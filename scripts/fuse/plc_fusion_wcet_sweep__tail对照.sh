@@ -20,6 +20,7 @@ source "$SCRIPT_DIR/plc_fusion_common__公共库.sh"
 plc_enable_err_trap
 
 PROJECT_ROOT="$(plc_project_root)"
+SCRIPTS_ROOT="$(plc_scripts_root)"
 MANIFEST="${1:-${PLC_FUSE_MANIFEST:-manifests/manifest_cyclictest__主线压测.env}}"
 
 plc_resolve_manifest "$MANIFEST" "$PROJECT_ROOT"
@@ -68,7 +69,7 @@ if [ "${#VARIANTS[@]}" -eq 0 ] || [ -z "${VARIANTS[0]:-}" ]; then
     if [ "${WCET_SWEEP_INCLUDE_PAPER:-1}" = "1" ]; then
         while IFS= read -r line; do
             [ -n "$line" ] && VARIANTS+=("$line")
-        done < <(python3 "$SCRIPT_DIR/plc_fusion_wcet_passes__Pass序列库.py" --sweep-specs)
+        done < <(python3 "$SCRIPTS_ROOT/plc_fusion_wcet_passes__Pass序列库.py" --sweep-specs)
     fi
 fi
 

@@ -189,6 +189,21 @@ if dry:
         print(f"      {key}: {old or '<missing>'} -> {new}")
     sys.exit(0)
 
+def dedupe_env_lines(raw_lines):
+    """同一 key 只保留最后一次出现（去掉 manifest 重复行）。"""
+    seen = set()
+    out = []
+    for line in reversed(raw_lines):
+        m = key_re.match(line.strip())
+        if m:
+            k = m.group(1)
+            if k in seen:
+                continue
+            seen.add(k)
+        out.append(line if line.endswith("\n") else line + "\n")
+    out.reverse()
+    return out
+
 keys_seen = set()
 new_lines = []
 for line in lines:
@@ -209,6 +224,7 @@ if missing:
     for key in sorted(missing):
         new_lines.append(fmt_line(key, suggestions[key]))
 
+new_lines = dedupe_env_lines(new_lines)
 manifest_path.write_text("".join(new_lines), encoding="utf-8")
 print(f"    已写入 {len(changes)} 项 -> {manifest_path}")
 for key, old, new in changes:

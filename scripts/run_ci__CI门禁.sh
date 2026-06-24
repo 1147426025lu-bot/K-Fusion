@@ -37,10 +37,27 @@ DEFAULT_MANIFESTS=(
 
 export PLC_FUSE_STRICT_MISSING=1
 export PLC_FUSE_STRICT_VALIDATE=1
+# CI 不修改 manifests/（fill-empty 仅用于 onboarding，见 plc_ast_apply_manifest --dry-run）
+export FUSE_AST_APPLY_SUGGEST=0
+
+LITE_MANIFESTS=(
+    "$PRJ/manifests/manifest_github_rt_periodic__周期demo.env"
+    "$PRJ/manifests/manifest_github_rt_periodic_multitu__多TU.env"
+    "$PRJ/manifests/manifest_github_stb_sprintf__sprintf_demo.env"
+    "$PRJ/manifests/manifest_plc_cc_gpio__PLC示例.env"
+    "$PRJ/manifests/manifest_plc_cc_pure_logic__纯逻辑.env"
+    "$PRJ/manifests/manifest_plc_cc_temp_control__温控.env"
+    "$PRJ/manifests/manifest_plc_cc_isolation__隔离测试.env"
+    "$PRJ/manifests/manifest_plc_cc_dither__抖动测试.env"
+    "$PRJ/manifests/manifest_plc_cc_hello__入门.env"
+)
 
 if [ -n "${MANIFESTS:-}" ]; then
     # shellcheck disable=SC2206
     MANIFEST_LIST=($MANIFESTS)
+elif [ "${CI_LITE:-0}" = "1" ]; then
+    MANIFEST_LIST=("${LITE_MANIFESTS[@]}")
+    echo "    mode=CI_LITE (${#MANIFEST_LIST[@]} manifests, 无 rt-tests)"
 else
     MANIFEST_LIST=("${DEFAULT_MANIFESTS[@]}")
 fi
@@ -51,6 +68,9 @@ echo "    manifests=${#MANIFEST_LIST[@]} (+ validate strict + wcet sweep)"
 
 echo "🔗 [1a] fuse 符号链接门禁..."
 bash "$SCRIPT_DIR/run_fuse_symlink_check__fuse符号链接门禁.sh"
+
+echo "🔗 [1a1] deploy profile 符号链接门禁..."
+bash "$SCRIPT_DIR/run_deploy_symlink_check__deploy符号链接门禁.sh"
 
 echo "🧹 [1a2] 仓库整洁门禁..."
 bash "$SCRIPT_DIR/run_repo_clean_check__仓库整洁门禁.sh"
@@ -126,6 +146,17 @@ KO_BUILD_FORCE_FUSE=0 bash "$SCRIPT_DIR/run_ko_build__全类ko编译.sh"
 
 echo "🧪 功能门禁（kernel.o + modpost）..."
 bash "$SCRIPT_DIR/run_functional_ci__功能门禁.sh"
+
+if [ "${CI_INSMOD:-0}" = "1" ]; then
+    if sudo -n true 2>/dev/null; then
+        echo "🔌 功能门禁 insmod 短测（plc_cc_hello + github_rt_periodic）..."
+        FUNCTIONAL_INSMOD=1 \
+        FUNCTIONAL_MANIFESTS="$PRJ/manifests/manifest_plc_cc_hello__入门.env $PRJ/manifests/manifest_github_rt_periodic__周期demo.env" \
+            bash "$SCRIPT_DIR/run_functional_ci__功能门禁.sh"
+    else
+        echo "⏭️  CI_INSMOD=1 但无免密 sudo，跳过 insmod（Pi 上可 sudo -v 后重跑）"
+    fi
+fi
 
 if [ "${CI_PLATFORM_X86:-0}" = "1" ]; then
     echo "🖥️  x86_64 平台交叉构建验证（无 insmod）..."

@@ -419,6 +419,17 @@ plc_enable_err_trap() {
     trap 'plc_on_err' ERR
 }
 
+# scripts/ 根目录（本库在 scripts/fuse/ 内时返回上级，供 WCET Pass 库等）
+plc_scripts_root() {
+    local d
+    d="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [ "$(basename "$d")" = fuse ]; then
+        cd "$d/.." && pwd
+    else
+        echo "$d"
+    fi
+}
+
 # manifest 源码根（与 plc_fuse [2/6] 一致）
 plc_fusion_resolve_src_root() {
     local project_root="$1"

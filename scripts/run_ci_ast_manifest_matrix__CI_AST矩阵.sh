@@ -88,7 +88,10 @@ d = json.load(open(sys.argv[1]))
 elig = "yes" if d.get("fusion_eligible") else "no"
 crit = int(d.get("fusion_critical_count", 0))
 warn = int(d.get("fusion_warn_count", 0))
-entry = d.get("entry") or "-"
+entry = d.get("entry")
+if not entry and d.get("has_main"):
+    entry = "main"
+entry = entry or "-"
 errs = int(d.get("error_count", 0))
 status = "PASS"
 if crit > 0:

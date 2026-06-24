@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      FUSE_AST_APPLY_SUGGEST: "0"
+      CI_LITE: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build clang llvm llvm-dev libclang-dev \
+            linux-headers-generic git python3 build-essential
+
+      - name: Run CI gate (lite manifests, no insmod)
+        run: bash scripts/run_ci__CI门禁.sh

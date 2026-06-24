@@ -1,0 +1,25 @@
+name: WCET nightly
+
+on:
+  schedule:
+    - cron: "0 3 * * 0"
+  workflow_dispatch:
+
+jobs:
+  wcet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      FUSE_AST_APPLY_SUGGEST: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build clang llvm llvm-dev libclang-dev \
+            linux-headers-generic git python3 build-essential
+
+      - name: WCET nightly (static autotune, skip insmod)
+        run: bash scripts/run_ci_wcet_nightly__WCET夜间门禁.sh

@@ -26,6 +26,7 @@ source "$SCRIPT_DIR/plc_fusion_common__公共库.sh"
 plc_enable_err_trap
 
 PROJECT_ROOT="$(plc_project_root)"
+SCRIPTS_ROOT="$(plc_scripts_root)"
 MANIFEST="${1:-${PLC_FUSE_MANIFEST:-manifests/manifest_cyclictest__主线压测.env}}"
 SWEEP="$SCRIPT_DIR/plc_fusion_wcet_sweep__tail对照.sh"
 PROBE="$SCRIPT_DIR/plc_fusion_wcet_probe__短测探针.sh"
@@ -88,7 +89,7 @@ if [ "${WCET_AUTOTUNE_GREEDY:-0}" = "1" ]; then
     export PLC_FUSION_ROOTS="${FUSE_DCE_ROOTS:-${FUSE_KTHREAD_ENTRY:-}}"
     export PLC_FUSION_HOT_PATH_FUNCTIONS="${FUSE_HOT_PATH_FUNCTIONS:-${FUSE_KTHREAD_ENTRY:-}}"
     export PLC_FUSION_WCET_HOT_FUNCTIONS="${PLC_FUSION_HOT_PATH_FUNCTIONS:-}"
-    mapfile -t greedy_specs < <(python3 "$SCRIPT_DIR/plc_fusion_wcet_passes__Pass序列库.py" --greedy-specs)
+    mapfile -t greedy_specs < <(python3 "$SCRIPTS_ROOT/plc_fusion_wcet_passes__Pass序列库.py" --greedy-specs)
     for spec in "${greedy_specs[@]}"; do
         name="${spec%%|*}"
         rest="${spec#*|}"

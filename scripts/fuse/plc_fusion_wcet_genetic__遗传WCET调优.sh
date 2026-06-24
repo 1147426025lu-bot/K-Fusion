@@ -25,9 +25,10 @@ source "$SCRIPT_DIR/plc_fusion_common__公共库.sh"
 plc_enable_err_trap
 
 PROJECT_ROOT="$(plc_project_root)"
+SCRIPTS_ROOT="$(plc_scripts_root)"
 MANIFEST="${1:-${PLC_FUSE_MANIFEST:-manifests/manifest_cyclictest__主线压测.env}}"
 PROBE="$SCRIPT_DIR/plc_fusion_wcet_probe__短测探针.sh"
-SEARCH_PY="$SCRIPT_DIR/plc_fusion_wcet_search__WCET搜索核心.py"
+SEARCH_PY="$SCRIPTS_ROOT/plc_fusion_wcet_search__WCET搜索核心.py"
 
 plc_resolve_manifest "$MANIFEST" "$PROJECT_ROOT"
 MANIFEST="$PLC_MANIFEST"
