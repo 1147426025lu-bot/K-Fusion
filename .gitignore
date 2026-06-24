@@ -1,0 +1,90 @@
+# ============================================
+# PLC Compiler - Git Ignore Rules
+# ============================================
+
+# --- 构建产物 ---
+build/
+*.o
+.*.o
+*.ko
+*.mod
+*.mod.c
+*.mod.o
+*.o_shipped
+*.ll
+*.so
+*.a
+*.cmd
+.*.cmd
+.tmp_versions/
+Module.symvers
+modules.order
+
+# --- 编译中间文件 ---
+*.kernel.c
+*.reloc.txt
+*.objdump.txt
+
+# --- Python 缓存 ---
+__pycache__/
+*.pyc
+*.pyo
+
+# --- 测试结果 / 日志（保留目录说明与汇总表）---
+results/*
+!results/README.md
+!results/stability/
+results/stability/*
+!results/stability/*.csv
+test/rt-tests/
+test/platform_*/
+scripts/platform/test/
+
+# test/ 融合与 WCET 生成物（FIXED 骨架见 test/README.md）
+test/.official_cycletest_wcet_*/
+test/.fusion_ast_*
+test/.plc_fused_host.o.d
+test/*.detected.env
+test/*.host_profile.env
+test/*.fusion_report
+test/*.validate.json
+test/*.fusion_ast.json
+test/*.fusion_plan.json
+test/*.plc_ast.json
+test/*.plc_ast.env
+test/*.manifest.suggest.env
+test/*.apply_ast.json
+test/*.entries
+test/*.remap_hints
+test/*.unmapped
+test/*.autotune.env
+test/*.genetic.env
+test/*.wcet_sweep.json
+test/*.wcet_sweep.tsv
+test/*.wcet_autotune.json
+test/*.wcet_genetic.json
+test/*_runtime_stubs.c
+!test/plc_runtime_stubs.c
+test/*.stubs.generated.c
+test/ci_*
+test/rebuild_smoke.json
+test/suggest_*
+examples/**/*.plc_ast.json
+
+*.log
+*.out
+*.raw.log
+*.dmesg
+*.png
+!docs/examples/*.png
+*.pid
+
+# --- 备份文件 ---
+*.bak
+*.swp
+*.swo
+*~
+
+# --- 系统文件 ---
+.DS_Store
+Thumbs.db

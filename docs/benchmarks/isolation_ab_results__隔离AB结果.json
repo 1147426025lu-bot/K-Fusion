@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "test": "best_fused_isolation_ab",
+  "stamp": "20260611_210919",
+  "started": "2026-06-11T21:43:55.295415+08:00",
+  "uptime_sec": 44717,
+  "duration_min": 15,
+  "profile": "scripts/deploy/best_fused_profile.env.sh",
+  "module_flags": {
+    "FUSED_RINGBUF_ENABLE": 0,
+    "FUSED_HIST_ENABLE": 0,
+    "JITTER_COMPENSATION_ENABLE": 1,
+    "FUSED_WAKE_TIMERTHREAD": 1
+  },
+  "results": [
+    {
+      "isolation_level": 2,
+      "cset": 0,
+      "duration_min": 15,
+      "abs_max_ns": 9383,
+      "exit_code": 1,
+      "raw_log": "results/raw/fused_best_l2_20260611_210919_15min.raw.log",
+      "png": "results/png/fused_best_l2_20260611_210919_15min.png",
+      "stamp": "20260611_210919"
+    },
+    {
+      "isolation_level": 3,
+      "cset": 1,
+      "duration_min": 15,
+      "abs_max_ns": 13455,
+      "exit_code": 1,
+      "raw_log": "results/raw/fused_best_l3_20260611_212637_15min.raw.log",
+      "png": "results/png/fused_best_l3_20260611_212637_15min.png",
+      "stamp": "20260611_210919"
+    }
+  ]
+}

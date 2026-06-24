@@ -1,0 +1,1 @@
+fuse/plc_fusion_wcet_tail_pick__短测选tail.sh

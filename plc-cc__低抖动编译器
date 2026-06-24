@@ -1,0 +1,41 @@
+#!/bin/bash
+# plc-cc__低抖动编译器 — PLC 低抖动编译集成脚本（plc-cc 为符号链接）
+SOURCE=$1
+BASE=$(basename "$SOURCE" .c)
+BUILD_DIR=$(pwd)
+PASS_LIB="$BUILD_DIR/libPLCLowJitterPass.so"
+PLC_AST="$BUILD_DIR/plc_ast"
+PRJ="$(cd "$(dirname "$0")" && pwd)"
+SHIM="$PRJ/examples/plc-cc__低抖动示例/plc_cc_fuse_shim__融合头.h"
+
+if [ ! -f "$SOURCE" ]; then
+    echo "Usage: $0 <source.c>"
+    exit 1
+fi
+
+if [[ "$SOURCE" != /* ]]; then
+    SOURCE="$(cd "$(dirname "$SOURCE")" && pwd)/$(basename "$SOURCE")"
+fi
+
+echo ">>> [Step 1] plc-cc 静态分析（默认 analyze-only，不写 .kernel.c）..."
+if ! "$PLC_AST" --analyze-only --json="${SOURCE}.plc_ast.json" "$SOURCE" --; then
+    echo "❌ plc_ast 分析失败（见上方 ERROR）"
+    exit 1
+fi
+
+echo ">>> [Step 2] 生成 LLVM IR（源文件 + shim，POSIX 映射交给 Pass/融合）..."
+clang -S -emit-llvm "$SOURCE" -o "${BASE}.ll" \
+      -Wno-implicit-function-declaration \
+      -include "$SHIM"
+
+echo ">>> [Step 3] 加载 PLCLowJitterPass（自动标记 plc_cycle/plc_main/plc_logic）..."
+opt -load-pass-plugin "$PASS_LIB" \
+    -passes=plc-low-jitter \
+    "${BASE}.ll" -S -o "${BASE}_opt.ll"
+
+echo ">>> [Step 4] 生成目标机器码 (.o)..."
+llc -relocation-model=pic -filetype=obj "${BASE}_opt.ll" -o "${BASE}.o"
+
+echo ">>> [完成] ${BASE}.o | JSON=${SOURCE}.plc_ast.json"
+echo "    融合进 .ko: bash scripts/plc_fuse_plc_cc__plc-cc融合.sh $SOURCE"
+echo "    旧式 .kernel.c: plc_ast --emit-kernel-c \"$SOURCE\" --"

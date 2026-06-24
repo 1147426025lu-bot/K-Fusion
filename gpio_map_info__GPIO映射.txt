@@ -1,0 +1,122 @@
+gpiochip11: GPIOs 512-528, parent: platform/107d517c00.gpio, gpio-brcmstb@107d517c00:
+ gpio-512 (RP1_SDA             )
+ gpio-513 (RP1_SCL             )
+ gpio-514 (RP1_RUN             |RP1 RUN pin         ) out hi 
+ gpio-515 (SD_IOVDD_SEL        |vdd-sd-io           ) out hi 
+ gpio-516 (SD_PWR_ON           |sd-vcc-reg          ) out hi 
+ gpio-517 (SD_CDET_N           |cd                  ) in  lo ACTIVE LOW
+ gpio-518 (SD_FLG_N            )
+ gpio-519 (-                   )
+ gpio-520 (2712_WAKE           )
+ gpio-521 (2712_STAT_LED       |ACT                 ) out hi ACTIVE LOW
+ gpio-522 (-                   )
+ gpio-523 (-                   )
+ gpio-524 (PMIC_INT            )
+ gpio-525 (UART_TX_FS          )
+ gpio-526 (UART_RX_FS          )
+ gpio-527 (-                   )
+ gpio-528 (-                   )
+
+gpiochip12: GPIOs 529-534, parent: platform/107d517c00.gpio, gpio-brcmstb@107d517c20:
+ gpio-529 (HDMI0_SCL           )
+ gpio-530 (HDMI0_SDA           )
+ gpio-531 (HDMI1_SCL           )
+ gpio-532 (HDMI1_SDA           )
+ gpio-533 (PMIC_SCL            )
+ gpio-534 (PMIC_SDA            )
+
+gpiochip10: GPIOs 535-566, parent: platform/107d508500.gpio, gpio-brcmstb@107d508500:
+ gpio-535 (-                   )
+ gpio-536 (2712_BOOT_CS_N      |spi10 CS0           ) out hi ACTIVE LOW
+ gpio-537 (2712_BOOT_MISO      )
+ gpio-538 (2712_BOOT_MOSI      )
+ gpio-539 (2712_BOOT_SCLK      )
+ gpio-540 (-                   )
+ gpio-541 (-                   )
+ gpio-542 (-                   )
+ gpio-543 (-                   )
+ gpio-544 (-                   )
+ gpio-545 (-                   )
+ gpio-546 (-                   )
+ gpio-547 (-                   )
+ gpio-548 (-                   )
+ gpio-549 (PCIE_SDA            )
+ gpio-550 (PCIE_SCL            )
+ gpio-551 (-                   )
+ gpio-552 (-                   )
+ gpio-553 (-                   )
+ gpio-554 (-                   )
+ gpio-555 (PWR_GPIO            |pwr_button          ) in  hi ACTIVE LOW
+ gpio-556 (2712_G21_FS         )
+ gpio-557 (-                   )
+ gpio-558 (-                   )
+ gpio-559 (BT_RTS              )
+ gpio-560 (BT_CTS              )
+ gpio-561 (BT_TXD              )
+ gpio-562 (BT_RXD              )
+ gpio-563 (WL_ON               |wl-on-reg           ) out hi 
+ gpio-564 (BT_ON               |shutdown            ) out hi 
+ gpio-565 (WIFI_SDIO_CLK       )
+ gpio-566 (WIFI_SDIO_CMD       )
+
+gpiochip13: GPIOs 567-570, parent: platform/107d508500.gpio, gpio-brcmstb@107d508520:
+ gpio-567 (WIFI_SDIO_D0        )
+ gpio-568 (WIFI_SDIO_D1        )
+ gpio-569 (WIFI_SDIO_D2        )
+ gpio-570 (WIFI_SDIO_D3        )
+
+gpiochip0: GPIOs 571-624, parent: platform/1f000d0000.gpio, pinctrl-rp1:
+ gpio-571 (ID_SDA              )
+ gpio-572 (ID_SCL              )
+ gpio-573 (GPIO2               )
+ gpio-574 (GPIO3               )
+ gpio-575 (GPIO4               )
+ gpio-576 (GPIO5               )
+ gpio-577 (GPIO6               )
+ gpio-578 (GPIO7               )
+ gpio-579 (GPIO8               )
+ gpio-580 (GPIO9               )
+ gpio-581 (GPIO10              )
+ gpio-582 (GPIO11              )
+ gpio-583 (GPIO12              )
+ gpio-584 (GPIO13              )
+ gpio-585 (GPIO14              )
+ gpio-586 (GPIO15              )
+ gpio-587 (GPIO16              )
+ gpio-588 (GPIO17              )
+ gpio-589 (GPIO18              )
+ gpio-590 (GPIO19              )
+ gpio-591 (GPIO20              )
+ gpio-592 (GPIO21              )
+ gpio-593 (GPIO22              )
+ gpio-594 (GPIO23              )
+ gpio-595 (GPIO24              )
+ gpio-596 (GPIO25              )
+ gpio-597 (GPIO26              |plc_hrtimer         ) out lo 
+ gpio-598 (GPIO27              )
+ gpio-599 (PCIE_RP1_WAKE       )
+ gpio-600 (FAN_TACH            )
+ gpio-601 (HOST_SDA            )
+ gpio-602 (HOST_SCL            )
+ gpio-603 (ETH_RST_N           |phy-reset           ) out hi ACTIVE LOW
+ gpio-604 (-                   )
+ gpio-605 (CD0_IO0_MICCLK      |cam0_reg            ) out lo 
+ gpio-606 (CD0_IO0_MICDAT0     )
+ gpio-607 (RP1_PCIE_CLKREQ_N   )
+ gpio-608 (-                   )
+ gpio-609 (CD0_SDA             )
+ gpio-610 (CD0_SCL             )
+ gpio-611 (CD1_SDA             )
+ gpio-612 (CD1_SCL             )
+ gpio-613 (USB_VBUS_EN         )
+ gpio-614 (USB_OC_N            )
+ gpio-615 (RP1_STAT_LED        |PWR                 ) out hi ACTIVE LOW
+ gpio-616 (FAN_PWM             )
+ gpio-617 (CD1_IO0_MICCLK      |cam1_reg            ) out lo 
+ gpio-618 (2712_WAKE           )
+ gpio-619 (CD1_IO1_MICDAT1     )
+ gpio-620 (EN_MAX_USB_CUR      )
+ gpio-621 (-                   )
+ gpio-622 (-                   )
+ gpio-623 (-                   )
+ gpio-624 (-                   )

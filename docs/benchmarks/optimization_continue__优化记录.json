@@ -1,0 +1,19 @@
+[
+  {
+    "schema_version": 1,
+    "round": "l2_optimize",
+    "stamp": "20260611_215121",
+    "finished": "2026-06-11T22:48:55.343923+08:00",
+    "uptime_sec_at_start": 126,
+    "profile": "best_fused_l2_profile.env.sh",
+    "trials_5min": {
+      "baseline_ns": 4505,
+      "best_ns": 2175,
+      "best_step": "no_probe_rt"
+    },
+    "long_min": 15,
+    "long_abs_max_ns": 4833,
+    "long_exit_code": 0,
+    "summary_log": "/home/pi/plc_compiler/results/stability/l2_optimize_20260611_215121.log"
+  }
+]
