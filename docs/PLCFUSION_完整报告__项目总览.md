@@ -200,7 +200,7 @@ flowchart LR
    | `PLC_FUSION_ROOTS` | `main,fifothread,timerthread,sighand` | `collectRoots()` → DCE BFS 起点 |
    | `PLC_FUSION_HOT_PATH_FUNCTIONS` | `timerthread,fifothread` | `runWCETMark()` + LowJitter Pass |
    | `PLC_FUSION_KEEP_GLOBALS` | `shutdown use_nsecs` | `runExport()` → ExternalLinkage + `llvm.used` |
-   | `PLC_FUSION_FLOAT_KILL` | `1`（默认） | `runFloatKill()` |
+   | `PLC_FUSION_FIXED_POINT` | `1`（默认） | `runFixedPoint()` Q16.16/Q32.32 |
    | `PLC_FUSION_DCE` | `1` | `runDCE()` |
    | `PLC_FUSION_BLACKHOLE` | `1` | remap 时未映射 call → 返回值改 0/null |
    | `PLC_FUSION_UNMAPPED_LOG` | `test/official_cycletest.unmapped` | 未映射符号追加日志 |
@@ -538,7 +538,7 @@ ir_lines=6419
 PLC_FUSION_ROOTS=main,fifothread,timerthread,sighand
 PLC_FUSION_HOT_PATH_FUNCTIONS=timerthread,fifothread
 PLC_FUSION_KEEP_GLOBALS=shutdown use_nsecs
-PLC_FUSION_FLOAT_KILL=1
+PLC_FUSION_FIXED_POINT=1
 PLC_FUSION_DCE=1
 PLC_FUSION_BLACKHOLE=1
 ```
@@ -592,7 +592,7 @@ cp official_cycletest_kernel.o official_cycletest_kernel.o_shipped
 | 项 | 说明 |
 |----|------|
 | `optnone` | `timerthread` 汇编接近 IR 块顺序，便于 WCET |
-| 无 FP/NEON | 配合 float kill；否则链 `plc_compiler_rt.o` |
+| 无 FP/NEON | 配合 Q 定点 Pass；禁止链 compiler-rt |
 | objcopy | 宿主可 `extern int shutdown` 并 `WRITE_ONCE` |
 
 **机制详解** → §3.5
@@ -715,30 +715,13 @@ F.setDSOLocal(true);  // 所有 Function
 
 单 `.o` 链接模型；减少错误的外部 interposable。
 
-#### 步骤 2 — float kill（第 1 轮）
+#### 步骤 2 — Q 定点（fixed-point Pass）
 
-**条件**：`PLC_FUSION_FLOAT_KILL=1` 且 Module 含浮点类型/指令。
+**条件**：`PLC_FUSION_FIXED_POINT=1` 且 Module 含浮点类型/指令。
 
-**算法**：最多 32 轮扫描全部 Instruction，`killOneFloatInst`：
+**算法**：`runFixedPointConvert()` 将 float/double 转为 Q16.16 / Q32.32（i64 存储），保留除法/比较语义；`printf` 边界用 `plc_fix_to_double()`。
 
-| IR | 处理 |
-|----|------|
-| `fadd/fsub/fmul/fdiv` | 删指令，uses→0.0 |
-| `fcmp` | uses→false |
-| `uitofp/sitofp/fptosi` | 删或→0 |
-| `store double` | 改为 `store double 0.0` |
-| `call @__muldf3` 等 | 删 call 或返回 0 |
-
-**cyclictest 实测**：
-
-```llvm
-;; pre.ll ~3466 — avg 累加（会被 kill）
-%369 = uitofp i64 %357 to double
-%371 = fadd double %370, %369
-store double %371, ptr %248
-
-;; kernel.ll — 上述消失；grep fadd/fdiv = 0
-```
+**cyclictest 实测**：`kernel.ll` 无 `fadd`/`fdiv`/`fcmp`；avg 路径为定点 `sdiv` + `icmp`。
 
 **保留**：`sub i64` jitter 路径（§3.7）。
 
@@ -983,7 +966,7 @@ bash scripts/run_ko_build__全类ko编译.sh
 | `multiple definition of warn` | kernel.o 与桩同强符号 | 桩 `__weak`；删旧 stubs 重生 |
 | `init_module` 重复 | 子 .c 误写 module_init | 仅 `plc_fused_host.c` 可有 |
 | pipeline 非 wcet | 未设 `FUSE_WCET_MODE` | 改 manifest |
-| float 链接失败 | IR 残留 `__muldf3` | `FUSE_LINK_COMPILER_RT=auto` |
+| float 链接失败 | IR 残留 `__muldf3` | 设 `FUSE_FIXED_POINT=1`，确认 fixed Pass 已跑 |
 
 ---
 
@@ -994,7 +977,7 @@ bash scripts/run_ko_build__全类ko编译.sh
 | `PLC_FUSION_ROOTS` | main,fifothread,timerthread,sighand | DCE 根 |
 | `PLC_FUSION_HOT_PATH_FUNCTIONS` | timerthread,fifothread | wcet-mark + LJ |
 | `PLC_FUSION_KEEP_GLOBALS` | shutdown use_nsecs | export |
-| `PLC_FUSION_FLOAT_KILL` | 1 | 删浮点 IR |
+| `PLC_FUSION_FIXED_POINT` | 1 | 浮点→Q 定点 |
 | `PLC_FUSION_DCE` | 1 | 可达性裁剪 |
 | `PLC_FUSION_BLACKHOLE` | 1 | 未映射→0/null |
 | `PLC_FUSION_UNMAPPED_LOG` | `.unmapped` | 缺映射日志 |

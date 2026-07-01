@@ -180,6 +180,8 @@
 | `manifest_ptsematest__互斥锁测试.env` | rt-tests ptsematest |
 | `manifest_github_rt_periodic__周期demo.env` | 本地 1ms 周期 demo |
 | `manifest_github_stb_sprintf__sprintf_demo.env` | stb_sprintf demo |
+| `manifest_tacle_cover__路径覆盖.env` | TACLeBench cover (MRTC) |
+| `manifest_tacle_minver__矩阵求逆.env` | TACLeBench minver (FP) |
 
 ## test/ — Kbuild 工作区（混合：FIXED 骨架 + SWAPPABLE 样例 + GENERATED 产物）
 

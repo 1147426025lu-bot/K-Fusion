@@ -24,13 +24,14 @@ DEFAULT_MANIFESTS=(
     "$PRJ/manifests/manifest_ptsematest__互斥锁测试.env"
     "$PRJ/manifests/manifest_github_rt_periodic__周期demo.env"
     "$PRJ/manifests/manifest_github_rt_periodic_multitu__多TU.env"
-    "$PRJ/manifests/manifest_github_stb_sprintf__sprintf_demo.env"
+    # github_stb_sprintf: 需 compiler-rt，已移出 Q-only ko 门禁
     "$PRJ/manifests/manifest_plc_cc_gpio__PLC示例.env"
     "$PRJ/manifests/manifest_plc_cc_pure_logic__纯逻辑.env"
     "$PRJ/manifests/manifest_plc_cc_temp_control__温控.env"
     "$PRJ/manifests/manifest_plc_cc_isolation__隔离测试.env"
     "$PRJ/manifests/manifest_plc_cc_dither__抖动测试.env"
     "$PRJ/manifests/manifest_plc_cc_hello__入门.env"
+    "$PRJ/manifests/manifest_plc_multitask__多任务优先级.env"
 )
 
 if [ -n "${KO_BUILD_MANIFESTS:-}" ]; then

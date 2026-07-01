@@ -7,7 +7,7 @@
 #   0. load_ast_plan — 读 fusion_ast / plc_ast JSON → fusion_plan.json
 #   1. select_profile — manifest 推断 mainline/generic；auto 时 AST + IR 微调
 #   2. apply_profile  — profile → Pass 配方与环境变量
-#   3. apply_ir_hints  — 无浮点 IR 时关 float_kill；记录分析依据
+#   3. apply_ir_hints  — 无浮点 IR 时关 fixed_point；记录分析依据
 #   4. build_opt_passes — 拼 opt -passes 字符串
 # 输入: manifest.env（可选已 source plc_fusion_analyze_ir__IR特征分析.sh 的 export）
 # 输出（export）:
@@ -18,6 +18,7 @@
 #   FUSE_PIPELINE=auto|mainline|generic|minimal|debug|size|hotpath|wcet|custom
 #   FUSE_WCET_MODE=1      auto 时 kthread 应用优先 hotpath（无 tail、轻 pre）
 #   FUSE_HOT_PATH_FUNCTIONS  热路径函数（逗号分隔，供 Pass DCE 额外保留）
+#   FUSE_FIXED_POINT=1    浮点 → Q 定点（默认 1；IR 无浮点时可自动 0）
 #   FUSE_AUTO_DEBUG=1     unknown_externs >= FUSE_DEBUG_THRESHOLD → debug
 #   FUSE_AUTO_SIZE=1      IR/已有 .o 偏大且 unknown 低 → size
 #   FUSE_DEBUG_THRESHOLD  默认 3
@@ -86,7 +87,6 @@ auto_tune_profile() {
     local obj="${PLC_FUSION_OBJ_BYTES:-0}"
     local reason=""
 
-    # AST 安全门：融合 critical → minimal（优先于 IR 微调）
     if [ "${PLC_FUSION_AST_LOADED:-0}" = "1" ] \
         && [ "${PLC_FUSION_AST_FUSION_CRIT:-0}" -gt 0 ]; then
         reason="ast:fusion_crit=${PLC_FUSION_AST_FUSION_CRIT}"
@@ -94,7 +94,6 @@ auto_tune_profile() {
         return
     fi
 
-    # pre.ll 阶段默认不因 unknown 切 debug（成熟应用误报多）；阈值 0=关闭
     if [ "${FUSE_AUTO_DEBUG:-1}" = "1" ] && [ "$FUSE_DEBUG_PRE_THRESHOLD" -gt 0 ] \
         && [ "$unknown" -ge "$FUSE_DEBUG_PRE_THRESHOLD" ]; then
         reason="pre_unknown=${unknown}>=${FUSE_DEBUG_PRE_THRESHOLD}"
@@ -116,7 +115,6 @@ auto_tune_profile() {
         return
     fi
 
-    # AST profile 建议（manifest/IR 未更强覆盖时）
     if [ "${PLC_FUSION_AST_LOADED:-0}" = "1" ] \
         && [ -n "${PLC_FUSION_AST_SUGGEST_PROFILE:-}" ]; then
         reason="ast:${PLC_FUSION_AST_PLAN_REASON:-heuristic}"
@@ -146,6 +144,10 @@ select_profile() {
     PLC_FUSION_PIPELINE="$req"
 }
 
+apply_fixed_point_default() {
+    export PLC_FUSION_FIXED_POINT="${PLC_FUSION_FIXED_POINT:-${FUSE_FIXED_POINT:-1}}"
+}
+
 # --- 算法 3: profile → Pass 配方 ---
 apply_profile() {
     local profile="$1"
@@ -154,77 +156,58 @@ apply_profile() {
     PLC_FUSION_KERNEL_PASS="plc-fusion"
 
     case "$profile" in
-        mainline)
-            PLC_FUSION_KERNEL_PASS="plc-kernelize-mainline"
-            export PLC_FUSION_FLOAT_KILL="${PLC_FUSION_FLOAT_KILL:-1}"
-            export PLC_FUSION_DCE="${PLC_FUSION_DCE:-1}"
-            export PLC_FUSION_BLACKHOLE="${PLC_FUSION_BLACKHOLE:-1}"
-            if [ "${FUSE_AUTO_OPT:-1}" = "1" ] && [ -z "${FUSE_GLOBALIZE_SYMBOLS:-}" ]; then
-                PLC_FUSION_TAIL_PASSES="globaldce,globalopt"
+        mainline|generic|size|hotpath|wcet)
+            PLC_FUSION_KERNEL_PASS="plc-kernelize-${profile}"
+            if [ "$profile" = mainline ] || [ "$profile" = generic ]; then
+                :
+            elif [ "$profile" = size ]; then
+                PLC_FUSION_KERNEL_PASS="plc-kernelize-size"
+            elif [ "$profile" = hotpath ]; then
+                PLC_FUSION_PRE_PASSES="function(mem2reg,instcombine)"
+                PLC_FUSION_KERNEL_PASS="plc-kernelize-hotpath"
+                PLC_FUSION_TAIL_PASSES=""
+            elif [ "$profile" = wcet ]; then
+                PLC_FUSION_PRE_PASSES="function(mem2reg,instcombine)"
+                PLC_FUSION_KERNEL_PASS="plc-kernelize-wcet"
+                if [ -n "${FUSE_HOT_PATH_FUNCTIONS:-}" ]; then
+                    export PLC_FUSION_WCET_HOT_FUNCTIONS="$FUSE_HOT_PATH_FUNCTIONS"
+                elif [ -n "${FUSE_KTHREAD_ENTRY:-}" ]; then
+                    export PLC_FUSION_WCET_HOT_FUNCTIONS="$FUSE_KTHREAD_ENTRY"
+                fi
+                if [ -n "${FUSE_COLD_PASS_SEQUENCE:-}" ] || [ -n "${FUSE_MODULE_PASS_SEQUENCE:-}" ]; then
+                    PLC_FUSION_TAIL_PASSES="$(wcet_tail_from_sequences)"
+                elif [ -n "${FUSE_TAIL_PASSES:-}" ]; then
+                    PLC_FUSION_TAIL_PASSES="$FUSE_TAIL_PASSES"
+                else
+                    export FUSE_COLD_PASS_SEQUENCE="${FUSE_COLD_PASS_SEQUENCE:-simplifycfg|sroa|instcombine|loop-mssa(loop-rotate,licm)|loop-unroll|gvn|adce|instcombine}"
+                    export FUSE_MODULE_PASS_SEQUENCE="${FUSE_MODULE_PASS_SEQUENCE:-globaldce}"
+                    PLC_FUSION_TAIL_PASSES="$(wcet_tail_from_sequences)"
+                fi
             fi
-            ;;
-        generic)
-            PLC_FUSION_KERNEL_PASS="plc-kernelize-generic"
-            export PLC_FUSION_FLOAT_KILL="${PLC_FUSION_FLOAT_KILL:-1}"
             export PLC_FUSION_DCE="${PLC_FUSION_DCE:-1}"
             export PLC_FUSION_BLACKHOLE="${PLC_FUSION_BLACKHOLE:-1}"
-            if [ "${FUSE_AUTO_OPT:-1}" = "1" ] && [ -z "${FUSE_GLOBALIZE_SYMBOLS:-}" ]; then
+            apply_fixed_point_default
+            if [ "$profile" != hotpath ] && [ "$profile" != wcet ] \
+                && [ "${FUSE_AUTO_OPT:-1}" = "1" ] && [ -z "${FUSE_GLOBALIZE_SYMBOLS:-}" ]; then
                 PLC_FUSION_TAIL_PASSES="globaldce,globalopt"
             fi
             ;;
         minimal)
             PLC_FUSION_KERNEL_PASS="plc-kernelize-minimal"
-            export PLC_FUSION_FLOAT_KILL=0
+            export PLC_FUSION_FIXED_POINT=0
             export PLC_FUSION_DCE=0
             export PLC_FUSION_BLACKHOLE="${PLC_FUSION_BLACKHOLE:-1}"
             ;;
         debug)
             PLC_FUSION_KERNEL_PASS="plc-kernelize-debug"
-            export PLC_FUSION_FLOAT_KILL="${PLC_FUSION_FLOAT_KILL:-0}"
+            apply_fixed_point_default
             export PLC_FUSION_DCE=0
             export PLC_FUSION_BLACKHOLE=0
-            ;;
-        size)
-            PLC_FUSION_KERNEL_PASS="plc-kernelize-size"
-            export PLC_FUSION_FLOAT_KILL="${PLC_FUSION_FLOAT_KILL:-1}"
-            export PLC_FUSION_DCE="${PLC_FUSION_DCE:-1}"
-            export PLC_FUSION_BLACKHOLE="${PLC_FUSION_BLACKHOLE:-1}"
-            if [ "${FUSE_AUTO_OPT:-1}" = "1" ]; then
-                PLC_FUSION_TAIL_PASSES="globaldce,globalopt"
-            fi
-            ;;
-        hotpath)
-            PLC_FUSION_PRE_PASSES="function(mem2reg,instcombine)"
-            PLC_FUSION_KERNEL_PASS="plc-kernelize-hotpath"
-            export PLC_FUSION_FLOAT_KILL="${PLC_FUSION_FLOAT_KILL:-1}"
-            export PLC_FUSION_DCE="${PLC_FUSION_DCE:-1}"
-            export PLC_FUSION_BLACKHOLE="${PLC_FUSION_BLACKHOLE:-1}"
-            PLC_FUSION_TAIL_PASSES=""
-            ;;
-        wcet)
-            PLC_FUSION_PRE_PASSES="function(mem2reg,instcombine)"
-            PLC_FUSION_KERNEL_PASS="plc-kernelize-wcet"
-            export PLC_FUSION_FLOAT_KILL="${PLC_FUSION_FLOAT_KILL:-1}"
-            export PLC_FUSION_DCE="${PLC_FUSION_DCE:-1}"
-            export PLC_FUSION_BLACKHOLE="${PLC_FUSION_BLACKHOLE:-1}"
-            if [ -n "${FUSE_HOT_PATH_FUNCTIONS:-}" ]; then
-                export PLC_FUSION_WCET_HOT_FUNCTIONS="$FUSE_HOT_PATH_FUNCTIONS"
-            elif [ -n "${FUSE_KTHREAD_ENTRY:-}" ]; then
-                export PLC_FUSION_WCET_HOT_FUNCTIONS="$FUSE_KTHREAD_ENTRY"
-            fi
-            if [ -n "${FUSE_COLD_PASS_SEQUENCE:-}" ] || [ -n "${FUSE_MODULE_PASS_SEQUENCE:-}" ]; then
-                PLC_FUSION_TAIL_PASSES="$(wcet_tail_from_sequences)"
-            elif [ -n "${FUSE_TAIL_PASSES:-}" ]; then
-                PLC_FUSION_TAIL_PASSES="$FUSE_TAIL_PASSES"
-            else
-                export FUSE_COLD_PASS_SEQUENCE="${FUSE_COLD_PASS_SEQUENCE:-simplifycfg|sroa|instcombine|loop-mssa(loop-rotate,licm)|loop-unroll|gvn|adce|instcombine}"
-                export FUSE_MODULE_PASS_SEQUENCE="${FUSE_MODULE_PASS_SEQUENCE:-globaldce}"
-                PLC_FUSION_TAIL_PASSES="$(wcet_tail_from_sequences)"
-            fi
             ;;
         custom)
             PLC_FUSION_KERNEL_PASS="${FUSE_KERNEL_PASS:-plc-fusion}"
             PLC_FUSION_PRE_PASSES="${FUSE_PRE_PASSES:-function(mem2reg,instcombine,simplifycfg)}"
+            apply_fixed_point_default
             if [ -n "${FUSE_COLD_PASS_SEQUENCE:-}" ] || [ -n "${FUSE_MODULE_PASS_SEQUENCE:-}" ]; then
                 PLC_FUSION_TAIL_PASSES="$(wcet_tail_from_sequences)"
             else
@@ -239,18 +222,14 @@ apply_profile() {
     esac
 }
 
-# --- 算法 4: IR 特征覆盖 float_kill（Pass 内也会再判）---
+# --- 算法 4: IR 无浮点时跳过定点 Pass ---
 apply_ir_hints() {
     PLC_FUSION_IR_FLOAT_SKIP=0
     if [ "${PLC_FUSION_IR_HAS_FLOAT:-}" = "0" ]; then
-        export PLC_FUSION_FLOAT_KILL=0
+        export PLC_FUSION_FIXED_POINT=0
         PLC_FUSION_IR_FLOAT_SKIP=1
-    fi
-    # AST：周期/全局浮点 → 保持 float_kill（IR 无浮点时 IR 优先关）
-    if [ "${PLC_FUSION_AST_LOADED:-0}" = "1" ] \
-        && [ "${PLC_FUSION_AST_SUGGEST_FLOAT_KILL:-auto}" = "1" ] \
-        && [ "${PLC_FUSION_IR_FLOAT_SKIP:-0}" != "1" ]; then
-        export PLC_FUSION_FLOAT_KILL=1
+    elif [ "${PLC_FUSION_AST_SUGGEST_FIXED_POINT:-auto}" = "1" ]; then
+        export PLC_FUSION_FIXED_POINT=1
     fi
     export PLC_FUSION_IR_FLOAT_SKIP
 }
@@ -284,7 +263,6 @@ resolve_low_jitter() {
     fi
 }
 
-# RTSS 2025：FUSE_COLD_PASS_SEQUENCE（| 分隔原子）+ FUSE_MODULE_PASS_SEQUENCE
 wcet_tail_from_sequences() {
     local cold="${FUSE_COLD_PASS_SEQUENCE:-}"
     local mod="${FUSE_MODULE_PASS_SEQUENCE:-}"
@@ -296,8 +274,8 @@ PLC_FUSION_PIPELINE=""
 load_ast_plan
 select_profile
 apply_profile "$PLC_FUSION_PIPELINE"
-if [ -n "${FUSE_FLOAT_KILL:-}" ]; then
-    export PLC_FUSION_FLOAT_KILL="$FUSE_FLOAT_KILL"
+if [ -n "${FUSE_FIXED_POINT:-}" ]; then
+    export PLC_FUSION_FIXED_POINT="$FUSE_FIXED_POINT"
 fi
 apply_ir_hints
 build_opt_passes
@@ -319,7 +297,7 @@ LOG="${FUSE_WORK_DIR:-$PROJECT_ROOT/test}/${FUSE_NAME}.pipeline.log"
     echo "kernel=$PLC_FUSION_KERNEL_PASS"
     echo "tail=$PLC_FUSION_TAIL_PASSES"
     echo "opt=$OPT_PASSES"
-    echo "float_kill=${PLC_FUSION_FLOAT_KILL:-}"
+    echo "fixed_point=${PLC_FUSION_FIXED_POINT:-}"
     echo "float_skip_ir=${PLC_FUSION_IR_FLOAT_SKIP:-0}"
     echo "low_jitter=${FUSE_LOW_JITTER:-0}"
     echo "low_jitter_funcs=${PLC_FUSION_LOW_JITTER_FUNCTIONS:-}"

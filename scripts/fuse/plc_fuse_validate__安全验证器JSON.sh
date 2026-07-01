@@ -127,8 +127,7 @@ fi
 if [ -n "${FUSE_EXTRA_SOURCES:-}" ]; then
     extra_n=$(echo "$FUSE_EXTRA_SOURCES" | wc -w)
     if [ "$extra_n" -gt 0 ] && [ -f "$KLL" ]; then
-        if ! grep -qE '^define .* @rt_periodic_record_worst\(' "$KLL" 2>/dev/null && \
-           ! grep -qE '^define .* @hist_' "$KLL" 2>/dev/null; then
+        if ! grep -qE '^define .* @(rt_periodic_record_worst|hist_|mt_scheduler_tick|task_sensor_fusion)\(' "$KLL" 2>/dev/null; then
             multi_tu_ok=0
         fi
     fi
@@ -151,6 +150,28 @@ fi
 
 report_ok=0
 [ -f "$REPORT" ] && report_ok=1
+
+fixed_point_ok=1
+fixed_point_detail="n/a"
+if [ "${FUSE_FIXED_POINT:-1}" = "1" ] && [ -f "$KLL" ]; then
+    if plc_kernel_ll_has_float_ir "$KLL"; then
+        fixed_point_ok=0
+        fixed_point_detail="kernel.ll still contains float IR"
+    else
+        fixed_point_detail="no float IR"
+    fi
+fi
+
+softfloat_ok=1
+softfloat_detail="n/a"
+if [ "${FUSE_FIXED_POINT:-1}" = "1" ] && [ -f "$OBJ" ]; then
+    if plc_kernel_has_compiler_rt_syms "$OBJ" 2>/dev/null; then
+        softfloat_ok=0
+        softfloat_detail="kernel.o has compiler-rt soft-float refs"
+    else
+        softfloat_detail="no soft-float syms"
+    fi
+fi
 
 {
     echo "{"
@@ -188,6 +209,10 @@ report_ok=0
     check_bool "single_entry_dce" "$single_entry_ok" "FUSE_DCE_SINGLE=${FUSE_DCE_SINGLE:-0}"
     echo ","
     check_bool "entries_present" "$entry_ok" "entries=${entry_list}"
+    echo ","
+    check_bool "fixed_point_no_float_ir" "$fixed_point_ok" "${fixed_point_detail}"
+    echo ","
+    check_bool "fixed_point_no_softfloat_syms" "$softfloat_ok" "${softfloat_detail}"
     echo ""
     echo "  ],"
     if [ "$FAIL" = 0 ]; then

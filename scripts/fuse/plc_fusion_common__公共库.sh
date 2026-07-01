@@ -273,49 +273,99 @@ plc_try_step() {
     return 1
 }
 
-plc_git_clone() {
+plc_git_sync() {
     local url="$1"
     local dest="$2"
     local depth="${3:-1}"
+    local branch="${4:-${FUSE_GIT_BRANCH:-}}"
+    local update="${5:-${FUSE_GIT_UPDATE:-0}}"
+
     if [ -d "$dest/.git" ]; then
-        echo "   -> 已存在 ${dest}，跳过 clone"
+        if [ "$update" = "1" ]; then
+            echo "   -> 更新 git: ${dest}"
+            (
+                cd "$dest"
+                if [ -n "$branch" ]; then
+                    git fetch origin "$branch" --depth "$depth" 2>/dev/null \
+                        || git fetch origin "$branch" 2>/dev/null \
+                        || git fetch origin 2>/dev/null || true
+                    git checkout "$branch" 2>/dev/null \
+                        || git checkout -B "$branch" "origin/$branch" 2>/dev/null \
+                        || plc_die "$PLC_E_GIT" "无法 checkout 分支: ${branch}" \
+                            "检查 FUSE_GIT_BRANCH / --git-branch"
+                else
+                    git fetch origin --depth "$depth" 2>/dev/null \
+                        || git fetch origin 2>/dev/null || true
+                fi
+                git pull --ff-only 2>/dev/null || true
+            )
+        else
+            echo "   -> 已存在 ${dest}，跳过 clone（--update 或 FUSE_GIT_UPDATE=1 可同步）"
+        fi
         return 0
     fi
+
     plc_ensure_dir "$(dirname "$dest")"
-    if ! git clone --depth "$depth" "$url" "$dest" 2>/dev/null; then
+    local clone_args=(clone --depth "$depth")
+    if [ -n "$branch" ]; then
+        clone_args+=(-b "$branch")
+    fi
+    clone_args+=("$url" "$dest")
+    if ! git "${clone_args[@]}" 2>/dev/null; then
         plc_die "$PLC_E_GIT" "git clone 失败: ${url}" \
             "检查网络与 git:// 是否被防火墙拦截" \
             "可手动 clone 到 ${dest} 后重试" \
-            "或改用本地源码：去掉 FUSE_GIT_URL，设置 FUSE_SOURCE"
+            "或改用本地源码：--local / --local-dir"
     fi
 }
 
-# 检测 fused .o 是否仍引用 compiler-rt 软浮点符号
+# 兼容旧名
+plc_git_clone() {
+    plc_git_sync "$@"
+}
+
+# 从 key=value 文件加载环境（值可含括号/逗号，避免 source 语法错误）
+plc_load_kv_env_file() {
+    local file="$1"
+    local line key val
+    [ -f "$file" ] || return 1
+    while IFS= read -r line || [ -n "$line" ]; do
+        case "$line" in
+            ''|\#*) continue ;;
+        esac
+        case "$line" in
+            FUSE_*=*|PLC_*=*)
+                key="${line%%=*}"
+                val="${line#*=}"
+                printf -v "$key" '%s' "$val"
+                export "$key"
+                ;;
+        esac
+    done < "$file"
+}
+
+# 检测 fused .o 是否仍引用 compiler-rt 软浮点符号（定点 Pass 应已消除）
 plc_kernel_has_compiler_rt_syms() {
     local obj="$1"
     [ -f "$obj" ] || return 1
     nm -u "$obj" 2>/dev/null | awk '{print $2}' | grep -qE \
-        '^__(add|sub|mul|div|fix|float|extends|trunc|gt|lt|ge|le|eq|ne)|^fma$|^pow$|^ceil$|^floor$|^sqrt$'
+        '^__(add|sub|mul|div|fix|float|extends|trunc|gt|lt|ge|le|eq|ne)(df|sf|tf|hf|bf|)'
 }
 
-plc_resolve_compiler_rt_link() {
-    local obj="$1"
-    local mode="${FUSE_LINK_COMPILER_RT:-auto}"
-    case "$mode" in
-        0|false|no) echo 0 ;;
-        1|true|yes) echo 1 ;;
-        auto)
-            if plc_kernel_has_compiler_rt_syms "$obj"; then
-                echo 1
-            else
-                echo 0
-            fi
-            ;;
-        *)
-            plc_die "$PLC_E_MANIFEST" "无效 FUSE_LINK_COMPILER_RT=$mode" \
-                "可选: auto | 0 | 1"
-            ;;
-    esac
+# kernel.ll 是否仍含浮点 IR 指令（FUSE_FIXED_POINT=1 时应为 0；忽略 struct/tbaa 中的 double 字段名）
+plc_kernel_ll_has_float_ir() {
+    local kll="$1"
+    [ -f "$kll" ] || return 1
+    if grep -qE '^[[:space:]]*%[0-9a-zA-Z.]+ = (fadd|fsub|fmul|fdiv|fcmp|uitofp|sitofp|fptosi|fptoui|fptrunc|fpext) ' "$kll" 2>/dev/null; then
+        return 0
+    fi
+    if grep -qE '^[[:space:]]*(load|store|atomicrmw|cmpxchg).*\b(double|float)\b' "$kll" 2>/dev/null; then
+        return 0
+    fi
+    if grep -qE '^[[:space:]]*%.+ = (invoke|call)[^@]*@.*\b(double|float)\b' "$kll" 2>/dev/null; then
+        return 0
+    fi
+    return 1
 }
 
 # 内核/编译器已提供的符号 — modpost 缺符号时不生成桩

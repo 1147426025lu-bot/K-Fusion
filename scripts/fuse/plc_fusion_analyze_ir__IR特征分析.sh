@@ -74,7 +74,7 @@ while IFS= read -r s; do [ -n "$s" ] && REMAP_SYMS+=("$s"); done < <(load_remap_
 PRESERVED_SYMS=()
 while IFS= read -r s; do [ -n "$s" ] && PRESERVED_SYMS+=("$s"); done < <(load_preserved_syms || true)
 
-# --- 浮点 IR：Pass 内也会再判，此处供 shell pipeline 提前关 float_kill ---
+# --- 浮点 IR：供 pipeline 决定是否运行 Q 定点 Pass ---
 has_float_ir() {
     grep -qE \
         ' (float|double) | fadd | fsub | fmul | fdiv | fcmp | fpext | fptrunc | sitofp | uitofp | fptosi | fptoui ' \

@@ -100,8 +100,9 @@ NEW_BLOCK=""
 while IFS= read -r sym; do
     [ -z "$sym" ] && continue
     if plc_is_compiler_rt_sym "$sym"; then
-        NEED_COMPILER_RT=1
-        continue
+        plc_die "$PLC_E_BUILD" "kernel.o 仍引用软浮点符号: $sym" \
+            "应启用 Q 定点 Pass（FUSE_FIXED_POINT=1）" \
+            "勿再使用已移除的 compiler-rt 桩"
     fi
     sym_defined "$sym" && continue
     hint="$(plc_remap_hint_for_sym "$sym" 2>/dev/null || true)"

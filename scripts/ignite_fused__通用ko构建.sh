@@ -29,7 +29,6 @@ FUSE_RUN_MAIN="${FUSE_RUN_MAIN:-0}"
 FUSE_KTHREAD_ENTRY="${FUSE_KTHREAD_ENTRY:-}"
 FUSE_LINK_RUNTIME_STUBS="${FUSE_LINK_RUNTIME_STUBS:-1}"
 FUSE_LINK_PTHREAD_HOST="${FUSE_LINK_PTHREAD_HOST:-1}"
-FUSE_LINK_COMPILER_RT="${FUSE_LINK_COMPILER_RT:-auto}"
 FUSE_HOST="${FUSE_HOST:-generic}"
 FUSE_AUTO_DETECT="${FUSE_AUTO_DETECT:-1}"
 FORCE_REBUILD_KERNEL_O="${FORCE_REBUILD_KERNEL_O:-1}"
@@ -157,9 +156,14 @@ if [ "$FUSE_LINK_PTHREAD_HOST" = "1" ]; then
     EXTRA_OBJS="${EXTRA_OBJS} plc_pthread_host.o"
 fi
 
-LINK_COMPILER_RT="$(plc_resolve_compiler_rt_link "$KERNEL_O")"
 MODPOST_STUBS_C="${FUSE_NAME}_modpost_stubs.c"
 MODPOST_STUBS_O="${FUSE_NAME}_modpost_stubs.o"
+
+if plc_kernel_has_compiler_rt_syms "$KERNEL_O" 2>/dev/null; then
+    plc_die "$PLC_E_BUILD" "kernel.o 仍含软浮点符号（应已由 Q 定点 Pass 消除）" \
+        "确认 FUSE_FIXED_POINT=1 且 plc-kernelize Pass 已运行" \
+        "见 test/${FUSE_NAME}.pipeline.log"
+fi
 
 write_kbuild_makefile() {
     cat > Makefile <<MAKEFILE_EOF
@@ -168,8 +172,6 @@ ${MOD_NAME}-objs := ${HOST_OBJS}${EXTRA_OBJS} ${KERNEL_O}
 KDIR := /lib/modules/\$(shell uname -r)/build
 PWD := \$(shell pwd)
 ccflags-y += -O2 -I${PROJECT_ROOT}/include ${HOST_CFLAGS}
-# 允许 compiler-rt 桩使用 FP 寄存器（移除内核模块默认 -mgeneral-regs-only）
-CFLAGS_REMOVE_plc_compiler_rt.o := -mgeneral-regs-only
 all:
 	\$(MAKE) -C \$(KDIR) M=\$(PWD) modules
 clean:
@@ -177,14 +179,18 @@ clean:
 MAKEFILE_EOF
 }
 
-ensure_compiler_rt_obj() {
-    LINK_COMPILER_RT="$(plc_resolve_compiler_rt_link "$KERNEL_O")"
-    if [ "$LINK_COMPILER_RT" = "1" ] && ! echo "$EXTRA_OBJS" | grep -qF "plc_compiler_rt.o"; then
-        plc_require_file "$PROJECT_ROOT/src/plc_compiler_rt__软浮点桩.c" "compiler-rt 桩"
-        cp "$PROJECT_ROOT/src/plc_compiler_rt__软浮点桩.c" "$PROJECT_ROOT/test/plc_compiler_rt.c"
-        EXTRA_OBJS="${EXTRA_OBJS} plc_compiler_rt.o"
-        echo "    link compiler-rt stubs (soft-float syms)"
-    fi
+clean_current_ko_artifacts() {
+    # 勿 make clean：会删掉 test/ 里其它 manifest 已生成的 *_mod.ko
+    rm -f \
+        "${MOD_NAME}.ko" "${MOD_NAME}.o" "${MOD_NAME}.mod" "${MOD_NAME}.mod.o" \
+        "${MOD_NAME}.mod.c" ".${MOD_NAME}.ko.cmd" ".${MOD_NAME}.o.cmd" \
+        ".${MOD_NAME}.mod.o.cmd" "modules.order" "Module.symvers" \
+        ".module-common.o" ".module-common.o.cmd" ".modules.order.cmd" \
+        ".Module.symvers.cmd" 2>/dev/null || true
+    # 宿主 .o 带 manifest 相关 -DFUSED_*，切换应用时必须重编
+    rm -f plc_fused_host.o plc_fused_timer_host.o plc_pthread_host.o \
+        .plc_fused_host.o.cmd .plc_fused_timer_host.o.cmd .plc_pthread_host.o.cmd \
+        "${STUBS_O}" ".${STUBS_O}.cmd" 2>/dev/null || true
 }
 
 ensure_modpost_stubs_obj() {
@@ -194,17 +200,10 @@ ensure_modpost_stubs_obj() {
     fi
 }
 
-if [ "$LINK_COMPILER_RT" = "1" ]; then
-    plc_require_file "$PROJECT_ROOT/src/plc_compiler_rt__软浮点桩.c" "compiler-rt 桩"
-    cp "$PROJECT_ROOT/src/plc_compiler_rt__软浮点桩.c" "$PROJECT_ROOT/test/plc_compiler_rt.c"
-    EXTRA_OBJS="${EXTRA_OBJS} plc_compiler_rt.o"
-    echo "    link compiler-rt stubs (soft-float syms in ${KERNEL_O})"
-fi
-
 write_kbuild_makefile
 
 echo "savedcmd_${PWD}/${KERNEL_O} := true" > ".${KERNEL_O}.cmd"
-make clean >/dev/null 2>&1 || true
+clean_current_ko_artifacts
 echo "savedcmd_${PWD}/${KERNEL_O} := true" > ".${KERNEL_O}.cmd"
 
 FUSE_KO_FIXUP_LOOP="${FUSE_KO_FIXUP_LOOP:-1}"
@@ -230,9 +229,6 @@ for attempt in $(seq 1 "$FUSE_KO_FIXUP_MAX"); do
         break
     }
     echo "$fix_out"
-    if echo "$fix_out" | grep -q 'NEED_COMPILER_RT=1'; then
-        ensure_compiler_rt_obj
-    fi
     ensure_modpost_stubs_obj
     write_kbuild_makefile
     echo "savedcmd_${PWD}/${KERNEL_O} := true" > ".${KERNEL_O}.cmd"

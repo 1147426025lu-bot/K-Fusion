@@ -262,7 +262,7 @@ struct PLCAnalysis {
         if (HasPthreadCreate)
             S["FUSE_LINK_PTHREAD_HOST"] = "1";
         if (FloatAnywhere || FloatInCycle)
-            S["FUSE_LINK_COMPILER_RT"] = "auto";
+            S["FUSE_FIXED_POINT"] = "1";
         if (!Globals.empty()) {
             std::set<std::string> Gset;
             for (const auto &G : Globals)

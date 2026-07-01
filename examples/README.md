@@ -17,4 +17,15 @@
 
 **替换/新增**：复制任一 `.c` 改逻辑 → 新建 manifest → `plc_fuse` + `ignite_fused`。
 
-本地 RT demo 样例在 `test/github_demo__本地demo/`（见 [test/README.md](../test/README.md)）。
+## `plc_multitask__多任务示例/`（PLCFusion 综合演示）
+
+多优先级协作调度 + pthread 监视器 + 多 TU + `double`/`float` 定点 Pass。
+
+| 文件 | 说明 |
+|------|------|
+| `plc_multitask_demo__主程序.c` | `main`、1ms 周期、`pthread_create` |
+| `plc_multitask_scheduler__调度器.c` | 定长任务表 + 优先级位图 |
+| `plc_multitask_tasks__任务集.c` | 传感融合、PID、malloc 统计 |
+
+Manifest：`manifests/manifest_plc_multitask__多任务优先级.env`。详见 [plc_multitask__多任务示例/README.md](plc_multitask__多任务示例/README.md)。
+

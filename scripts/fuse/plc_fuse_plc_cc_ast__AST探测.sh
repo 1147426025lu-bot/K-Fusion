@@ -44,6 +44,10 @@ else
 fi
 plc_require_file "$SOURCE_PATH" "plc-cc 源文件"
 
+plc_fusion_ast_extra_clang "$PROJECT_ROOT" "$SRC_ROOT"
+AST_CLANG_EXTRA=("${PLC_FUSION_AST_EXTRA_CLANG[@]}")
+AST_CLANG_EXTRA+=(-I"$PROJECT_ROOT/include")
+
 PLC_AST="$PROJECT_ROOT/build/plc_ast"
 AST_SRC="$PROJECT_ROOT/frontend/ast/ast_tool__AST工具.cpp"
 if [ ! -x "$PLC_AST" ] || { [ -f "$AST_SRC" ] && [ "$AST_SRC" -nt "$PLC_AST" ]; }; then
@@ -66,7 +70,7 @@ echo "=== plc-cc AST: ${FUSE_NAME} ==="
 echo "    source=$SOURCE_PATH"
 echo "    json=$JSON_OUT"
 
-if ! "$PLC_AST" "${AST_ARGS[@]}" "$SOURCE_PATH" --; then
+if ! "$PLC_AST" "${AST_ARGS[@]}" "$SOURCE_PATH" -- "${AST_CLANG_EXTRA[@]}"; then
     plc_die "$PLC_E_BUILD" "plc_ast 分析失败（见上方 ERROR）" \
         "修复周期函数内阻塞调用，或查看 $JSON_OUT"
 fi

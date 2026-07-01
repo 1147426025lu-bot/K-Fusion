@@ -37,6 +37,8 @@ results/*
 results/stability/*
 !results/stability/*.csv
 test/rt-tests/
+test/tacle-bench/
+test/vendor/
 test/platform_*/
 scripts/platform/test/
 
@@ -66,6 +68,7 @@ test/*.wcet_genetic.json
 test/*_runtime_stubs.c
 !test/plc_runtime_stubs.c
 test/*.stubs.generated.c
+test/*_stubs.generated.c
 test/ci_*
 test/rebuild_smoke.json
 test/suggest_*
@@ -84,6 +87,10 @@ examples/**/*.plc_ast.json
 *.swp
 *.swo
 *~
+
+# --- 论文本地导出包（写作在 Windows，勿提交副本）---
+plc_paper_writing/
+plc_paper_writing.tar.gz
 
 # --- 系统文件 ---
 .DS_Store

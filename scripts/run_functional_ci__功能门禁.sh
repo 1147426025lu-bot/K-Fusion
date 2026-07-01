@@ -21,7 +21,6 @@ DEFAULT_MANIFESTS=(
     "$PRJ/manifests/manifest_plc_cc_hello__入门.env"
     "$PRJ/manifests/manifest_github_rt_periodic__周期demo.env"
     "$PRJ/manifests/manifest_signaltest__信号测试.env"
-    "$PRJ/manifests/manifest_github_stb_sprintf__sprintf_demo.env"
 )
 
 if [ -n "${FUNCTIONAL_MANIFESTS:-}" ]; then

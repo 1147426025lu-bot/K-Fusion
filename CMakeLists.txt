@@ -42,7 +42,9 @@ set_target_properties(PLCLowJitterPass PROPERTIES
 )
 
 # --- AI-PLC Fusion Compiler Pass ---
-add_library(PLCFusionPass MODULE backend/pass/PLCFusionPass__内核化Pass.cpp)
+add_library(PLCFusionPass MODULE
+    backend/pass/PLCFusionPass__内核化Pass.cpp
+    backend/pass/PLCFusionFixedPoint__定点Pass.cpp)
 set_target_properties(PLCFusionPass PROPERTIES
     CXX_STANDARD 17
     PREFIX "" 

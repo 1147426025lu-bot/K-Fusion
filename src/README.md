@@ -11,7 +11,7 @@
 | `plc_fused_timer_host__hrtimer宿主.c` | hrtimer 周期睡眠 | cyclictest、周期 demo |
 | `plc_pthread_host__pthread宿主.c` | pthread → kthread | signaltest、多线程 rt-tests |
 | `plc_runner_official__cyclictest宿主.c` | cyclictest 专用低抖动宿主 | `ignite_official_cycletest__*` 专用 |
-| `plc_compiler_rt__软浮点桩.c` | 软浮点 | `FUSE_LINK_COMPILER_RT=auto` 时链入 |
+| `plc_runtime_stubs__POSIX桩.c` | POSIX 桩 + `plc_fix_to_double()`（printf 边界） |
 | `plc_baseline_cyclic__手写基线.c` | 论文手写基线 | `scripts/paper/ignite_baseline_cyclic__*` |
 | `plot_frequency_polygon__抖动绘图.py` | 浸泡 histogram 绘图 | deploy 长测后可选 |
 

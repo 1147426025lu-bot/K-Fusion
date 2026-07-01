@@ -96,7 +96,6 @@ void plc_fused_stats_tick(void)
 {
 	atomic64_inc(&fused_loop_count);
 }
-EXPORT_SYMBOL_GPL(plc_fused_stats_tick);
 module_param(fused_cpu, int, 0644);
 MODULE_PARM_DESC(fused_cpu, "CPU to pin fused worker (-1=any)");
 

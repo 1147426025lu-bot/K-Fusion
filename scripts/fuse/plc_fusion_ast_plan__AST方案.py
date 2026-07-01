@@ -199,8 +199,8 @@ def build_plan(data: dict[str, Any], manifest: dict[str, str]) -> dict[str, Any]
         if not manifest.get("FUSE_DCE_ROOTS"):
             manifest_hints["FUSE_DCE_ROOTS"] = roots
 
-    if float_anywhere and not manifest.get("FUSE_LINK_COMPILER_RT"):
-        manifest_hints["FUSE_LINK_COMPILER_RT"] = "auto"
+    if float_anywhere and not manifest.get("FUSE_FIXED_POINT"):
+        manifest_hints["FUSE_FIXED_POINT"] = "1"
 
     low_jitter: bool | None = None
     if fuse_name.startswith("plc_cc_") or entry.startswith("plc_"):
@@ -208,9 +208,9 @@ def build_plan(data: dict[str, Any], manifest: dict[str, str]) -> dict[str, Any]
     elif wcet_mode and profile in ("wcet", "hotpath", "mainline"):
         low_jitter = True
 
-    float_kill: bool | None = None
+    fixed_point: bool | None = None
     if float_in_cycle or float_anywhere:
-        float_kill = True
+        fixed_point = True
 
     candidates = build_candidates(profile, reason, {**data, "blocking_error_count": blocking_errors}, manifest)
 
@@ -225,7 +225,7 @@ def build_plan(data: dict[str, Any], manifest: dict[str, str]) -> dict[str, Any]
         "pass_plan": {
             "profile": profile,
             "low_jitter": low_jitter,
-            "float_kill": float_kill,
+            "fixed_point": fixed_point,
         },
         "ast_summary": {
             "entry": entry,
@@ -271,11 +271,12 @@ def shell_export(plan: dict[str, Any], ast_path: Path, plan_path: Path) -> str:
         lines.append(f"PLC_FUSION_AST_CANDIDATE_3={(cands[2]['profile'] if len(cands) > 2 else '')}")
     pp = plan.get("pass_plan") or {}
     lj = pp.get("low_jitter")
-    fk = pp.get("float_kill")
+    fp = pp.get("fixed_point")
     lines.append(f"PLC_FUSION_AST_SUGGEST_LOW_JITTER={'auto' if lj is None else (1 if lj else 0)}")
     lines.append(
-        f"PLC_FUSION_AST_SUGGEST_FLOAT_KILL={'auto' if fk is None else (1 if fk else 0)}"
+        f"PLC_FUSION_AST_SUGGEST_FIXED_POINT={'auto' if fp is None else (1 if fp else 0)}"
     )
+    lines.append(f"PLC_FUSION_AST_FLOAT_ANYWHERE={1 if s.get('float_anywhere') else 0}")
     return "\n".join(lines)
 
 

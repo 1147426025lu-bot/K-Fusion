@@ -39,8 +39,8 @@ plc_require_file "$MANIFEST" "manifest" \
 plc_source_manifest "$MANIFEST"
 
 # 平台 LLC / 隔离参数（覆盖 manifest 内 FUSE_LLC_*）
-# shellcheck source=platform/plc_source_platform__加载平台.sh
-source "$SCRIPT_DIR/platform/plc_source_platform__加载平台.sh"
+# shellcheck source=../platform/plc_source_platform__加载平台.sh
+source "$(plc_scripts_root)/platform/plc_source_platform__加载平台.sh"
 echo "🖥️  platform=${PLATFORM_ID:-?} (${PLATFORM_LABEL:-}) llc=${FUSE_LLC_ARCH}/${FUSE_LLC_ATTR}"
 # 子脚本会再次 source manifest 并覆盖 FUSE_LLC_*；平台 LLC 单独保留
 _PLATFORM_LLC_ARCH="${FUSE_LLC_ARCH:-aarch64}"
@@ -67,6 +67,12 @@ FUSE_LLC_ARCH="${FUSE_LLC_ARCH:-aarch64}"
 FUSE_LLC_ATTR="${FUSE_LLC_ATTR:--fp-armv8,-neon}"
 FUSE_LLC_RELOC="${FUSE_LLC_RELOC:-static}"
 FUSE_WORK_DIR="${FUSE_WORK_DIR:-$TEST_DIR}"
+
+AUTOTUNE_ENV="$FUSE_WORK_DIR/${FUSE_NAME}.autotune.env"
+if [ -f "$AUTOTUNE_ENV" ] && [ "${FUSE_WCET_USE_AUTOTUNE:-1}" = "1" ]; then
+    echo "    WCET autotune env: $AUTOTUNE_ENV"
+    plc_load_kv_env_file "$AUTOTUNE_ENV"
+fi
 
 plc_ensure_dir "$FUSE_WORK_DIR"
 
@@ -136,7 +142,7 @@ if [ -n "${FUSE_GIT_URL:-}" ]; then
             "示例: FUSE_GIT_DIR=rt-tests"
     fi
     SRC_ROOT="$FUSE_WORK_DIR/$FUSE_GIT_DIR"
-    plc_git_clone "$FUSE_GIT_URL" "$SRC_ROOT" "$FUSE_GIT_DEPTH"
+    plc_git_sync "$FUSE_GIT_URL" "$SRC_ROOT" "$FUSE_GIT_DEPTH" "${FUSE_GIT_BRANCH:-}" "${FUSE_GIT_UPDATE:-0}"
 elif [ -n "$FUSE_GIT_DIR" ]; then
     SRC_ROOT="$FUSE_WORK_DIR/$FUSE_GIT_DIR"
     if [ ! -d "$SRC_ROOT" ]; then
@@ -290,8 +296,8 @@ run_kernel_and_llc() {
     fi
     export PLC_FUSION_DCE="$FUSE_DCE"
     export PLC_FUSION_ROOTS
-    if [ -n "${FUSE_FLOAT_KILL:-}" ]; then
-        export PLC_FUSION_FLOAT_KILL="$FUSE_FLOAT_KILL"
+    if [ -n "${FUSE_FIXED_POINT:-}" ]; then
+        export PLC_FUSION_FIXED_POINT="$FUSE_FIXED_POINT"
     fi
     if [ -n "${FUSE_DETECT_GLOBALS:-}" ] && [ -z "${FUSE_GLOBALIZE_SYMBOLS:-}" ]; then
         export PLC_FUSION_KEEP_GLOBALS="$FUSE_DETECT_GLOBALS"
@@ -359,6 +365,11 @@ run_kernel_and_llc() {
     ENTRIES_FILE="$FUSE_WORK_DIR/${FUSE_NAME}.entries"
     grep -E '^define .* @(signalthread|timerthread|semathread|main|worker|thread|plc_cycle|plc_main|plc_logic)\(' "$OUT_KLL" 2>/dev/null | \
         sed -E 's/^define .* @([^ (]+).*/\1/' | sort -u > "$ENTRIES_FILE" || true
+    if [ -n "${FUSE_KTHREAD_ENTRY:-}" ]; then
+        if [ ! -f "$ENTRIES_FILE" ] || ! grep -qx "${FUSE_KTHREAD_ENTRY}" "$ENTRIES_FILE" 2>/dev/null; then
+            echo "${FUSE_KTHREAD_ENTRY}" >> "$ENTRIES_FILE"
+        fi
+    fi
     if [ -s "$ENTRIES_FILE" ]; then
         echo "    kthread entries: $(tr '\n' ' ' < "$ENTRIES_FILE")"
     else
@@ -451,7 +462,7 @@ if [ "$FUSE_AUTO_REFINE" = "1" ] && [ "${FUSE_PIPELINE:-auto}" = "auto" ] \
             echo "🔄 [6c] 缺符号=${PLC_FUSION_IR_UNKNOWN_EXTERNS}，自动 refine → debug pipeline..."
             FUSE_PIPELINE=debug
             if source "$SCRIPT_DIR/plc_fusion_pipeline__Pass组合选择.sh" "$MANIFEST"; then
-                export PLC_FUSION_FLOAT_KILL="${PLC_FUSION_FLOAT_KILL:-${FUSE_FLOAT_KILL:-1}}"
+                export PLC_FUSION_FIXED_POINT="${PLC_FUSION_FIXED_POINT:-${FUSE_FIXED_POINT:-1}}"
                 run_kernel_and_llc
                 if [ "$FUSE_AUTO_STUBS" = "1" ]; then
                     bash "$SCRIPT_DIR/plc_fuse_merge_stubs__桩合并.sh" "$MANIFEST" || \

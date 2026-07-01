@@ -47,7 +47,7 @@ run_ast() {
     local args=(--analyze-only --json="$json")
     [ "$strict" = "1" ] && args+=(--strict)
     echo "    -> $(basename "$src") strict=$strict"
-    if ! "$PLC_AST" "${args[@]}" "$src" --; then
+    if ! "$PLC_AST" "${args[@]}" "$src" -- -I"$PRJ/include"; then
         plc_die "$PLC_E_BUILD" "plc_ast 失败: $src"
     fi
 }

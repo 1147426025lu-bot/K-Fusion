@@ -63,7 +63,7 @@ OPT_BIN="$(plc_resolve_tool OPT_BIN opt-19 opt-18 opt-17 opt)"
 LLC_BIN="$(plc_resolve_tool LLC_BIN llc-19 llc-18 llc-17 llc)"
 
 export PLC_FUSION_DCE="${FUSE_DCE:-1}"
-export PLC_FUSION_FLOAT_KILL="${PLC_FUSION_FLOAT_KILL:-1}"
+export PLC_FUSION_FIXED_POINT="${PLC_FUSION_FIXED_POINT:-1}"
 export PLC_FUSION_BLACKHOLE="${PLC_FUSION_BLACKHOLE:-1}"
 export PLC_FUSION_KEEP_GLOBALS="${FUSE_GLOBALIZE_SYMBOLS:-}"
 if [ -n "${FUSE_DCE_ROOTS:-}" ]; then
@@ -108,7 +108,7 @@ cfg = {
     "llc_attr": os.environ.get("LLC_ATTR", "-fp-armv8,-neon"),
     "pass_env": {
         "PLC_FUSION_DCE": os.environ.get("PLC_FUSION_DCE", "1"),
-        "PLC_FUSION_FLOAT_KILL": os.environ.get("PLC_FUSION_FLOAT_KILL", "1"),
+        "PLC_FUSION_FIXED_POINT": os.environ.get("PLC_FUSION_FIXED_POINT", "1"),
         "PLC_FUSION_BLACKHOLE": os.environ.get("PLC_FUSION_BLACKHOLE", "1"),
         "PLC_FUSION_KEEP_GLOBALS": os.environ.get("PLC_FUSION_KEEP_GLOBALS", ""),
         "PLC_FUSION_ROOTS": os.environ.get("PLC_FUSION_ROOTS", ""),

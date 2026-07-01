@@ -782,6 +782,74 @@ char *__weak get_tracefs_prefix(void)
 
 static int plc_gpio_shadow[32];
 
+static uint64_t plc_udiv128_by_64(uint64_t hi, uint64_t lo, uint64_t div)
+{
+	if (!div)
+		return 0;
+	if (!hi)
+		return lo / div;
+	if (hi >= div)
+		return ~0ULL;
+	uint64_t rem = hi;
+	uint64_t quot = 0;
+	for (int i = 0; i < 64; ++i) {
+		rem = (rem << 1) | (lo >> 63);
+		lo <<= 1;
+		quot <<= 1;
+		if (rem >= div) {
+			rem -= div;
+			quot |= 1;
+		}
+	}
+	return quot;
+}
+
+int64_t plc_fix_mul_i64(long long a, long long b, int frac_bits)
+{
+	if (frac_bits <= 0 || frac_bits >= 63)
+		return 0;
+#if defined(__SIZEOF_INT128__)
+	__int128 p = (__int128)a * (__int128)b;
+	return (int64_t)(p >> frac_bits);
+#else
+	return 0;
+#endif
+}
+
+int64_t plc_fix_div_i64(long long a, long long b, int frac_bits)
+{
+	uint64_t ua, ub;
+	int neg;
+
+	if (!b || frac_bits <= 0 || frac_bits >= 63)
+		return 0;
+
+	neg = (a < 0) ^ (b < 0);
+	if (a < 0)
+		ua = (uint64_t)(-(unsigned long long)a);
+	else
+		ua = (uint64_t)a;
+	if (b < 0)
+		ub = (uint64_t)(-(unsigned long long)b);
+	else
+		ub = (uint64_t)b;
+
+	uint64_t lo = ua << (unsigned)frac_bits;
+	uint64_t hi = ua >> (64 - (unsigned)frac_bits);
+	uint64_t q = plc_udiv128_by_64(hi, lo, ub);
+	return neg ? -(int64_t)q : (int64_t)q;
+}
+
+/* Q 定点 → double：仅用户态 printf 变参边界（内核 -mgeneral-regs-only 下不提供） */
+#ifndef __KERNEL__
+double plc_fix_to_double(long long fixed, int frac_bits)
+{
+	if (frac_bits <= 0 || frac_bits > 62)
+		return 0.0;
+	return (double)fixed / (double)(1ULL << frac_bits);
+}
+#endif
+
 void plc_gpio_set(int pin, int value)
 {
 	if (pin >= 0 && pin < 32)

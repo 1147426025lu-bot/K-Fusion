@@ -12,6 +12,7 @@
 | `manifest_signaltest__*` / `manifest_ptsematest__*` | `test/rt-tests/src/...` | 多线程 rt-tests |
 | `manifest_plc_cc_*__*` | `examples/plc-cc__低抖动示例/` | plc-cc 六例 |
 | `manifest_github_*__*` | `test/github_demo__本地demo/` | 本地 RT demo |
+| `manifest_tacle_*__*` | `test/tacle-bench/bench/...` | TACLeBench / Mälardalen WCET |
 | `manifest_template__*` | — | 新应用模板 |
 
 ## 平台参数（FIXED 默认值，可按板子覆盖）

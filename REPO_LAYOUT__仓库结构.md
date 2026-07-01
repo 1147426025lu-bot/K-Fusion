@@ -76,7 +76,7 @@ results/soak/ | results/stress/  (GENERATED)
 | `plc_fused_timer_host__hrtimer宿主.c` | hrtimer 定时宿主 |
 | `plc_pthread_host__pthread宿主.c` | pthread → kthread 宿主 |
 | `plc_runner_official__cyclictest宿主.c` | cyclictest 极致抖动专用宿主 |
-| `plc_compiler_rt__软浮点桩.c` | 软浮点 runtime |
+| `plc_runtime_stubs__POSIX桩.c` | 内核模块 printf/内存等 POSIX 桩；含 `plc_fix_to_double()`（定点 → double，仅 printf 边界） |
 | `plc_baseline_cyclic__手写基线.c` | 论文手写基线（非 Pass 路径） |
 | `plot_frequency_polygon__抖动绘图.py` | 浸泡结果绘图 |
 

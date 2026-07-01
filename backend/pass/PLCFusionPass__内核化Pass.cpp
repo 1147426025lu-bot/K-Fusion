@@ -3,17 +3,17 @@
  *
  * 功能: 将用户态 C 的 LLVM IR 转为可链接的 freestanding 内核 .o
  *   - normalize: DSOLocal 全局/函数；thread_local → 普通全局（避免 TLS reloc）
- *   - float:     浮点 IR kill（无浮点时可自动跳过）
+ *   - fixed:     浮点 IR → Q 定点（Q16.16 / Q32.32，默认开启）
  *   - remap:     POSIX → plc_* 映射；pthread_create → 提升线程入口
  *   - dce:       从 PLC_FUSION_ROOTS / PLC_FUSION_HOT_PATH_FUNCTIONS 可达性裁剪
  *   - export:    保留 FUSE_GLOBALIZE_SYMBOLS / llvm.used
  *   - wcet-mark: 热函数 optnone（RTSS 2025 函数级 WCET 调优前置）
  *   - cleanup:   死 declare 清理；blackhole 未映射 external
  *
- * 可组合子 Pass: plc-fusion-{normalize,float,remap,dce,export,wcet-mark,cleanup}
+ * 可组合子 Pass: plc-fusion-{normalize,fixed,remap,dce,export,wcet-mark,cleanup}
  * 预设 pipeline: plc-kernelize-{mainline,generic,minimal,debug,size,hotpath,wcet}
  *
- * 环境: PLC_FUSION_FLOAT_KILL, PLC_FUSION_DCE, PLC_FUSION_BLACKHOLE,
+ * 环境: PLC_FUSION_FIXED_POINT, PLC_FUSION_DCE, PLC_FUSION_BLACKHOLE,
  *       PLC_FUSION_ROOTS,        PLC_FUSION_HOT_PATH_FUNCTIONS,
  *       PLC_FUSION_WCET_HOT_FUNCTIONS,
  *       PLC_FUSION_KEEP_GLOBALS, PLC_FUSION_UNMAPPED_LOG
@@ -28,6 +28,7 @@
 #include "llvm/IR/Attributes.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
+#include "PLCFusionFixedPoint__定点Pass.h"
 #include <cstdio>
 #include <cstdlib>
 #include <set>
@@ -78,6 +79,7 @@ static bool isPreservedExternal(StringRef Name) {
         "setitimer", "setvbuf", "syscall",
         "pthread_attr_init", "pthread_attr_getstack", "pthread_attr_setstack",
         "plc_gpio_set", "plc_cycle", "plc_main", "plc_logic",
+        "plc_fix_to_double",
         "stbsp_sprintf", "stbsp_snprintf", "stbsp_vsprintf",
         "stbsp_vsprintfcb", "stbsp_set_separators",
         "rt_periodic_record_worst",
@@ -434,7 +436,6 @@ static void preserveExportedGlobals(Module &M, bool &Changed) {
         if (!G)
             continue;
         G->setLinkage(GlobalValue::ExternalLinkage);
-        G->setDSOLocal(false);
         Used.push_back(G);
         Changed = true;
     }
@@ -617,152 +618,7 @@ static bool runNormalize(Module &M) {
     return Changed;
 }
 
-static bool typeHasFloat(Type *Ty) {
-    if (!Ty)
-        return false;
-    if (Ty->isFloatingPointTy())
-        return true;
-    if (auto *ST = dyn_cast<StructType>(Ty))
-        for (unsigned i = 0; i < ST->getNumElements(); ++i)
-            if (typeHasFloat(ST->getElementType(i)))
-                return true;
-    if (auto *AT = dyn_cast<ArrayType>(Ty))
-        return typeHasFloat(AT->getElementType());
-    return false;
-}
-
-static bool moduleHasFloatIR(Module &M) {
-    for (const GlobalVariable &G : M.globals())
-        if (typeHasFloat(G.getValueType()))
-            return true;
-    for (const Function &F : M) {
-        if (typeHasFloat(F.getReturnType()))
-            return true;
-        for (const Argument &A : F.args())
-            if (typeHasFloat(A.getType()))
-                return true;
-        for (const BasicBlock &BB : F)
-            for (const Instruction &I : BB) {
-                if (typeHasFloat(I.getType()))
-                    return true;
-                for (const Use &U : I.operands())
-                    if (typeHasFloat(U->getType()))
-                        return true;
-            }
-    }
-    return false;
-}
-
-static bool isCompilerRtFloat(StringRef Name) {
-    if (!Name.starts_with("__"))
-        return false;
-    return Name.contains("df") || Name.contains("sf") ||
-           Name.ends_with("tf") || Name.ends_with("hf") ||
-           Name.ends_with("bf");
-}
-
-static Value *zeroForType(Type *Ty, LLVMContext &Ctx) {
-    if (Ty->isFloatingPointTy())
-        return ConstantFP::get(Ty, 0.0);
-    if (Ty->isIntegerTy())
-        return ConstantInt::get(Ty, 0);
-    return UndefValue::get(Ty);
-}
-
-static bool killOneFloatInst(Instruction *Inst, bool &Changed) {
-    if (!Inst || !Inst->getParent())
-        return false;
-
-    if (auto *Sel = dyn_cast<SelectInst>(Inst)) {
-        if (!Sel->getType()->isFloatingPointTy())
-            return false;
-        Sel->replaceAllUsesWith(ConstantFP::get(Sel->getType(), 0.0));
-        Sel->eraseFromParent();
-        Changed = true;
-        return true;
-    }
-
-    if (auto *PN = dyn_cast<PHINode>(Inst)) {
-        if (!PN->getType()->isFloatingPointTy())
-            return false;
-        PN->replaceAllUsesWith(ConstantFP::get(PN->getType(), 0.0));
-        PN->eraseFromParent();
-        Changed = true;
-        return true;
-    }
-
-    if (auto *SI = dyn_cast<StoreInst>(Inst)) {
-        Value *V = SI->getValueOperand();
-        if (!V || !V->getType()->isFloatingPointTy())
-            return false;
-        SI->setOperand(0, ConstantFP::get(V->getType(), 0.0));
-        Changed = true;
-        return true;
-    }
-
-    if (auto *FCmp = dyn_cast<FCmpInst>(Inst)) {
-        FCmp->replaceAllUsesWith(ConstantInt::getFalse(FCmp->getContext()));
-        FCmp->eraseFromParent();
-        Changed = true;
-        return true;
-    }
-
-    if (auto *CB = dyn_cast<CallBase>(Inst)) {
-        Function *Callee = CB->getCalledFunction();
-        if (!Callee || !isCompilerRtFloat(Callee->getName()))
-            return false;
-        if (!CB->getType()->isVoidTy())
-            CB->replaceAllUsesWith(zeroForType(CB->getType(), CB->getContext()));
-        CB->eraseFromParent();
-        Changed = true;
-        return true;
-    }
-
-    if (auto *Cast = dyn_cast<CastInst>(Inst)) {
-        Type *SrcTy = Cast->getSrcTy();
-        Type *DstTy = Cast->getDestTy();
-        if (!SrcTy->isFloatingPointTy() && !DstTy->isFloatingPointTy())
-            return false;
-        if (!Cast->getType()->isVoidTy())
-            Cast->replaceAllUsesWith(zeroForType(Cast->getType(), Cast->getContext()));
-        Cast->eraseFromParent();
-        Changed = true;
-        return true;
-    }
-
-    if (Inst->getType()->isFloatingPointTy()) {
-        Inst->replaceAllUsesWith(ConstantFP::get(Inst->getType(), 0.0));
-        Inst->eraseFromParent();
-        Changed = true;
-        return true;
-    }
-
-    return false;
-}
-
-static bool runFloatKill(Module &M) {
-    if (!envEnabled("PLC_FUSION_FLOAT_KILL", true))
-        return false;
-    if (!moduleHasFloatIR(M))
-        return false;
-
-    bool Changed = false;
-    for (unsigned Round = 0; Round < 32; ++Round) {
-        bool RoundChanged = false;
-        for (Function &F : M) {
-            for (BasicBlock &BB : F) {
-                for (auto I = BB.begin(), E = BB.end(); I != E;) {
-                    Instruction *Inst = &*I++;
-                    killOneFloatInst(Inst, RoundChanged);
-                }
-            }
-        }
-        if (!RoundChanged)
-            break;
-        Changed = true;
-    }
-    return Changed;
-}
+static bool runFixedPoint(Module &M) { return runFixedPointConvert(M); }
 
 static bool runRemap(Module &M) {
     bool Changed = false;
@@ -835,10 +691,10 @@ struct PLCFusionNormalizePass : public PassInfoMixin<PLCFusionNormalizePass> {
     }
 };
 
-struct PLCFusionFloatPass : public PassInfoMixin<PLCFusionFloatPass> {
+struct PLCFusionFixedPass : public PassInfoMixin<PLCFusionFixedPass> {
     PreservedAnalyses run(Module &M, ModuleAnalysisManager &) {
-        return runFloatKill(M) ? PreservedAnalyses::none()
-                               : PreservedAnalyses::all();
+        return runFixedPoint(M) ? PreservedAnalyses::none()
+                                : PreservedAnalyses::all();
     }
 };
 
@@ -877,10 +733,10 @@ struct PLCFusionWCETMarkPass : public PassInfoMixin<PLCFusionWCETMarkPass> {
 
 static void addKernelizeMainline(ModulePassManager &MPM) {
     MPM.addPass(PLCFusionNormalizePass());
-    MPM.addPass(PLCFusionFloatPass());
+    MPM.addPass(PLCFusionFixedPass());
     MPM.addPass(PLCFusionRemapPass());
     MPM.addPass(PLCFusionDCEPass());
-    MPM.addPass(PLCFusionFloatPass());
+    MPM.addPass(PLCFusionFixedPass());
     MPM.addPass(PLCFusionExportPass());
     MPM.addPass(PLCFusionCleanupPass());
 }
@@ -897,13 +753,13 @@ static void addKernelizeMinimal(ModulePassManager &MPM) {
 
 static void addKernelizeDebug(ModulePassManager &MPM) {
     MPM.addPass(PLCFusionNormalizePass());
-    if (envEnabled("PLC_FUSION_FLOAT_KILL", true))
-        MPM.addPass(PLCFusionFloatPass());
+    if (envEnabled("PLC_FUSION_FIXED_POINT", true))
+        MPM.addPass(PLCFusionFixedPass());
     MPM.addPass(PLCFusionRemapPass());
     MPM.addPass(PLCFusionExportPass());
     MPM.addPass(PLCFusionCleanupPass());
-    if (envEnabled("PLC_FUSION_FLOAT_KILL", true))
-        MPM.addPass(PLCFusionFloatPass());
+    if (envEnabled("PLC_FUSION_FIXED_POINT", true))
+        MPM.addPass(PLCFusionFixedPass());
 }
 
 static void addKernelizeHotpath(ModulePassManager &MPM) {
@@ -920,10 +776,11 @@ struct PLCFusionPass : public PassInfoMixin<PLCFusionPass> {
         resetUnmappedLog();
         bool Changed = false;
         Changed |= runNormalize(M);
-        Changed |= runFloatKill(M);
+        Changed |= runFixedPoint(M);
         Changed |= runRemap(M);
         Changed |= runDCE(M);
         Changed |= runExport(M);
+        Changed |= runNormalize(M);
         Changed |= runCleanup(M);
         return Changed ? PreservedAnalyses::none() : PreservedAnalyses::all();
     }
@@ -946,8 +803,8 @@ llvmGetPassPluginInfo() {
                             MPM.addPass(PLCFusionNormalizePass());
                             return true;
                         }
-                        if (Name == "plc-fusion-float") {
-                            MPM.addPass(PLCFusionFloatPass());
+                        if (Name == "plc-fusion-fixed" || Name == "plc-fusion-float") {
+                            MPM.addPass(PLCFusionFixedPass());
                             return true;
                         }
                         if (Name == "plc-fusion-remap") {

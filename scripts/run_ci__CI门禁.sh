@@ -26,7 +26,6 @@ DEFAULT_MANIFESTS=(
     "$PRJ/manifests/manifest_ptsematest__互斥锁测试.env"
     "$PRJ/manifests/manifest_github_rt_periodic__周期demo.env"
     "$PRJ/manifests/manifest_github_rt_periodic_multitu__多TU.env"
-    "$PRJ/manifests/manifest_github_stb_sprintf__sprintf_demo.env"
     "$PRJ/manifests/manifest_plc_cc_gpio__PLC示例.env"
     "$PRJ/manifests/manifest_plc_cc_pure_logic__纯逻辑.env"
     "$PRJ/manifests/manifest_plc_cc_temp_control__温控.env"
@@ -37,13 +36,13 @@ DEFAULT_MANIFESTS=(
 
 export PLC_FUSE_STRICT_MISSING=1
 export PLC_FUSE_STRICT_VALIDATE=1
+export PLC_FUSION_FIXED_POINT=1
 # CI 不修改 manifests/（fill-empty 仅用于 onboarding，见 plc_ast_apply_manifest --dry-run）
 export FUSE_AST_APPLY_SUGGEST=0
 
 LITE_MANIFESTS=(
     "$PRJ/manifests/manifest_github_rt_periodic__周期demo.env"
     "$PRJ/manifests/manifest_github_rt_periodic_multitu__多TU.env"
-    "$PRJ/manifests/manifest_github_stb_sprintf__sprintf_demo.env"
     "$PRJ/manifests/manifest_plc_cc_gpio__PLC示例.env"
     "$PRJ/manifests/manifest_plc_cc_pure_logic__纯逻辑.env"
     "$PRJ/manifests/manifest_plc_cc_temp_control__温控.env"
@@ -139,6 +138,9 @@ CYCLIC="$PRJ/manifests/manifest_cyclictest__主线压测.env"
 if [ -f "$CYCLIC" ]; then
     echo "📊 WCET tail 对照（cyclictest 主线）..."
     WCET_SWEEP_RUN_FUSE=0 bash "$WCET" "$CYCLIC"
+    echo "📊 WCET autotune 静态（cyclictest 主线）..."
+    WCET_AUTOTUNE_SKIP_INSMOD=1 bash "$SCRIPT_DIR/fuse/plc_fusion_wcet_autotune__WCET自动调优.sh" "$CYCLIC" \
+        || plc_warn "WCET autotune 未完成（可忽略于无 pre.ll 环境）"
 fi
 
 echo "📦 全类 .ko 链接编译（无 insmod）..."

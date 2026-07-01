@@ -106,7 +106,7 @@ TU_COUNT=1
     echo "| kernel.o_shipped | — | $(file_bytes "${OBJ}_shipped") |"
     echo
     echo "- unknown externs（pre）: ${IR_UNK:-?}"
-    echo "- IR 无浮点跳过 float_kill: ${IR_FLOAT:-?}"
+    echo "- IR 无浮点跳过 fixed_point: ${IR_FLOAT:-?}"
     echo
     echo "## 入口 / DCE"
     echo

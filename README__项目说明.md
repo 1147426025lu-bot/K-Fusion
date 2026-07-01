@@ -11,24 +11,39 @@
 
 **可以。** 较复杂的程序（多线程 rt-tests、多 TU 工程、带浮点/定时器/互斥的周期逻辑）已纳入 CI 与批量验证，不必为每类应用单独写宿主。
 
-当前 **13 个 manifest** 覆盖下列 **6 大类**（均走统一 `ignite_fused__通用ko构建.sh`）：
+当前仓库有 **13 个 manifest**（6 大类）；**默认 CI / 全类 `.ko` 编译覆盖其中 12 个**（见下表）。均走统一 `ignite_fused__通用ko构建.sh`。
 
-| 大类 | 典型应用 | manifest 要点 | 宿主组件 |
-|------|----------|---------------|----------|
-| **1. rt-tests 多线程 main** | signaltest、ptsematest | `FUSE_RUN_MAIN=1`，自动链 pthread 宿主 | `plc_fused_host` + `plc_pthread_host` |
-| **2. rt-tests 周期定时** | cyclictest（含多 TU + histogram） | `FUSE_RUN_MAIN=1`，`FUSE_HOST=hrtimer` | 上者 + `plc_fused_timer_host` |
-| **3. 第三方 RT demo** | github rt_periodic | `FUSE_KTHREAD_ENTRY=plc_main` 或 main 路径 + hrtimer | hrtimer 宿主 |
-| **4. plc-cc 周期控制** | hello / gpio / 温控 / 隔离 / 抖动等 6 例 | `FUSE_KTHREAD_ENTRY=plc_main`，`FUSE_HOST=hrtimer` | hrtimer 宿主 |
-| **5. 单 TU 库/算法** | stb sprintf demo | `FUSE_RUN_MAIN=1`，POSIX 面小 | 通用宿主 + runtime 桩 |
-| **6. 多 TU C 工程** | cyclictest+histogram、rt_periodic multitu | `FUSE_EXTRA_SOURCES='...'` | 按 IR 自动推断 hrtimer/pthread |
+| 大类 | 典型应用 | manifest 要点 | 宿主组件 | 默认 CI |
+|------|----------|---------------|----------|---------|
+| **1. rt-tests 多线程 main** | signaltest、ptsematest | `FUSE_RUN_MAIN=1`，自动链 pthread 宿主 | `plc_fused_host` + `plc_pthread_host` | ✅ |
+| **2. rt-tests 周期定时** | cyclictest（含多 TU + histogram） | `FUSE_RUN_MAIN=1`，`FUSE_HOST=hrtimer` | 上者 + `plc_fused_timer_host` | ✅ |
+| **3. 第三方 RT demo** | github rt_periodic | `FUSE_KTHREAD_ENTRY=main` 或 kthread 入口 + hrtimer | hrtimer 宿主 | ✅ |
+| **4. plc-cc 周期控制** | hello / gpio / 温控 / 隔离 / 抖动等 6 例 | `FUSE_KTHREAD_ENTRY=plc_main` 或 `plc_cycle`，`FUSE_HOST=hrtimer` | hrtimer 宿主 | ✅ |
+| **5. 单 TU 库/算法** | stb sprintf demo | `FUSE_FIXED_POINT=0`（依赖 native double） | 通用宿主 + runtime 桩 | ❌ 见下 |
+| **6. 多 TU C 工程** | cyclictest+histogram、rt_periodic multitu | `FUSE_EXTRA_SOURCES='...'` | 按 IR 自动推断 hrtimer/pthread | ✅ |
+
+**stb_sprintf**（第 5 类）仍保留 manifest，但 **不在 Q-only 默认 CI / ko 门禁** 内：stb 内部 API 需 native `double`，与 `FUSE_FIXED_POINT=1` 冲突。需单独设 `FUSE_FIXED_POINT=0` 并自行验证链接。
 
 **自研复杂 C 代码** 走同一流程：写 manifest → `plc_fuse` → `ignite_fused`。Pass 会自动探测入口、合并缺失桩、按 IR 选 hrtimer/pthread 宿主。
 
 **尚不适合或需额外工作：**
 
 - 重度依赖未映射 libc（socket、复杂 I/O、动态加载）— 需补 `kRemap` 或 runtime 桩
-- 大量浮点且 `FUSE_FLOAT_KILL=0` 时，`ignite_fused` 会自动链 `plc_compiler_rt__软浮点桩.c`（`FUSE_LINK_COMPILER_RT=auto`）
 - 不是把任意用户态进程「整体搬进内核」，而是 **源码算法保留、POSIX 换 ABI、链接进 .ko**
+
+### 定点策略（Q-only，默认）
+
+默认 **`FUSE_FIXED_POINT=1`** / **`PLC_FUSION_FIXED_POINT=1`**：IR 内 float/double 由 **`plc-fusion-fixed`** Pass 转为 **Q16.16 / Q32.32**（`int64`），不再使用 `float_kill` 或 compiler-rt 软浮点。
+
+| 组件 | 说明 |
+|------|------|
+| 源码 API | `include/plc_fixed__定点Q.h`：`plc_fix32_t`、`PLC_FIX32()`、`plc_fix32_cmp` 等 |
+| 乘除 | Pass 生成对 `plc_fix_mul_i64` / `plc_fix_div_i64` 的调用（runtime 桩内纯整数实现，避免 `__udivti3`） |
+| 内核 `.o` | validate 要求 **无 float IR、无 soft-float 未解析符号** |
+| printf | 融合 `.ko` 内用 **整数格式**（如 `%d.%01d`）；`plc_fix_to_double()` 仅 **用户态桩**（`#ifndef __KERNEL__`），供 `%f` 边界 |
+| 关闭定点 | manifest 设 `FUSE_FIXED_POINT=0`（仅特殊 demo，如 stb_sprintf） |
+
+plc-cc 示例推荐显式使用 `plc_fix32_t`；cyclictest 等仍可在源码写 `double`，由 Pass 自动转换。
 
 cyclictest **极致抖动** 仍可选用专用宿主 `scripts/deploy/ignite_official_cycletest__cyclictest主线.sh`；与通用路径 **注入方式相同**（都是调用 `_kernel.o` 里的函数），差别在 timer 实现是否更贴 benchmark。
 
@@ -44,9 +59,9 @@ C 源码 ──Clang──► LLVM IR ──PLCFusionPass──► 内核化 IR 
               plc_runtime_stubs.o + plc_fused_host.o (+ timer/pthread 宿主) ──► ${FUSE_NAME}_mod.ko
 ```
 
-1. **IR 变换（Pass）**：`malloc`→`plc_kmalloc`，`pthread_create`→`plc_pthread_create`，`timer_create`→`plc_timer_create` 等；未映射的外部调用可黑洞或留给桩；从入口函数做 DCE，只保留可达代码。
-2. **产物**：`${FUSE_NAME}_kernel.o` 含你的 **原始算法**（timerthread、main、plc_main 等），不含 glibc。
-3. **宿主 `.ko`**：只做 **启动、POSIX 替身、卸载**；**不向宿主注入应用源码**。
+1. **IR 变换（Pass）**：`malloc`→`plc_kmalloc`，`pthread_create`→`plc_pthread_create`，`timer_create`→`plc_timer_create` 等；可选 **定点 Pass**；未映射的外部调用可黑洞或留给桩；从入口函数做 DCE，只保留可达代码。
+2. **产物**：`${FUSE_NAME}_kernel.o` 含你的 **原始算法**（timerthread、main、plc_main / plc_cycle 等），不含 glibc。LLC 默认 **`-relocation-model=static`**；导出全局保持 **`dso_local`**，避免内核不支持的 GOT 重定位（RELA 311）。
+3. **宿主 `.ko`**：只做 **启动、POSIX 替身、卸载**；**不向宿主注入应用源码**。`ignite_fused` 按 manifest 重编 `plc_fused_host.o`（带 `-DFUSED_ENTRY_SYMBOL=...`），批量构建时 **不会 `make clean` 删掉其它 `*_mod.ko`**。
 
 ### 运行时模型（函数调用，非「掏空线程」）
 
@@ -64,8 +79,8 @@ insmod → module_init → kthread_create("plc_fused_worker")
 | | **PLCFusion** | **plc-cc** |
 |--|---------------|------------|
 | 输入 | 任意 C（rt-tests、demo、自研） | 手写 `plc_cycle()` 的 PLC 程序 |
-| Pass | `PLCFusionPass`（POSIX→plc_*） | `PLCLowJitterPass`（周期抖动优化） |
-| 验证 | cyclictest / verify_fused 13 类 | `examples/plc-cc__低抖动示例/` |
+| Pass | `PLCFusionPass`（POSIX→plc_* + 定点） | `PLCLowJitterPass`（周期抖动优化） |
+| 验证 | cyclictest / verify_fused 最多 13 类 insmod | `examples/plc-cc__低抖动示例/` |
 
 二者共享 `plc_abi__运行时ABI.h` 与 `plc_*` 运行时 ABI。
 
@@ -129,7 +144,9 @@ export PLC_PLATFORM=x86_64
 bash scripts/plc_fuse__内核化主流程.sh manifests/manifest_signaltest__信号测试.env
 ```
 
-配置：`manifests/platform/{rpi5,x86_64,generic}.env`。详见 [docs/platform/README.md](docs/platform/README.md)。
+配置：`manifests/platform/{rpi5,x86_64,generic}.env`。详见 [docs/platform/README.md](docs/platform/README.md) 与 [ARM vs x86 对照](docs/platform/ARM_vs_x86__平台对照.md)。
+
+**GitHub**：`git clone git@github.com:1147426025lu-bot/plc_compiler_rpi5.git` — 同一仓库；Pi 用默认 `rpi5`，x86 实机设 `PLC_PLATFORM=x86_64`。
 
 **注意**：不要用 `sudo bash ignite_official_cycletest__...` 跑整脚本（`sudo` 会重置 `PATH`，找不到 `/usr/local/llvm-*` 里的 clang）；`insmod` 在脚本 `[5/5]` 内自动 `sudo`。跑前建议先 **`sudo -v`**（刷新 sudo 凭证，避免 `[5/5]` 等密码）。若上一步 `plc_fuse` 已成功，可跳过重建：`FORCE_REBUILD_KERNEL_O=0 bash ignite_official_cycletest__cyclictest主线.sh`
 
@@ -144,6 +161,8 @@ bash scripts/plc_fuse__内核化主流程.sh manifests/manifest_signaltest__信�
 | 现象 | 常见原因 |
 |------|----------|
 | 卡在 `[5/5] 加载模块...` | 旧模块未卸干净；`sudo -n` 未先 `sudo -v`；`insmod` 在 `module_init` 里阻塞 |
+| `Invalid module format` / `unsupported RELA relocation: 311` | 旧版 `.ko` 含 GOT 重定位；或 **未卸旧模块** 导致 duplicate symbol。先 `rmmod`，再 `plc_fuse` + `ignite_fused` 重建 |
+| `exports duplicate symbol` | 同时加载了两个 fused 模块；**同一时刻只加载一个 `*_mod`** |
 | `Ctrl+C` 停不下来 | 前台 bash 在 `wait` 一个 **D 状态** 的子进程（`sudo`、`rmmod`、`insmod`） |
 | `sudo reboot` 也卡住 | 内核模块路径已死锁；软重启需等内核清理，可能永远等不到 |
 | 之前有 `rmmod xxx_mod` 一直不返回 | 例如残留的 `rmmod signaltest_mod`，会拖住后续所有模块操作 |
@@ -180,7 +199,7 @@ bash ignite_official_cycletest__cyclictest主线.sh
 2. **卸载**：优先用脚本，不要强杀终端：
    - cyclictest 主线：`bash scripts/deploy/safe_rmmod_official__cyclictest卸载.sh`
    - 通用模块：`bash scripts/safe_rmmod_fused__安全卸载.sh <模块名>`
-3. **切换应用前**先卸旧模块（例如先卸 `signaltest_mod` 再跑 cyclictest）。
+3. **切换应用前**先卸旧模块（`safe_rmmod_fused__安全卸载.sh`）；**不要同时 insmod 两个 `*_mod`**。
 4. **`rmmod` 超过 ~60s 仍无返回**：不要反复 `insmod` / 不要开新终端狂试 `sudo` → **直接 reboot**，否则容易 D 状态死锁。
 5. **不要用 `sudo bash ignite_...` 跑整脚本**；不要用 `kill -9` 杀正在跑 cyclictest 的会话。
 
@@ -200,12 +219,23 @@ sudo dmesg | tail -40
 
 | 命令 | 说明 |
 |------|------|
-| `bash scripts/run_ci__CI门禁.sh` | 无 insmod：Pass + 13 manifest 融合 + 覆盖率 + JSON + WCET sweep |
+| `bash scripts/run_ci__CI门禁.sh` | 无 insmod：**12 manifest** 融合 + validate + WCET sweep + **12 类 `.ko` 链接** + functional（3 类 insmod 短测） |
+| `CI_INSMOD=1 bash scripts/run_ci__CI门禁.sh` | 上者 + hello / rt_periodic insmod 短测（需 sudo） |
 | `bash scripts/run_smoke_tests__冒烟测试.sh --insmod` | CI + cyclictest insmod 短测 |
-| `bash scripts/run_smoke_tests__冒烟测试.sh --full` | 上者 + `verify_fused_apps` 全 13 类 insmod |
-| `bash scripts/verify_fused_apps__批量验证.sh` | 仅批量 insmod/rmmod（需 sudo） |
+| `bash scripts/run_smoke_tests__冒烟测试.sh --full` | 上者 + `verify_fused_apps` 批量 insmod（最多 13 类，含 stb） |
+| `bash scripts/verify_fused_apps__批量验证.sh` | 仅批量 insmod/rmmod（需 sudo；`VERIFY_CONTINUE=1` 单个失败仍继续） |
+| `bash scripts/run_ko_build__全类ko编译.sh` | 仅 12 类 `.ko` 链接（无 insmod） |
 
 单 manifest CI：`MANIFESTS="$PRJ/manifests/manifest_xxx.env" bash scripts/run_ci__CI门禁.sh`
+
+**WCET autotune** 依赖 `test/${FUSE_NAME}_pre.ll`；若已被清理，请加 `WCET_SWEEP_RUN_FUSE=1` 或先跑 `plc_fuse`：
+
+```bash
+WCET_AUTOTUNE_SKIP_INSMOD=1 WCET_SWEEP_RUN_FUSE=1 \
+  bash scripts/fuse/plc_fusion_wcet_autotune__WCET自动调优.sh \
+  manifests/manifest_cyclictest__主线压测.env
+# 输出: test/official_cycletest.autotune.env / .wcet_autotune.json
+```
 
 ---
 
@@ -228,6 +258,7 @@ sudo insmod test/my_app_mod.ko
 | `FUSE_KTHREAD_ENTRY` | 宿主直接调线程入口（如 `timerthread`、`plc_main`） |
 | `FUSE_HOST` | `generic` / `hrtimer`（可省略，ignite 从 IR 推断） |
 | `FUSE_PIPELINE` | `auto` / `hotpath` / `debug` 等 |
+| `FUSE_FIXED_POINT` | `1`（默认 Q 定点）；`0` 保留 native float（特殊 demo） |
 | `FUSE_AUTO_DETECT=1` | 从 pre.ll 推断入口与 DCE roots（默认开） |
 
 融合产物：`test/${FUSE_NAME}_kernel.o`、`.fusion_report`、`.unmapped`（缺符号列表）。
@@ -241,9 +272,13 @@ sudo insmod test/my_app_mod.ko
 bash scripts/plc_fuse_report__覆盖率报告.sh manifests/manifest_cyclictest__主线压测.env
 bash scripts/plc_fuse_fusion_report__一页报告.sh manifests/manifest_cyclictest__主线压测.env
 
-# WCET 对照 / 自动调优
+# WCET 对照 / 自动调优（cyclictest；无 pre.ll 时加 WCET_SWEEP_RUN_FUSE=1）
 bash scripts/plc_fusion_wcet_sweep__tail对照.sh manifests/manifest_cyclictest__主线压测.env
-WCET_AUTOTUNE_SKIP_INSMOD=1 bash scripts/plc_fusion_wcet_autotune__WCET自动调优.sh manifests/manifest_cyclictest__主线压测.env
+WCET_AUTOTUNE_SKIP_INSMOD=1 WCET_SWEEP_RUN_FUSE=1 \
+  bash scripts/fuse/plc_fusion_wcet_autotune__WCET自动调优.sh manifests/manifest_cyclictest__主线压测.env
+
+# 批量 .ko 链接（12 类，不 insmod）
+bash scripts/run_ko_build__全类ko编译.sh
 
 # 用户态 vs fused 对比（需 sudo）
 DURATION_SEC=120 bash scripts/demo_compare__用户态vs融合.sh
@@ -268,8 +303,10 @@ bash scripts/maintenance/cleanup_results__清理结果.sh
 |------|------|
 | 融合 | `test/${FUSE_NAME}_kernel.o` 非空，退出码 0 |
 | 覆盖率门禁 | `plc_fuse_check`：`unmapped ≤ 25`（可调 `MAX_UNMAPPED`） |
-| insmod | `dmesg` 无 unresolved symbol；debugfs `fused_stats` 可读 |
-| verify_fused | 13 类均 `✅ *_mod OK` |
+| validate（定点） | `fixed_point_no_float_ir` + `fixed_point_no_softfloat_syms`（`FUSE_FIXED_POINT=1` 时） |
+| insmod | `dmesg` 无 unresolved symbol / RELOC 311；debugfs `fused_stats` 可读 |
+| CI | `run_ci__CI门禁.sh` 全程通过（12 manifest + ko + functional） |
+| verify_fused | 13 类 manifest 均可 insmod/rmmod（stb 需 `FUSE_FIXED_POINT=0`） |
 
 ---
 

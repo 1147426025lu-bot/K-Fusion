@@ -8,7 +8,10 @@
 |----------------|------|----------|------|
 | `rpi5`（默认 on aarch64） | AArch64 | Raspberry Pi 5 + `rpt-rpi-v8-rt` | **已验证**（浸泡/加压测） |
 | `x86_64` | x86-64 | PREEMPT_RT PC / 工控机 | **构建已支持**；insmod/抖动需实机 |
-| `generic` | 自动 | 其他 `uname -m` | 回退 LLC，隔离需自配 |
+
+**ARM 与 x86 对照表**：[ARM_vs_x86__平台对照.md](ARM_vs_x86__平台对照.md)
+
+x86 一键脚本：`bash scripts/platform/quickstart_x86_64__x86快速开始.sh all`
 
 配置文件：`manifests/platform/<id>.env`
 
