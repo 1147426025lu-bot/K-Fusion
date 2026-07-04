@@ -2,7 +2,7 @@
 # ============================================================================
 # run_paper_baseline_matrix__论文基线矩阵.sh — 三基线 × soak/stress × N 次
 # ============================================================================
-# 基线: userspace | baseline_ko (手写) | fused_soak | fused_stress
+# 基线: userspace | baseline_ko | fused | timedc
 # 用法:
 #   bash scripts/paper/run_paper_baseline_matrix__论文基线矩阵.sh
 #   PAPER_RUNS=3 DURATION_MIN=5 SKIP_USERSPACE=1 bash ...
@@ -12,6 +12,7 @@
 #   MATRIX_COOLDOWN_SEC=120
 #   SKIP_USERSPACE=1      跳过用户态（省时）
 #   SKIP_BASELINE_KO=1    跳过手写基线
+#   SKIP_TIMEDC=1         跳过 Timed C（同源 cyclictest 参数）
 # ============================================================================
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -77,6 +78,14 @@ run_cell() {
             run_fused "$kind" "$idx"
             return
             ;;
+        timedc)
+            log="$OUT_DIR/timedc_${kind}_run${idx}_$(date +%H%M%S).log"
+            if ! MEASURE_KIND="$kind" DURATION_MIN="$DURATION_MIN" \
+                bash "$SCRIPT_DIR/run_paper_timedc__论文TimedC.sh" >"$log" 2>&1; then
+                rc=1
+            fi
+            iso=$([ "$kind" = "stress" ] && echo 1 || echo 2)
+            ;;
         *)
             echo "unknown baseline $baseline"; return 1
             ;;
@@ -101,6 +110,12 @@ for idx in $(seq 1 "$PAPER_RUNS"); do
         run_cell baseline_ko soak "$idx" || true
         sleep "$COOLDOWN"
         run_cell baseline_ko stress "$idx" || true
+        sleep "$COOLDOWN"
+    fi
+    if [ "${SKIP_TIMEDC:-0}" != "1" ]; then
+        run_cell timedc soak "$idx" || true
+        sleep "$COOLDOWN"
+        run_cell timedc stress "$idx" || true
         sleep "$COOLDOWN"
     fi
     if [ "$FUSED_SOAK_COOLDOWN_SEC" -gt 0 ] 2>/dev/null; then

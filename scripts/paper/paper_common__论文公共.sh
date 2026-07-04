@@ -24,13 +24,20 @@ paper_csv_header() {
 paper_parse_abs_max() {
     local log="$1"
     local abs_max min_ns max_ns cycles resync
-    abs_max=$(grep -E 'BaselineSummary:|FusedSummary:|Max:' "$log" 2>/dev/null | tail -1 | sed -n 's/.*abs_max_ns=\([0-9]*\).*/\1/p')
+    abs_max=$(grep -E 'BaselineSummary:|FusedSummary:|TimedCSummary:|Max:' "$log" 2>/dev/null | tail -1 | sed -n 's/.*abs_max_ns=\([0-9]*\).*/\1/p')
     if [ -z "$abs_max" ]; then
         abs_max=$(grep -E 'Max:' "$log" 2>/dev/null | tail -1 | sed -n 's/.*Max:[[:space:]]*\([0-9]*\).*/\1/p')
     fi
     if [ -z "$abs_max" ]; then
-        min_ns=$(grep -E 'FusedSummary:|BaselineSummary:' "$log" | tail -1 | sed -n 's/.*min_ns=\(-[0-9]*\).*/\1/p')
-        max_ns=$(grep -E 'FusedSummary:|BaselineSummary:' "$log" | tail -1 | sed -n 's/.*max_ns=\([0-9]*\).*/\1/p')
+        local max_us
+        max_us=$(grep -E '# Max Latencies:' "$log" 2>/dev/null | tail -1 | awk '{print $NF}' | sed 's/^0*//')
+        if [ -n "$max_us" ] && [ "$max_us" -gt 0 ] 2>/dev/null; then
+            abs_max=$((max_us * 1000))
+        fi
+    fi
+    if [ -z "$abs_max" ]; then
+        min_ns=$(grep -E 'FusedSummary:|BaselineSummary:|TimedCSummary:' "$log" | tail -1 | sed -n 's/.*min_ns=\(-[0-9]*\).*/\1/p')
+        max_ns=$(grep -E 'FusedSummary:|BaselineSummary:|TimedCSummary:' "$log" | tail -1 | sed -n 's/.*max_ns=\([0-9]*\).*/\1/p')
         if [ -n "$min_ns" ] && [ -n "$max_ns" ]; then
             abs_max=$max_ns
             if [ "${min_ns#-}" -gt "$abs_max" ] 2>/dev/null; then
@@ -39,6 +46,9 @@ paper_parse_abs_max() {
         fi
     fi
     cycles=$(grep -E 'cycles=' "$log" 2>/dev/null | tail -1 | sed -n 's/.*cycles=\([0-9]*\).*/\1/p')
+    if [ -z "$cycles" ]; then
+        cycles=$(grep -E 'TimedCSummary:' "$log" 2>/dev/null | tail -1 | sed -n 's/.*cycles=\([0-9]*\).*/\1/p')
+    fi
     resync=$(grep -oE 'spike_resync=[0-9]+' "$log" 2>/dev/null | tail -1 | sed 's/spike_resync=//' || true)
     echo "${abs_max:-}|${min_ns:-}|${max_ns:-}|${cycles:-0}|${resync:-0}"
 }

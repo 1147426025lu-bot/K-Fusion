@@ -9,6 +9,30 @@
 | [fig1_architecture_comparison__架构对照.svg](fig1_architecture_comparison__架构对照.svg) | **Figure 1** | cRTOS（空间分域）vs PLCFusion（编译器分裂内核化）总架构对照 |
 | [fig2_plcfusion_toolchain__端到端工具链.svg](fig2_plcfusion_toolchain__端到端工具链.svg) | **Figure 2** | 端到端 toolchain + Pi 上三基线实验（仿 Timed C Fig.1） |
 | [fig3_split_kernelization__分裂式内核化.svg](fig3_split_kernelization__分裂式内核化.svg) | **Figure 3** | `kernel.o` 与宿主 `.ko` 分裂链接细节 |
+由 `plot_frequency_polygon__抖动绘图.py` 生成 **4 宫格抖动直方图** + **延迟时序图**（PNG）。须 `profile_paper_plot__论文抖动出图.env.sh` 开启 ringbuf；默认 L2 浸泡 profile 为压低 jitter **关闭** ringbuf，故默认不出图。
+
+```bash
+sudo -v
+DURATION_MIN=15 bash scripts/paper/run_paper_jitter_plots__论文抖动图.sh
+# 产出 → results/paper/plots/ 与 docs/paper/figures/fig_soak_jitter*.png
+```
+| `fig5_baseline_cdf__抖动CDF.png` | **Figure 5** | 抖动 CDF（需日志含 histogram / Jitter 行） |
+| `fig6_ablation__消融对照.png` | **Figure 6** | 消融对照（跑完 ablation 矩阵后生成） |
+
+## 数据图如何生成
+
+架构图（Fig.1–3）为手工 SVG；**实验数据图（Fig.4–6）由脚本从 CSV/日志自动生成**：
+
+```bash
+# 跑完实验后（或仅有 CSV 时）
+python3 scripts/paper/paper_plot_results__论文出图.py
+
+# 或随整理一步出图
+bash scripts/paper/paper_consolidate__整理结果.sh
+```
+
+若 Fig.4 只有 baseline_ko / fused、没有 userspace，说明 **userspace 基线尚未跑通**（cyclictest 参数或 abs_max 未写入 CSV）。  
+CDF（Fig.5）需要 userspace 日志含 `# Histogram`，或 fused dmesg 含 `Jitter:` 行；默认 soak profile 关闭 ringbuf 时 fused CDF 可能为空。
 
 ## 导出 PDF（投稿用）
 

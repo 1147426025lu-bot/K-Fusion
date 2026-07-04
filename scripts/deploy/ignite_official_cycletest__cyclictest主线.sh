@@ -9,12 +9,13 @@
 # 注意: 不要用 sudo 跑整脚本（会丢 PATH，找不到 /usr/local/llvm-*）；仅 insmod 步骤内部 sudo
 # ============================================================================
 set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DEPLOY_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$DEPLOY_DIR"
 # shellcheck source=../plc_fusion_common__公共库.sh
-source "$SCRIPT_DIR/../plc_fusion_common__公共库.sh"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-TUNE_SCRIPT="$SCRIPT_DIR/../tune/rt_host_tune__主机调优.sh"
-ISOLATE_SCRIPT="$SCRIPT_DIR/../tune/rt_host_isolate__CPU隔离.sh"
+source "$DEPLOY_DIR/../plc_fusion_common__公共库.sh"
+PROJECT_ROOT="$(cd "$DEPLOY_DIR/../.." && pwd)"
+TUNE_SCRIPT="$DEPLOY_DIR/../tune/rt_host_tune__主机调优.sh"
+ISOLATE_SCRIPT="$DEPLOY_DIR/../tune/rt_host_isolate__CPU隔离.sh"
 FUSE_MANIFEST="${PLC_FUSE_MANIFEST:-$PROJECT_ROOT/manifests/manifest_cyclictest__主线压测.env}"
 plc_resolve_manifest "$FUSE_MANIFEST" "$PROJECT_ROOT"
 FUSE_MANIFEST="$PLC_MANIFEST"
@@ -24,7 +25,7 @@ KERNEL_O="${FUSE_NAME}_kernel.o"
 
 # L2 生产 profile（可用 PLC_PROFILE 覆盖；IGNITE_SKIP_PROFILE=1 跳过）
 if [ "${IGNITE_SKIP_PROFILE:-0}" != "1" ]; then
-    _IGNITE_PROFILE="${PLC_PROFILE:-$SCRIPT_DIR/profiles/profile_soak_l2_best__安静浸泡.env.sh}"
+    _IGNITE_PROFILE="${PLC_PROFILE:-$DEPLOY_DIR/profiles/profile_soak_l2_best__安静浸泡.env.sh}"
     if [ -f "$_IGNITE_PROFILE" ]; then
         echo "📦 加载 profile: $_IGNITE_PROFILE"
         # shellcheck source=/dev/null
@@ -72,7 +73,7 @@ else
 fi
 
 echo "🚀 [2/5] PLCFusion 融合目标 (${KERNEL_O})..."
-FUSE_SCRIPT="$SCRIPT_DIR/../plc_fuse__内核化主流程.sh"
+FUSE_SCRIPT="$DEPLOY_DIR/../plc_fuse__内核化主流程.sh"
 if [ "$FORCE_REBUILD_KERNEL_O" = "1" ]; then
     echo "   -> 重建 ${KERNEL_O} (manifest=${FUSE_MANIFEST})..."
     bash "$FUSE_SCRIPT" "$FUSE_MANIFEST"

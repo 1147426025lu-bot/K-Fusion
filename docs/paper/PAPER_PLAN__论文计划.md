@@ -43,7 +43,8 @@ python3 scripts/paper/paper_summarize_results__论文结果汇总.py \
 
 | 步骤 | 脚本 | 产出 | 论文用途 |
 |------|------|------|----------|
-| 1 | `run_paper_feasibility__论文可行性扫描.sh` | `results/paper/feasibility/*.csv` | Table: 13 manifest 可内核化率 |
+| 0 | `run_paper_missing__补跑缺失.sh` | 补 userspace/消融/第二应用 + 自动 `paper_consolidate` | **缺项一键补跑** |
+| 1 | `run_paper_feasibility__论文可行性扫描.sh` | `results/paper/feasibility/LATEST_*.csv` | Table: manifest 可内核化率 |
 | 2 | `run_paper_baseline_matrix__论文基线矩阵.sh` | 三基线 × soak/stress × N 次 | **主结果表** |
 | 3 | `run_paper_ablation_matrix__论文消融矩阵.sh` | hist/wake/ring/iso 消融 | Figure: 每项贡献 ns |
 | 4 | `run_paper_second_app__论文第二应用.sh` | signaltest 短测 | 泛化案例 |

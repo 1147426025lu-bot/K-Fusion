@@ -8,8 +8,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=paper_common__论文公共.sh
 source "$SCRIPT_DIR/paper_common__论文公共.sh"
-# shellcheck source=../plc_fusion_common__公共库.sh
-source "$SCRIPT_DIR/../plc_fusion_common__公共库.sh"
+# shellcheck source=../fuse/plc_fusion_common__公共库.sh
+source "$SCRIPT_DIR/../fuse/plc_fusion_common__公共库.sh"
 
 PROJECT_ROOT="$(paper_root)"
 RT_TESTS="${RT_TESTS_DIR:-$PROJECT_ROOT/test/rt-tests}"
@@ -37,7 +37,7 @@ fi
         export STRESS_LOAD_ENABLE=1
         paper_stress_start
     fi
-    taskset -c "$PROBE" sudo -n "$CYCLIC_BIN" -p 99 -n -i 1000 -m -q -D "${DURATION_MIN}m"
+    taskset -c "$PROBE" sudo -n "$CYCLIC_BIN" -p 99 -i 1000 -m -q -h 100000 -D "${DURATION_MIN}m"
     paper_stress_stop
 } 2>&1 | tee "$LOG"
 

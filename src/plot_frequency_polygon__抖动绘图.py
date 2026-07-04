@@ -18,6 +18,8 @@ JITTER_BATCH_PATTERN = re.compile(r'JitterBatch:\s*([\d\s-]+)')
 CYCLICTEST_ACT_PATTERN = re.compile(r'\bAct:\s*(-?\d+)')
 CYCLICTEST_VERBOSE_PATTERN = re.compile(r'^\s*\d+:\s*\d+:\s*(-?\d+)\s*$')
 CYCLICTEST_HISTOGRAM_PATTERN = re.compile(r'^# Histogram|^#\s*ns\s*:')
+CYCLICTEST_HIST_LINE_PATTERN = re.compile(r'^(\d{6})\s+(\d{6})$')
+CYCLICTEST_MAX_LATENCY_PATTERN = re.compile(r'^#\s*Max Latencies:\s*(\d+)')
 DMESG_PREFIX_PATTERN = re.compile(r'^\[[^\]]+\]\s*(.*)$')
 INTEGER_ONLY_PATTERN = re.compile(r'^-?\d+$')
 JITTER_SUMMARY_PATTERN = re.compile(
@@ -171,6 +173,58 @@ def parse_jitter_values_from_text(text):
     return values
 
 
+def parse_cyclictest_histogram_from_text(text):
+    """cyclictest -h 输出：000001 868800（latency_us, count）。"""
+    if '# Histogram' not in text:
+        return []
+    entries = []
+    for raw_line in text.splitlines():
+        match = CYCLICTEST_HIST_LINE_PATTERN.match(raw_line.strip())
+        if not match:
+            continue
+        lat_us = int(match.group(1))
+        count = int(match.group(2))
+        if count <= 0 or lat_us <= 0:
+            continue
+        left_ns = max(0, lat_us - 1) * 1000
+        right_ns = lat_us * 1000
+        entries.append((left_ns, right_ns, count))
+    return entries
+
+
+def parse_cyclictest_summary_from_text(text, hist_entries=None):
+    max_us = None
+    min_us = None
+    avg_us = None
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        m_max = CYCLICTEST_MAX_LATENCY_PATTERN.match(stripped)
+        if m_max:
+            max_us = int(m_max.group(1))
+        m_min = re.match(r'^#\s*Min Latencies:\s*(\d+)', stripped)
+        if m_min:
+            min_us = int(m_min.group(1))
+        m_avg = re.match(r'^#\s*Avg Latencies:\s*(\d+)', stripped)
+        if m_avg:
+            avg_us = int(m_avg.group(1))
+    if max_us is None:
+        return None
+    min_us = min_us if min_us is not None else max_us
+    if hist_entries is None:
+        hist_entries = parse_cyclictest_histogram_from_text(text)
+    sample_total = sum(count for _, _, count in hist_entries)
+    summary = {
+        'samples': sample_total,
+        'signed_min_ns': min_us * 1000,
+        'signed_max_ns': max_us * 1000,
+        'abs_max_ns': max_us * 1000,
+        'source': 'cyclictest_hist',
+    }
+    if avg_us is not None:
+        summary['signed_avg_ns'] = avg_us * 1000
+    return summary
+
+
 def parse_histogram_entries_from_text(text):
     entries = []
     for raw_line in text.splitlines():
@@ -182,7 +236,9 @@ def parse_histogram_entries_from_text(text):
         right_ns = int(match.group(2))
         count = int(match.group(3))
         entries.append((left_ns, right_ns, count))
-    return entries
+    if entries:
+        return entries
+    return parse_cyclictest_histogram_from_text(text)
 
 
 def parse_summary_from_text(text):
@@ -549,7 +605,10 @@ def plot_all_distributions(jitters_ns, args, hist_entries=None, summary=None):
         signed_max = float(summary['signed_max_ns']) / 1000.0 if summary else float(signed_edges[-1])
         abs_max = float(summary['abs_max_ns']) / 1000.0 if summary else float(abs_edges[-1])
         abs_p99 = float(percentile_from_histogram(abs_edges, abs_counts, 99.0))
-        sample_count = int(summary['samples']) if summary else int(np.sum(signed_counts))
+        hist_total = int(np.sum(signed_counts))
+        sample_count = hist_total
+        if summary and int(summary.get('samples') or 0) > 0:
+            sample_count = int(summary['samples'])
         summary_source = 'histogram_fallback'
     else:
         signed_min = float(np.min(signed_us))
@@ -708,6 +767,8 @@ def main():
             hist_entries = parse_histogram_entries_from_text(log_text)
         if summary is None:
             summary = parse_summary_from_text(log_text)
+        if summary is None:
+            summary = parse_cyclictest_summary_from_text(log_text, hist_entries=hist_entries)
         if hist_entries and not args.input_jitter_bin:
             print(f'📊 已从离线日志读取直方图 bin: {len(hist_entries)} 个')
         if summary is not None and summary.get('source') not in ('fast_hrtimer_bin', 'fast_hrtimer_bin_v2'):

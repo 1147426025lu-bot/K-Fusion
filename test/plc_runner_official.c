@@ -468,7 +468,7 @@ static int plc_misc_open(struct inode *inode, struct file *file)
 {
 	(void)inode;
 	(void)file;
-    return 0;
+	return 0;
 }
 
 static int plc_misc_mmap(struct file *file, struct vm_area_struct *vma)
@@ -753,7 +753,7 @@ int plc_sigwait(const unsigned long *set, int *sig)
 					       atomic_read(&ct->pending) > 0 ||
 					       READ_ONCE(shutdown) ||
 					       READ_ONCE(shutdown_requested));
-    if (ret)
+		if (ret)
 			return ret;
 	}
 }
@@ -992,7 +992,7 @@ static int __init runner_init(void)
 	fused_stat = kzalloc(sizeof(*fused_stat), GFP_KERNEL);
 	fused_par = kzalloc(sizeof(*fused_par), GFP_KERNEL);
 	if (!fused_stat || !fused_par)
-            return -ENOMEM;
+		return -ENOMEM;
 
 	fused_stat->values = kzalloc(VALBUF_SIZE * sizeof(long), GFP_KERNEL);
 	fused_fast.values = kzalloc(VALBUF_SIZE * sizeof(long), GFP_KERNEL);

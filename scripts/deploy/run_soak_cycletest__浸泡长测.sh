@@ -85,7 +85,7 @@ stress_load_stop() {
 
 cleanup() {
     stress_load_stop
-    if [ -n "$SAVE_PRINTK" ]; then
+    if [ -n "${SAVE_PRINTK:-}" ]; then
         echo "$SAVE_PRINTK" | sudo -n tee /proc/sys/kernel/printk >/dev/null 2>&1 || true
     fi
     env_teardown_host
@@ -101,7 +101,7 @@ if [ "$MAX_UPTIME_SEC" -eq 0 ]; then
     echo "ℹ️ uptime=${UPTIME}s（已跳过 MAX_UPTIME 门禁）"
 fi
 
-if [ "$DURATION_MIN" -lt 15 ] 2>/dev/null; then
+if [ "$DURATION_MIN" -lt 15 ] 2>/dev/null && [ "${PAPER_JITTER_PLOTS:-0}" != "1" ]; then
     echo "❌ 正式测量最短 15min（当前 DURATION_MIN=$DURATION_MIN）"
     echo "   调试请直接 bash ignite_official_cycletest__cyclictest主线.sh"
     exit 2

@@ -31,5 +31,6 @@ bash scripts/maintenance/cleanup_results__清理结果.sh
 | 浸泡 15min+ | `DURATION_MIN=15 bash scripts/deploy/run_soak_cycletest__浸泡长测.sh` |
 | 加压 15min+ | `DURATION_MIN=15 bash scripts/deploy/run_stress_cycletest__加压长测.sh` |
 | 论文矩阵 | `bash scripts/paper/run_paper_baseline_matrix__论文基线矩阵.sh` |
+| **抖动/延迟图** | `DURATION_MIN=15 bash scripts/paper/run_paper_jitter_plots__论文抖动图.sh` |
 
-**最短保留时长：15 分钟**（短测仅供终端调试，不写入 results/）。
+由 `plot_frequency_polygon__抖动绘图.py` 生成 **4 宫格抖动直方图** + **延迟时序图**（PNG）。须 `profile_paper_plot__论文抖动出图.env.sh` 开启 ringbuf；默认 L2 浸泡 profile 为压低 jitter **关闭** ringbuf，故默认不出图。
