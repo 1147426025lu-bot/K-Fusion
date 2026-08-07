@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "platform_id": "rpi5",
+  "manifest_basename": "manifest_cyclictest__主线压测.env",
+  "probe_sec": 8,
+  "max_abs_max_ns": 5000000,
+  "min_cycles": 100,
+  "notes": "PREEMPT_RT Pi5, 1ms cyclictest interval; abs_max_ns must stay below 5ms on isolated CPU"
+}

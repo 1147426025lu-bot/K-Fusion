@@ -14,11 +14,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install build deps
+      - name: Install build deps (LLVM 19)
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            cmake ninja-build clang llvm llvm-dev libclang-dev \
+            cmake ninja-build clang-19 llvm-19 llvm-19-dev llvm-19-tools \
             linux-headers-generic git python3 build-essential
 
       - name: WCET nightly (static autotune, skip insmod)

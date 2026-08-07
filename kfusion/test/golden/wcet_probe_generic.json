@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "platform_id": "generic",
+  "manifest_basename": "manifest_cyclictest__主线压测.env",
+  "probe_sec": 8,
+  "max_abs_max_ns": 10000000,
+  "min_cycles": 50,
+  "notes": "Conservative fallback for unknown boards (10ms ceiling)"
+}

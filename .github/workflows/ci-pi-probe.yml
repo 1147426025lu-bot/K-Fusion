@@ -1,0 +1,38 @@
+name: Pi WCET probe
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 04:00 UTC daily — 需仓库注册 self-hosted runner（ARM64 + PREEMPT_RT）
+    - cron: "0 4 * * *"
+
+jobs:
+  pi-probe:
+    runs-on: [self-hosted, Linux, ARM64]
+    timeout-minutes: 120
+    env:
+      CI_WCET_PROBE: "1"
+      CI_CYCLICTEST_MULTITU: "1"
+      PLC_PLATFORM: rpi5
+      WCET_PROBE_SEC: "8"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build deps (LLVM 19)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake ninja-build clang-19 llvm-19 llvm-19-dev \
+            linux-headers-$(uname -r) git python3 build-essential \
+            || sudo apt-get install -y raspberrypi-kernel-headers
+
+      - name: Pi board-level CI (fuse + WCET probe)
+        run: bash kfusion/scripts/run_ci_pi__Pi板级CI.sh
+
+      - name: Upload probe report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wcet-probe-report
+          path: kfusion/test/ci_wcet_probe.json
+          if-no-files-found: ignore
