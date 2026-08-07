@@ -8,8 +8,8 @@ echo "kernel: $(uname -r)"
 JH_VA_BITS="$(zcat /proc/config.gz 2>/dev/null | grep '^CONFIG_ARM64_VA_BITS=' | cut -d= -f2 || true)"
 if [ -z "$JH_VA_BITS" ]; then
 	KR="$(uname -r)"
-	for cfg in "$HOME/plc_compiler/crtos/cache/jh-kernel-$KR/.config" \
-		   "$HOME/plc_compiler/crtos/cache/jh-kdir/.config"; do
+	for cfg in "$HOME/k-fusion/crtos/cache/jh-kernel-$KR/.config" \
+		   "$HOME/k-fusion/crtos/cache/jh-kdir/.config"; do
 		[ -f "$cfg" ] || continue
 		JH_VA_BITS="$(grep '^CONFIG_ARM64_VA_BITS=' "$cfg" | cut -d= -f2)"
 		[ -n "$JH_VA_BITS" ] && break

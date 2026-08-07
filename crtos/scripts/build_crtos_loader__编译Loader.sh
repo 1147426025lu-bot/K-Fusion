@@ -3,7 +3,7 @@
 # Native build on Pi 5 (aarch64) is NOT supported — raw_syscall.S is x86_64 only.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/../../plcfusion/scripts/lib/repo_paths__仓库路径.sh"
+source "$SCRIPT_DIR/../../kfusion/scripts/lib/repo_paths__仓库路径.sh"
 PRJ="$REPO_ROOT"
 LOADER="$CRTOS_UPSTREAM/crtos-loader"
 

@@ -1,77 +1,34 @@
-# 仓库结构说明
-
-2026-07 起仓库按 **子系统分顶栏**，原扁平目录已迁入对应子树。
-
-## 角色标记
-
-| 标记 | 含义 |
-|------|------|
-| **FIXED** | 长期维护的核心代码 |
-| **SWAPPABLE** | 实验 manifest / profile / 示例 |
-| **GENERATED** | 脚本输出，可删后重建 |
-| **UPSTREAM** | 第三方源码（Jailhouse、NuttX、KTC 等） |
-| **LOCAL** | 本地基准数据，gitignore |
-
-## 顶层
+# K-Fusion 仓库结构
 
 ```
-plc_compiler/
-├── plcfusion/     FIXED+SWAPPABLE   C→.ko 融合工具链
-├── crtos/         FIXED+UPSTREAM     Jailhouse Pi5 + cRTOS 参考
-├── timedc/        UPSTREAM+FIXED    TimedC / KTC
-├── compare/       LOCAL              论文/浸泡/加压结果（不提交）
-├── results/       → compare/         符号链接
-├── plc-cc         → plcfusion/scripts/plc-cc__低抖动编译器
-└── .github/       CI 工作流
+k-fusion/                          # GitHub: 1147426025lu-bot/k-fusion
+├── kfusion/          FIXED       # K-Fusion 工具链（主线）
+├── crtos/            REF         # cRTOS/Jailhouse 对照实验
+├── timedc/           REF         # Timed C/KTC 灵感与三基线对照
+├── compare/          LOCAL       # 基准数据（gitignore）
+├── results/          → compare/
+└── plc-cc            → kfusion/scripts/plc-cc__低抖动编译器
 ```
 
-## plcfusion/
-
-原仓库根目录的 `backend/`、`frontend/`、`include/`、`src/`、`manifests/`、`examples/`、`scripts/`、`test/`、`docs/` 等均已移入此处。
+## kfusion/（主线）
 
 ```
-plcfusion/
-├── backend/pass/       LLVM Pass（内核化 / 定点 / 低抖动）
-├── frontend/           plc-cc AST 工具
-├── include/            plc_* ABI
-├── src/                宿主与 POSIX 桩
-├── manifests/          每应用融合清单
-├── scripts/fuse/       融合主流程
-├── scripts/deploy/     cyclictest 长测
-└── test/               Kbuild 工作区
+kfusion/
+├── backend/pass/     LLVM Pass（kernelization / fixed-point / low-jitter）
+├── frontend/         AST 工具
+├── include/          plc_* 运行时 ABI
+├── src/              宿主与 POSIX 桩
+├── manifests/        每应用融合清单（SWAPPABLE）
+├── scripts/fuse/     融合主流程
+├── scripts/deploy/   cyclictest 长测
+└── test/             Kbuild 工作区
 ```
 
-数据流：`manifests/*.env` → `scripts/fuse/` → `test/*_kernel.o` → `ignite_fused` → `.ko` → `compare/plcfusion/soak|stress/`。
+## crtos/ · timedc/（非主线）
 
-## crtos/
+- **crtos/** — Jailhouse Pi5 补丁与 enable 脚本；cRTOS 为论文 **spatial isolation 对照**
+- **timedc/** — KTC 移植；Timed C 为 **语言层时间语义对照**
 
-```
-crtos/
-├── upstream/jailhouse/     Jailhouse 源码 + **Pi5 补丁**（driver、entry.S、configs）
-├── upstream/fixstars/      cRTOS / NuttX / loader 参考 clone
-├── scripts/                编内核、enable 分步测试、netconsole、scratch 读取
-├── docs/                   Pi5 Jailhouse 实验文档
-├── cache/                  本地 KDIR / 内核构建缓存（gitignore）
-└── logs/                   enable 抓包日志（gitignore）
-```
+## compare/
 
-Pi5 Jailhouse 实验入口：`crtos/docs/README__Jailhouse树莓派5实验.md`。
-
-## timedc/
-
-```
-timedc/
-├── upstream/ktc/         KTC 上游
-├── scripts/                编译 / 安装 / 论文周期 demo
-└── docs/
-```
-
-## compare/ 与 results/
-
-| 路径 | 内容 |
-|------|------|
-| `compare/paper/` | 论文三基线图表与 JSON |
-| `compare/plcfusion/soak|stress/` | cyclictest 长测 |
-| `compare/crtos/` | Jailhouse enable 调试 log |
-
-根目录 `results/` 仅作快捷符号链接；**compare 内大文件默认 gitignore**。
+本地 soak/stress/paper 输出；默认不提交 Git。`results/soak` 等符号链接指向此处。

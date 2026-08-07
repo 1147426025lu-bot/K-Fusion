@@ -1,0 +1,25 @@
+# remap hints for official_cycletest
+# manifest: /home/pi/plc_compiler/plcfusion/manifests/manifest_cyclictest__主线压测.env
+# action: pass=加入 kRemap 后重跑 plc_fuse; stub=runtime 桩; refusion=重跑融合
+
+fputs → (unknown — 需手写 stub 或 Pass 规则)
+fread → (unknown — 需手写 stub 或 Pass 规则)
+indirect:unresolved → Pass v3.5 resolveIndirectCallee（GEP/常量函数表）；仍失败则 blackhole
+__isoc23_fscanf → (unknown — 需手写 stub 或 Pass 规则)
+localtime → (unknown — 需手写 stub 或 Pass 规则)
+numa_allocate_cpumask → (unknown — 需手写 stub 或 Pass 规则)
+numa_available → (unknown — 需手写 stub 或 Pass 规则)
+numa_bitmask_clearbit → (unknown — 需手写 stub 或 Pass 规则)
+numa_parse_cpustring_all → (unknown — 需手写 stub 或 Pass 规则)
+numa_sched_getaffinity → (unknown — 需手写 stub 或 Pass 规则)
+__sched_cpucount → (unknown — 需手写 stub 或 Pass 规则)
+sched_getaffinity → (unknown — 需手写 stub 或 Pass 规则)
+sched_getparam → (unknown — 需手写 stub 或 Pass 规则)
+sched_getscheduler → (unknown — 需手写 stub 或 Pass 规则)
+sprintf → (unknown — 需手写 stub 或 Pass 规则)
+strchr → (unknown — 需手写 stub 或 Pass 规则)
+strftime → (unknown — 需手写 stub 或 Pass 规则)
+strtok → (unknown — 需手写 stub 或 Pass 规则)
+uname → (unknown — 需手写 stub 或 Pass 规则)
+vfprintf → (unknown — 需手写 stub 或 Pass 规则)
+vsnprintf → (unknown — 需手写 stub 或 Pass 规则)

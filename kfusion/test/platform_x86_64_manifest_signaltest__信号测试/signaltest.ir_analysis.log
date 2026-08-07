@@ -1,0 +1,45 @@
+# PLCFusion IR analysis 2026-06-19T15:01:12+08:00
+ir=/home/pi/plc_compiler/test/platform_x86_64_manifest_signaltest__信号测试/signaltest_pre.ll
+mode=pre
+has_float=1
+lines=2772
+funcs=39
+external_calls=90
+unknown_externs=24
+obj_bytes=0
+# PLCFusion IR analysis 2026-06-19T15:01:54+08:00
+ir=/home/pi/plc_compiler/test/platform_x86_64_manifest_signaltest__信号测试/signaltest_pre.ll
+mode=pre
+has_float=1
+lines=2772
+funcs=39
+external_calls=90
+unknown_externs=24
+obj_bytes=0
+# PLCFusion IR analysis 2026-06-19T15:56:57+08:00
+ir=/home/pi/plc_compiler/test/platform_x86_64_manifest_signaltest__信号测试/signaltest_pre.ll
+mode=pre
+has_float=1
+lines=2772
+funcs=39
+external_calls=90
+unknown_externs=24
+obj_bytes=0
+# PLCFusion IR analysis 2026-06-19T15:57:25+08:00
+ir=/home/pi/plc_compiler/test/platform_x86_64_manifest_signaltest__信号测试/signaltest_pre.ll
+mode=pre
+has_float=1
+lines=2772
+funcs=39
+external_calls=90
+unknown_externs=24
+obj_bytes=0
+# PLCFusion IR analysis 2026-06-19T16:02:16+08:00
+ir=/home/pi/plc_compiler/test/platform_x86_64_manifest_signaltest__信号测试/signaltest_pre.ll
+mode=pre
+has_float=1
+lines=2772
+funcs=39
+external_calls=90
+unknown_externs=24
+obj_bytes=0

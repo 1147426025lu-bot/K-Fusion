@@ -1,5 +1,5 @@
 # ============================================
-# plc_compiler_rpi5 — Git ignore
+# K-Fusion — Git ignore
 # ============================================
 
 # --- 构建产物（全树）---
@@ -50,25 +50,24 @@ crtos/upstream/fixstars/
 crtos/cache/
 timedc/upstream/ktc/
 
-# --- plcfusion 测试生成物 ---
-plcfusion/test/.official_cycletest_wcet_*/
-plcfusion/test/.fusion_ast_*
-plcfusion/test/*.detected.env
-plcfusion/test/*.host_profile.env
-plcfusion/test/*.fusion_report
-plcfusion/test/*.validate.json
-plcfusion/test/*.fusion_ast.json
-plcfusion/test/*.fusion_plan.json
-plcfusion/test/*.plc_ast.json
-plcfusion/test/*.plc_ast.env
-plcfusion/test/*.manifest.suggest.env
-plcfusion/test/*.apply_ast.json
-plcfusion/test/*.entries
-plcfusion/test/*.remap_hints
-plcfusion/test/rt-tests/
-plcfusion/test/tacle-bench/
-plcfusion/test/vendor/
-plcfusion/test/platform_*/
-
-# --- 大体积 vendor 克隆（按需 init）---
-# 若已提交子模块则勿忽略；此处仅忽略未跟踪的临时 clone
+# --- kfusion 测试生成物 / vendor ---
+kfusion/test/quick_validate/
+kfusion/test/rt-tests/
+kfusion/test/tacle-bench/
+kfusion/test/**/rt-tests/
+kfusion/test/vendor/
+kfusion/test/platform_*/
+kfusion/test/.official_cycletest_wcet_*/
+kfusion/test/.fusion_ast_*
+kfusion/test/**/*.detected.env
+kfusion/test/**/*.host_profile.env
+kfusion/test/**/*.fusion_report
+kfusion/test/**/*.validate.json
+kfusion/test/**/*.fusion_ast.json
+kfusion/test/**/*.fusion_plan.json
+kfusion/test/**/*.plc_ast.json
+kfusion/test/**/*.plc_ast.env
+kfusion/test/**/*.manifest.suggest.env
+kfusion/test/**/*.apply_ast.json
+kfusion/test/**/*.entries
+kfusion/test/**/*.remap_hints

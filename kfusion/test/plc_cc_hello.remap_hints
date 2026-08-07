@@ -1,0 +1,4 @@
+# remap hints for plc_cc_hello
+# manifest: /home/pi/plc_compiler/plcfusion/manifests/manifest_plc_cc_hello__入门.env
+# action: pass=加入 kRemap 后重跑 plc_fuse; stub=runtime 桩; refusion=重跑融合
+

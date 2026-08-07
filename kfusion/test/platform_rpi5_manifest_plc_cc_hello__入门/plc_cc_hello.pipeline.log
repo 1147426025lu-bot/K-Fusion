@@ -1,0 +1,27 @@
+# PLCFusion pipeline 2026-07-27T21:32:04+08:00
+profile=wcet
+reason=auto: ast:plc_entry+wcet
+pre=function(mem2reg,instcombine)
+kernel=plc-kernelize-wcet
+tail=function(simplifycfg,sroa,instcombine,loop-mssa(loop-rotate,licm),loop-unroll,gvn,adce,instcombine),globaldce
+opt=plc-kernelize-wcet,function(simplifycfg,sroa,instcombine,loop-mssa(loop-rotate,licm),loop-unroll,gvn,adce,instcombine),globaldce,plc-low-jitter
+fixed_point=0
+float_skip_ir=1
+low_jitter=1
+low_jitter_funcs=plc_main
+dce=1
+blackhole=1
+hot_path=plc_main
+wcet_mode=1
+cold_pass_sequence=simplifycfg|sroa|instcombine|loop-mssa(loop-rotate,licm)|loop-unroll|gvn|adce|instcombine
+module_pass_sequence=globaldce
+ir_unknown=0
+ir_lines=21
+obj_bytes=0
+ast_loaded=1
+ast_json=/home/pi/plc_compiler/plcfusion/test/platform_rpi5_manifest_plc_cc_hello__入门/plc_cc_hello.plc_ast.json
+ast_plan=/home/pi/plc_compiler/plcfusion/test/platform_rpi5_manifest_plc_cc_hello__入门/plc_cc_hello.fusion_plan.json
+ast_suggest_profile=wcet
+ast_plan_reason=plc_entry+wcet
+ast_candidate_1=wcet (plc_entry+wcet)
+ast_candidate_2=hotpath (fallback_light)

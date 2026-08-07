@@ -1,0 +1,5 @@
+# remap hints for plc_multitask
+# manifest: /home/pi/plc_compiler/manifests/manifest_plc_multitask_paper__论文多任务测量.env
+# action: pass=加入 kRemap 后重跑 plc_fuse; stub=runtime 桩; refusion=重跑融合
+
+fflush → (unknown — 需手写 stub 或 Pass 规则)

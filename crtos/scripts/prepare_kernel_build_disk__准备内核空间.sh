@@ -2,7 +2,7 @@
 # Free disk for jailhouse kernel build (~12 GiB needed for full compile).
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/../../plcfusion/scripts/lib/repo_paths__仓库路径.sh"
+source "$SCRIPT_DIR/../../kfusion/scripts/lib/repo_paths__仓库路径.sh"
 PRJ="$REPO_ROOT"
 TARGET_GB="${TARGET_GB:-12}"
 

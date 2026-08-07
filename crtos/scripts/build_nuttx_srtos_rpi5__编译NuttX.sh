@@ -3,7 +3,7 @@
 # Requires: init_crtos_submodules, jailhouse-enabling kernel (later for load).
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/../../plcfusion/scripts/lib/repo_paths__仓库路径.sh"
+source "$SCRIPT_DIR/../../kfusion/scripts/lib/repo_paths__仓库路径.sh"
 PRJ="$REPO_ROOT"
 CRTOS="$CRTOS_UPSTREAM"
 NUTTX="$CRTOS/crtos-nuttx"

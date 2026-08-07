@@ -1,50 +1,45 @@
-# plc_compiler_rpi5
+# K-Fusion
 
-Raspberry Pi 5 实时系统实验仓库：**PLCFusion**（C→内核融合）、**TimedC**（KTC 周期 C）、**cRTOS/Jailhouse**（分区 hypervisor 与 NuttX cell）。
+**An LLVM-based Kernelization and Fusion Compiler**
 
-> 目录结构见 [REPO_LAYOUT.md](REPO_LAYOUT.md)（`原名__功能说明` 命名规则见 [FILES.md](FILES.md)）。
+将用户态 C 通过 LLVM Pass **内核化（kernelization）** 并 **融合（fusion）** 进 PREEMPT_RT 内核模块，在隔离的执行域中降低周期抖动。
 
-## 顶层目录
+> 目录结构：[REPO_LAYOUT.md](REPO_LAYOUT.md) · 文件索引：[FILES.md](FILES.md)
 
-| 目录 | 说明 |
+## 核心（本仓库主线）
+
+| 路径 | 内容 |
 |------|------|
-| [`plcfusion/`](plcfusion/) | PLC 低抖动编译器 + LLVM Pass + manifest 融合管线 |
-| [`crtos/`](crtos/) | Jailhouse hypervisor/driver 补丁、cRTOS 上游、Pi5 脚本 |
-| [`timedc/`](timedc/) | TimedC / KTC 树莓派移植 |
-| [`compare/`](compare/) | 本地基准与论文对比结果（**不提交 Git**，见目录 README） |
-| [`results/`](results/) | 指向 `compare/` 的符号链接 |
-
-## 快速入口
-
-### PLCFusion
+| [`kfusion/`](kfusion/) | **K-Fusion 工具链**：Clang/LLVM Pass、manifest、`.ko` 构建与 cyclictest 验证 |
+| [`compare/kfusion/`](compare/) | 本地 jitter 基准（soak/stress，gitignore） |
 
 ```bash
-cd plcfusion
-bash scripts/run_ci__CI门禁.sh          # 无 insmod 门禁
+git clone git@github.com:1147426025lu-bot/k-fusion.git
+cd k-fusion/kfusion
+
+cmake -B build -G Ninja && ninja -C build
+bash scripts/run_ci__CI门禁.sh
 bash scripts/ignite_fused__通用ko构建.sh manifests/manifest_plc_cc_hello__入门.env
 ```
 
-详见 `plcfusion/scripts/README.md`。
+## 对照与参考（非主线）
 
-### Jailhouse on Pi 5（进行中）
+| 路径 | 角色 |
+|------|------|
+| [`crtos/`](crtos/) | **论文对照**：cRTOS / Jailhouse 分区 baseline（Pi5 实验脚本与补丁） |
+| [`timedc/`](timedc/) | **灵感来源**：Timed C / KTC 周期 C 移植（三基线对比用） |
 
-```bash
-cd /home/pi/plc_compiler
-bash crtos/scripts/rebuild_jailhouse_pi5__重编HV与驱动.sh
-bash crtos/docs/README__Jailhouse树莓派5实验.md   # 完整流程
-```
+## 设计要点
 
-Pi5 关键补丁：`crtos/upstream/jailhouse/`（canonical VA、`cpu_soft_restart` EL2 入口、VHE leave、scratch 诊断）。
-
-### TimedC
-
-见 `timedc/docs/README__TimedC树莓派移植.md`。
+1. **Split kernelization** — 保留算法 IR，POSIX → `plc_*`，链入 freestanding `kernel.o`
+2. **Manifest 驱动** — 每应用一份 `.env`，可复现融合与 WCET Pass 策略
+3. **隔离 + 降抖动** — CPU 隔离 / RT 优先级 + 内核态热路径（相对用户态 cyclictest）
 
 ## 环境
 
-- 目标板：Raspberry Pi 5，内核 `6.12.x-jh`（PREEMPT_RT + Jailhouse ksym）
-- 开发机：Linux + clang/llvm + 内核 headers
+- 主要平台：Raspberry Pi 5 · Linux `PREEMPT_RT`（`6.12.x-jh` 等）
+- 构建：clang/llvm · 内核 headers · cmake/ninja
 
 ## 许可证
 
-各子目录遵循对应上游许可证（Jailhouse GPL-2.0、PLCFusion 见源文件头等）。
+K-Fusion 工具链见各源文件头；Jailhouse / KTC 等上游遵循各自许可证。

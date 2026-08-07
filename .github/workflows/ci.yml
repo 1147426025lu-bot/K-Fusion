@@ -23,5 +23,5 @@ jobs:
             cmake ninja-build clang llvm llvm-dev libclang-dev \
             linux-headers-generic git python3 build-essential
 
-      - name: Run PLCFusion CI gate (lite manifests, no insmod)
-        run: bash plcfusion/scripts/run_ci__CI门禁.sh
+      - name: Run K-Fusion CI gate (lite manifests, no insmod)
+        run: bash kfusion/scripts/run_ci__CI门禁.sh

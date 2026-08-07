@@ -7,7 +7,7 @@
  * Reservation via device tree overlay before enable:
  *   reg = <0x0 0x20000000 0x0 0x10000000>;  (256 MiB at 512 MiB)
  *
- * PLCFusion Pi5 draft, 2026
+ * K-Fusion Pi5 draft, 2026
  * SPDX-License-Identifier: GPL-2.0
  */
 

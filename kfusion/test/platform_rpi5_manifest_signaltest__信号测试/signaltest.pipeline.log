@@ -1,0 +1,27 @@
+# PLCFusion pipeline 2026-07-27T21:32:06+08:00
+profile=wcet
+reason=auto: manifest
+pre=function(mem2reg,instcombine)
+kernel=plc-kernelize-wcet
+tail=function(simplifycfg,sroa,instcombine,loop-mssa(loop-rotate,licm),loop-unroll,gvn,adce,instcombine),globaldce
+opt=plc-kernelize-wcet,function(simplifycfg,sroa,instcombine,loop-mssa(loop-rotate,licm),loop-unroll,gvn,adce,instcombine),globaldce,plc-low-jitter
+fixed_point=1
+float_skip_ir=0
+low_jitter=1
+low_jitter_funcs=signalthread
+dce=1
+blackhole=1
+hot_path=signalthread
+wcet_mode=1
+cold_pass_sequence=simplifycfg|sroa|instcombine|loop-mssa(loop-rotate,licm)|loop-unroll|gvn|adce|instcombine
+module_pass_sequence=globaldce
+ir_unknown=24
+ir_lines=2772
+obj_bytes=0
+ast_loaded=1
+ast_json=/home/pi/plc_compiler/plcfusion/test/platform_rpi5_manifest_signaltest__信号测试/signaltest.fusion_ast.json
+ast_plan=/home/pi/plc_compiler/plcfusion/test/platform_rpi5_manifest_signaltest__信号测试/signaltest.fusion_plan.json
+ast_suggest_profile=
+ast_plan_reason=
+ast_candidate_1=wcet (FUSE_WCET_MODE=1)
+ast_candidate_2=hotpath (fallback_light)
