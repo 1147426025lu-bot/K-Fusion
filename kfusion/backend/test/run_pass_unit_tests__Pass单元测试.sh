@@ -102,6 +102,10 @@ run_grep_fallback() {
             echo "$out" | grep -qE 'call void .*%fn' || { echo "❌ alloca store/load 间接调用被 blackhole"; return 1; }
             echo "$out" | grep -qE 'call void null' && return 1
             ;;
+        indirect_dispatch_table.ll)
+            echo "$out" | grep -qE 'call void .*%fn' || { echo "❌ dispatch table 间接调用被 blackhole"; return 1; }
+            echo "$out" | grep -qE 'call void null' && return 1
+            ;;
         remap_sched_getaffinity.ll)
             echo "$out" | grep -qE 'call .*@sched_getaffinity' && return 1
             echo "$out" | grep -qE 'call .*@plc_sched_getaffinity' || return 1
@@ -175,6 +179,26 @@ JSON
     rm -f "$bad" "$err"
 }
 
+run_cyclictest_unmapped_probe() {
+    local pre="$KFUSION/test/official_cycletest_multitu_pre.ll"
+    local unmap="$SCRIPT_DIR/.cyclictest_unmapped_probe"
+    [ -f "$pre" ] || return 0
+    echo "   ▶ cyclictest unmapped probe (official_cycletest_multitu_pre.ll)"
+    : > "$unmap"
+    if ! env PLC_FUSION_UNMAPPED_LOG="$unmap" PLC_FUSION_BLACKHOLE=1 \
+        "$OPT" -load-pass-plugin "$PASS_SO" \
+        -passes=plc-fusion-remap "$pre" -S >/dev/null 2>&1; then
+        echo "❌ cyclictest pre.ll remap 失败" >&2
+        return 1
+    fi
+    if [ -s "$unmap" ]; then
+        echo "❌ cyclictest 仍有 unmapped 符号:" >&2
+        sort -u "$unmap" >&2
+        return 1
+    fi
+    rm -f "$unmap"
+}
+
 echo "=== K-Fusion Pass 单元测试 ==="
 echo "    pass=$PASS_SO"
 echo "    opt=$OPT"
@@ -199,6 +223,7 @@ for ll in "$SCRIPT_DIR"/*.ll; do
 done
 
 run_wcet_schedule_negative || FAIL=1
+run_cyclictest_unmapped_probe || FAIL=1
 
 if [ "$FAIL" -ne 0 ]; then
     exit 1

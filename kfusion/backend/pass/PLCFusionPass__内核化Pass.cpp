@@ -117,6 +117,7 @@ static Function *calleeFromValue(Value *V) {
 }
 
 static Function *resolveIndirectCalleeImpl(Value *Op, unsigned Depth);
+static Function *resolveGEPFunctionPointer(GetElementPtrInst *GEP, unsigned Depth);
 
 static Function *resolveFromConstant(Constant *C) {
     if (!C)
@@ -181,8 +182,41 @@ static Function *resolveFromStoredPointer(Value *Ptr, unsigned Depth) {
         }
     }
     if (auto *GEP = dyn_cast<GetElementPtrInst>(Ptr))
-        return resolveFromStoredPointer(GEP->getPointerOperand(), Depth + 1);
+        return resolveGEPFunctionPointer(GEP, Depth + 1);
     return nullptr;
+}
+
+static Function *resolveGEPFunctionPointer(GetElementPtrInst *GEP, unsigned Depth) {
+    if (!GEP || Depth > 8)
+        return nullptr;
+    Value *Base = GEP->getPointerOperand()->stripPointerCasts();
+    Constant *C = nullptr;
+    if (auto *GV = dyn_cast<GlobalVariable>(Base))
+        C = GV->getInitializer();
+    else if (auto *CE = dyn_cast<ConstantExpr>(Base))
+        C = CE;
+
+    if (C) {
+        bool AllConst = true;
+        SmallVector<Constant *, 4> CIdxs;
+        for (Use &U : GEP->indices()) {
+            auto *CI = dyn_cast<ConstantInt>(U.get());
+            if (!CI) {
+                AllConst = false;
+                break;
+            }
+            CIdxs.push_back(CI);
+        }
+        if (AllConst) {
+            Constant *Elem = ConstantExpr::getGetElementPtr(
+                C->getType(), C, CIdxs, GEP->isInBounds());
+            if (Function *F = resolveFromConstant(Elem))
+                return F;
+        }
+        if (Function *F = resolveFromConstant(C))
+            return F;
+    }
+    return resolveFromStoredPointer(GEP->getPointerOperand(), Depth + 1);
 }
 
 // 解析 load @global → 常量函数指针（signal handler / 函数表等间接调用）
@@ -195,12 +229,12 @@ static Function *resolveIndirectCalleeImpl(Value *Op, unsigned Depth) {
     if (auto *Load = dyn_cast<LoadInst>(Op)) {
         auto *Ptr = Load->getPointerOperand();
         if (auto *GEP = dyn_cast<GetElementPtrInst>(Ptr))
-            return resolveIndirectCalleeImpl(GEP, Depth + 1);
+            return resolveGEPFunctionPointer(GEP, Depth + 1);
         if (Function *F = resolveFromStoredPointer(Ptr, Depth + 1))
             return F;
     }
     if (auto *GEP = dyn_cast<GetElementPtrInst>(Op))
-        return resolveIndirectCalleeImpl(GEP->getPointerOperand(), Depth + 1);
+        return resolveGEPFunctionPointer(GEP, Depth + 1);
     if (auto *Sel = dyn_cast<SelectInst>(Op)) {
         if (Function *T = resolveIndirectCalleeImpl(Sel->getTrueValue(), Depth + 1))
             return T;
