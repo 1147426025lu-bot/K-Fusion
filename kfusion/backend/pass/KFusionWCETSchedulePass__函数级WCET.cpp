@@ -9,12 +9,36 @@
 #include "llvm/Support/Error.h"
 #include "llvm/Support/JSON.h"
 #include "llvm/Support/MemoryBuffer.h"
+#include "llvm/Support/raw_ostream.h"
+#include <cstdio>
 #include <cstdlib>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
 using namespace llvm;
+
+static bool gWcetScheduleHadError = false;
+
+static void wcetScheduleError(StringRef Msg) {
+    gWcetScheduleHadError = true;
+    errs() << "[KFusionWCETSchedule] ERROR: " << Msg << "\n";
+    const char *Path = std::getenv("PLC_FUSION_WCET_SCHEDULE_ERR");
+    if (Path && Path[0]) {
+        FILE *F = std::fopen(Path, "a");
+        if (F) {
+            std::string Line = Msg.str();
+            std::fwrite(Line.data(), 1, Line.size(), F);
+            std::fputc('\n', F);
+            std::fclose(F);
+        }
+    }
+}
+
+static bool wcetScheduleStrict() {
+    const char *V = std::getenv("PLC_FUSION_WCET_SCHEDULE_STRICT");
+    return V && V[0] && V[0] != '0';
+}
 
 static std::string wcetSchedulePath() {
     const char *Env = std::getenv("PLC_FUSION_WCET_SCHEDULE_FILE");
@@ -26,14 +50,20 @@ static bool loadWcetSchedule(
     std::unordered_map<std::string, std::vector<std::string>> &Cold,
     std::vector<std::string> &ModulePasses) {
     auto Buf = MemoryBuffer::getFile(Path);
-    if (!Buf)
+    if (!Buf) {
+        wcetScheduleError(("cannot read schedule: " + Path).str());
         return false;
+    }
     Expected<json::Value> Parsed = json::parse(Buf.get()->getBuffer());
-    if (!Parsed)
+    if (!Parsed) {
+        wcetScheduleError(("invalid JSON: " + Path).str());
         return false;
+    }
     json::Object *Root = Parsed->getAsObject();
-    if (!Root)
+    if (!Root) {
+        wcetScheduleError("schedule root must be object");
         return false;
+    }
     if (json::Object *ColdObj = Root->getObject("cold_sequences")) {
         for (auto &KV : *ColdObj) {
             if (json::Array *Arr = KV.second.getAsArray()) {
@@ -74,7 +104,12 @@ static bool runFunctionPipeline(Function &F, StringRef Pipeline,
     PassBuilder PB;
     FunctionPassManager FPM;
     if (Error Err = PB.parsePassPipeline(FPM, Pipeline)) {
-        consumeError(std::move(Err));
+        std::string Msg;
+        raw_string_ostream OS(Msg);
+        OS << "function pipeline parse failed fn=" << F.getName()
+           << " pipe=" << Pipeline << ": ";
+        OS << toString(std::move(Err));
+        wcetScheduleError(OS.str());
         return false;
     }
     FPM.run(F, FAM);
@@ -82,14 +117,18 @@ static bool runFunctionPipeline(Function &F, StringRef Pipeline,
 }
 
 PreservedAnalyses KFusionWCETSchedulePass::run(Module &M, ModuleAnalysisManager &MAM) {
+    gWcetScheduleHadError = false;
     std::string Path = wcetSchedulePath();
     if (Path.empty())
         return PreservedAnalyses::all();
 
     std::unordered_map<std::string, std::vector<std::string>> Cold;
     std::vector<std::string> ModulePasses;
-    if (!loadWcetSchedule(Path, Cold, ModulePasses))
+    if (!loadWcetSchedule(Path, Cold, ModulePasses)) {
+        if (wcetScheduleStrict())
+            wcetScheduleError("strict mode: abort after load failure");
         return PreservedAnalyses::all();
+    }
 
     PassBuilder PB;
     LoopAnalysisManager LAM;
@@ -122,12 +161,20 @@ PreservedAnalyses KFusionWCETSchedulePass::run(Module &M, ModuleAnalysisManager 
         }
         ModulePassManager MPM;
         if (Error Err = PB.parsePassPipeline(MPM, ModPipe)) {
-            consumeError(std::move(Err));
+            std::string Msg;
+            raw_string_ostream OS(Msg);
+            OS << "module pipeline parse failed pipe=" << ModPipe << ": ";
+            OS << toString(std::move(Err));
+            wcetScheduleError(OS.str());
         } else {
             MPM.run(M, MAM);
             Changed = true;
         }
     }
+
+    if (gWcetScheduleHadError && wcetScheduleStrict())
+        errs() << "[KFusionWCETSchedule] strict: errors recorded (see stderr / "
+                  "PLC_FUSION_WCET_SCHEDULE_ERR)\n";
 
     return Changed ? PreservedAnalyses::none() : PreservedAnalyses::all();
 }

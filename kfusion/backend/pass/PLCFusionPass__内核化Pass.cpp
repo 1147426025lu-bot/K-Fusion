@@ -60,6 +60,7 @@ static bool isPreservedExternal(StringRef Name) {
         "strlen", "strcmp", "strncmp", "strncasecmp", "strncpy", "strnlen",
         "strerror", "__errno_location",
         "snprintf",
+        "bsearch", "qsort", "lsearch",
         "rt_init", "check_privs", "sysconf", "__sysconf",
         "enable_trace_mark", "disable_trace_mark", "tracing_stop", "tracemark",
         "numa_initialize", "numa_sched_setaffinity", "numa_node_of_cpu",
@@ -170,6 +171,23 @@ static Function *resolveIndirectCalleeImpl(Value *Op, unsigned Depth) {
         for (Value *Incoming : Phi->incoming_values()) {
             if (Function *F = resolveIndirectCalleeImpl(Incoming, Depth + 1))
                 return F;
+        }
+    }
+    if (auto *Arg = dyn_cast<Argument>(Op)) {
+        Function *Parent = Arg->getParent();
+        if (Parent && Depth < 8) {
+            unsigned ArgNo = Arg->getArgNo();
+            for (User *U : Parent->users()) {
+                if (auto *CB = dyn_cast<CallBase>(U)) {
+                    if (CB->getCalledFunction() != Parent)
+                        continue;
+                    if (ArgNo >= CB->arg_size())
+                        continue;
+                    if (Function *F = resolveIndirectCalleeImpl(
+                            CB->getArgOperand(ArgNo), Depth + 1))
+                        return F;
+                }
+            }
         }
     }
     if (auto *BC = dyn_cast<BitCastInst>(Op))
