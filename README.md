@@ -49,3 +49,9 @@ bash scripts/ignite_fused__通用ko构建.sh manifests/manifest_plc_cc_hello__�
 ## 许可证
 
 见各子目录源文件头；Jailhouse / KTC 等上游遵循各自许可证。
+
+## 开发与贡献
+
+- [`docs/DEV__开发指南.md`](docs/DEV__开发指南.md) — 脚本约定、环境依赖、Pass 测试与 `compare/` 说明  
+- [`kfusion/manifests/README.md`](kfusion/manifests/README.md) — manifest 最小字段与 5 分钟演示  
+- [`REPO_LAYOUT.md`](REPO_LAYOUT.md) — 目录角色（FIXED / SWAPPABLE / LOCAL）

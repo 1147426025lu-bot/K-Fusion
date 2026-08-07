@@ -31,4 +31,13 @@ kfusion/
 
 ## compare/
 
-本地 soak/stress/paper 输出；默认不提交 Git。`results/soak` 等符号链接指向此处。
+本地 soak/stress/paper 输出；**仅 `compare/README.md` 与 `compare/.gitignore` 纳入 Git**（见 [`compare/README.md`](compare/README.md)）。`results/` 为符号链接，不跟踪数据。
+
+## 根目录平台快照（非 Git 依赖）
+
+| 文件 | 说明 |
+|------|------|
+| `kernel_version__内核版本.txt` | 手工记录的内核版本；脚本请用 `uname -r` |
+| `gpio_map_info__GPIO映射.txt` | 某次 GPIO 映射导出，供 PLC 示例对照 |
+
+维护与贡献约定见 [`docs/DEV__开发指南.md`](docs/DEV__开发指南.md)。
