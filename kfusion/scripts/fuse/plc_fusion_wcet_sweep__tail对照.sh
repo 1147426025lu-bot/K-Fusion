@@ -34,7 +34,7 @@ OUT_JSON="$WORK/${FUSE_NAME}.wcet_sweep.json"
 OUT_TSV="$WORK/${FUSE_NAME}.wcet_sweep.tsv"
 SWEEP_DIR="$WORK/.${FUSE_NAME}_wcet_sweep"
 BUILD_DIR="$PROJECT_ROOT/build"
-FUSION_SO="$BUILD_DIR/PLCFusionPass.so"
+FUSION_SO="$(plc_fusion_pass_so "$PROJECT_ROOT" "$BUILD_DIR")"
 
 if [ ! -f "$PRE" ]; then
     if [ "${WCET_SWEEP_RUN_FUSE:-1}" = "1" ]; then

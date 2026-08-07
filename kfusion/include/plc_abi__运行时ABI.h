@@ -124,4 +124,20 @@ void *plc_fopen(const char *path, const char *mode);
 int plc_fclose(void *stream);
 void *plc_fdopen(int fd, const char *mode);
 
+int plc_snprintf(char *buf, size_t size, const char *fmt, ...);
+int plc_fflush(void *stream);
+int plc_fsync(int fd);
+int plc_pthread_detach(unsigned long thread);
+int plc_pthread_attr_setdetachstate(void *attr, int state);
+int plc_pthread_attr_setinheritsched(void *attr, int inherit);
+int plc_pthread_attr_setschedpolicy(void *attr, int policy);
+int plc_sem_init(void *sem, int pshared, unsigned value);
+int plc_sem_destroy(void *sem);
+int plc_sem_wait(void *sem);
+int plc_sem_post(void *sem);
+int plc_sem_timedwait(void *sem, const struct plc_timespec *abs);
+int plc_sem_getvalue(void *sem, int *sval);
+int plc_sched_getparam(int pid, struct sched_param *param);
+int plc_sched_getscheduler(int pid);
+
 #endif /* PLC_ABI_H */

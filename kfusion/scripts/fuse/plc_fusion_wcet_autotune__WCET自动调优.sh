@@ -79,7 +79,7 @@ if [ "${WCET_AUTOTUNE_GREEDY:-0}" = "1" ]; then
     echo "🧬 greedy 变异 tail（4 组）..."
     PRE="$WORK/${FUSE_NAME}_pre.ll"
     BUILD_DIR="$PROJECT_ROOT/build"
-    FUSION_SO="$BUILD_DIR/PLCFusionPass.so"
+    FUSION_SO="$(plc_fusion_pass_so "$PROJECT_ROOT" "$BUILD_DIR")"
     OPT_BIN="$(plc_resolve_tool OPT_BIN opt-19 opt-18 opt-17 opt)"
     LLC_BIN="$(plc_resolve_tool LLC_BIN llc-19 llc-18 llc-17 llc)"
     export PLC_FUSION_DCE="${FUSE_DCE:-1}"

@@ -42,7 +42,7 @@ OUT_ENV="$WORK/${FUSE_NAME}.genetic.env"
 GEN_DIR="$WORK/.${FUSE_NAME}_wcet_genetic"
 CFG="$GEN_DIR/search_config.json"
 BUILD_DIR="$PROJECT_ROOT/build"
-FUSION_SO="$BUILD_DIR/PLCFusionPass.so"
+FUSION_SO="$(plc_fusion_pass_so "$PROJECT_ROOT" "$BUILD_DIR")"
 
 POP="${WCET_GENETIC_POP:-8}"
 GEN="${WCET_GENETIC_GEN:-4}"

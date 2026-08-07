@@ -21,11 +21,15 @@ FUNCTION_ATOMS: tuple[str, ...] = (
     "sroa",
     "early-cse",
     "instcombine",
+    "reassociate",
+    "lcssa",
     "dse",
     "gvn",
     "sccp",
     "adce",
     "bdce",
+    "tailcallelim",
+    "memcpyopt",
     "loop-unroll",
 )
 

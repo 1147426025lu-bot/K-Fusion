@@ -25,7 +25,8 @@ plc_enable_err_trap
 PROJECT_ROOT="$(plc_project_root)"
 BUILD_DIR="$PROJECT_ROOT/build"
 TEST_DIR="$PROJECT_ROOT/test"
-FUSION_SO="$BUILD_DIR/PLCFusionPass.so"
+FUSION_SO="$(plc_fusion_pass_so "$PROJECT_ROOT" "$BUILD_DIR")"
+PASS_TARGET="$(plc_fusion_pass_target)"
 LOW_JITTER_SO="$BUILD_DIR/PLCLowJitterPass.so"
 FUSE_STRICT="${FUSE_STRICT:-0}"
 
@@ -99,7 +100,7 @@ CLANG_BIN="$(plc_resolve_tool CLANG_BIN clang-19 clang-18 clang-17 clang)"
 OPT_BIN="$(plc_resolve_tool OPT_BIN opt-19 opt-18 opt-17 opt)"
 LLC_BIN="$(plc_resolve_tool LLC_BIN llc-19 llc-18 llc-17 llc)"
 
-echo "=== PLCFusion: ${FUSE_DESC} ==="
+echo "=== K-Fusion fuse: ${FUSE_DESC} ==="
 echo "    manifest=$MANIFEST"
 echo "    output=$OUT_OBJ"
 [ -n "$FUSE_KTHREAD_ENTRY" ] && echo "    kthread_entry=$FUSE_KTHREAD_ENTRY (宿主须调用)"
@@ -108,14 +109,15 @@ echo "🛠️ [1/6] 编译 LLVM Pass..."
 mkdir -p "$BUILD_DIR"
 PASS_SRC="$PROJECT_ROOT/backend/pass/PLCFusionPass__内核化Pass.cpp"
 if [ ! -f "$PASS_SRC" ]; then
-    plc_die "$PLC_E_NOFILE" "Pass 源码缺失: $PASS_SRC" "确认在 PLCFusion 项目根目录执行"
+    plc_die "$PLC_E_NOFILE" "Pass 源码缺失: $PASS_SRC" "确认在 K-Fusion/kfusion 目录执行"
 fi
 if [ ! -f "$FUSION_SO" ] || [ "$PASS_SRC" -nt "$FUSION_SO" ]; then
-    if ! (cd "$BUILD_DIR" && cmake .. >/dev/null && make PLCFusionPass -j"$(nproc)" >/dev/null); then
-        plc_die "$PLC_E_BUILD" "PLCFusionPass.so 编译失败" \
+    if ! (cd "$BUILD_DIR" && cmake .. >/dev/null && make "$PASS_TARGET" -j"$(nproc)" >/dev/null); then
+        plc_die "$PLC_E_BUILD" "${PASS_TARGET}.so 编译失败" \
             "检查 build/ 下 cmake 输出" \
             "需安装 llvm-19-dev 与兼容的 C++ 编译器"
     fi
+    FUSION_SO="$(plc_fusion_pass_so "$PROJECT_ROOT" "$BUILD_DIR")"
 fi
 LOW_JITTER_SRC="$PROJECT_ROOT/backend/pass/PLCLowJitterPass__低抖动Pass.cpp"
 if [ ! -f "$LOW_JITTER_SO" ] || [ "$LOW_JITTER_SRC" -nt "$LOW_JITTER_SO" ]; then
@@ -124,7 +126,7 @@ if [ ! -f "$LOW_JITTER_SO" ] || [ "$LOW_JITTER_SRC" -nt "$LOW_JITTER_SO" ]; then
     fi
 fi
 plc_require_file "$FUSION_SO" "Pass 插件" \
-    "手动: cd build && cmake .. && make PLCFusionPass"
+    "手动: cd build && cmake .. && make ${PASS_TARGET}"
 
 if [ -n "${FUSE_SRC_ROOT:-}" ]; then
     if [[ "$FUSE_SRC_ROOT" = /* ]]; then

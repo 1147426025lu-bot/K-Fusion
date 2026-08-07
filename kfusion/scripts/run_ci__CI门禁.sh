@@ -61,7 +61,7 @@ else
     MANIFEST_LIST=("${DEFAULT_MANIFESTS[@]}")
 fi
 
-echo "=== PLCFusion CI 门禁 ==="
+echo "=== K-Fusion CI 门禁 ==="
 echo "    project=$PRJ"
 echo "    manifests=${#MANIFEST_LIST[@]} (+ validate strict + wcet sweep)"
 
@@ -75,16 +75,25 @@ echo "🧹 [1a2] 仓库整洁门禁..."
 bash "$SCRIPT_DIR/run_repo_clean_check__仓库整洁门禁.sh"
 
 if [ "${SKIP_BUILD:-0}" != "1" ]; then
-    echo "🛠️ [1/3] 编译 PLCFusionPass + PLCLowJitterPass + plc_ast..."
-    if ! (cd "$PRJ/build" && cmake .. >/dev/null && make PLCFusionPass PLCLowJitterPass plc_ast -j"$(nproc)" >/dev/null); then
+    PASS_TARGET="$(plc_fusion_pass_target)"
+    echo "🛠️ [1/3] 编译 ${PASS_TARGET} + PLCLowJitterPass + plc_ast..."
+    if ! (cd "$PRJ/build" && cmake .. >/dev/null && make "$PASS_TARGET" PLCLowJitterPass plc_ast -j"$(nproc)" >/dev/null); then
         plc_die "$PLC_E_BUILD" "Pass / plc_ast 编译失败"
     fi
 else
     echo "⏭️  SKIP_BUILD=1，跳过 Pass 编译"
 fi
-plc_require_file "$PRJ/build/PLCFusionPass.so" "Pass 插件"
+plc_require_file "$(plc_fusion_pass_so "$PRJ" "$PRJ/build")" "Pass 插件"
 plc_require_file "$PRJ/build/PLCLowJitterPass.so" "LowJitter Pass 插件"
 plc_require_file "$PRJ/build/plc_ast" "plc_ast 分析器"
+
+echo "🧪 [1a3] Pass 单元测试 (FileCheck)..."
+bash "$PRJ/backend/test/run_pass_unit_tests__Pass单元测试.sh"
+
+echo "🧪 [1a4] 函数级 WCET 门禁 (plc_cc_hello)..."
+chmod +x "$SCRIPT_DIR/run_ci_wcet_per_function__函数级WCET门禁.sh"
+bash "$SCRIPT_DIR/run_ci_wcet_per_function__函数级WCET门禁.sh" \
+    "$PRJ/manifests/manifest_plc_cc_hello__入门.env"
 
 echo "🔬 [1b] plc-cc AST 门禁..."
 bash "$SCRIPT_DIR/run_plc_cc_ast_ci__plc-cc分析门禁.sh"

@@ -71,3 +71,10 @@ kfusion/test/**/*.manifest.suggest.env
 kfusion/test/**/*.apply_ast.json
 kfusion/test/**/*.entries
 kfusion/test/**/*.remap_hints
+kfusion/test/**/*.unmapped
+kfusion/test/**/*.wcet_sweep.tsv
+kfusion/test/**/*.discover_tu.log
+kfusion/test/**/*.preflight.log
+kfusion/test/**/*.pipeline.log
+kfusion/test/**/*.pipeline_policy.log
+kfusion/test/**/*.ir_analysis.log

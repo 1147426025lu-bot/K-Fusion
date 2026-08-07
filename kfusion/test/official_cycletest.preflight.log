@@ -1,6 +1,0 @@
-# preflight: /home/pi/plc_compiler/plcfusion/manifests/manifest_cyclictest__主线压测.env
-# scanned: 2026-07-27T21:33:05+08:00
-[WARN] file IO heavy in /home/pi/plc_compiler/plcfusion/test/rt-tests/src/cyclictest/cyclictest.c
-[INFO] float/double IR in /home/pi/plc_compiler/plcfusion/test/rt-tests/src/cyclictest/cyclictest.c
-
-summary: critical=0 warnings=2

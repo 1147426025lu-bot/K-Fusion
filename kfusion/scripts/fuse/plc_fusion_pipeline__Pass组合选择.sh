@@ -174,7 +174,11 @@ apply_profile() {
                 elif [ -n "${FUSE_KTHREAD_ENTRY:-}" ]; then
                     export PLC_FUSION_WCET_HOT_FUNCTIONS="$FUSE_KTHREAD_ENTRY"
                 fi
-                if [ -n "${FUSE_COLD_PASS_SEQUENCE:-}" ] || [ -n "${FUSE_MODULE_PASS_SEQUENCE:-}" ]; then
+                if [ "${FUSE_WCET_PER_FUNCTION:-0}" = "1" ] \
+                    && [ -n "${PLC_FUSION_WCET_SCHEDULE_FILE:-}" ] \
+                    && [ -f "${PLC_FUSION_WCET_SCHEDULE_FILE}" ]; then
+                    PLC_FUSION_TAIL_PASSES="plc-fusion-wcet-schedule"
+                elif [ -n "${FUSE_COLD_PASS_SEQUENCE:-}" ] || [ -n "${FUSE_MODULE_PASS_SEQUENCE:-}" ]; then
                     PLC_FUSION_TAIL_PASSES="$(wcet_tail_from_sequences)"
                 elif [ -n "${FUSE_TAIL_PASSES:-}" ]; then
                     PLC_FUSION_TAIL_PASSES="$FUSE_TAIL_PASSES"

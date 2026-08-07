@@ -1,4 +1,0 @@
-# remap hints for signaltest
-# manifest: /home/pi/plc_compiler/plcfusion/manifests/manifest_signaltest__信号测试.env
-# action: pass=加入 kRemap 后重跑 plc_fuse; stub=runtime 桩; refusion=重跑融合
-

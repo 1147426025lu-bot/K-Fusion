@@ -1,5 +1,0 @@
-# preflight: /home/pi/plc_compiler/plcfusion/manifests/manifest_signaltest__信号测试.env
-# scanned: 2026-07-27T21:32:05+08:00
-[INFO] float/double IR in /home/pi/plc_compiler/plcfusion/test/platform_rpi5_manifest_signaltest__信号测试/rt-tests/src/signaltest/signaltest.c
-
-summary: critical=0 warnings=1

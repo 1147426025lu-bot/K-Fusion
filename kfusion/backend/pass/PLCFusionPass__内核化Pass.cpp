@@ -10,7 +10,7 @@
  *   - wcet-mark: 热函数 optnone（RTSS 2025 函数级 WCET 调优前置）
  *   - cleanup:   死 declare 清理；blackhole 未映射 external
  *
- * 可组合子 Pass: plc-fusion-{normalize,fixed,remap,dce,export,wcet-mark,cleanup}
+ * 可组合子 Pass: plc-fusion-{normalize,fixed,remap,dce,export,wcet-mark,cleanup,wcet-schedule}
  * 预设 pipeline: plc-kernelize-{mainline,generic,minimal,debug,size,hotpath,wcet}
  *
  * 环境: PLC_FUSION_FIXED_POINT, PLC_FUSION_DCE, PLC_FUSION_BLACKHOLE,
@@ -29,6 +29,7 @@
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
 #include "PLCFusionFixedPoint__定点Pass.h"
+#include "KFusionWCETSchedulePass__函数级WCET.h"
 #include <cstdio>
 #include <cstdlib>
 #include <set>
@@ -322,6 +323,23 @@ static bool applyRemapRules(Module &M, CallBase *CB, Function *Callee,
         {"fopen", "plc_fopen"},
         {"fclose", "plc_fclose"},
         {"fdopen", "plc_fdopen"},
+        {"vfprintf", "plc_fprintf"},
+        {"vprintf", "plc_printk"},
+        {"vsnprintf", "plc_snprintf"},
+        {"fflush", "plc_fflush"},
+        {"fsync", "plc_fsync"},
+        {"pthread_detach", "plc_pthread_detach"},
+        {"pthread_attr_setdetachstate", "plc_pthread_attr_setdetachstate"},
+        {"pthread_attr_setinheritsched", "plc_pthread_attr_setinheritsched"},
+        {"pthread_attr_setschedpolicy", "plc_pthread_attr_setschedpolicy"},
+        {"sem_init", "plc_sem_init"},
+        {"sem_destroy", "plc_sem_destroy"},
+        {"sem_wait", "plc_sem_wait"},
+        {"sem_post", "plc_sem_post"},
+        {"sem_timedwait", "plc_sem_timedwait"},
+        {"sem_getvalue", "plc_sem_getvalue"},
+        {"sched_getparam", "plc_sched_getparam"},
+        {"sched_getscheduler", "plc_sched_getscheduler"},
     };
 
     for (const RemapRule &Rule : kRemap) {
@@ -366,15 +384,16 @@ static bool applyRemapRules(Module &M, CallBase *CB, Function *Callee,
         return true;
     }
 
-    if (Name == "exit" || Name == "abort" || Name == "_exit") {
+    if (Name == "exit" || Name == "abort" || Name == "_exit" || Name == "raise") {
         FunctionType *Ty = FunctionType::get(Type::getVoidTy(Ctx),
                                              {Type::getInt32Ty(Ctx)}, false);
         if (Name == "exit" || Name == "_exit") {
             CB->setCalledFunction(getOrInsert(M, "plc_exit", Ty));
         } else {
             IRBuilder<> Builder(CB);
+            int Code = (Name == "raise") ? 1 : 134;
             Builder.CreateCall(getOrInsert(M, "plc_exit", Ty),
-                               {ConstantInt::get(Type::getInt32Ty(Ctx), 134)});
+                               {ConstantInt::get(Type::getInt32Ty(Ctx), Code)});
             if (auto *Invoke = dyn_cast<InvokeInst>(CB))
                 BranchInst::Create(Invoke->getNormalDest(), Invoke);
             CB->eraseFromParent();
@@ -792,6 +811,7 @@ extern "C" LLVM_ATTRIBUTE_WEAK ::llvm::PassPluginLibraryInfo
 llvmGetPassPluginInfo() {
     return {LLVM_PLUGIN_API_VERSION, "PLCFusion", "v3.5",
             [](PassBuilder &PB) {
+                registerKFusionWCETSchedulePipeline(PB);
                 PB.registerPipelineParsingCallback(
                     [](StringRef Name, ModulePassManager &MPM,
                        ArrayRef<PassBuilder::PipelineElement>) {

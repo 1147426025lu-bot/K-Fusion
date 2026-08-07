@@ -1,6 +1,0 @@
-# TU discover 2026-07-27T21:33:05+08:00
-primary=/home/pi/plc_compiler/plcfusion/test/rt-tests/src/cyclictest/cyclictest.c
-found: src/lib/rt-utils.c (from #include "rt-utils.h")
-found: src/lib/rt-numa.c (from #include "rt-numa.h")
-found: src/lib/rt-error.c (from #include "rt-error.h")
-found: src/lib/histogram.c (from #include "histogram.h")

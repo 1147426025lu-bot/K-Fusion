@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, feat/timedc-paper-compare]
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -20,7 +20,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            cmake ninja-build clang llvm llvm-dev libclang-dev \
+            cmake ninja-build clang llvm llvm-dev libclang-dev llvm-tools \
             linux-headers-generic git python3 build-essential
 
       - name: Run K-Fusion CI gate (lite manifests, no insmod)

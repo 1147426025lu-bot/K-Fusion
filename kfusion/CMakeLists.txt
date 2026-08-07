@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.10)
-project(PLCCompiler)
+project(KFusion CXX C)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -34,18 +34,25 @@ target_link_libraries(plc_ast PRIVATE
 # 2. 编译后端 Pass 插件
 add_library(PLCLowJitterPass MODULE backend/pass/PLCLowJitterPass__低抖动Pass.cpp)
 target_compile_definitions(PLCLowJitterPass PRIVATE ${LLVM_DEFINITIONS})
-set_target_properties(PLCLowJitterPass PROPERTIES 
+set_target_properties(PLCLowJitterPass PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     C_VISIBILITY_PRESET default
     CXX_VISIBILITY_PRESET default
     PREFIX ""
 )
 
-# --- AI-PLC Fusion Compiler Pass ---
-add_library(PLCFusionPass MODULE
+# --- K-Fusion kernelization Pass (KFusionPass.so; PLCFusionPass.so symlink for compat) ---
+add_library(KFusionPass MODULE
     backend/pass/PLCFusionPass__内核化Pass.cpp
-    backend/pass/PLCFusionFixedPoint__定点Pass.cpp)
-set_target_properties(PLCFusionPass PROPERTIES
+    backend/pass/PLCFusionFixedPoint__定点Pass.cpp
+    backend/pass/KFusionWCETSchedulePass__函数级WCET.cpp)
+target_include_directories(KFusionPass PRIVATE backend/pass)
+set_target_properties(KFusionPass PROPERTIES
     CXX_STANDARD 17
-    PREFIX "" 
+    PREFIX ""
+)
+add_custom_command(TARGET KFusionPass POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E create_symlink KFusionPass.so PLCFusionPass.so
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    COMMENT "Symlink PLCFusionPass.so -> KFusionPass.so (backward compat)"
 )

@@ -1218,3 +1218,104 @@ int __weak plc_gettid(void)
 {
 	return task_pid_nr(current);
 }
+
+int __weak plc_snprintf(char *buf, size_t size, const char *fmt, ...)
+{
+	(void)buf;
+	(void)size;
+	(void)fmt;
+	return 0;
+}
+
+int __weak plc_fflush(void *stream)
+{
+	(void)stream;
+	return 0;
+}
+
+int __weak plc_fsync(int fd)
+{
+	(void)fd;
+	return 0;
+}
+
+int __weak plc_pthread_detach(unsigned long thread)
+{
+	(void)thread;
+	return 0;
+}
+
+int __weak plc_pthread_attr_setdetachstate(void *attr, int state)
+{
+	(void)attr;
+	(void)state;
+	return 0;
+}
+
+int __weak plc_pthread_attr_setinheritsched(void *attr, int inherit)
+{
+	(void)attr;
+	(void)inherit;
+	return 0;
+}
+
+int __weak plc_pthread_attr_setschedpolicy(void *attr, int policy)
+{
+	(void)attr;
+	(void)policy;
+	return 0;
+}
+
+int __weak plc_sem_init(void *sem, int pshared, unsigned value)
+{
+	(void)sem;
+	(void)pshared;
+	(void)value;
+	return 0;
+}
+
+int __weak plc_sem_destroy(void *sem)
+{
+	(void)sem;
+	return 0;
+}
+
+int __weak plc_sem_wait(void *sem)
+{
+	(void)sem;
+	return 0;
+}
+
+int __weak plc_sem_post(void *sem)
+{
+	(void)sem;
+	return 0;
+}
+
+int __weak plc_sem_timedwait(void *sem, const struct plc_timespec *abs)
+{
+	(void)sem;
+	(void)abs;
+	return 0;
+}
+
+int __weak plc_sem_getvalue(void *sem, int *sval)
+{
+	(void)sem;
+	if (sval)
+		*sval = 0;
+	return 0;
+}
+
+int __weak plc_sched_getparam(int pid, struct sched_param *param)
+{
+	(void)pid;
+	(void)param;
+	return 0;
+}
+
+int __weak plc_sched_getscheduler(int pid)
+{
+	(void)pid;
+	return 0;
+}

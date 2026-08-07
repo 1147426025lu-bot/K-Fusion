@@ -17,7 +17,15 @@ cd build && cmake .. && ninja PLCFusionPass PLCLowJitterPass
 # 或：ninja -C build
 ```
 
-产物：`build/PLCFusionPass.so` 等。ABI 见 `include/plc_abi__运行时ABI.h`。
+产物：`build/KFusionPass.so`（兼容 symlink `PLCFusionPass.so`）、`PLCLowJitterPass.so` 等。ABI 见 `include/plc_abi__运行时ABI.h`。
+
+### Pass 单元测试
+
+```bash
+bash backend/test/run_pass_unit_tests__Pass单元测试.sh
+```
+
+无 `llvm-*-tools` 时自动用 grep 回退；CI 安装 `llvm-tools` 后走 FileCheck。
 
 ## 测试与审阅
 
