@@ -4,6 +4,7 @@
 # ============================================================================
 # 输出: test/${FUSE_NAME}.host_profile.env
 #   FUSE_DETECT_NEED_HRTIMER / FUSE_DETECT_NEED_PTHREAD / FUSE_DETECT_NEED_SIGNAL
+#   FUSE_DETECT_NEED_SEM / FUSE_DETECT_NEED_FILEIO / FUSE_DETECT_NEED_BARRIER
 # 用法: source 于 ignite_fused；或 bash ... manifests/foo.env
 # ============================================================================
 set -euo pipefail
@@ -30,15 +31,27 @@ plc_require_file "$PRE_LL" "pre.ll" \
 need_hrtimer=0
 need_pthread=0
 need_signal=0
+need_sem=0
+need_fileio=0
+need_barrier=0
 
 if grep -qE '@(nanosleep|clock_nanosleep|timer_create|timer_settime|timer_delete|usleep|sleep)\(' "$PRE_LL" 2>/dev/null; then
     need_hrtimer=1
 fi
-if grep -qE '@pthread_(create|join|mutex_|cond_)' "$PRE_LL" 2>/dev/null; then
+if grep -qE '@pthread_(create|join|mutex_|cond_|barrier_)' "$PRE_LL" 2>/dev/null; then
     need_pthread=1
 fi
 if grep -qE '@(signal|sigaction|sigprocmask|sigwait)\(' "$PRE_LL" 2>/dev/null; then
     need_signal=1
+fi
+if grep -qE '@sem_(init|wait|post|destroy|timedwait)\(' "$PRE_LL" 2>/dev/null; then
+    need_sem=1
+fi
+if grep -qE '@(fopen|fread|fputs|fscanf|open|mmap|shm_open)\(' "$PRE_LL" 2>/dev/null; then
+    need_fileio=1
+fi
+if grep -qE '@pthread_barrier_(init|wait)\(' "$PRE_LL" 2>/dev/null; then
+    need_barrier=1
 fi
 
 {
@@ -47,10 +60,14 @@ fi
     echo "FUSE_DETECT_NEED_HRTIMER=$need_hrtimer"
     echo "FUSE_DETECT_NEED_PTHREAD=$need_pthread"
     echo "FUSE_DETECT_NEED_SIGNAL=$need_signal"
+    echo "FUSE_DETECT_NEED_SEM=$need_sem"
+    echo "FUSE_DETECT_NEED_FILEIO=$need_fileio"
+    echo "FUSE_DETECT_NEED_BARRIER=$need_barrier"
 } > "$OUT"
 
 if [ "${BASH_SOURCE[0]}" = "${0}" ]; then
     echo "=== host profile: ${FUSE_NAME} ==="
     echo "    hrtimer=$need_hrtimer pthread=$need_pthread signal=$need_signal"
+    echo "    sem=$need_sem fileio=$need_fileio barrier=$need_barrier"
     echo "    -> $OUT"
 fi

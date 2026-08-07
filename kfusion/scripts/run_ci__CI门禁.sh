@@ -87,6 +87,7 @@ bash "$SCRIPT_DIR/run_deploy_symlink_check__deploy符号链接门禁.sh"
 
 echo "🧹 [1a2] 仓库整洁门禁..."
 bash "$SCRIPT_DIR/run_repo_clean_check__仓库整洁门禁.sh"
+bash "$SCRIPT_DIR/run_host_stubs_sync_check__宿主桩同步门禁.sh"
 
 if [ "${SKIP_BUILD:-0}" != "1" ]; then
     PASS_TARGET="$(plc_fusion_pass_target)"

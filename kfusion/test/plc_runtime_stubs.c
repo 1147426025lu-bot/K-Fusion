@@ -9,6 +9,7 @@
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/sched.h>
+#include <linux/sched/signal.h>
 #include <linux/cpumask.h>
 #include <linux/delay.h>
 #include <linux/spinlock.h>
@@ -17,6 +18,8 @@
 #include <linux/stdarg.h>
 #include <linux/errno.h>
 #include <linux/err.h>
+#include <linux/wait.h>
+#include <linux/utsrelease.h>
 
 #include "../include/plc_abi__运行时ABI.h"
 
@@ -182,7 +185,16 @@ void __weak tracing_stop(void) {}
 void __weak tracemark(char *fmt, ...) { (void)fmt; }
 
 int __weak numa_initialize(void) { return 0; }
+int __weak numa_available(void) { return 0; }
+void *__weak numa_parse_cpustring_all(const char *s) { (void)s; return NULL; }
+void *__weak numa_allocate_cpumask(void) { return NULL; }
 int numa_sched_setaffinity(int pid, void *mask)
+{
+	(void)pid;
+	(void)mask;
+	return 0;
+}
+int __weak numa_sched_getaffinity(int pid, void *mask)
 {
 	(void)pid;
 	(void)mask;
@@ -202,7 +214,15 @@ void numa_free(void *ptr, unsigned long size)
 int numa_run_on_node(int node) { (void)node; return 0; }
 int numa_bitmask_weight(void *mask) { (void)mask; return 0; }
 int numa_bitmask_isbitset(void *mask, int n) { (void)mask; (void)n; return 0; }
+void __weak numa_bitmask_clearbit(void *mask, int bit) { (void)mask; (void)bit; }
 void numa_bitmask_free(void *mask) { (void)mask; }
+
+int __weak __sched_cpucount(size_t setsize, const unsigned long *set)
+{
+	(void)setsize;
+	(void)set;
+	return 1;
+}
 
 long sysconf(int name)
 {
@@ -1003,25 +1023,146 @@ int plc_mutex_destroy(void *mutex)
 	return 0;
 }
 
+#define PLC_BARRIER_SLOTS 16
+
+struct plc_barrier_slot {
+	atomic_t count;
+	atomic_t generation;
+	unsigned target;
+	bool inited;
+};
+
+static struct plc_barrier_slot plc_barrier_slots[PLC_BARRIER_SLOTS];
+static bool plc_barrier_table_ready;
+
+static struct plc_barrier_slot *plc_barrier_slot(void *barrier, bool create)
+{
+	unsigned idx;
+	struct plc_barrier_slot *s;
+
+	if (!barrier)
+		return NULL;
+	if (!plc_barrier_table_ready) {
+		int i;
+
+		for (i = 0; i < PLC_BARRIER_SLOTS; i++) {
+			atomic_set(&plc_barrier_slots[i].count, 0);
+			atomic_set(&plc_barrier_slots[i].generation, 0);
+			plc_barrier_slots[i].target = 1;
+			plc_barrier_slots[i].inited = false;
+		}
+		plc_barrier_table_ready = true;
+	}
+	idx = ((unsigned long)barrier / 16) % PLC_BARRIER_SLOTS;
+	s = &plc_barrier_slots[idx];
+	if (!create && !s->inited)
+		return NULL;
+	return s;
+}
+
+int plc_barrier_init(void *barrier, void *attr, unsigned count)
+{
+	struct plc_barrier_slot *s = plc_barrier_slot(barrier, true);
+
+	(void)attr;
+	if (!s)
+		return -EINVAL;
+	atomic_set(&s->count, 0);
+	s->target = count ? count : 1;
+	atomic_inc(&s->generation);
+	s->inited = true;
+	return 0;
+}
+
+int plc_barrier_wait(void *barrier)
+{
+	struct plc_barrier_slot *s = plc_barrier_slot(barrier, false);
+	int gen;
+
+	if (!s)
+		return -EINVAL;
+	gen = atomic_read(&s->generation);
+	if (atomic_inc_return(&s->count) >= (int)s->target) {
+		atomic_set(&s->count, 0);
+		atomic_inc(&s->generation);
+		return 1;
+	}
+	while (atomic_read(&s->generation) == gen)
+		cpu_relax();
+	return 0;
+}
+
+#define PLC_COND_SLOTS 32
+
+struct plc_cond_slot {
+	wait_queue_head_t wait;
+	bool inited;
+};
+
+static struct plc_cond_slot plc_cond_slots[PLC_COND_SLOTS];
+static bool plc_cond_table_ready;
+
+static struct plc_cond_slot *plc_cond_slot(void *cond, bool create)
+{
+	unsigned idx;
+	struct plc_cond_slot *s;
+
+	if (!cond)
+		return NULL;
+	if (!plc_cond_table_ready) {
+		int i;
+
+		for (i = 0; i < PLC_COND_SLOTS; i++) {
+			init_waitqueue_head(&plc_cond_slots[i].wait);
+			plc_cond_slots[i].inited = false;
+		}
+		plc_cond_table_ready = true;
+	}
+	idx = ((unsigned long)cond / 16) % PLC_COND_SLOTS;
+	s = &plc_cond_slots[idx];
+	if (create)
+		s->inited = true;
+	else if (!s->inited)
+		return NULL;
+	return s;
+}
+
 int plc_cond_wait(void *cond, void *mutex)
 {
-	(void)cond;
-	plc_mutex_unlock(mutex);
-	schedule();
-	plc_mutex_lock(mutex);
-	return 0;
+	struct plc_cond_slot *slot = plc_cond_slot(cond, true);
+	DEFINE_WAIT(wait);
+	long ret = 0;
+
+	if (!slot)
+		return -EINVAL;
+	for (;;) {
+		prepare_to_wait(&slot->wait, &wait, TASK_INTERRUPTIBLE);
+		plc_mutex_unlock(mutex);
+		if (signal_pending(current))
+			ret = -ERESTARTSYS;
+		else
+			schedule();
+		finish_wait(&slot->wait, &wait);
+		plc_mutex_lock(mutex);
+		if (ret)
+			return ret;
+		return 0;
+	}
 }
 
 int plc_cond_signal(void *cond)
 {
-	(void)cond;
+	struct plc_cond_slot *slot = plc_cond_slot(cond, true);
+
+	if (!slot)
+		return -EINVAL;
+	wake_up_interruptible(&slot->wait);
 	return 0;
 }
 
 int plc_cond_broadcast(void *cond)
 {
-	(void)cond;
-	return 0;
+	return plc_cond_signal(cond);
 }
 
 int plc_cond_timedwait(void *cond, void *mutex,
@@ -1029,7 +1170,6 @@ int plc_cond_timedwait(void *cond, void *mutex,
 {
 	u64 now_ns, deadline_ns, remain_ns;
 
-	(void)abstime;
 	if (abstime) {
 		now_ns = ktime_get_ns();
 		deadline_ns = (u64)abstime->tv_sec * NSEC_PER_SEC +
@@ -1040,40 +1180,7 @@ int plc_cond_timedwait(void *cond, void *mutex,
 				     div_u64(remain_ns, NSEC_PER_USEC) + 1);
 		}
 	}
-	plc_mutex_unlock(mutex);
-	schedule();
-	plc_mutex_lock(mutex);
-	return 0;
-}
-
-static atomic_t plc_barrier_gen;
-static atomic_t plc_barrier_count;
-static unsigned plc_barrier_target;
-
-int plc_barrier_init(void *barrier, void *attr, unsigned count)
-{
-	(void)barrier;
-	(void)attr;
-	atomic_set(&plc_barrier_count, 0);
-	plc_barrier_target = count ? count : 1;
-	atomic_inc(&plc_barrier_gen);
-	return 0;
-}
-
-int plc_barrier_wait(void *barrier)
-{
-	int gen;
-
-	(void)barrier;
-	gen = atomic_read(&plc_barrier_gen);
-	if (atomic_inc_return(&plc_barrier_count) >= (int)plc_barrier_target) {
-		atomic_set(&plc_barrier_count, 0);
-		atomic_inc(&plc_barrier_gen);
-		return 1;
-	}
-	while (atomic_read(&plc_barrier_gen) == gen)
-		cpu_relax();
-	return 0;
+	return plc_cond_wait(cond, mutex);
 }
 
 /* weak: cyclictest host provides real hrtimer-backed implementations */
@@ -1234,103 +1341,327 @@ int __weak plc_gettid(void)
 	return task_pid_nr(current);
 }
 
-int __weak plc_snprintf(char *buf, size_t size, const char *fmt, ...)
+/* --- POSIX semaphores (counting; slot by sem object address) --- */
+
+#define PLC_SEM_SLOTS 32
+
+struct plc_sem_slot {
+	atomic_t count;
+	wait_queue_head_t wait;
+	bool inited;
+};
+
+static struct plc_sem_slot plc_sem_slots[PLC_SEM_SLOTS];
+static DEFINE_SPINLOCK(plc_sem_table_lock);
+static bool plc_sem_table_ready;
+
+static struct plc_sem_slot *plc_sem_slot(void *sem, bool create)
 {
-	(void)buf;
-	(void)size;
-	(void)fmt;
+	unsigned idx;
+	struct plc_sem_slot *s;
+
+	if (!sem)
+		return NULL;
+	if (!plc_sem_table_ready) {
+		int i;
+
+		spin_lock(&plc_sem_table_lock);
+		if (!plc_sem_table_ready) {
+			for (i = 0; i < PLC_SEM_SLOTS; i++) {
+				init_waitqueue_head(&plc_sem_slots[i].wait);
+				atomic_set(&plc_sem_slots[i].count, 0);
+				plc_sem_slots[i].inited = false;
+			}
+			plc_sem_table_ready = true;
+		}
+		spin_unlock(&plc_sem_table_lock);
+	}
+	idx = ((unsigned long)sem / 16) % PLC_SEM_SLOTS;
+	s = &plc_sem_slots[idx];
+	if (!create && !s->inited)
+		return NULL;
+	return s;
+}
+
+int plc_sem_init(void *sem, int pshared, unsigned value)
+{
+	struct plc_sem_slot *s;
+
+	(void)pshared;
+	s = plc_sem_slot(sem, true);
+	if (!s)
+		return -EINVAL;
+	spin_lock(&plc_sem_table_lock);
+	atomic_set(&s->count, (int)value);
+	s->inited = true;
+	spin_unlock(&plc_sem_table_lock);
 	return 0;
 }
 
-int __weak plc_fflush(void *stream)
+int plc_sem_destroy(void *sem)
 {
-	(void)stream;
+	struct plc_sem_slot *s = plc_sem_slot(sem, false);
+
+	if (!s)
+		return 0;
+	spin_lock(&plc_sem_table_lock);
+	s->inited = false;
+	atomic_set(&s->count, 0);
+	spin_unlock(&plc_sem_table_lock);
 	return 0;
 }
 
-int __weak plc_fsync(int fd)
+int plc_sem_wait(void *sem)
 {
-	(void)fd;
+	struct plc_sem_slot *s = plc_sem_slot(sem, false);
+
+	if (!s)
+		return -EINVAL;
+	for (;;) {
+		if (atomic_dec_if_positive(&s->count) >= 0)
+			return 0;
+		if (wait_event_interruptible(s->wait, atomic_read(&s->count) > 0))
+			return -ERESTARTSYS;
+	}
+}
+
+int plc_sem_post(void *sem)
+{
+	struct plc_sem_slot *s = plc_sem_slot(sem, false);
+
+	if (!s)
+		return -EINVAL;
+	atomic_inc(&s->count);
+	wake_up_interruptible(&s->wait);
 	return 0;
 }
 
-int __weak plc_pthread_detach(unsigned long thread)
+int plc_sem_timedwait(void *sem, const struct plc_timespec *abs)
 {
-	(void)thread;
+	struct plc_sem_slot *s = plc_sem_slot(sem, false);
+	u64 deadline_ns, now_ns;
+
+	if (!s)
+		return -EINVAL;
+	if (abs) {
+		deadline_ns = (u64)abs->tv_sec * NSEC_PER_SEC + (u64)abs->tv_nsec;
+		now_ns = ktime_get_ns();
+		if (now_ns < deadline_ns) {
+			u64 remain = deadline_ns - now_ns;
+
+			usleep_range(div_u64(remain, NSEC_PER_USEC) ?: 1,
+				     div_u64(remain, NSEC_PER_USEC) + 1);
+		}
+	}
+	return plc_sem_wait(sem);
+}
+
+int plc_sem_getvalue(void *sem, int *sval)
+{
+	struct plc_sem_slot *s = plc_sem_slot(sem, false);
+	int v;
+
+	if (!sval)
+		return -EINVAL;
+	if (!s)
+		v = 0;
+	else
+		v = atomic_read(&s->count);
+	*sval = v;
 	return 0;
 }
 
-int __weak plc_pthread_attr_setdetachstate(void *attr, int state)
+int plc_sched_getparam(int pid, struct sched_param *param)
+{
+	(void)pid;
+	if (param)
+		param->sched_priority = current->rt_priority;
+	return 0;
+}
+
+int plc_sched_getscheduler(int pid)
+{
+	(void)pid;
+	return current->policy;
+}
+
+int plc_pthread_attr_setdetachstate(void *attr, int state)
 {
 	(void)attr;
 	(void)state;
 	return 0;
 }
 
-int __weak plc_pthread_attr_setinheritsched(void *attr, int inherit)
+int plc_pthread_attr_setinheritsched(void *attr, int inherit)
 {
 	(void)attr;
 	(void)inherit;
 	return 0;
 }
 
-int __weak plc_pthread_attr_setschedpolicy(void *attr, int policy)
+int plc_pthread_attr_setschedpolicy(void *attr, int policy)
 {
 	(void)attr;
 	(void)policy;
 	return 0;
 }
 
-int __weak plc_sem_init(void *sem, int pshared, unsigned value)
+int plc_snprintf(char *buf, size_t size, const char *fmt, ...)
 {
-	(void)sem;
-	(void)pshared;
-	(void)value;
+	va_list args;
+	int n;
+
+	if (!buf || !size)
+		return 0;
+	va_start(args, fmt);
+	n = vscnprintf(buf, size, fmt, args);
+	va_end(args);
+	return n;
+}
+
+int plc_fflush(void *stream)
+{
+	(void)stream;
 	return 0;
 }
 
-int __weak plc_sem_destroy(void *sem)
+/* --- libc stdio/time (Pass kKeep; cyclictest / rt-tests helpers) --- */
+
+int sprintf(char *buf, const char *fmt, ...)
 {
-	(void)sem;
+	va_list args;
+	int n;
+
+	if (!buf)
+		return 0;
+	va_start(args, fmt);
+	n = vscnprintf(buf, 512, fmt, args);
+	va_end(args);
+	return n;
+}
+
+size_t fread(void *ptr, size_t size, size_t nmemb, void *stream)
+{
+	size_t total;
+
+	(void)stream;
+	total = size * nmemb;
+	if (ptr && total)
+		memset(ptr, 0, total);
 	return 0;
 }
 
-int __weak plc_sem_wait(void *sem)
+int fputs(const char *s, void *stream)
 {
-	(void)sem;
+	if (!s)
+		return EOF;
+	return plc_fprintf(stream, "%s", s);
+}
+
+int fscanf(void *stream, const char *fmt, ...)
+{
+	(void)stream;
+	(void)fmt;
 	return 0;
 }
 
-int __weak plc_sem_post(void *sem)
+int __isoc23_fscanf(void *stream, const char *fmt, ...)
 {
-	(void)sem;
+	(void)stream;
+	(void)fmt;
 	return 0;
 }
 
-int __weak plc_sem_timedwait(void *sem, const struct plc_timespec *abs)
+char *strchr(const char *s, int c)
 {
-	(void)sem;
-	(void)abs;
+	if (!s)
+		return NULL;
+	while (*s) {
+		if (*s == (char)c)
+			return (char *)s;
+		s++;
+	}
+	return (*s == (char)c) ? (char *)s : NULL;
+}
+
+char *strtok(char *str, const char *delim)
+{
+	static char *saved;
+	char *start, *end;
+
+	if (str)
+		saved = str;
+	if (!saved || !delim)
+		return NULL;
+	while (*saved && strchr(delim, *saved))
+		saved++;
+	if (!*saved)
+		return NULL;
+	start = saved;
+	end = saved;
+	while (*end && !strchr(delim, *end))
+		end++;
+	if (*end)
+		*end++ = '\0';
+	saved = end;
+	return start;
+}
+
+struct plc_stub_tm {
+	int tm_sec;
+	int tm_min;
+	int tm_hour;
+	int tm_mday;
+	int tm_mon;
+	int tm_year;
+	int tm_wday;
+	int tm_yday;
+	int tm_isdst;
+};
+
+struct plc_stub_tm *localtime(const long *timep)
+{
+	static struct plc_stub_tm plc_tm;
+	u64 ns;
+
+	(void)timep;
+	ns = ktime_get_ns();
+	memset(&plc_tm, 0, sizeof(plc_tm));
+	plc_tm.tm_sec = (int)(div_u64(ns, NSEC_PER_SEC) % 60);
+	plc_tm.tm_min = (int)(div_u64(ns, 60 * NSEC_PER_SEC) % 60);
+	return &plc_tm;
+}
+
+size_t strftime(char *s, size_t max, const char *fmt, const void *tm)
+{
+	(void)fmt;
+	(void)tm;
+	if (!s || !max)
+		return 0;
+	s[0] = '\0';
 	return 0;
 }
 
-int __weak plc_sem_getvalue(void *sem, int *sval)
-{
-	(void)sem;
-	if (sval)
-		*sval = 0;
-	return 0;
-}
+struct utsname {
+	char sysname[65];
+	char nodename[65];
+	char release[65];
+	char version[65];
+	char machine[65];
+};
 
-int __weak plc_sched_getparam(int pid, struct sched_param *param)
+int uname(struct utsname *name)
 {
-	(void)pid;
-	(void)param;
-	return 0;
-}
-
-int __weak plc_sched_getscheduler(int pid)
-{
-	(void)pid;
+	if (!name)
+		return -EINVAL;
+	strscpy(name->sysname, "Linux", sizeof(name->sysname));
+	strscpy(name->nodename, "plc-fusion", sizeof(name->nodename));
+	strscpy(name->release, UTS_RELEASE, sizeof(name->release));
+	strscpy(name->version, "#1 PLC-Fusion", sizeof(name->version));
+#if defined(CONFIG_ARM64)
+	strscpy(name->machine, "aarch64", sizeof(name->machine));
+#else
+	strscpy(name->machine, "unknown", sizeof(name->machine));
+#endif
 	return 0;
 }

@@ -16,6 +16,7 @@
 #include <linux/seq_file.h>
 #include <linux/atomic.h>
 #include <linux/string.h>
+#include <linux/uaccess.h>
 
 #ifndef FUSED_ENTRY_SYMBOL
 #define FUSED_ENTRY_SYMBOL timerthread
@@ -52,6 +53,7 @@ __attribute__((weak)) void plc_pthread_wake_all(void) { }
 static struct task_struct *fused_task;
 static struct completion fused_done;
 static struct dentry *fused_stats_dentry;
+static struct dentry *fused_stats_reset_dentry;
 static int fused_cpu = -1;
 static bool shutdown_request;
 static atomic64_t fused_loop_count = ATOMIC64_INIT(0);
@@ -150,6 +152,30 @@ static const struct file_operations fused_stats_fops = {
 	.release = single_release,
 };
 
+static ssize_t fused_stats_reset_write(struct file *file, const char __user *ubuf,
+				       size_t count, loff_t *ppos)
+{
+	char buf[16];
+	ssize_t n;
+
+	(void)file;
+	if (!count)
+		return 0;
+	n = simple_write_to_buffer(buf, sizeof(buf) - 1, ppos, ubuf, count);
+	if (n <= 0)
+		return n;
+	buf[n < (ssize_t)sizeof(buf) ? n : sizeof(buf) - 1] = '\0';
+	if (strncmp(buf, "reset_stats", 11) != 0 && strncmp(buf, "reset", 5) != 0)
+		return -EINVAL;
+	atomic64_set(&fused_loop_count, 0);
+	return count;
+}
+
+static const struct file_operations fused_stats_reset_fops = {
+	.write = fused_stats_reset_write,
+	.llseek = noop_llseek,
+};
+
 static int fused_worker(void *arg)
 {
 	(void)arg;
@@ -175,6 +201,9 @@ static int __init fused_host_init(void)
 	init_completion(&fused_done);
 	fused_stats_dentry = debugfs_create_file("fused_stats", 0444, NULL, NULL,
 						 &fused_stats_fops);
+	fused_stats_reset_dentry = debugfs_create_file("fused_stats_reset", 0200,
+						       NULL, NULL,
+						       &fused_stats_reset_fops);
 	fused_task = kthread_create(fused_worker, NULL, "plc_fused_worker");
 	if (IS_ERR(fused_task))
 		return PTR_ERR(fused_task);
@@ -191,6 +220,8 @@ static int __init fused_host_init(void)
 static void __exit fused_host_exit(void)
 {
 	fused_request_stop();
+	debugfs_remove(fused_stats_reset_dentry);
+	fused_stats_reset_dentry = NULL;
 	debugfs_remove(fused_stats_dentry);
 	fused_stats_dentry = NULL;
 

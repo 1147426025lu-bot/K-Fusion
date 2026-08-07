@@ -81,15 +81,25 @@ if [ -f "$PRE_LL" ]; then
         # shellcheck disable=SC1090
         source "$HOST_PROFILE"
         if [ -z "${FUSE_HOST:-}" ] || [ "${FUSE_HOST:-}" = generic ]; then
-            if [ "${FUSE_DETECT_NEED_HRTIMER:-0}" = "1" ]; then
+            if [ "${FUSE_DETECT_NEED_HRTIMER:-0}" = "1" ] || \
+               [ "${FUSE_DETECT_NEED_SIGNAL:-0}" = "1" ]; then
                 FUSE_HOST=hrtimer
-                echo "    auto FUSE_HOST=hrtimer (from IR)"
+                echo "    auto FUSE_HOST=hrtimer (from IR: timer/signal)"
             fi
         fi
-        if [ "${FUSE_DETECT_NEED_PTHREAD:-0}" = "1" ] && [ "${FUSE_LINK_PTHREAD_HOST:-auto}" = auto ]; then
-            FUSE_LINK_PTHREAD_HOST=1
+        if [ "${FUSE_DETECT_NEED_PTHREAD:-0}" = "1" ] || \
+           [ "${FUSE_DETECT_NEED_SEM:-0}" = "1" ] || \
+           [ "${FUSE_DETECT_NEED_BARRIER:-0}" = "1" ]; then
+            if [ "${FUSE_LINK_PTHREAD_HOST:-auto}" = auto ]; then
+                FUSE_LINK_PTHREAD_HOST=1
+                echo "    auto FUSE_LINK_PTHREAD_HOST=1 (pthread/sem/barrier)"
+            fi
         elif [ "${FUSE_LINK_PTHREAD_HOST:-auto}" = auto ]; then
             FUSE_LINK_PTHREAD_HOST=0
+        fi
+        if [ "${FUSE_DETECT_NEED_FILEIO:-0}" = "1" ] && \
+           [ "${FUSE_LINK_RUNTIME_STUBS:-1}" != "1" ]; then
+            echo "    hint: IR 含 fileio，建议 FUSE_LINK_RUNTIME_STUBS=1"
         fi
     elif [ "${FUSE_LINK_PTHREAD_HOST:-auto}" = auto ]; then
         FUSE_LINK_PTHREAD_HOST=0

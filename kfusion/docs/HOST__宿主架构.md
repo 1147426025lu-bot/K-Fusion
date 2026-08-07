@@ -43,8 +43,13 @@ ${FUSE_NAME}_mod.ko :=
 ## 后续演进（不必一次做完）
 
 1. **提取 `plc_hrtimer_core`** — 合并 runner 与 `plc_fused_timer_host` 中重复的 timer/sleep 实现
-2. **generic 宿主补 `fused_stats_reset`** — 缩短 generic 与 l2 的 debugfs 差距（可选）
-3. **`test/plc_*.c` 仅构建时复制** — 避免与 `src/` 漂移（`plc_runtime_stubs.c` 已出现 +84 行差）
+2. ~~**generic 宿主补 `fused_stats_reset`**~~ — 已实现（清零 `loops`）
+3. **`test/plc_*.c` 仅构建时复制** — `run_host_stubs_sync_check__宿主桩同步门禁.sh` 已接入 CI
+
+### 宿主桩增强（2026-08）
+
+- **Phase 1:** `plc_sem_*` 计数信号量；libc `fread/fputs/fscanf/sprintf/strtok/…` 桩；`run_host_stubs_sync_check`
+- **Phase 2:** per-object `plc_barrier_*` / `plc_cond_*`；host_profile 扩 sem/fileio/barrier；signal IR → 自动 `hrtimer`
 
 ## 常用命令
 
