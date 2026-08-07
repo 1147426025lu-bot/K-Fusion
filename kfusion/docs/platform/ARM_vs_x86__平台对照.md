@@ -16,7 +16,7 @@
 
 ```bash
 git clone git@github.com:1147426025lu-bot/K-Fusion.git
-cd k-fusion
+cd K-Fusion
 # Pi 上可省略 PLC_PLATFORM
 bash scripts/plc_fuse__内核化主流程.sh manifests/manifest_signaltest__信号测试.env
 bash scripts/ignite_fused__通用ko构建.sh manifests/manifest_signaltest__信号测试.env
@@ -27,7 +27,7 @@ sudo insmod test/signaltest_mod.ko
 
 ```bash
 git clone git@github.com:1147426025lu-bot/K-Fusion.git
-cd k-fusion
+cd K-Fusion
 export PLC_PLATFORM=x86_64
 export PATH="/usr/lib/llvm-19/bin:$PATH"
 

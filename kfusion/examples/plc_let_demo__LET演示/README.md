@@ -5,7 +5,7 @@
 调度器为**单线程** STRICT 模式：一个 job、固定 period，release 时刻不随执行时间漂移。
 
 ```bash
-export PRJ=/home/pi/k-fusion
+export PRJ=/home/pi/K-Fusion
 gcc -O2 -I"$PRJ/include" \
   "$PRJ/examples/plc_let_demo__LET演示/plc_let_demo__主程序.c" \
   "$PRJ/src/runtime/plc_let__LET.c" \

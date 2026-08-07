@@ -42,7 +42,7 @@ main → plc_let_run()  （单线程 STRICT LET 调度器）
 ### 最小 userspace 冒烟
 
 ```bash
-export PRJ=/home/pi/k-fusion
+export PRJ=/home/pi/K-Fusion
 gcc -O2 -I"$PRJ/examples/plc_multitask__多任务示例" -I"$PRJ/include" \
   -D_GNU_SOURCE -DMT_RUN_LOOPS=200 -DMT_PAPER_BASELINE=\"smoke\" \
   "$PRJ/examples/plc_multitask__多任务示例/plc_multitask_demo__主程序.c" \
@@ -58,7 +58,7 @@ gcc -O2 -I"$PRJ/examples/plc_multitask__多任务示例" -I"$PRJ/include" \
 ### fused 手动 insmod
 
 ```bash
-export PRJ=/home/pi/k-fusion
+export PRJ=/home/pi/K-Fusion
 bash scripts/plc_fuse__内核化主流程.sh manifests/manifest_plc_multitask__多任务优先级.env
 bash scripts/ignite_fused__通用ko构建.sh manifests/manifest_plc_multitask__多任务优先级.env
 sudo insmod test/plc_multitask_mod.ko fused_cpu=3

@@ -68,7 +68,7 @@ LetSummary: baseline=fused jobs=6 releases=... let_overrun=... deadline_miss=...
 ### 前置
 
 ```bash
-cd ~/k-fusion
+cd ~/K-Fusion
 export PATH="/usr/local/llvm-17/bin:$PATH"
 sudo -v
 # 确认产物存在（脚本也会 preflight）

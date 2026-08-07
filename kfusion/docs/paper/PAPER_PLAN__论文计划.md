@@ -22,7 +22,7 @@
 ## 2. 实验步骤（按顺序执行）
 
 ```bash
-cd ~/k-fusion
+cd ~/K-Fusion
 export PATH="/usr/local/llvm-17/bin:$PATH"
 sudo -v
 

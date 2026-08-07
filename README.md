@@ -15,6 +15,8 @@ cd K-Fusion
 
 仓库地址：https://github.com/1147426025lu-bot/K-Fusion
 
+**Pi 本机推荐路径**：`/home/pi/K-Fusion`（旧名 `~/plc_compiler` 为指向该目录的符号链接，可继续使用）。
+
 ## 核心（主线）
 
 | 路径 | 内容 |

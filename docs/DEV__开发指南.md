@@ -26,7 +26,7 @@
 ### 对外贡献提示
 
 - 新增脚本请保留 `__中文说明` 后缀，并在同目录或上级 `README.md` 增加一行说明。
-- 避免在脚本内写死 `/home/pi/...`；使用 `repo_paths` 或 `$REPO_ROOT`。
+- 避免在脚本内写死 `/home/pi/...`；使用 `repo_paths` 或脚本内 `REPO_ROOT="$(cd .../../.. && pwd)"`。
 - 文件名含 Unicode 时，文档中给出 **ASCII 复制路径**（如 `manifest_plc_cc_hello__入门.env`）。
 
 ## 2. Manifest 与演示

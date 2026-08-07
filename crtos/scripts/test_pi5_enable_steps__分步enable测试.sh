@@ -20,7 +20,7 @@ REFUSED: make_exec / full enable can freeze the whole Pi (SSH dies, reboot requi
 
 Before running, on your PC (192.168.137.1) — Windows has no nc by default:
 
-  cd <k-fusion repo on PC or copy scripts folder>
+  cd <K-Fusion repo on PC or copy scripts folder>
   powershell -NoProfile -ExecutionPolicy Bypass -File crtos/scripts/windows_netconsole_listen.ps1
 
   Or paste in PowerShell (one window, leave running):
