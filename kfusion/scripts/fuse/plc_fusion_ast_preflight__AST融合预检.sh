@@ -149,3 +149,47 @@ elif [ "$WARN" -gt 0 ]; then
 else
     echo "✅ AST 融合预检通过"
 fi
+
+# 间接调用门禁（bsearch 等）：允许名单 FUSE_AST_INDIRECT_ALLOW，严格模式 FUSE_AST_INDIRECT_STRICT=1
+if command -v python3 >/dev/null; then
+    read -r indirect_bad indirect_total <<< "$(python3 - "$FUSE_WORK_DIR" "$FUSE_SOURCE" ${FUSE_EXTRA_SOURCES:-} \
+        "${FUSE_AST_INDIRECT_ALLOW:-}" <<'PY'
+import json, sys, os
+from pathlib import Path
+work, main_rel = sys.argv[1], sys.argv[2]
+extra = sys.argv[3:-1]
+allow_raw = sys.argv[-1]
+allow = {x.strip() for x in allow_raw.split(",") if x.strip()}
+paths = [Path(work) / f".fusion_ast_{Path(main_rel).name}.json"]
+for rel in extra:
+    paths.append(Path(work) / f".fusion_ast_{Path(rel).name}.json")
+bad = []
+total = 0
+for p in paths:
+    if not p.is_file():
+        continue
+    d = json.load(open(p, encoding="utf-8"))
+    for issue in d.get("fusion_issues") or []:
+        if issue.get("symbol") != "indirect_call":
+            continue
+        total += 1
+        ctx = issue.get("context") or issue.get("message") or "?"
+        if ctx not in allow:
+            bad.append(f"{p.name}:{issue.get('line', '?')}:{ctx}")
+print(len(bad), total)
+if bad:
+    for line in bad:
+        print(line, file=sys.stderr)
+PY
+)" 2>/dev/null || echo "0 0"
+    if [ "${indirect_total:-0}" -gt 0 ]; then
+        echo "    indirect_call total=$indirect_total unallowed=${indirect_bad:-0} allow=${FUSE_AST_INDIRECT_ALLOW:-<none>}"
+    fi
+    if [ "${indirect_bad:-0}" -gt 0 ]; then
+        plc_warn "未在白名单的 indirect_call: ${indirect_bad} 处" \
+            "设置 FUSE_AST_INDIRECT_ALLOW=sym1,sym2 或修复源码"
+        if [ "${FUSE_AST_INDIRECT_STRICT:-0}" = "1" ]; then
+            exit 1
+        fi
+    fi
+fi

@@ -14,15 +14,22 @@ jobs:
       FUSE_AST_APPLY_SUGGEST: "0"
       CI_LITE: "1"
       CI_CYCLICTEST_MULTITU: "1"
+      CI_REQUIRE_LLVM19: "1"
+      OPT_BIN: opt-19
+      LLC_BIN: llc-19
+      CLANG_BIN: clang-19
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install build deps
+      - name: Install build deps (LLVM 19)
         run: |
           sudo apt-get update
           sudo apt-get install -y \
-            cmake ninja-build clang llvm llvm-dev libclang-dev llvm-tools \
-            linux-headers-generic git python3 build-essential
+            cmake ninja-build clang-19 llvm-19 llvm-19-dev llvm-19-tools \
+            libclang-19-dev linux-headers-generic git python3 build-essential
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-19 100 || true
+          sudo update-alternatives --install /usr/bin/opt opt /usr/bin/opt-19 100 || true
+          sudo update-alternatives --install /usr/bin/llc llc /usr/bin/llc-19 100 || true
 
       - name: Run K-Fusion CI gate (lite manifests, no insmod)
         run: bash kfusion/scripts/run_ci__CI门禁.sh

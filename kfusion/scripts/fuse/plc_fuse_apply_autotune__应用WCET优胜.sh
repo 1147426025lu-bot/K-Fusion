@@ -2,13 +2,6 @@
 # ============================================================================
 # plc_fuse_apply_autotune__应用WCET优胜.sh — 将 autotune/genetic 结果写回 manifest
 # ============================================================================
-# 用法:
-#   bash scripts/plc_fuse_apply_autotune__应用WCET优胜.sh \
-#     manifests/manifest_cyclictest__主线压测.env
-# 环境:
-#   WCET_APPLY_SOURCE=autotune|genetic   默认 autotune（.autotune.env）
-#   WCET_APPLY_DRY_RUN=1                 只打印不写文件
-# ============================================================================
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -39,25 +32,21 @@ plc_require_file "$ENV_FILE" "autotune env ($ENV_FILE)" \
 echo "=== 应用 WCET 优胜 → $MANIFEST ==="
 echo "    source=$SOURCE env=$ENV_FILE"
 
-TMP="$(mktemp)"
-grep -vE '^(FUSE_PIPELINE=|FUSE_KERNEL_PASS=|FUSE_TAIL_PASSES=|FUSE_COLD_TAIL_PASSES=|FUSE_COLD_PASS_SEQUENCE=|FUSE_MODULE_PASS_SEQUENCE=|FUSE_WCET_MODE=|FUSE_PRE_PASSES=)' \
-    "$MANIFEST" > "$TMP" || true
-
-{
-    cat "$TMP"
-    echo ""
-    echo "# --- WCET autotune applied $(date -Iseconds) from $ENV_FILE ---"
-    grep -E '^(FUSE_PIPELINE=|FUSE_KERNEL_PASS=|FUSE_TAIL_PASSES=|FUSE_COLD_TAIL_PASSES=|FUSE_COLD_PASS_SEQUENCE=|FUSE_MODULE_PASS_SEQUENCE=|FUSE_WCET_MODE=|FUSE_PRE_PASSES=)' \
-        "$ENV_FILE" || true
-} > "${TMP}.merged"
+STRIP='^(FUSE_PIPELINE=|FUSE_KERNEL_PASS=|FUSE_TAIL_PASSES=|FUSE_COLD_TAIL_PASSES=|FUSE_COLD_PASS_SEQUENCE=|FUSE_MODULE_PASS_SEQUENCE=|FUSE_WCET_MODE=|FUSE_PRE_PASSES=)'
+EXTRACT='^(FUSE_PIPELINE=|FUSE_KERNEL_PASS=|FUSE_TAIL_PASSES=|FUSE_COLD_TAIL_PASSES=|FUSE_COLD_PASS_SEQUENCE=|FUSE_MODULE_PASS_SEQUENCE=|FUSE_WCET_MODE=|FUSE_PRE_PASSES=)'
 
 if [ "$DRY" = "1" ]; then
+    TMP="$(mktemp)"
+    grep -vE "$STRIP" "$MANIFEST" > "$TMP" || true
     echo "--- dry-run merged tail ---"
-    tail -20 "${TMP}.merged"
-    rm -f "$TMP" "${TMP}.merged"
+    {
+        tail -5 "$TMP"
+        echo ""
+        grep -E "$EXTRACT" "$ENV_FILE" || true
+    }
+    rm -f "$TMP"
     exit 0
 fi
 
-mv "${TMP}.merged" "$MANIFEST"
-rm -f "$TMP"
+plc_manifest_merge_env_snippet "$MANIFEST" "$STRIP" "$ENV_FILE" "$EXTRACT" "WCET autotune"
 echo "✅ 已写回 manifest: $MANIFEST"

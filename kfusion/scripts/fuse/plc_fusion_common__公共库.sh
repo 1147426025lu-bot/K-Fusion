@@ -26,6 +26,7 @@ readonly PLC_E_KMOD=8
 readonly PLC_E_PERM=9
 readonly PLC_E_IR=10
 readonly PLC_E_STUCK=11
+readonly PLC_E_IO=12
 
 # 被 source 时失败用 return，独立执行用 exit
 plc_die() {
@@ -150,6 +151,50 @@ plc_ensure_dir() {
             "检查磁盘空间与写权限" \
             "可设置 FUSE_WORK_DIR 指向可写路径"
     fi
+}
+
+# 原子替换：失败时从 .bak 恢复 dst
+plc_atomic_replace_file() {
+    local src="$1"
+    local dst="$2"
+    local backup=""
+    plc_require_file "$src" "merge 临时文件"
+    if [ -f "$dst" ]; then
+        backup="${dst}.bak.$$"
+        cp -f "$dst" "$backup"
+    fi
+    if ! mv "$src" "$dst"; then
+        if [ -n "$backup" ] && [ -f "$backup" ]; then
+            cp -f "$backup" "$dst"
+        fi
+        rm -f "$backup"
+        plc_die "$PLC_E_IO" "无法写入 $dst" "已尝试从 backup 恢复"
+    fi
+    if [ -n "$backup" ]; then
+        echo "    manifest backup: $backup"
+        rm -f "$backup"
+    fi
+}
+
+# 从 env 片段合并 manifest（去掉旧 key 后追加新块）
+plc_manifest_merge_env_snippet() {
+    local manifest="$1"
+    local strip_re="$2"
+    local env_file="$3"
+    local extract_re="$4"
+    local label="${5:-env snippet}"
+    local tmp merged
+    tmp="$(mktemp)"
+    merged="$(mktemp)"
+    grep -vE "$strip_re" "$manifest" > "$tmp" || true
+    {
+        cat "$tmp"
+        echo ""
+        echo "# --- ${label} $(date -Iseconds) from $(basename "$env_file") ---"
+        grep -E "$extract_re" "$env_file" || true
+    } > "$merged"
+    rm -f "$tmp"
+    plc_atomic_replace_file "$merged" "$manifest"
 }
 
 plc_source_manifest() {

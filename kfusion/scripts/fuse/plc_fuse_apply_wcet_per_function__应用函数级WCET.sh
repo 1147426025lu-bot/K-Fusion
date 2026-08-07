@@ -27,25 +27,21 @@ plc_require_file "$SUGGEST" "wcet suggest env" \
 echo "=== 应用函数级 WCET → $MANIFEST ==="
 echo "    suggest=$SUGGEST"
 
-TMP="$(mktemp)"
-grep -vE '^(FUSE_PIPELINE=|FUSE_WCET_MODE=|FUSE_WCET_PER_FUNCTION=|PLC_FUSION_WCET_SCHEDULE_FILE=|FUSE_COLD_PASS_SEQUENCE=|FUSE_MODULE_PASS_SEQUENCE=)' \
-    "$MANIFEST" > "$TMP" || true
-
-{
-    cat "$TMP"
-    echo ""
-    echo "# --- per-function WCET applied $(date -Iseconds) from $SUGGEST ---"
-    grep -E '^(FUSE_PIPELINE=|FUSE_WCET_MODE=|FUSE_WCET_PER_FUNCTION=|PLC_FUSION_WCET_SCHEDULE_FILE=|FUSE_COLD_PASS_SEQUENCE=|FUSE_MODULE_PASS_SEQUENCE=)' \
-        "$SUGGEST" || true
-} > "${TMP}.merged"
+STRIP='^(FUSE_PIPELINE=|FUSE_WCET_MODE=|FUSE_WCET_PER_FUNCTION=|PLC_FUSION_WCET_SCHEDULE_FILE=|FUSE_COLD_PASS_SEQUENCE=|FUSE_MODULE_PASS_SEQUENCE=)'
+EXTRACT='^(FUSE_PIPELINE=|FUSE_WCET_MODE=|FUSE_WCET_PER_FUNCTION=|PLC_FUSION_WCET_SCHEDULE_FILE=|FUSE_COLD_PASS_SEQUENCE=|FUSE_MODULE_PASS_SEQUENCE=)'
 
 if [ "$DRY" = "1" ]; then
+    TMP="$(mktemp)"
+    grep -vE "$STRIP" "$MANIFEST" > "$TMP" || true
     echo "--- dry-run merged tail ---"
-    tail -20 "${TMP}.merged"
-    rm -f "$TMP" "${TMP}.merged"
+    {
+        tail -5 "$TMP"
+        echo ""
+        grep -E "$EXTRACT" "$SUGGEST" || true
+    }
+    rm -f "$TMP"
     exit 0
 fi
 
-mv "${TMP}.merged" "$MANIFEST"
-rm -f "$TMP"
+plc_manifest_merge_env_snippet "$MANIFEST" "$STRIP" "$SUGGEST" "$EXTRACT" "per-function WCET"
 echo "✅ 已写回 manifest: $MANIFEST"

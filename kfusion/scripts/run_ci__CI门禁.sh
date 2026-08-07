@@ -65,6 +65,20 @@ echo "=== K-Fusion CI 门禁 ==="
 echo "    project=$PRJ"
 echo "    manifests=${#MANIFEST_LIST[@]} (+ validate strict + wcet sweep)"
 
+OPT_BIN_RESOLVED="$(plc_resolve_tool OPT_BIN opt-19 opt-18 opt-17 opt)"
+LLC_BIN_RESOLVED="$(plc_resolve_tool LLC_BIN llc-19 llc-18 llc-17 llc)"
+echo "🔗 [0] LLVM 工具链: opt=$OPT_BIN_RESOLVED llc=$LLC_BIN_RESOLVED"
+case "$OPT_BIN_RESOLVED" in
+    *opt-19*|*/llvm-19/*) ;;
+    *)
+        if [ "${CI_REQUIRE_LLVM19:-1}" = "1" ]; then
+            plc_warn "CI 建议使用 LLVM 19（当前 opt=$OPT_BIN_RESOLVED）" \
+                "Ubuntu: sudo apt install clang-19 llvm-19" \
+                "或设 CI_REQUIRE_LLVM19=0"
+        fi
+        ;;
+esac
+
 echo "🔗 [1a] fuse 符号链接门禁..."
 bash "$SCRIPT_DIR/run_fuse_symlink_check__fuse符号链接门禁.sh"
 
@@ -174,6 +188,10 @@ if [ "${CI_INSMOD:-0}" = "1" ]; then
         echo "⏭️  CI_INSMOD=1 但无免密 sudo，跳过 insmod（Pi 上可 sudo -v 后重跑）"
     fi
 fi
+
+echo "📊 WCET 板级探针门禁..."
+chmod +x "$SCRIPT_DIR/run_ci_wcet_probe__板级探针门禁.sh" 2>/dev/null || true
+bash "$SCRIPT_DIR/run_ci_wcet_probe__板级探针门禁.sh"
 
 if [ "${CI_PLATFORM_X86:-0}" = "1" ]; then
     echo "🖥️  x86_64 平台交叉构建验证（无 insmod）..."

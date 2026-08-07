@@ -29,6 +29,11 @@ FUSION_SO="$(plc_fusion_pass_so "$PROJECT_ROOT" "$BUILD_DIR")"
 PASS_TARGET="$(plc_fusion_pass_target)"
 LOW_JITTER_SO="$BUILD_DIR/PLCLowJitterPass.so"
 FUSE_STRICT="${FUSE_STRICT:-0}"
+if [ "$FUSE_STRICT" = "1" ]; then
+    export FUSE_STRICT_VALIDATE="${FUSE_STRICT_VALIDATE:-1}"
+    export FUSE_AST_PREFLIGHT_STRICT="${FUSE_AST_PREFLIGHT_STRICT:-1}"
+    export FUSE_AST_INDIRECT_STRICT="${FUSE_AST_INDIRECT_STRICT:-1}"
+fi
 
 MANIFEST="${1:-${PLC_FUSE_MANIFEST:-}}"
 plc_resolve_manifest "$MANIFEST" "$PROJECT_ROOT"
@@ -495,9 +500,14 @@ fi
 
 if [ "${FUSE_WCET_AUTOTUNE:-0}" = "1" ] && [ "${PLC_FUSION_PIPELINE_POLICY:-}" = "wcet-benchmark" ]; then
     echo "📊 [7/7] WCET autotune（FUSE_WCET_AUTOTUNE=1）..."
-    WCET_AUTOTUNE_SKIP_INSMOD="${WCET_AUTOTUNE_SKIP_INSMOD:-1}" \
-        bash "$SCRIPT_DIR/plc_fusion_wcet_autotune__WCET自动调优.sh" "$MANIFEST" || \
+    if ! WCET_AUTOTUNE_SKIP_INSMOD="${WCET_AUTOTUNE_SKIP_INSMOD:-1}" \
+        bash "$SCRIPT_DIR/plc_fusion_wcet_autotune__WCET自动调优.sh" "$MANIFEST"; then
+        if [ "$FUSE_STRICT" = "1" ]; then
+            plc_die "$PLC_E_BUILD" "WCET autotune 失败（FUSE_STRICT=1）" \
+                "见 test/${FUSE_NAME}.wcet_autotune.json"
+        fi
         plc_warn "WCET autotune 未完成（见 test/${FUSE_NAME}.wcet_autotune.json）"
+    fi
 fi
 
 echo "   报告:   test/${FUSE_NAME}.fusion_report"

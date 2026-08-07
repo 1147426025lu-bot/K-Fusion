@@ -86,6 +86,8 @@ kfusion/test/**/*.wcet_schedule.json
 kfusion/test/**/*.wcet_per_function.json
 kfusion/test/**/*.wcet_per_function.env
 kfusion/test/**/*.wcet_suggest.env
+kfusion/test/ci_wcet_probe.json
+kfusion/test/.ci_wcet_probe.out
 kfusion/test/**/*.wcet_ci_smoke.err
 kfusion/test/.wcet_per_fn_search/
 kfusion/test/.github_rt_periodic_wcet_per_fn/
