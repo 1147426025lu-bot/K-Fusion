@@ -1,0 +1,36 @@
+{
+  "cycle_issues": [
+    {
+      "call": "malloc",
+      "function": "plc_logic",
+      "line": 2,
+      "message": "周期函数内动态分配或 I/O 会增加抖动（strict 模式下为 error）",
+      "severity": "warn"
+    },
+    {
+      "call": "printf",
+      "function": "plc_logic",
+      "line": 3,
+      "message": "周期函数内动态分配或 I/O 会增加抖动（strict 模式下为 error）",
+      "severity": "warn"
+    },
+    {
+      "call": "free",
+      "function": "plc_logic",
+      "line": 4,
+      "message": "周期函数内动态分配或 I/O 会增加抖动（strict 模式下为 error）",
+      "severity": "warn"
+    }
+  ],
+  "entries_found": [
+    "plc_logic"
+  ],
+  "entry": "plc_logic",
+  "error_count": 0,
+  "globals": [],
+  "ok": true,
+  "source": "/home/pi/plc_compiler/examples/plc-cc__低抖动示例/dither_test__抖动测试.c",
+  "tool": "plc_ast",
+  "version": 1,
+  "warn_count": 3
+}

@@ -1,0 +1,43 @@
+{
+  "fuse_name": "plc_cc_hello",
+  "manifest": "/home/pi/plc_compiler/plcfusion/manifests/manifest_plc_cc_hello__入门.env",
+  "generated": "2026-07-27T21:30:48+08:00",
+  "artifacts": {
+    "kernel_o_bytes": 816,
+    "missing_impl": 0,
+    "pipeline_profile": "wcet",
+    "pipeline_tail": "function(simplifycfg,sroa,instcombine,loop-mssa(loop-rotate,licm),loop-unroll,gvn,adce,instcombine),globaldce",
+    "entries": "plc_main"
+  },
+  "checks": [
+    {"id":"kernel_o_exists","pass":true,"detail":"bytes=816"}
+,
+    {"id":"coverage_gate","pass":true,"detail":"missing=0 max=0"}
+,
+    {"id":"fusion_report_exists","pass":true,"detail":"test/quick_validate/plc_cc_hello.fusion_report"}
+,
+    {"id":"hotpath_no_tail","pass":true,"detail":"profile=wcet tail=function(simplifycfg,sroa,instcombine,loop-mssa(loop-rotate,licm),loop-unroll,gvn,adce,instcombine),globaldce"}
+,
+    {"id":"getopt_rt_tests_ok","pass":true,"detail":"getopt_long preserved or N/A"}
+,
+    {"id":"signal_remap_ok","pass":true,"detail":"signal→plc_signal"}
+,
+    {"id":"globalize_symbols_ok","pass":true,"detail":"ok"}
+,
+    {"id":"strict_missing_zero","pass":true,"detail":"missing=0 strict=0"}
+,
+    {"id":"assert_remap_ok","pass":true,"detail":"assert→plc_assert_fail"}
+,
+    {"id":"multi_tu_linked","pass":true,"detail":"extra_sources="}
+,
+    {"id":"single_entry_dce","pass":true,"detail":"FUSE_DCE_SINGLE=0"}
+,
+    {"id":"entries_present","pass":true,"detail":"entries=plc_main"}
+,
+    {"id":"fixed_point_no_float_ir","pass":true,"detail":"no float IR"}
+,
+    {"id":"fixed_point_no_softfloat_syms","pass":true,"detail":"no soft-float syms"}
+
+  ],
+  "verdict": "PASS"
+}

@@ -1,0 +1,2 @@
+# 内核源码在 U 盘: /media/pi/JHBUILD/linux-rpi
+# 挂载: bash scripts/crtos/mount_jhbuild_usb__挂载JHBUILD.sh

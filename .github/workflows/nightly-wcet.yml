@@ -22,4 +22,4 @@ jobs:
             linux-headers-generic git python3 build-essential
 
       - name: WCET nightly (static autotune, skip insmod)
-        run: bash scripts/run_ci_wcet_nightly__WCET夜间门禁.sh
+        run: bash plcfusion/scripts/run_ci_wcet_nightly__WCET夜间门禁.sh

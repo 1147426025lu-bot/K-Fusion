@@ -1,0 +1,9 @@
+# PLCFusion IR analysis 2026-07-27T21:33:06+08:00
+ir=/home/pi/plc_compiler/plcfusion/test/official_cycletest_pre.ll
+mode=pre
+has_float=1
+lines=6419
+funcs=56
+external_calls=147
+unknown_externs=31
+obj_bytes=0

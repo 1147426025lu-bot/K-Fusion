@@ -1,0 +1,14 @@
+manifest,fuse_name,eligible,fusion_crit,fusion_warn,entry,errors,status
+manifest_cyclictest__主线压测.env,official_cycletest,yes,0,1,main,0,WARN
+manifest_cyclictest__多TU压测.env,official_cycletest_multitu,yes,0,1,main,0,WARN
+manifest_signaltest__信号测试.env,signaltest,yes,0,1,main,0,WARN
+manifest_ptsematest__互斥锁测试.env,ptsematest,yes,0,1,main,0,WARN
+manifest_github_rt_periodic__周期demo.env,github_rt_periodic,yes,0,1,main,0,WARN
+manifest_github_rt_periodic_multitu__多TU.env,github_rt_periodic_multitu,yes,0,1,main,0,WARN
+manifest_github_stb_sprintf__sprintf_demo.env,github_stb_sprintf,yes,0,1,main,0,WARN
+manifest_plc_cc_gpio__PLC示例.env,plc_cc_gpio,yes,0,0,plc_cycle,0,PASS
+manifest_plc_cc_pure_logic__纯逻辑.env,plc_cc_pure_logic,yes,0,0,plc_cycle,0,PASS
+manifest_plc_cc_temp_control__温控.env,plc_cc_temp_control,yes,0,0,plc_cycle,0,PASS
+manifest_plc_cc_isolation__隔离测试.env,plc_cc_isolation,yes,0,0,plc_cycle,0,PASS
+manifest_plc_cc_dither__抖动测试.env,plc_cc_dither,yes,0,0,plc_logic,0,PASS
+manifest_plc_cc_hello__入门.env,plc_cc_hello,yes,0,0,plc_main,0,PASS

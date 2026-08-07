@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, feat/timedc-paper-compare]
   pull_request:
     branches: [main]
 
@@ -23,5 +23,5 @@ jobs:
             cmake ninja-build clang llvm llvm-dev libclang-dev \
             linux-headers-generic git python3 build-essential
 
-      - name: Run CI gate (lite manifests, no insmod)
-        run: bash scripts/run_ci__CI门禁.sh
+      - name: Run PLCFusion CI gate (lite manifests, no insmod)
+        run: bash plcfusion/scripts/run_ci__CI门禁.sh

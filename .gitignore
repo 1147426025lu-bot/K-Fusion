@@ -1,9 +1,10 @@
 # ============================================
-# PLC Compiler - Git Ignore Rules
+# plc_compiler_rpi5 — Git ignore
 # ============================================
 
-# --- 构建产物 ---
-build/
+# --- 构建产物（全树）---
+**/build/
+**/cache/
 *.o
 .*.o
 *.ko
@@ -19,81 +20,55 @@ build/
 .tmp_versions/
 Module.symvers
 modules.order
+**/hypervisor.lds
+**/include/generated/
 
 # --- 编译中间文件 ---
 *.kernel.c
 *.reloc.txt
 *.objdump.txt
 
-# --- Python 缓存 ---
+# --- Python ---
 __pycache__/
 *.pyc
 *.pyo
 
-# --- 测试结果 / 日志（保留目录说明与汇总表）---
-results/*
-!results/README.md
-!results/stability/
-results/stability/*
-!results/stability/*.csv
-test/rt-tests/
-test/tacle-bench/
-test/vendor/
-test/platform_*/
-scripts/platform/test/
+# --- 本地 IDE（保留 extensions.json）---
+.vscode/settings.json
 
-# test/ 融合与 WCET 生成物（FIXED 骨架见 test/README.md）
-test/.official_cycletest_wcet_*/
-test/.fusion_ast_*
-test/.plc_fused_host.o.d
-test/*.detected.env
-test/*.host_profile.env
-test/*.fusion_report
-test/*.validate.json
-test/*.fusion_ast.json
-test/*.fusion_plan.json
-test/*.plc_ast.json
-test/*.plc_ast.env
-test/*.manifest.suggest.env
-test/*.apply_ast.json
-test/*.entries
-test/*.remap_hints
-test/*.unmapped
-test/*.autotune.env
-test/*.genetic.env
-test/*.wcet_sweep.json
-test/*.wcet_sweep.tsv
-test/*.wcet_autotune.json
-test/*.wcet_genetic.json
-test/*_runtime_stubs.c
-!test/plc_runtime_stubs.c
-test/*.stubs.generated.c
-test/*_stubs.generated.c
-test/ci_*
-test/rebuild_smoke.json
-test/suggest_*
-examples/**/*.plc_ast.json
+# --- 实验日志 / 基准数据（compare 仅保留 README）---
+compare/*
+!compare/README.md
+!compare/.gitignore
 
-*.log
-*.out
-*.raw.log
-*.dmesg
-*.png
-!docs/examples/*.png
-*.pid
+# --- crtos 运行日志 ---
+crtos/logs/*
+!crtos/logs/.gitignore
 
-# --- 备份文件 ---
-*.bak
-*.swp
-*.swo
-*~
+# --- 大体积上游 clone（按需脚本拉取）---
+crtos/upstream/fixstars/
+crtos/cache/
+timedc/upstream/ktc/
 
-# --- Timed C / KTC (clone via scripts/timedc/install_ktc_rpi5; overlay in scripts/timedc/ktc_overlay) ---
-third_party/ktc/
-!third_party/README.md
-plc_paper_writing/
-plc_paper_writing.tar.gz
+# --- plcfusion 测试生成物 ---
+plcfusion/test/.official_cycletest_wcet_*/
+plcfusion/test/.fusion_ast_*
+plcfusion/test/*.detected.env
+plcfusion/test/*.host_profile.env
+plcfusion/test/*.fusion_report
+plcfusion/test/*.validate.json
+plcfusion/test/*.fusion_ast.json
+plcfusion/test/*.fusion_plan.json
+plcfusion/test/*.plc_ast.json
+plcfusion/test/*.plc_ast.env
+plcfusion/test/*.manifest.suggest.env
+plcfusion/test/*.apply_ast.json
+plcfusion/test/*.entries
+plcfusion/test/*.remap_hints
+plcfusion/test/rt-tests/
+plcfusion/test/tacle-bench/
+plcfusion/test/vendor/
+plcfusion/test/platform_*/
 
-# --- 系统文件 ---
-.DS_Store
-Thumbs.db
+# --- 大体积 vendor 克隆（按需 init）---
+# 若已提交子模块则勿忽略；此处仅忽略未跟踪的临时 clone

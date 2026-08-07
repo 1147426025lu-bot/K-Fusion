@@ -1,0 +1,56 @@
+{
+  "cycle_issues": [
+    {
+      "call": "printf",
+      "function": "plc_cycle",
+      "line": 20,
+      "message": "周期函数内动态分配或 I/O 会增加抖动（strict 模式下为 error）",
+      "severity": "warn"
+    },
+    {
+      "call": "printf",
+      "function": "plc_cycle",
+      "line": 22,
+      "message": "周期函数内动态分配或 I/O 会增加抖动（strict 模式下为 error）",
+      "severity": "warn"
+    },
+    {
+      "call": "malloc",
+      "function": "plc_cycle",
+      "line": 26,
+      "message": "周期函数内动态分配或 I/O 会增加抖动（strict 模式下为 error）",
+      "severity": "warn"
+    },
+    {
+      "call": "free",
+      "function": "plc_cycle",
+      "line": 27,
+      "message": "周期函数内动态分配或 I/O 会增加抖动（strict 模式下为 error）",
+      "severity": "warn"
+    }
+  ],
+  "entries_found": [
+    "plc_cycle"
+  ],
+  "entry": "plc_cycle",
+  "error_count": 0,
+  "globals": [
+    {
+      "line": 1,
+      "name": "g_plc_counter"
+    },
+    {
+      "line": 2,
+      "name": "g_sensor_data"
+    },
+    {
+      "line": 3,
+      "name": "g_heater_status"
+    }
+  ],
+  "ok": true,
+  "source": "/home/pi/plc_compiler/examples/plc-cc__低抖动示例/temp_control__温控.c",
+  "tool": "plc_ast",
+  "version": 1,
+  "warn_count": 4
+}

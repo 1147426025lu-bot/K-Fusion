@@ -1,0 +1,43 @@
+{
+  "version": 2,
+  "tool": "plc_fusion_ast_plan",
+  "profile_suggestion": "wcet",
+  "reason": "plc_entry+wcet",
+  "confidence": "heuristic",
+  "candidates": [
+    {
+      "rank": 1,
+      "profile": "wcet",
+      "reason": "plc_entry+wcet",
+      "confidence": "heuristic"
+    },
+    {
+      "rank": 2,
+      "profile": "hotpath",
+      "reason": "fallback_light",
+      "confidence": "low"
+    }
+  ],
+  "manifest_hints": {},
+  "pass_plan": {
+    "profile": "wcet",
+    "low_jitter": true,
+    "fixed_point": null
+  },
+  "ast_summary": {
+    "entry": "plc_main",
+    "fusion_eligible": true,
+    "fusion_critical_count": 0,
+    "fusion_warn_count": 0,
+    "float_in_cycle": false,
+    "float_anywhere": false,
+    "has_pthread_create": false,
+    "has_main": false,
+    "cycle_error_count": 0,
+    "blocking_error_count": 0,
+    "sched_critical_count": 0,
+    "sched_warn_count": 0,
+    "sched_ok": true
+  },
+  "ast_source": "test/quick_validate/plc_cc_hello.plc_ast.json"
+}

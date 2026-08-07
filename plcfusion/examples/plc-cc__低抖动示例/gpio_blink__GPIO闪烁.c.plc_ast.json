@@ -1,0 +1,14 @@
+{
+  "cycle_issues": [],
+  "entries_found": [
+    "plc_cycle"
+  ],
+  "entry": "plc_cycle",
+  "error_count": 0,
+  "globals": [],
+  "ok": true,
+  "source": "/home/pi/plc_compiler/examples/plc-cc__低抖动示例/gpio_blink__GPIO闪烁.c",
+  "tool": "plc_ast",
+  "version": 1,
+  "warn_count": 0
+}

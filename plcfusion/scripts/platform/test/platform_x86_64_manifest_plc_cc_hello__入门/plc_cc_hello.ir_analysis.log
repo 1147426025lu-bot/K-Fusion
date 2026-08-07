@@ -1,0 +1,9 @@
+# PLCFusion IR analysis 2026-06-19T14:59:16+08:00
+ir=/home/pi/plc_compiler/scripts/platform/test/platform_x86_64_manifest_plc_cc_hello__入门/plc_cc_hello_pre.ll
+mode=pre
+has_float=0
+lines=21
+funcs=1
+external_calls=0
+unknown_externs=0
+obj_bytes=0

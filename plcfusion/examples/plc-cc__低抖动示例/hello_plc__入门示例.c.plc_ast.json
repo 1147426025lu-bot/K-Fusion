@@ -1,0 +1,14 @@
+{
+  "cycle_issues": [],
+  "entries_found": [
+    "plc_main"
+  ],
+  "entry": "plc_main",
+  "error_count": 0,
+  "globals": [],
+  "ok": true,
+  "source": "/home/pi/plc_compiler/examples/plc-cc__低抖动示例/hello_plc__入门示例.c",
+  "tool": "plc_ast",
+  "version": 1,
+  "warn_count": 0
+}
