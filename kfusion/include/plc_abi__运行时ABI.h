@@ -90,6 +90,7 @@ void plc_pthread_wake_all(void);
 int plc_gettid(void);
 int plc_getpid(void);
 int plc_sched_setaffinity(int pid, unsigned long len, const unsigned long *mask);
+int plc_sched_getaffinity(int pid, unsigned long len, unsigned long *mask);
 int plc_mutex_lock(void *mutex);
 int plc_mutex_unlock(void *mutex);
 int plc_mutex_init(void *mutex, void *attr);

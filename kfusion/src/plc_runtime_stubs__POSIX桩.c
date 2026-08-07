@@ -182,7 +182,16 @@ void __weak tracing_stop(void) {}
 void __weak tracemark(char *fmt, ...) { (void)fmt; }
 
 int __weak numa_initialize(void) { return 0; }
+int __weak numa_available(void) { return 0; }
+void *__weak numa_parse_cpustring_all(const char *s) { (void)s; return NULL; }
+void *__weak numa_allocate_cpumask(void) { return NULL; }
 int numa_sched_setaffinity(int pid, void *mask)
+{
+	(void)pid;
+	(void)mask;
+	return 0;
+}
+int __weak numa_sched_getaffinity(int pid, void *mask)
 {
 	(void)pid;
 	(void)mask;
@@ -202,7 +211,15 @@ void numa_free(void *ptr, unsigned long size)
 int numa_run_on_node(int node) { (void)node; return 0; }
 int numa_bitmask_weight(void *mask) { (void)mask; return 0; }
 int numa_bitmask_isbitset(void *mask, int n) { (void)mask; (void)n; return 0; }
+void __weak numa_bitmask_clearbit(void *mask, int bit) { (void)mask; (void)bit; }
 void numa_bitmask_free(void *mask) { (void)mask; }
+
+int __weak __sched_cpucount(size_t setsize, const unsigned long *set)
+{
+	(void)setsize;
+	(void)set;
+	return 1;
+}
 
 long sysconf(int name)
 {
@@ -512,6 +529,21 @@ int plc_sched_setaffinity(int pid, unsigned long len, const unsigned long *mask)
 		return -EINVAL;
 	ret = set_cpus_allowed_ptr(current, &cpumask);
 	return ret ? ret : 0;
+}
+
+int plc_sched_getaffinity(int pid, unsigned long len, unsigned long *mask)
+{
+	unsigned long i;
+
+	(void)pid;
+	if (!mask || len < sizeof(unsigned long))
+		return -EINVAL;
+	mask[0] = 0;
+	for_each_online_cpu(i) {
+		if (i < 8 * sizeof(unsigned long))
+			mask[0] |= 1UL << i;
+	}
+	return 0;
 }
 
 int plc_gettimeofday(void *tv, void *tz)

@@ -557,6 +557,11 @@ plc_remap_hint_for_sym() {
         pthread_sigmask|sigprocmask) echo plc_sigprocmask ;;
         sched_setscheduler) echo plc_setscheduler ;;
         sched_setaffinity) echo plc_sched_setaffinity ;;
+        sched_getaffinity) echo plc_sched_getaffinity ;;
+        fscanf|__isoc23_fscanf) echo stub:keep ;;
+        fputs|fread|sprintf|strtok|strchr|localtime|strftime|uname) echo stub:keep ;;
+        numa_available|numa_parse_cpustring_all|numa_allocate_cpumask|\
+        numa_sched_getaffinity|numa_bitmask_clearbit|__sched_cpucount) echo stub:keep ;;
         mlockall|munlockall|mlock) echo "plc_${1}" ;;
         timer_create|timer_settime|timer_getoverrun|timer_delete) echo "plc_${1}" ;;
         sigemptyset|sigaddset|sigwait|signal|sigaction) echo "plc_${1}" ;;

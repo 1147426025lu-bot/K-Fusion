@@ -90,6 +90,22 @@ run_grep_fallback() {
             echo "$out" | grep -qE 'call .*@bsearch' || { echo "❌ 无 @bsearch"; return 1; }
             echo "$out" | grep -qE 'call i32 (%fn|@compar)' || { echo "❌ compar 间接调用被 blackhole"; return 1; }
             ;;
+        indirect_qsort.ll)
+            echo "$out" | grep -qE 'call .*@qsort' || { echo "❌ 无 @qsort"; return 1; }
+            echo "$out" | grep -qE 'call i32 (%cmp|@compar)' || { echo "❌ qsort compar 被 blackhole"; return 1; }
+            ;;
+        indirect_global_fnptr.ll)
+            echo "$out" | grep -qE 'call void .*%fn' || { echo "❌ 全局 fn-ptr 间接调用被 blackhole"; return 1; }
+            echo "$out" | grep -qE 'call void null' && return 1
+            ;;
+        indirect_store_alloca.ll)
+            echo "$out" | grep -qE 'call void .*%fn' || { echo "❌ alloca store/load 间接调用被 blackhole"; return 1; }
+            echo "$out" | grep -qE 'call void null' && return 1
+            ;;
+        remap_sched_getaffinity.ll)
+            echo "$out" | grep -qE 'call .*@sched_getaffinity' && return 1
+            echo "$out" | grep -qE 'call .*@plc_sched_getaffinity' || return 1
+            ;;
         wcet_mark_hot.ll)
             echo "$out" | grep -q 'optnone' || return 1
             echo "$out" | grep -q 'plc-wcet-hot' || return 1

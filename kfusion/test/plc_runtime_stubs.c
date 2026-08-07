@@ -514,6 +514,21 @@ int plc_sched_setaffinity(int pid, unsigned long len, const unsigned long *mask)
 	return ret ? ret : 0;
 }
 
+int plc_sched_getaffinity(int pid, unsigned long len, unsigned long *mask)
+{
+	unsigned long i;
+
+	(void)pid;
+	if (!mask || len < sizeof(unsigned long))
+		return -EINVAL;
+	mask[0] = 0;
+	for_each_online_cpu(i) {
+		if (i < 8 * sizeof(unsigned long))
+			mask[0] |= 1UL << i;
+	}
+	return 0;
+}
+
 int plc_gettimeofday(void *tv, void *tz)
 {
 	struct {

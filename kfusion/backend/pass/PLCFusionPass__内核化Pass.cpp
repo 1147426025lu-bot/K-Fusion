@@ -63,9 +63,12 @@ static bool isPreservedExternal(StringRef Name) {
         "bsearch", "qsort", "lsearch",
         "rt_init", "check_privs", "sysconf", "__sysconf",
         "enable_trace_mark", "disable_trace_mark", "tracing_stop", "tracemark",
-        "numa_initialize", "numa_sched_setaffinity", "numa_node_of_cpu",
-        "numa_alloc_onnode", "numa_free", "numa_run_on_node",
-        "numa_bitmask_weight", "numa_bitmask_isbitset", "numa_bitmask_free",
+        "numa_initialize", "numa_available", "numa_sched_setaffinity",
+        "numa_sched_getaffinity", "numa_node_of_cpu", "numa_alloc_onnode",
+        "numa_free", "numa_run_on_node", "numa_parse_cpustring_all",
+        "numa_allocate_cpumask", "numa_bitmask_weight", "numa_bitmask_isbitset",
+        "numa_bitmask_clearbit", "numa_bitmask_free",
+        "__sched_cpucount",
         "parse_time_string", "parse_cpumask", "get_available_cpus",
         "cpu_for_thread_sp", "cpu_for_thread_ua",
         "sched_get_priority_max", "getrlimit", "setrlimit",
@@ -77,7 +80,9 @@ static bool isPreservedExternal(StringRef Name) {
         "hist_print_json", "hist_print_oflows",
         "hset_init", "hset_destroy", "hset_print_bucket",
         "rt_write_json", "get_tracefs_prefix",
-        "__isoc23_strtol", "strtol",
+        "__isoc23_strtol", "__isoc23_fscanf", "strtol", "fscanf",
+        "fputs", "fread", "sprintf", "strtok", "strchr",
+        "localtime", "strftime", "uname",
         "setitimer", "setvbuf", "syscall",
         "pthread_attr_init", "pthread_attr_getstack", "pthread_attr_setstack",
         "plc_gpio_set", "plc_cycle", "plc_main", "plc_logic",
@@ -146,6 +151,40 @@ static Function *resolveFromConstant(Constant *C) {
     return nullptr;
 }
 
+static Function *resolveFromStoredPointer(Value *Ptr, unsigned Depth) {
+    if (!Ptr || Depth > 8)
+        return nullptr;
+    Ptr = Ptr->stripPointerCasts();
+    if (auto *GV = dyn_cast<GlobalVariable>(Ptr)) {
+        if (Function *F = resolveFromConstant(GV->getInitializer()))
+            return F;
+        for (User *U : GV->users()) {
+            if (auto *Store = dyn_cast<StoreInst>(U)) {
+                if (Store->getPointerOperand()->stripPointerCasts() != GV)
+                    continue;
+                if (Function *F = resolveIndirectCalleeImpl(
+                        Store->getValueOperand(), Depth + 1))
+                    return F;
+            }
+        }
+        return nullptr;
+    }
+    if (auto *Alloca = dyn_cast<AllocaInst>(Ptr)) {
+        for (User *U : Alloca->users()) {
+            if (auto *Store = dyn_cast<StoreInst>(U)) {
+                if (Store->getPointerOperand()->stripPointerCasts() != Alloca)
+                    continue;
+                if (Function *F = resolveIndirectCalleeImpl(
+                        Store->getValueOperand(), Depth + 1))
+                    return F;
+            }
+        }
+    }
+    if (auto *GEP = dyn_cast<GetElementPtrInst>(Ptr))
+        return resolveFromStoredPointer(GEP->getPointerOperand(), Depth + 1);
+    return nullptr;
+}
+
 // 解析 load @global → 常量函数指针（signal handler / 函数表等间接调用）
 static Function *resolveIndirectCalleeImpl(Value *Op, unsigned Depth) {
     if (!Op || Depth > 8)
@@ -157,8 +196,8 @@ static Function *resolveIndirectCalleeImpl(Value *Op, unsigned Depth) {
         auto *Ptr = Load->getPointerOperand();
         if (auto *GEP = dyn_cast<GetElementPtrInst>(Ptr))
             return resolveIndirectCalleeImpl(GEP, Depth + 1);
-        if (auto *GV = dyn_cast<GlobalVariable>(Ptr))
-            return resolveFromConstant(GV->getInitializer());
+        if (Function *F = resolveFromStoredPointer(Ptr, Depth + 1))
+            return F;
     }
     if (auto *GEP = dyn_cast<GetElementPtrInst>(Op))
         return resolveIndirectCalleeImpl(GEP->getPointerOperand(), Depth + 1);
@@ -312,6 +351,7 @@ static bool applyRemapRules(Module &M, CallBase *CB, Function *Callee,
         {"gettid", "plc_gettid"},
         {"sched_setscheduler", "plc_setscheduler"},
         {"sched_setaffinity", "plc_sched_setaffinity"},
+        {"sched_getaffinity", "plc_sched_getaffinity"},
         {"gettimeofday", "plc_gettimeofday"},
         {"pthread_mutex_lock", "plc_mutex_lock"},
         {"pthread_mutex_unlock", "plc_mutex_unlock"},
