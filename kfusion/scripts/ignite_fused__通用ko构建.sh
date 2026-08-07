@@ -7,7 +7,8 @@
 # 宿主: FUSE_HOST=generic|hrtimer|pthread（plc_fused_host / timer / pthread）
 # 环境: FORCE_REBUILD_KERNEL_O, FUSE_AUTO_DETECT, FUSE_LINK_RUNTIME_STUBS
 # 用法: bash scripts/ignite_fused__通用ko构建.sh manifests/manifest_signaltest__信号测试.env
-# 注: cyclictest 主线请用 scripts/deploy/ignite_official_cycletest__cyclictest主线.sh
+# 注: cyclictest L2 测量 → scripts/deploy/ignite_official_cycletest__cyclictest主线.sh
+#     cyclictest CI/功能 → FUSE_RUNNER_PROFILE=generic bash $0 manifests/manifest_cyclictest__主线压测.env
 # ============================================================================
 set -euo pipefail
 

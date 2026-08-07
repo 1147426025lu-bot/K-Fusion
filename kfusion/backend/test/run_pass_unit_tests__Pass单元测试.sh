@@ -180,23 +180,27 @@ JSON
 }
 
 run_cyclictest_unmapped_probe() {
-    local pre="$KFUSION/test/official_cycletest_multitu_pre.ll"
-    local unmap="$SCRIPT_DIR/.cyclictest_unmapped_probe"
-    [ -f "$pre" ] || return 0
-    echo "   ▶ cyclictest unmapped probe (official_cycletest_multitu_pre.ll)"
-    : > "$unmap"
-    if ! env PLC_FUSION_UNMAPPED_LOG="$unmap" PLC_FUSION_BLACKHOLE=1 \
-        "$OPT" -load-pass-plugin "$PASS_SO" \
-        -passes=plc-fusion-remap "$pre" -S >/dev/null 2>&1; then
-        echo "❌ cyclictest pre.ll remap 失败" >&2
-        return 1
-    fi
-    if [ -s "$unmap" ]; then
-        echo "❌ cyclictest 仍有 unmapped 符号:" >&2
-        sort -u "$unmap" >&2
-        return 1
-    fi
-    rm -f "$unmap"
+    local pre unmap name
+    for pre in "$KFUSION/test/official_cycletest_multitu_pre.ll" \
+               "$KFUSION/test/official_cycletest_pre.ll"; do
+        [ -f "$pre" ] || continue
+        name="$(basename "$pre")"
+        unmap="$SCRIPT_DIR/.cyclictest_unmapped_probe"
+        echo "   ▶ cyclictest unmapped probe ($name)"
+        : > "$unmap"
+        if ! env PLC_FUSION_UNMAPPED_LOG="$unmap" PLC_FUSION_BLACKHOLE=1 \
+            "$OPT" -load-pass-plugin "$PASS_SO" \
+            -passes=plc-fusion-remap "$pre" -S >/dev/null 2>&1; then
+            echo "❌ cyclictest pre.ll remap 失败: $name" >&2
+            return 1
+        fi
+        if [ -s "$unmap" ]; then
+            echo "❌ cyclictest 仍有 unmapped ($name):" >&2
+            sort -u "$unmap" >&2
+            return 1
+        fi
+        rm -f "$unmap"
+    done
 }
 
 echo "=== K-Fusion Pass 单元测试 ==="
