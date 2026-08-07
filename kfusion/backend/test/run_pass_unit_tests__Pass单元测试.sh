@@ -61,14 +61,42 @@ run_grep_fallback() {
     name="$(basename "$ll")"
     echo "   ▶ $name (grep fallback — 安装 llvm-*-tools 可启用 FileCheck)"
     out="$("$OPT" -load-pass-plugin "$PASS_SO" -passes=plc-fusion-remap "$ll" -S)"
-    if echo "$out" | grep -E 'call .*@printf' >/dev/null; then
-        echo "❌ 仍有 call @printf: $name" >&2
-        return 1
-    fi
-    if ! echo "$out" | grep -E 'call .*@plc_printk' >/dev/null; then
-        echo "❌ 未找到 call @plc_printk: $name" >&2
-        return 1
-    fi
+    case "$name" in
+        remap_printf.ll)
+            if echo "$out" | grep -E 'call .*@printf' >/dev/null; then
+                echo "❌ 仍有 call @printf: $name" >&2
+                return 1
+            fi
+            if ! echo "$out" | grep -E 'call .*@plc_printk' >/dev/null; then
+                echo "❌ 未找到 call @plc_printk: $name" >&2
+                return 1
+            fi
+            ;;
+        remap_sem.ll)
+            if echo "$out" | grep -E 'call .*@sem_wait' >/dev/null; then
+                echo "❌ 仍有 call @sem_wait: $name" >&2
+                return 1
+            fi
+            if ! echo "$out" | grep -E 'call .*@plc_sem_wait' >/dev/null; then
+                echo "❌ 未找到 call @plc_sem_wait: $name" >&2
+                return 1
+            fi
+            ;;
+        remap_vsnprintf.ll)
+            if echo "$out" | grep -E 'call .*@vsnprintf' >/dev/null; then
+                echo "❌ 仍有 call @vsnprintf: $name" >&2
+                return 1
+            fi
+            if ! echo "$out" | grep -E 'call .*@plc_snprintf' >/dev/null; then
+                echo "❌ 未找到 call @plc_snprintf: $name" >&2
+                return 1
+            fi
+            ;;
+        *)
+            echo "❌ 未知测试 $name（无 grep 回退规则）" >&2
+            return 1
+            ;;
+    esac
 }
 
 FAIL=0

@@ -38,19 +38,35 @@ bash "$SCRIPT_DIR/plc_fusion_wcet_per_function__函数级WCET.sh" "$MANIFEST"
 
 SCHEDULE="$WORK/${FUSE_NAME}.wcet_schedule.json"
 REPORT="$WORK/${FUSE_NAME}.wcet_per_function.json"
-plc_require_file "$SCHEDULE" "wcet schedule"
+VALIDATE_PY="$SCRIPT_DIR/plc_fusion_wcet_schedule_validate__调度JSON校验.py"
 
-python3 - "$SCHEDULE" <<'PY'
-import json, sys
-doc = json.load(open(sys.argv[1], encoding="utf-8"))
-assert doc.get("version") == 1, "schedule version"
-assert "hot_functions" in doc and "cold_sequences" in doc
-print(f"    schedule ok hot={len(doc['hot_functions'])} cold={len(doc['cold_sequences'])}")
+plc_require_file "$SCHEDULE" "wcet schedule"
+python3 "$VALIDATE_PY" "$SCHEDULE" --require-cold
+
+echo "    schema negative smoke..."
+python3 - "$VALIDATE_PY" <<'PY'
+import json, subprocess, sys, tempfile
+from pathlib import Path
+validate = Path(sys.argv[1])
+bad = {"version": 2, "hot_functions": [], "cold_sequences": {}}
+with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False) as f:
+    json.dump(bad, f)
+    path = f.name
+rc = subprocess.run([sys.executable, str(validate), path], capture_output=True).returncode
+Path(path).unlink(missing_ok=True)
+if rc == 0:
+    print("expected validate failure for bad schedule", file=sys.stderr)
+    sys.exit(1)
+print("    schema negative ok")
 PY
 
 if [ -f "$REPORT" ]; then
     tuned=$(python3 -c "import json; print(json.load(open('$REPORT'))['cold_functions_tuned'])")
-    echo "    per-fn tuned=$tuned"
+    fails=$(python3 -c "import json; print(json.load(open('$REPORT')).get('compile_failures', 0))")
+    echo "    per-fn tuned=$tuned compile_failures=$fails"
+    if [ "$fails" -gt 0 ]; then
+        plc_die "$PLC_E_BUILD" "WCET 搜索 compile_failures=$fails（见 test/.wcet_per_fn_search/*.err）"
+    fi
     python3 - "$REPORT" <<'PY'
 import json, sys
 rep = json.load(open(sys.argv[1], encoding="utf-8"))

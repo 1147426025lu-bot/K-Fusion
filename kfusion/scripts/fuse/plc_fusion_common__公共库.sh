@@ -355,12 +355,34 @@ plc_git_sync() {
         clone_args+=(-b "$branch")
     fi
     clone_args+=("$url" "$dest")
-    if ! git "${clone_args[@]}" 2>/dev/null; then
-        plc_die "$PLC_E_GIT" "git clone 失败: ${url}" \
-            "检查网络与 git:// 是否被防火墙拦截" \
-            "可手动 clone 到 ${dest} 后重试" \
-            "或改用本地源码：--local / --local-dir"
+    if git "${clone_args[@]}" 2>/dev/null; then
+        return 0
     fi
+    # git:// 常被防火墙/CI 拦截；回退 https://
+    local fallback=""
+    case "$url" in
+        git://git.kernel.org/*)
+            fallback="https://git.kernel.org/pub/scm${url#git://git.kernel.org}"
+            ;;
+        git://github.com/*)
+            fallback="https://github.com/${url#git://github.com/}"
+            ;;
+    esac
+    if [ -n "$fallback" ] && [ "$fallback" != "$url" ]; then
+        echo "   -> git clone 回退 HTTPS: ${fallback}"
+        local retry_args=(clone --depth "$depth")
+        if [ -n "$branch" ]; then
+            retry_args+=(-b "$branch")
+        fi
+        retry_args+=("$fallback" "$dest")
+        if git "${retry_args[@]}" 2>/dev/null; then
+            return 0
+        fi
+    fi
+    plc_die "$PLC_E_GIT" "git clone 失败: ${url}" \
+        "检查网络与 git:// 是否被防火墙拦截" \
+        "可手动 clone 到 ${dest} 后重试" \
+        "或改用本地源码：--local / --local-dir"
 }
 
 # 兼容旧名

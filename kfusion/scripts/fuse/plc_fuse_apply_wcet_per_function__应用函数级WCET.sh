@@ -20,7 +20,6 @@ plc_source_manifest "$MANIFEST" "FUSE_NAME" ""
 
 WORK="${FUSE_WORK_DIR:-$PROJECT_ROOT/test}"
 SUGGEST="$WORK/${FUSE_NAME}.wcet_suggest.env"
-PER_FN="$WORK/${FUSE_NAME}.wcet_per_function.env"
 
 plc_require_file "$SUGGEST" "wcet suggest env" \
     "先运行: bash scripts/plc_fusion_wcet_per_function__函数级WCET.sh $MANIFEST"
@@ -38,10 +37,6 @@ grep -vE '^(FUSE_PIPELINE=|FUSE_WCET_MODE=|FUSE_WCET_PER_FUNCTION=|PLC_FUSION_WC
     echo "# --- per-function WCET applied $(date -Iseconds) from $SUGGEST ---"
     grep -E '^(FUSE_PIPELINE=|FUSE_WCET_MODE=|FUSE_WCET_PER_FUNCTION=|PLC_FUSION_WCET_SCHEDULE_FILE=|FUSE_COLD_PASS_SEQUENCE=|FUSE_MODULE_PASS_SEQUENCE=)' \
         "$SUGGEST" || true
-    if [ -f "$PER_FN" ]; then
-        grep -E '^(FUSE_WCET_MODE=|FUSE_WCET_PER_FUNCTION=|PLC_FUSION_WCET_SCHEDULE_FILE=)' "$PER_FN" 2>/dev/null | \
-            grep -vE '^(FUSE_WCET_MODE=|FUSE_WCET_PER_FUNCTION=|PLC_FUSION_WCET_SCHEDULE_FILE=)' || true
-    fi
 } > "${TMP}.merged"
 
 if [ "$DRY" = "1" ]; then

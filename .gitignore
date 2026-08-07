@@ -13,6 +13,7 @@
 *.mod.o
 *.o_shipped
 *.ll
+!kfusion/backend/test/*.ll
 *.so
 *.a
 *.cmd

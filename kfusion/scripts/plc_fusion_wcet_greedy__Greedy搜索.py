@@ -123,7 +123,7 @@ def search_per_function_greedy(
             sched = copy.deepcopy(schedule)
             sched["cold_sequences"][fn_name] = list(cold)
             sched["module_passes"] = list(module_passes)
-            hot_inst, obj_bytes, _kll = compile_module_with_schedule(
+            hot_inst, obj_bytes, _kll, err_path = compile_module_with_schedule(
                 pre_ll,
                 sched,
                 work_dir,

@@ -43,6 +43,8 @@ python3 "$PARTITION_PY" "$PRE_LL" -o "$SCHEDULE" \
     --default-cold "$DEFAULT_COLD" \
     --module "$DEFAULT_MOD"
 
+python3 "$PROJECT_ROOT/scripts/plc_fusion_wcet_schedule_validate__调度JSON校验.py" "$SCHEDULE"
+
 COLD_COUNT=$(python3 -c "import json; d=json.load(open('$SCHEDULE')); print(len(d.get('cold_sequences') or {}))")
 
 if [ "${FUSE_WCET_ASSOC_SKIP:-0}" = "1" ] || [ "${FUSE_WCET_ASSOC_BUDGET:-0}" = "0" ] || [ "$COLD_COUNT" = "0" ]; then

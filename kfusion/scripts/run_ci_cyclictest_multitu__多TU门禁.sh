@@ -19,6 +19,7 @@ FUSE="$SCRIPT_DIR/fuse/plc_fuse__内核化主流程.sh"
 CHECK="$SCRIPT_DIR/fuse/plc_fuse_check__覆盖率门禁.sh"
 VALIDATE="$SCRIPT_DIR/fuse/plc_fuse_validate__安全验证器JSON.sh"
 PARTITION_PY="$PRJ/scripts/plc_fusion_wcet_partition__函数级分区.py"
+SCHEDULE_VALIDATE_PY="$SCRIPT_DIR/plc_fusion_wcet_schedule_validate__调度JSON校验.py"
 WCET_FN="$SCRIPT_DIR/plc_fusion_wcet_per_function__函数级WCET.sh"
 
 plc_require_file "$MANIFEST" "manifest"
@@ -55,20 +56,24 @@ python3 "$PARTITION_PY" "$PRE_LL" -o "$SCHEDULE" \
     --default-cold "${FUSE_COLD_PASS_SEQUENCE:-simplifycfg|sroa|instcombine|loop-mssa(loop-rotate,licm)|gvn|adce}" \
     --module "${FUSE_MODULE_PASS_SEQUENCE:-globaldce}"
 
-python3 - "$SCHEDULE" <<'PY'
-import json, sys
-doc = json.load(open(sys.argv[1], encoding="utf-8"))
-hot = doc.get("hot_functions") or []
-cold = doc.get("cold_sequences") or {}
-assert doc.get("version") == 1
-assert len(hot) >= 1, "expected at least one hot function"
-print(f"    wcet partition ok hot={len(hot)} cold={len(cold)}")
-PY
+python3 "$SCHEDULE_VALIDATE_PY" "$SCHEDULE"
 
 if [ "${WCET_PARTITION_ONLY:-0}" != "1" ]; then
-    export FUSE_WCET_ASSOC_SKIP=1
-    export FUSE_WCET_ASSOC_BUDGET=0
+    export FUSE_WCET_ASSOC_SKIP=0
+    export FUSE_WCET_ASSOC_BUDGET="${FUSE_WCET_ASSOC_BUDGET:-8}"
+    export FUSE_WCET_ASSOC_MAX_FUNCS="${FUSE_WCET_ASSOC_MAX_FUNCS:-1}"
+    export FUSE_WCET_ASSOC_BUDGET_PER_FN="${FUSE_WCET_ASSOC_BUDGET_PER_FN:-8}"
+    echo "    per-function WCET smoke (1 cold fn, budget=${FUSE_WCET_ASSOC_BUDGET_PER_FN})..."
     bash "$WCET_FN" "$MANIFEST"
+    SCHEDULE="$WORK/${FUSE_NAME}.wcet_schedule.json"
+    REPORT="$WORK/${FUSE_NAME}.wcet_per_function.json"
+    python3 "$SCHEDULE_VALIDATE_PY" "$SCHEDULE" --require-cold
+    if [ -f "$REPORT" ]; then
+        fails=$(python3 -c "import json; print(json.load(open('$REPORT')).get('compile_failures', 0))")
+        if [ "$fails" -gt 0 ]; then
+            plc_die "$PLC_E_BUILD" "cyclictest multitu WCET compile_failures=$fails"
+        fi
+    fi
 fi
 
 echo "✅ cyclictest 多 TU CI 门禁通过"

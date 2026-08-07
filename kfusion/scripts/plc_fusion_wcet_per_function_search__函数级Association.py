@@ -68,7 +68,8 @@ def compile_module_with_schedule(
     pass_env: dict[str, str],
     hot_names: list[str],
     tag: str,
-) -> tuple[int | None, int | None, str | None]:
+) -> tuple[int | None, int | None, str | None, str | None]:
+    """Returns (hot_inst, obj_bytes, kll_path, err_path). err_path set on opt/llc failure."""
     work_dir.mkdir(parents=True, exist_ok=True)
     sched_path = work_dir / f"sched_{tag}.json"
     sched_path.write_text(json.dumps(schedule, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -99,7 +100,7 @@ def compile_module_with_schedule(
         )
         if r.returncode != 0:
             err.write_text(r.stderr or r.stdout, encoding="utf-8")
-            return None, None, None
+            return None, None, None, str(err)
         hot_inst = count_hot_instructions(kll.read_text(encoding="utf-8", errors="replace"), hot_names)
         r2 = subprocess.run(
             [
@@ -119,11 +120,11 @@ def compile_module_with_schedule(
         )
         if r2.returncode != 0 or not obj.is_file():
             err.write_text(r2.stderr or r2.stdout, encoding="utf-8")
-            return hot_inst, None, str(kll)
-        return hot_inst, obj.stat().st_size, str(kll)
+            return hot_inst, None, str(kll), str(err)
+        return hot_inst, obj.stat().st_size, str(kll), None
     except (subprocess.TimeoutExpired, OSError) as e:
         err.write_text(str(e), encoding="utf-8")
-        return None, None, None
+        return None, None, None, str(err)
 
 
 def cold_functions_ranked(schedule: dict[str, Any], max_funcs: int) -> list[str]:
@@ -163,6 +164,7 @@ def search_per_function(
     module_passes = list(schedule.get("module_passes") or ["globaldce"])
     targets = cold_functions_ranked(schedule, max_funcs)
     results: list[dict[str, Any]] = []
+    compile_failures = 0
 
     if not targets:
         out_schedule.write_text(json.dumps(schedule, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -187,7 +189,7 @@ def search_per_function(
             sched = copy.deepcopy(schedule)
             sched["cold_sequences"][fn_name] = list(cold)
             sched["module_passes"] = list(module)
-            hot_inst, obj_bytes, _kll = compile_module_with_schedule(
+            hot_inst, obj_bytes, _kll, err_path = compile_module_with_schedule(
                 pre_ll,
                 sched,
                 work_dir,
@@ -200,6 +202,8 @@ def search_per_function(
                 hot_names=hot_names,
                 tag=tag,
             )
+            if err_path is not None:
+                compile_failures += 1
             fit = make_fitness(hot_inst, obj_bytes, cold)
             ev = EvaluatedSequence(
                 kernel=kernel,
@@ -250,6 +254,7 @@ def search_per_function(
         "max_functions": max_funcs,
         "cold_functions_tuned": len(results),
         "total_compiles": compile_counter,
+        "compile_failures": compile_failures,
         "results": results,
         "schedule": str(out_schedule),
     }
