@@ -76,6 +76,7 @@ build_l2_ko() {
     ensure_kernel_o
     cd "$TEST_DIR"
 
+    cp "$PROJECT_ROOT/src/plc_hrtimer_core__定时核心.c" plc_hrtimer_core.c
     cp "$PROJECT_ROOT/src/plc_runner_official__cyclictest宿主.c" plc_runner_official.c
     stubs="${FUSE_NAME}_runtime_stubs.c"
     if [ ! -f "$stubs" ]; then
@@ -94,12 +95,12 @@ build_l2_ko() {
     cp -f "$KERNEL_O" "${KERNEL_O}_shipped" 2>/dev/null || true
     echo "savedcmd_${TEST_DIR}/${KERNEL_O} := true" > ".${KERNEL_O}.cmd"
 
-    cflags="-O2 -I${PROJECT_ROOT}/include"
-    [ "${HOST_DRIVER_OPT_LEVEL:--O2}" != "-O2" ] && cflags="${HOST_DRIVER_OPT_LEVEL} -I${PROJECT_ROOT}/include"
+    cflags="-O2 -I${PROJECT_ROOT}/include -I${PROJECT_ROOT}/src"
+    [ "${HOST_DRIVER_OPT_LEVEL:--O2}" != "-O2" ] && cflags="${HOST_DRIVER_OPT_LEVEL} -I${PROJECT_ROOT}/include -I${PROJECT_ROOT}/src"
 
     cat > Makefile <<MAKEFILE_EOF
 obj-m += ${MOD_NAME}.o
-${MOD_NAME}-objs := plc_runner_official.o ${stubs%.c}.o ${KERNEL_O}
+${MOD_NAME}-objs := plc_runner_official.o plc_hrtimer_core.o ${stubs%.c}.o ${KERNEL_O}
 KDIR := /lib/modules/\$(shell uname -r)/build
 PWD := \$(shell pwd)
 ccflags-y += ${cflags}
@@ -111,7 +112,7 @@ clean:
 MAKEFILE_EOF
 
     rm -f "${MOD_NAME}.ko" "${MOD_NAME}.o" "${MOD_NAME}.mod" "${MOD_NAME}.mod.o" \
-        "${MOD_NAME}.mod.c" plc_runner_official.o "${stubs%.c}.o" 2>/dev/null || true
+        "${MOD_NAME}.mod.c" plc_runner_official.o plc_hrtimer_core.o "${stubs%.c}.o" 2>/dev/null || true
 
     echo "🔧 Kbuild L2 runner → ${MOD_NAME}.ko"
     if make all 2>&1 | tee "${FUSE_NAME}.kbuild.log"; then

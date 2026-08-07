@@ -8,10 +8,8 @@
 |------|------|
 | `plc_runtime_stubs__POSIX桩.c` | 通用 POSIX / rt-tests 桩 |
 | `plc_fused_host__通用宿主.c` | kthread + `main()` 入口 |
-| `plc_fused_timer_host__hrtimer宿主.c` | hrtimer 周期睡眠 |
-| `plc_pthread_host__pthread宿主.c` | pthread → kthread |
-| `plc_fused_host__通用宿主.c` | 通用 kthread 壳（main 或 KTHREAD_ENTRY） |
-| `plc_fused_timer_host__hrtimer宿主.c` | hrtimer 定时 / sleep 后端 |
+| `plc_hrtimer_core__定时核心.c` | 共享 hrtimer sleep / ktime / EWMA 补偿 |
+| `plc_fused_timer_host__hrtimer宿主.c` | hrtimer 定时 slot + sleep 后端 |
 | `plc_pthread_host__pthread宿主.c` | pthread → kthread |
 | `plc_runner_official__cyclictest宿主.c` | cyclictest **L2 测量 profile**（非默认 CI 路径） |
 

@@ -7,6 +7,7 @@
 ```
 ${FUSE_NAME}_mod.ko :=
     plc_fused_host.o                 # 始终：kthread / shutdown / debugfs 壳
+  + [plc_hrtimer_core.o]             # hrtimer / L2 runner 共用
   + [plc_fused_timer_host.o]         # FUSE_HOST=hrtimer
   + [plc_pthread_host.o]             # FUSE_LINK_PTHREAD_HOST=1
   + [${FUSE_NAME}_runtime_stubs.o]   # Pass unmapped → 自动桩
@@ -25,6 +26,7 @@ ${FUSE_NAME}_mod.ko :=
 | 文件 | 职责 |
 |------|------|
 | `plc_fused_host__通用宿主.c` | 模块生命周期；`FUSE_RUN_MAIN` → `main()`，或 `FUSE_KTHREAD_ENTRY` |
+| `plc_hrtimer_core__定时核心.c` | 共享 sleep / ktime / EWMA 补偿 |
 | `plc_fused_timer_host__hrtimer宿主.c` | 强符号 `plc_timer_*` / `plc_nanosleep` |
 | `plc_pthread_host__pthread宿主.c` | `plc_pthread_*` → kthread |
 | `plc_runtime_stubs__POSIX桩.c` | weak POSIX / rt-tests 桩 |
@@ -42,7 +44,7 @@ ${FUSE_NAME}_mod.ko :=
 
 ## 后续演进（不必一次做完）
 
-1. **提取 `plc_hrtimer_core`** — 合并 runner 与 `plc_fused_timer_host` 中重复的 timer/sleep 实现
+1. ~~**提取 `plc_hrtimer_core`**~~ — runner 与 `plc_fused_timer_host` 共用 sleep/ktime/EWMA
 2. ~~**generic 宿主补 `fused_stats_reset`**~~ — 已实现（清零 `loops`）
 3. **`test/plc_*.c` 仅构建时复制** — `run_host_stubs_sync_check__宿主桩同步门禁.sh` 已接入 CI
 

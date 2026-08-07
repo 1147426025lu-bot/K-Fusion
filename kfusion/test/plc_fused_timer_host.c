@@ -20,15 +20,12 @@
 #include <linux/atomic.h>
 
 #include "../include/plc_abi__运行时ABI.h"
+#include "plc_hrtimer_core__定时核心.h"
 
 extern int shutdown;
 
 #define PLC_GEN_TIMER_MAX 8
 #define PLC_GEN_SIG 42
-#define PLC_EWMA_ALPHA 16
-#define PLC_EWMA_SHIFT 4
-#define PLC_MAX_COMP_NS 500LL
-#define PLC_COMP_WARMUP 64
 
 struct plc_gen_timer {
 	struct hrtimer hr;
@@ -51,8 +48,7 @@ static int fused_hrtimer_cpu = -1;
 static bool fused_hrtimer_jitter_comp = true;
 static atomic64_t fused_timer_fires = ATOMIC64_INIT(0);
 static atomic64_t fused_timer_overruns = ATOMIC64_INIT(0);
-static s64 fused_jitter_ewma_ns;
-static s64 fused_jitter_comp_ns;
+static struct plc_hr_comp_state fused_comp;
 static struct dentry *fused_timer_stats_dentry;
 static bool fused_timer_stats_ready;
 
@@ -67,27 +63,21 @@ MODULE_PARM_DESC(fused_hrtimer_jitter_comp, "EWMA jitter compensation for ABS ti
 
 static void fused_hrtimer_pin_self(void)
 {
-	if (fused_hrtimer_cpu >= 0 && fused_hrtimer_cpu < nr_cpu_ids &&
-	    cpu_online(fused_hrtimer_cpu))
-		set_cpus_allowed_ptr(current, cpumask_of(fused_hrtimer_cpu));
+	plc_hr_pin_cpu(fused_hrtimer_cpu);
 }
+
+static const struct plc_hr_comp_cfg fused_comp_cfg = {
+	.enabled = true,
+	.ignore_above_ns = PLC_HR_DEFAULT_IGNORE_NS,
+	.max_comp_ns = PLC_HR_DEFAULT_MAX_COMP_NS,
+};
 
 static void fused_update_compensation(s64 jitter_ns)
 {
-	s64 aj = jitter_ns < 0 ? -jitter_ns : jitter_ns;
+	struct plc_hr_comp_cfg cfg = fused_comp_cfg;
 
-	if (aj > 2000)
-		return;
-	fused_jitter_ewma_ns =
-		((PLC_EWMA_ALPHA - 1) * fused_jitter_ewma_ns + jitter_ns) >>
-		PLC_EWMA_SHIFT;
-	if (!fused_hrtimer_jitter_comp)
-		return;
-	fused_jitter_comp_ns = fused_jitter_ewma_ns;
-	if (fused_jitter_comp_ns > PLC_MAX_COMP_NS)
-		fused_jitter_comp_ns = PLC_MAX_COMP_NS;
-	else if (fused_jitter_comp_ns < -PLC_MAX_COMP_NS)
-		fused_jitter_comp_ns = -PLC_MAX_COMP_NS;
+	cfg.enabled = fused_hrtimer_jitter_comp;
+	plc_hr_comp_update(&fused_comp, &cfg, jitter_ns);
 }
 
 static struct plc_gen_timer *plc_gen_timer_alloc(void)
@@ -114,13 +104,11 @@ static struct plc_gen_timer *plc_gen_timer_alloc(void)
 
 static void plc_gen_schedule_abs(struct plc_gen_timer *t)
 {
-	ktime_t now = ktime_get();
+	struct plc_hr_comp_cfg cfg = fused_comp_cfg;
 
-	t->next_abs = t->next_nominal;
-	if (fused_hrtimer_jitter_comp && t->comp_warmup > PLC_COMP_WARMUP)
-		t->next_abs = ktime_sub_ns(t->next_abs, fused_jitter_comp_ns);
-	if (ktime_before(t->next_abs, now))
-		t->next_abs = ktime_add_ns(now, t->interval);
+	cfg.enabled = fused_hrtimer_jitter_comp;
+	t->next_abs = plc_hr_abs_next(t->next_nominal, t->interval,
+				      &fused_comp, &cfg, t->comp_warmup);
 	hrtimer_start(&t->hr, t->next_abs, HRTIMER_MODE_ABS_PINNED_HARD);
 }
 
@@ -161,72 +149,25 @@ static enum hrtimer_restart plc_gen_timer_fn(struct hrtimer *hr)
 	return HRTIMER_RESTART;
 }
 
-static int plc_gen_sleep(int clockid, int flags,
-			 const struct plc_timespec *request,
-			 struct plc_timespec *remain)
-{
-	u64 ns, slept;
-	const u64 chunk_ns = 100 * NSEC_PER_USEC;
-
-	(void)clockid;
-	(void)flags;
-	(void)remain;
-	if (!request)
-		return 0;
-
-	fused_hrtimer_pin_self();
-	ns = (u64)request->tv_sec * NSEC_PER_SEC + (u64)request->tv_nsec;
-	if (!ns)
-		return 0;
-
-	for (slept = 0; slept < ns; ) {
-		u64 step = ns - slept;
-		ktime_t expire;
-
-		if (READ_ONCE(shutdown) || fatal_signal_pending(current))
-			return -EINTR;
-
-		if (step > chunk_ns)
-			step = chunk_ns;
-
-		if (step < 50 * NSEC_PER_USEC) {
-			u32 us = div_u64(step + NSEC_PER_USEC - 1, NSEC_PER_USEC);
-
-			usleep_range(us, us + 1);
-		} else {
-			expire = ktime_add_ns(ktime_get(), step);
-			set_current_state(TASK_INTERRUPTIBLE);
-			schedule_hrtimeout(&expire, HRTIMER_MODE_ABS);
-			__set_current_state(TASK_RUNNING);
-		}
-		slept += step;
-		cond_resched();
-	}
-	return fatal_signal_pending(current) ? -EINTR : 0;
-}
-
 int plc_ktime_get_ts(int clk_id, struct plc_timespec *ts)
 {
-	u64 ns = ktime_get_ns();
-
-	(void)clk_id;
-	if (!ts)
-		return -EINVAL;
-	ts->tv_sec = div_u64(ns, NSEC_PER_SEC);
-	ts->tv_nsec = (long)(ns - (u64)ts->tv_sec * NSEC_PER_SEC);
-	return 0;
+	return plc_hr_ktime_get_ts(clk_id, ts);
 }
 
 int plc_nanosleep(const struct plc_timespec *req, struct plc_timespec *rem)
 {
-	return plc_gen_sleep(CLOCK_MONOTONIC, 0, req, rem);
+	fused_hrtimer_pin_self();
+	return plc_hr_timespec_sleep(req, rem);
 }
 
 int plc_clock_nanosleep(int clockid, int flags,
 			const struct plc_timespec *request,
 			struct plc_timespec *remain)
 {
-	return plc_gen_sleep(clockid, flags, request, remain);
+	(void)clockid;
+	(void)flags;
+	fused_hrtimer_pin_self();
+	return plc_hr_timespec_sleep(request, remain);
 }
 
 int plc_timer_create(int clockid, void *sevp, void **timerid)
@@ -273,8 +214,7 @@ int plc_timer_settime(void *timerid, int flags,
 	t->interval = ns_to_ktime(interval_ns);
 	t->next_nominal = ktime_get();
 	t->comp_warmup = 0;
-	fused_jitter_ewma_ns = 0;
-	fused_jitter_comp_ns = 0;
+	plc_hr_comp_reset(&fused_comp);
 
 	if (fused_hrtimer_abs) {
 		plc_gen_schedule_abs(t);
@@ -361,8 +301,8 @@ static int fused_timer_stats_show(struct seq_file *m, void *v)
 	seq_printf(m, "abs_mode=%d\n", fused_hrtimer_abs);
 	seq_printf(m, "cpu=%d\n", fused_hrtimer_cpu);
 	seq_printf(m, "jitter_comp=%d\n", fused_hrtimer_jitter_comp);
-	seq_printf(m, "ewma_ns=%lld\n", (long long)fused_jitter_ewma_ns);
-	seq_printf(m, "comp_ns=%lld\n", (long long)fused_jitter_comp_ns);
+	seq_printf(m, "ewma_ns=%lld\n", (long long)fused_comp.ewma_ns);
+	seq_printf(m, "comp_ns=%lld\n", (long long)fused_comp.comp_ns);
 	return 0;
 }
 

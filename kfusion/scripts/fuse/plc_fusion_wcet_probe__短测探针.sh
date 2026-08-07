@@ -55,6 +55,7 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
+cp "$PROJECT_ROOT/src/plc_hrtimer_core__定时核心.c" plc_hrtimer_core.c
 cp "$PROJECT_ROOT/src/plc_runner_official__cyclictest宿主.c" plc_runner_official.c
 STUBS="$TEST_DIR/${FUSE_NAME}_runtime_stubs.c"
 [ -f "$STUBS" ] || STUBS="$PROJECT_ROOT/src/plc_runtime_stubs__POSIX桩.c"
@@ -73,10 +74,10 @@ echo "savedcmd_${BUILD_DIR}/${KERNEL_O} := true" > ".${KERNEL_O}.cmd"
 
 cat > Makefile <<MAKEFILE_EOF
 obj-m += official_cycletest_mod.o
-official_cycletest_mod-objs := plc_runner_official.o plc_runtime_stubs.o ${KERNEL_O}
+official_cycletest_mod-objs := plc_runner_official.o plc_hrtimer_core.o plc_runtime_stubs.o ${KERNEL_O}
 KDIR := /lib/modules/\$(shell uname -r)/build
 PWD := \$(shell pwd)
-ccflags-y += -O2 -I${PROJECT_ROOT}/include
+ccflags-y += -O2 -I${PROJECT_ROOT}/include -I${PROJECT_ROOT}/src
 all:
 	\$(MAKE) -C \$(KDIR) M=\$(PWD) modules
 clean:

@@ -30,6 +30,7 @@
 #include <linux/sched/types.h>
 
 #include "../include/plc_shm__共享内存.h"
+#include "plc_hrtimer_core__定时核心.h"
 
 MODULE_LICENSE("GPL");
 
@@ -176,13 +177,9 @@ static bool fused_hist_enable = true;
 static bool fused_wake_timertthread = true;
 static bool fused_ringbuf_enable = true;
 
-#define FUSED_EWMA_ALPHA		16
-#define FUSED_EWMA_SHIFT		4
-#define FUSED_MAX_COMPENSATION_NS	500LL
-#define FUSED_COMP_WARMUP_SAMPLES	64
+#define FUSED_COMP_WARMUP_SAMPLES	PLC_HR_COMP_WARMUP
 
-static s64 fused_jitter_ewma_ns;
-static s64 fused_jitter_compensation_ns;
+static struct plc_hr_comp_state fused_comp;
 static u32 fused_spike_resync_count;
 static unsigned int measure_grace_ticks;
 static unsigned int measure_grace_default = 128;
@@ -209,6 +206,23 @@ module_param(fused_wake_timertthread, bool, 0644);
 module_param(fused_ringbuf_enable, bool, 0644);
 
 extern void *timerthread(void *param);
+
+static bool runner_should_stop(void)
+{
+	return READ_ONCE(shutdown_requested);
+}
+
+static struct plc_hr_comp_cfg runner_comp_cfg(void)
+{
+	struct plc_hr_comp_cfg cfg = {
+		.enabled = true,
+		.ignore_above_ns = jitter_ewma_ignore_ns,
+		.max_comp_ns = PLC_HR_DEFAULT_MAX_COMP_NS,
+	};
+
+	cfg.enabled = jitter_compensation_enable;
+	return cfg;
+}
 
 static bool fused_is_spike(s64 jitter_ns)
 {
@@ -265,29 +279,13 @@ static void configure_rt_fifo(int prio, const char *role)
 
 static void fused_comp_reset(void)
 {
-	fused_jitter_ewma_ns = 0;
-	fused_jitter_compensation_ns = 0;
+	plc_hr_comp_reset(&fused_comp);
 	fused_cyclic.comp_warmup = 0;
 }
 
 static inline void fused_update_compensation(s64 jitter_ns)
 {
-	s64 aj = jitter_ns < 0 ? -jitter_ns : jitter_ns;
-
-	if (jitter_ewma_ignore_ns > 0 && aj > jitter_ewma_ignore_ns)
-		return;
-
-	fused_jitter_ewma_ns = ((FUSED_EWMA_ALPHA - 1) * fused_jitter_ewma_ns + jitter_ns)
-		>> FUSED_EWMA_SHIFT;
-
-	if (!jitter_compensation_enable)
-		return;
-
-	fused_jitter_compensation_ns = fused_jitter_ewma_ns;
-	if (fused_jitter_compensation_ns > FUSED_MAX_COMPENSATION_NS)
-		fused_jitter_compensation_ns = FUSED_MAX_COMPENSATION_NS;
-	else if (fused_jitter_compensation_ns < -FUSED_MAX_COMPENSATION_NS)
-		fused_jitter_compensation_ns = -FUSED_MAX_COMPENSATION_NS;
+	plc_hr_comp_update(&fused_comp, &runner_comp_cfg(), jitter_ns);
 }
 
 static void fused_fast_reset(u64 interval_ns)
@@ -329,11 +327,10 @@ static void fused_resync_timer_phase(struct plc_cyclic_timer *ct, ktime_t now)
 
 static void fused_schedule_abs_timer(struct plc_cyclic_timer *ct)
 {
-	ct->next_abs = ct->next_nominal;
-	if (jitter_compensation_enable &&
-	    ct->comp_warmup > FUSED_COMP_WARMUP_SAMPLES)
-		ct->next_abs = ktime_sub_ns(ct->next_abs,
-					    fused_jitter_compensation_ns);
+	struct plc_hr_comp_cfg cfg = runner_comp_cfg();
+
+	ct->next_abs = plc_hr_abs_next(ct->next_nominal, ct->interval,
+				       &fused_comp, &cfg, ct->comp_warmup);
 	hrtimer_start(&ct->hr, ct->next_abs, HRTIMER_MODE_ABS_PINNED_HARD);
 }
 
@@ -529,59 +526,26 @@ static void plc_misc_exit(void)
 
 int plc_ktime_get_ts(int clk_id, struct plc_timespec *ts)
 {
-    u64 ns = ktime_get_ns();
-
-    (void)clk_id;
-    ts->tv_sec = div_u64(ns, NSEC_PER_SEC);
-    ts->tv_nsec = (long)(ns - (u64)ts->tv_sec * NSEC_PER_SEC);
-    return 0;
+	return plc_hr_ktime_get_ts(clk_id, ts);
 }
 
 int plc_sleep(int clockid, int flags, struct plc_timespec *request,
-              struct plc_timespec *remain)
+	      struct plc_timespec *remain)
 {
-    u64 ns;
-    u64 slept;
-    const u64 chunk_ns = 100 * NSEC_PER_USEC;
+	int ret;
 
-    (void)clockid;
-    (void)flags;
-    (void)remain;
+	(void)clockid;
+	(void)flags;
+	if (READ_ONCE(shutdown) || READ_ONCE(shutdown_requested))
+		return 0;
 
-    if (!request)
-        return 0;
-
-    ns = (u64)request->tv_sec * NSEC_PER_SEC + (u64)request->tv_nsec;
-    if (!ns)
-        return 0;
-
-    for (slept = 0; slept < ns; ) {
-        u64 step = ns - slept;
-        ktime_t expire;
-
-        if (READ_ONCE(shutdown) || READ_ONCE(shutdown_requested))
-            return 0;
-        if (fatal_signal_pending(current))
-            return -EINTR;
-
-        if (step > chunk_ns)
-            step = chunk_ns;
-
-        if (step < 50 * NSEC_PER_USEC) {
-            u32 us = div_u64(step + NSEC_PER_USEC - 1, NSEC_PER_USEC);
-
-            usleep_range(us, us + 1);
-        } else {
-            expire = ktime_add_ns(ktime_get(), step);
-            set_current_state(TASK_INTERRUPTIBLE);
-            schedule_hrtimeout(&expire, HRTIMER_MODE_ABS);
-            __set_current_state(TASK_RUNNING);
-        }
-        slept += step;
-		cond_resched();
-	}
-
-	return fatal_signal_pending(current) ? -EINTR : 0;
+	ret = plc_hr_timespec_sleep(
+		(const struct plc_timespec *)request,
+		(struct plc_timespec *)remain);
+	if (ret == -EINTR &&
+	    (READ_ONCE(shutdown) || READ_ONCE(shutdown_requested)))
+		return 0;
+	return ret;
 }
 
 int plc_nanosleep(const struct plc_timespec *req, struct plc_timespec *rem)
@@ -987,6 +951,7 @@ static int __init runner_init(void)
 	use_nsecs = 1;
 	shutdown = 0;
 	shutdown_requested = false;
+	plc_hr_set_stop_hook(runner_should_stop);
 	init_completion(&fused_worker_done);
 
 	fused_stat = kzalloc(sizeof(*fused_stat), GFP_KERNEL);

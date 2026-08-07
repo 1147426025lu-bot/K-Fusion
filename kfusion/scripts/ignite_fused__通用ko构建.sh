@@ -134,9 +134,11 @@ echo "    run_main=${FUSE_RUN_MAIN} entry=${ENTRY} host=${FUSE_HOST} pthread_hos
 case "$FUSE_HOST" in
     generic) ;;
     hrtimer)
+        plc_require_file "$PROJECT_ROOT/src/plc_hrtimer_core__定时核心.c" "hrtimer 核心"
         plc_require_file "$PROJECT_ROOT/src/plc_fused_timer_host__hrtimer宿主.c" "hrtimer 宿主"
+        cp "$PROJECT_ROOT/src/plc_hrtimer_core__定时核心.c" "$PROJECT_ROOT/test/plc_hrtimer_core.c"
         cp "$PROJECT_ROOT/src/plc_fused_timer_host__hrtimer宿主.c" "$PROJECT_ROOT/test/plc_fused_timer_host.c"
-        HOST_OBJS="${HOST_OBJS} plc_fused_timer_host.o"
+        HOST_OBJS="${HOST_OBJS} plc_hrtimer_core.o plc_fused_timer_host.o"
         ;;
     *)
         plc_die "$PLC_E_MANIFEST" "未知 FUSE_HOST=$FUSE_HOST" \
@@ -182,7 +184,7 @@ obj-m += ${MOD_NAME}.o
 ${MOD_NAME}-objs := ${HOST_OBJS}${EXTRA_OBJS} ${KERNEL_O}
 KDIR := /lib/modules/\$(shell uname -r)/build
 PWD := \$(shell pwd)
-ccflags-y += -O2 -I${PROJECT_ROOT}/include ${HOST_CFLAGS}
+ccflags-y += -O2 -I${PROJECT_ROOT}/include -I${PROJECT_ROOT}/src ${HOST_CFLAGS}
 all:
 	\$(MAKE) -C \$(KDIR) M=\$(PWD) modules
 clean:
@@ -199,8 +201,9 @@ clean_current_ko_artifacts() {
         ".module-common.o" ".module-common.o.cmd" ".modules.order.cmd" \
         ".Module.symvers.cmd" 2>/dev/null || true
     # 宿主 .o 带 manifest 相关 -DFUSED_*，切换应用时必须重编
-    rm -f plc_fused_host.o plc_fused_timer_host.o plc_pthread_host.o \
-        .plc_fused_host.o.cmd .plc_fused_timer_host.o.cmd .plc_pthread_host.o.cmd \
+    rm -f plc_fused_host.o plc_hrtimer_core.o plc_fused_timer_host.o plc_pthread_host.o \
+        .plc_fused_host.o.cmd .plc_hrtimer_core.o.cmd .plc_fused_timer_host.o.cmd \
+        .plc_pthread_host.o.cmd \
         "${STUBS_O}" ".${STUBS_O}.cmd" 2>/dev/null || true
 }
 
