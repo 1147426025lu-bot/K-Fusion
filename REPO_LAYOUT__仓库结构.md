@@ -1,7 +1,7 @@
 # K-Fusion 仓库结构
 
 ```
-k-fusion/                          # GitHub: 1147426025lu-bot/k-fusion
+k-fusion/                          # GitHub: 1147426025lu-bot/K-Fusion
 ├── kfusion/          FIXED       # K-Fusion 工具链（主线）
 ├── crtos/            REF         # cRTOS/Jailhouse 对照实验
 ├── timedc/           REF         # Timed C/KTC 灵感与三基线对照

@@ -9,16 +9,11 @@
 ## 克隆
 
 ```bash
-# 仓库在 GitHub 重命名为 k-fusion 后：
-git clone git@github.com:1147426025lu-bot/k-fusion.git
-cd k-fusion
-
-# 若尚未重命名，暂用旧 URL（内容已是最新 main）：
-# git clone git@github.com:1147426025lu-bot/plc_compiler_rpi5.git
+git clone git@github.com:1147426025lu-bot/K-Fusion.git
+cd K-Fusion
 ```
 
-重命名：`bash scripts/rename_github_repo__重命名GitHub仓库.sh`  
-或 GitHub → Settings → Repository name → `k-fusion`
+仓库地址：https://github.com/1147426025lu-bot/K-Fusion
 
 ## 核心（主线）
 

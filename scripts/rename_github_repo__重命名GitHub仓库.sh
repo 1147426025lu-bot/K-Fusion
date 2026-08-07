@@ -2,7 +2,7 @@
 # Rename GitHub repo plc_compiler_rpi5 → k-fusion (run once on dev machine with gh auth).
 set -euo pipefail
 REPO="1147426025lu-bot/plc_compiler_rpi5"
-NEW="k-fusion"
+NEW="K-Fusion"
 
 if ! command -v gh >/dev/null 2>&1; then
 	echo "Install GitHub CLI: sudo apt install gh && gh auth login"

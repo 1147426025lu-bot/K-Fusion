@@ -15,7 +15,7 @@
 ## ARM 快速开始（Pi 默认）
 
 ```bash
-git clone git@github.com:1147426025lu-bot/k-fusion.git
+git clone git@github.com:1147426025lu-bot/K-Fusion.git
 cd k-fusion
 # Pi 上可省略 PLC_PLATFORM
 bash scripts/plc_fuse__内核化主流程.sh manifests/manifest_signaltest__信号测试.env
@@ -26,7 +26,7 @@ sudo insmod test/signaltest_mod.ko
 ## x86_64 快速开始（PREEMPT_RT 实机）
 
 ```bash
-git clone git@github.com:1147426025lu-bot/k-fusion.git
+git clone git@github.com:1147426025lu-bot/K-Fusion.git
 cd k-fusion
 export PLC_PLATFORM=x86_64
 export PATH="/usr/lib/llvm-19/bin:$PATH"
@@ -51,4 +51,4 @@ file test/platform_x86_64_*/*_kernel.o   # 应含 x86-64
 
 ## 仓库命名说明
 
-远程仓库：**`1147426025lu-bot/k-fusion`**。内容已支持 x86_64，见 `manifests/platform/x86_64.env`。
+远程仓库：**`1147426025lu-bot/K-Fusion`**。内容已支持 x86_64，见 `manifests/platform/x86_64.env`。
