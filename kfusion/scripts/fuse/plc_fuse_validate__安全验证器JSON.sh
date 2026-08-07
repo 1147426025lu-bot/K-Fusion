@@ -127,7 +127,7 @@ fi
 if [ -n "${FUSE_EXTRA_SOURCES:-}" ]; then
     extra_n=$(echo "$FUSE_EXTRA_SOURCES" | wc -w)
     if [ "$extra_n" -gt 0 ] && [ -f "$KLL" ]; then
-        if ! grep -qE '^define .* @(rt_periodic_record_worst|hist_|mt_scheduler_tick|task_sensor_fusion)\(' "$KLL" 2>/dev/null; then
+        if ! grep -qE '^define .* @hist_[A-Za-z0-9_]+\(' "$KLL" 2>/dev/null; then
             multi_tu_ok=0
         fi
     fi

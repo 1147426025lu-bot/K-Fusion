@@ -78,3 +78,14 @@ kfusion/test/**/*.preflight.log
 kfusion/test/**/*.pipeline.log
 kfusion/test/**/*.pipeline_policy.log
 kfusion/test/**/*.ir_analysis.log
+kfusion/test/**/*_runtime_stubs.c
+!kfusion/test/plc_runtime_stubs.c
+kfusion/test/**/*.stubs.generated.c
+kfusion/test/**/*.wcet_schedule.json
+kfusion/test/**/*.wcet_per_function.json
+kfusion/test/**/*.wcet_per_function.env
+kfusion/test/**/*.wcet_suggest.env
+kfusion/test/**/*.wcet_ci_smoke.err
+kfusion/test/.wcet_per_fn_search/
+kfusion/test/.github_rt_periodic_wcet_per_fn/
+kfusion/test/.official_cycletest_multitu_wcet_per_fn/

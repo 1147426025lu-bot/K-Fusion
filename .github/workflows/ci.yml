@@ -13,6 +13,7 @@ jobs:
     env:
       FUSE_AST_APPLY_SUGGEST: "0"
       CI_LITE: "1"
+      CI_CYCLICTEST_MULTITU: "1"
     steps:
       - uses: actions/checkout@v4
 

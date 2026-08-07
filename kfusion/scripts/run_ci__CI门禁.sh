@@ -90,10 +90,16 @@ plc_require_file "$PRJ/build/plc_ast" "plc_ast 分析器"
 echo "🧪 [1a3] Pass 单元测试 (FileCheck)..."
 bash "$PRJ/backend/test/run_pass_unit_tests__Pass单元测试.sh"
 
-echo "🧪 [1a4] 函数级 WCET 门禁 (plc_cc_hello)..."
+echo "🧪 [1a4] 函数级 WCET 门禁 (github_rt_periodic)..."
 chmod +x "$SCRIPT_DIR/run_ci_wcet_per_function__函数级WCET门禁.sh"
 bash "$SCRIPT_DIR/run_ci_wcet_per_function__函数级WCET门禁.sh" \
-    "$PRJ/manifests/manifest_plc_cc_hello__入门.env"
+    "$PRJ/manifests/manifest_github_rt_periodic__周期demo.env"
+
+if [ "${CI_CYCLICTEST_MULTITU:-0}" = "1" ]; then
+    echo "🧪 [1a5] cyclictest 多 TU 门禁 (rt-tests git + histogram)..."
+    chmod +x "$SCRIPT_DIR/run_ci_cyclictest_multitu__多TU门禁.sh"
+    bash "$SCRIPT_DIR/run_ci_cyclictest_multitu__多TU门禁.sh"
+fi
 
 echo "🔬 [1b] plc-cc AST 门禁..."
 bash "$SCRIPT_DIR/run_plc_cc_ast_ci__plc-cc分析门禁.sh"
