@@ -18,8 +18,8 @@ ${FUSE_NAME}_mod.ko :=
 
 | Profile | 构建入口 | 用途 |
 |---------|----------|------|
-| `generic` | `ignite_fused__通用ko构建.sh` | CI、功能验证、跑完整 `main()` |
-| `l2` | `ignite_official_cycletest__cyclictest主线.sh` | 论文/浸泡、直接 `timerthread()` + 测量 debugfs |
+| `generic` | `plc_kernelize__内核化.sh` | CI、功能验证、跑完整 `main()` |
+| `l2` | `deploy/ignite_official_cycletest__cyclictest主线.sh` | 论文/浸泡、L2 测量 debugfs |
 
 ## 现有模块（`src/` 为权威源）
 
@@ -56,11 +56,14 @@ ${FUSE_NAME}_mod.ko :=
 ## 常用命令
 
 ```bash
+# 全流程（推荐）
+bash scripts/plc_kernelize__内核化.sh manifests/manifest_cyclictest__主线压测.env
+
 # CI / 功能（generic，跑 main）
-FUSE_RUNNER_PROFILE=generic bash scripts/ignite_fused__通用ko构建.sh \
+FUSE_RUNNER_PROFILE=generic bash scripts/plc_kernelize__内核化.sh \
   manifests/manifest_cyclictest__主线压测.env
 
-# 浸泡 / L2 测量（默认 l2）
+# 浸泡 / L2 测量（build + insmod）
 bash scripts/deploy/ignite_official_cycletest__cyclictest主线.sh
 
 # 仅构建 L2 .ko

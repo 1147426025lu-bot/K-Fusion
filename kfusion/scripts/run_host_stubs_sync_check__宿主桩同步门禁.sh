@@ -35,6 +35,8 @@ check_copy "$PRJ/src/plc_fused_host__通用宿主.c" "$PRJ/test/plc_fused_host.c
     "plc_fused_host"
 check_copy "$PRJ/src/plc_fused_timer_host__hrtimer宿主.c" \
     "$PRJ/test/plc_fused_timer_host.c" "plc_fused_timer_host"
+check_copy "$PRJ/src/plc_hrtimer_core__定时核心.c" \
+    "$PRJ/test/plc_hrtimer_core.c" "plc_hrtimer_core"
 check_copy "$PRJ/src/plc_pthread_host__pthread宿主.c" "$PRJ/test/plc_pthread_host.c" \
     "plc_pthread_host"
 

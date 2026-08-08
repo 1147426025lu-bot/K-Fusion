@@ -7,10 +7,16 @@ PLCFusion 核心：manifest → Clang IR → Pass → LLC → `_kernel.o` → �
 ## 主入口
 
 ```bash
+# 推荐：fuse + check + .ko 一步完成
+bash scripts/plc_kernelize__内核化.sh manifests/manifest_cyclictest__主线压测.env
+
+# 仅 Pass 融合（IR → kernel.o）
 bash scripts/plc_fuse__内核化主流程.sh manifests/manifest_cyclictest__主线压测.env
-# 或（等价）
+# 或（等价 symlink）
 bash scripts/fuse/plc_fuse__内核化主流程.sh manifests/manifest_cyclictest__主线压测.env
 ```
+
+详见 [`docs/KERNELIZE__内核化流程.md`](../docs/KERNELIZE__内核化流程.md)。
 
 ## 脚本分组
 
@@ -50,4 +56,4 @@ WCET 搜索（仅 wcet-benchmark，默认不自动跑）：
 WCET_AUTOTUNE_SKIP_INSMOD=1 bash scripts/fuse/plc_fusion_wcet_autotune__WCET自动调优.sh manifests/manifest_cyclictest__主线压测.env
 ```
 
-下一步：`bash scripts/ignite_fused__通用ko构建.sh <同一 manifest>`
+下一步：`bash scripts/plc_kernelize__内核化.sh <同一 manifest>`

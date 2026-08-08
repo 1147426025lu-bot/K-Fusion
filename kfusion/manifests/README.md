@@ -37,8 +37,7 @@ cd kfusion
 cmake -B build -G Ninja && ninja -C build
 
 # 2. 融合 + 编 .ko（使用现成最小 manifest）
-bash scripts/plc_fuse__内核化主流程.sh manifests/manifest_plc_cc_hello__入门.env
-bash scripts/ignite_fused__通用ko构建.sh manifests/manifest_plc_cc_hello__入门.env
+bash scripts/plc_kernelize__内核化.sh manifests/manifest_plc_cc_hello__入门.env
 
 # 3. 实机加载（需 PREEMPT_RT + 匹配内核头）
 sudo insmod test/plc_cc_hello_mod.ko
@@ -81,5 +80,5 @@ bash scripts/run_ci__CI门禁.sh
 cp manifests/manifest_template__清单模板.env manifests/manifest_myapp.env
 # 编辑 FUSE_NAME、FUSE_SOURCE、FUSE_KTHREAD_ENTRY 等（见上表「最小必需字段」）
 bash scripts/plc_fuse__内核化主流程.sh manifests/manifest_myapp.env
-bash scripts/ignite_fused__通用ko构建.sh manifests/manifest_myapp.env
+bash scripts/plc_kernelize__内核化.sh manifests/manifest_myapp.env
 ```

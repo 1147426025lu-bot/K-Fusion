@@ -17,8 +17,10 @@
 
 | 脚本 | 用途 |
 |------|------|
-| `ignite_fused__通用ko构建.sh` | manifest → `.ko`（通用 fused 路径） |
-| `run_ci__CI门禁.sh` | 无 insmod：Pass + 13 manifest + 覆盖率 |
+| **`plc_kernelize__内核化.sh`** | **主入口**：fuse → check → `.ko` |
+| `plc_fuse__内核化主流程.sh` | 仅 Pass 融合 → `_kernel.o`（symlink → fuse/） |
+| `ignite_fused__通用ko构建.sh` | 兼容：仅 Kbuild（generic 宿主） |
+| `run_ci__CI门禁.sh` | 无 insmod：Pass + manifest + 覆盖率 |
 | `run_smoke_tests__冒烟测试.sh` | CI + 可选 insmod |
 | `verify_fused_apps__批量验证.sh` | 13 类批量 insmod/rmmod |
 | `run_ko_build__全类ko编译.sh` | 全 manifest `.ko` 编译 |

@@ -16,13 +16,14 @@
 ```bash
 cmake -B build -G Ninja && ninja -C build
 bash scripts/run_ci__CI门禁.sh
-bash scripts/ignite_fused__通用ko构建.sh manifests/manifest_plc_cc_hello__入门.env
+bash scripts/plc_kernelize__内核化.sh manifests/manifest_plc_cc_hello__入门.env
 ```
 
 ## 流水线
 
 ```
-manifests/*.env → plc_fuse (LLVM Pass) → *_kernel.o → ignite_fused → *.ko
+manifests/*.env → plc_kernelize (fuse → check → ko) → *_mod.ko
+              └→ plc_fuse only → *_kernel.o
 ```
 
 默认 **Q-only 定点**（`FUSE_FIXED_POINT=1`）：见 `include/plc_fixed__定点Q.h`。

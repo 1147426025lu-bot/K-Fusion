@@ -520,5 +520,5 @@ else
     echo "   WCET:   bash scripts/fuse/plc_fusion_wcet_sweep__tail对照.sh $MANIFEST"
 fi
 echo "   覆盖率: bash scripts/plc_fuse_report__覆盖率报告.sh $MANIFEST"
-echo "   cyclictest 主线: bash scripts/deploy/ignite_official_cycletest__cyclictest主线.sh"
-echo "   通用模块:       bash scripts/ignite_fused__通用ko构建.sh $MANIFEST"
+echo "   下一步: bash scripts/plc_kernelize__内核化.sh $MANIFEST"
+echo "   （仅 .ko）: PLC_KERNELIZE_STAGE=ko bash scripts/plc_kernelize__内核化.sh $MANIFEST"
