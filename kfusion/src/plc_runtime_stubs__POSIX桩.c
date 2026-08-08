@@ -1638,7 +1638,7 @@ struct plc_stub_tm *localtime(const long *timep)
 	ns = ktime_get_ns();
 	memset(&plc_tm, 0, sizeof(plc_tm));
 	plc_tm.tm_sec = (int)(div_u64(ns, NSEC_PER_SEC) % 60);
-        plc_tm.tm_min = (int)(div_u64(ns, 60ULL * NSEC_PER_SEC) % 60);
+        plc_tm.tm_min = (int)(div_u64(ns, (u64)(60ULL * NSEC_PER_SEC)) % 60);
 	return &plc_tm;
 }
 
