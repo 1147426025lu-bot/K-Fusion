@@ -22,6 +22,8 @@
 
 **可选但常用**：`FUSE_INCLUDE_DIRS`、`FUSE_CLANG_FLAGS`、`FUSE_EXTRA_SOURCES`（多 TU）、`FUSE_PIPELINE_POLICY`（`ast-auto` / `wcet-benchmark`）。
 
+**rt-tests 推荐**（cyclictest / signaltest / ptsematest）：`FUSE_STRICT=1`、`FUSE_MAX_UNMAPPED=0`、`FUSE_AST_INDIRECT_ALLOW=bsearch`、`FUSE_HOST=hrtimer`。
+
 平台 LLC 默认由 `manifests/platform/rpi5.env` 等注入；单 manifest 可覆盖 `FUSE_LLC_ARCH` / `FUSE_LLC_ATTR`。
 
 完整模板：[`manifest_template__清单模板.env`](manifest_template__清单模板.env)

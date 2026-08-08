@@ -179,28 +179,48 @@ JSON
     rm -f "$bad" "$err"
 }
 
-run_cyclictest_unmapped_probe() {
-    local pre unmap name
-    for pre in "$KFUSION/test/official_cycletest_multitu_pre.ll" \
-               "$KFUSION/test/official_cycletest_pre.ll"; do
+run_prell_unmapped_probe() {
+    local pre name unmap tag="${1:-pre.ll}"
+    shift
+    for pre in "$@"; do
         [ -f "$pre" ] || continue
         name="$(basename "$pre")"
-        unmap="$SCRIPT_DIR/.cyclictest_unmapped_probe"
-        echo "   ▶ cyclictest unmapped probe ($name)"
+        unmap="$SCRIPT_DIR/.unmapped_probe_${name}"
+        echo "   ▶ rt-tests unmapped probe ($name)"
         : > "$unmap"
         if ! env PLC_FUSION_UNMAPPED_LOG="$unmap" PLC_FUSION_BLACKHOLE=1 \
             "$OPT" -load-pass-plugin "$PASS_SO" \
             -passes=plc-fusion-remap "$pre" -S >/dev/null 2>&1; then
-            echo "❌ cyclictest pre.ll remap 失败: $name" >&2
+            echo "❌ remap 失败: $name ($tag)" >&2
             return 1
         fi
         if [ -s "$unmap" ]; then
-            echo "❌ cyclictest 仍有 unmapped ($name):" >&2
+            echo "❌ 仍有 unmapped ($name):" >&2
             sort -u "$unmap" >&2
             return 1
         fi
         rm -f "$unmap"
     done
+}
+
+run_rttests_unmapped_probes() {
+    local plat
+    run_prell_unmapped_probe cyclictest \
+        "$KFUSION/test/official_cycletest_multitu_pre.ll" \
+        "$KFUSION/test/official_cycletest_pre.ll" || return 1
+    run_prell_unmapped_probe signaltest "$KFUSION/test/signaltest_pre.ll" || return 1
+    run_prell_unmapped_probe ptsematest "$KFUSION/test/ptsematest_pre.ll" || return 1
+    shopt -s nullglob
+    for plat in "$KFUSION/test/platform_"*; do
+        [ -d "$plat" ] || continue
+        run_prell_unmapped_probe "$(basename "$plat")/official_cycletest" \
+            "$plat/official_cycletest_pre.ll" || return 1
+        run_prell_unmapped_probe "$(basename "$plat")/signaltest" \
+            "$plat/signaltest_pre.ll" || return 1
+        run_prell_unmapped_probe "$(basename "$plat")/ptsematest" \
+            "$plat/ptsematest_pre.ll" || return 1
+    done
+    shopt -u nullglob
 }
 
 echo "=== K-Fusion Pass 单元测试 ==="
@@ -227,9 +247,9 @@ for ll in "$SCRIPT_DIR"/*.ll; do
 done
 
 run_wcet_schedule_negative || FAIL=1
-run_cyclictest_unmapped_probe || FAIL=1
+run_rttests_unmapped_probes || FAIL=1
 
 if [ "$FAIL" -ne 0 ]; then
     exit 1
 fi
-echo "✅ Pass 单元测试通过 (${SCRIPT_DIR}/*.ll + wcet schedule negative)"
+echo "✅ Pass 单元测试通过 (${SCRIPT_DIR}/*.ll + wcet + rt-tests unmapped probes)"
