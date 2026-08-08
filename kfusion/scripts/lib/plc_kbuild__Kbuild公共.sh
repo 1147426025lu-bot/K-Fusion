@@ -27,11 +27,15 @@ plc_kbuild_write_makefile() {
     local objs="$2"
     local ccflags="$3"
     local extra_cflags="${4:-}"
+    local kdir
+
+    kdir="$(plc_kbuild_kdir)" || plc_die "$PLC_E_NOCMD" "无法解析 Kbuild KDIR" \
+        "设 PLC_KBUILD_KDIR 或 PLC_KBUILD_KDIR_AUTO=1"
 
     cat > Makefile <<MAKEFILE_EOF
 obj-m += ${mod_name}.o
 ${mod_name}-objs := ${objs}
-KDIR := /lib/modules/\$(shell uname -r)/build
+KDIR := ${kdir}
 PWD := \$(shell pwd)
 ccflags-y += ${ccflags}
 ${extra_cflags}

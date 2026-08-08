@@ -19,9 +19,19 @@
 #include <linux/errno.h>
 #include <linux/err.h>
 #include <linux/wait.h>
+#if __has_include(<generated/utsrelease.h>)
+#include <generated/utsrelease.h>
+#elif __has_include(<linux/utsrelease.h>)
 #include <linux/utsrelease.h>
+#else
+#define UTS_RELEASE "unknown"
+#endif
 
 #include "../include/plc_abi__运行时ABI.h"
+
+#ifndef EOF
+#define EOF (-1)
+#endif
 
 /* --- libc string helpers (resolve fused .o externals) --- */
 
@@ -1628,7 +1638,7 @@ struct plc_stub_tm *localtime(const long *timep)
 	ns = ktime_get_ns();
 	memset(&plc_tm, 0, sizeof(plc_tm));
 	plc_tm.tm_sec = (int)(div_u64(ns, NSEC_PER_SEC) % 60);
-	plc_tm.tm_min = (int)(div_u64(ns, 60 * NSEC_PER_SEC) % 60);
+        plc_tm.tm_min = (int)(div_u64(ns, 60ULL * NSEC_PER_SEC) % 60);
 	return &plc_tm;
 }
 

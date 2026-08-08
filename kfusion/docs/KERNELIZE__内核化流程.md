@@ -13,6 +13,10 @@ PLC_KERNELIZE_STAGE=fuse bash scripts/plc_kernelize__内核化.sh manifests/foo.
 
 # 已有 kernel.o，仅链接 .ko
 PLC_KERNELIZE_STAGE=ko bash scripts/plc_kernelize__内核化.sh manifests/foo.env
+
+# 运行内核无 headers 时（仅验证链接；insmod 需 vermagic 一致）
+PLC_KBUILD_KDIR_AUTO=1 bash scripts/plc_kernelize__内核化.sh manifests/foo.env
+# 或: PLC_KBUILD_KDIR=/lib/modules/6.12.62+rpt-rpi-v8-rt/build
 ```
 
 ## cyclictest 宿主 profile

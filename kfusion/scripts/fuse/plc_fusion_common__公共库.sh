@@ -297,13 +297,46 @@ plc_resolve_objcopy() {
 }
 
 plc_check_kernel_build() {
-    local kdir="/lib/modules/$(uname -r)/build"
-    if [ ! -d "$kdir" ]; then
-        plc_die "$PLC_E_NOCMD" "内核头文件未安装: ${kdir}" \
+    local kdir
+    kdir="$(plc_kbuild_kdir 2>/dev/null)" || true
+    if [ -z "$kdir" ] || [ ! -d "$kdir" ]; then
+        plc_die "$PLC_E_NOCMD" "内核头文件未安装: /lib/modules/$(uname -r)/build" \
             "执行: sudo apt install raspberrypi-kernel-headers 或 linux-headers-\$(uname -r)" \
-            "安装后重新运行本脚本"
+            "或: PLC_KBUILD_KDIR=/lib/modules/<ver>/build" \
+            "或: PLC_KBUILD_KDIR_AUTO=1（用本机其它 RT headers 仅验证链接）"
     fi
     echo "$kdir"
+}
+
+# Kbuild 头文件路径：PLC_KBUILD_KDIR > 运行内核 > PLC_KBUILD_KDIR_AUTO 回退
+plc_kbuild_kdir() {
+    local run_kdir="/lib/modules/$(uname -r)/build"
+    local c
+
+    if [ -n "${PLC_KBUILD_KDIR:-}" ]; then
+        if [ -d "${PLC_KBUILD_KDIR}" ]; then
+            echo "${PLC_KBUILD_KDIR}"
+            return 0
+        fi
+        plc_die "$PLC_E_NOCMD" "PLC_KBUILD_KDIR 不存在: ${PLC_KBUILD_KDIR}"
+    fi
+    if [ -d "$run_kdir" ]; then
+        echo "$run_kdir"
+        return 0
+    fi
+    if [ "${PLC_KBUILD_KDIR_AUTO:-0}" = "1" ]; then
+        for c in /lib/modules/*rpi-v8-rt/build \
+                 /lib/modules/*rt-arm64/build \
+                 /lib/modules/*rpi-2712/build; do
+            if [ -d "$c" ]; then
+                plc_warn "运行内核 $(uname -r) 无 headers，Kbuild 回退: $c" \
+                    "insmod 需 vermagic 与运行内核一致；仅验证 .ko 链接可继续"
+                echo "$c"
+                return 0
+            fi
+        done
+    fi
+    return 1
 }
 
 plc_check_sudo() {
