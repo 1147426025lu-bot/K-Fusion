@@ -180,13 +180,15 @@ JSON
 }
 
 run_prell_unmapped_probe() {
-    local pre name unmap tag="${1:-pre.ll}"
+    local tag="$1"
     shift
+    local pre name unmap ran=0
     for pre in "$@"; do
         [ -f "$pre" ] || continue
+        ran=1
         name="$(basename "$pre")"
         unmap="$SCRIPT_DIR/.unmapped_probe_${name}"
-        echo "   ▶ rt-tests unmapped probe ($name)"
+        echo "   ▶ unmapped probe [$tag] ($name)"
         : > "$unmap"
         if ! env PLC_FUSION_UNMAPPED_LOG="$unmap" PLC_FUSION_BLACKHOLE=1 \
             "$OPT" -load-pass-plugin "$PASS_SO" \
@@ -201,6 +203,10 @@ run_prell_unmapped_probe() {
         fi
         rm -f "$unmap"
     done
+    if [ "$ran" = "0" ] && [ "${PASS_PROBE_REQUIRE_PRELL:-0}" = "1" ]; then
+        echo "❌ 无 pre.ll 可测 ($tag)" >&2
+        return 1
+    fi
 }
 
 run_rttests_unmapped_probes() {
@@ -210,6 +216,9 @@ run_rttests_unmapped_probes() {
         "$KFUSION/test/official_cycletest_pre.ll" || return 1
     run_prell_unmapped_probe signaltest "$KFUSION/test/signaltest_pre.ll" || return 1
     run_prell_unmapped_probe ptsematest "$KFUSION/test/ptsematest_pre.ll" || return 1
+    run_prell_unmapped_probe github_rt_periodic \
+        "$KFUSION/test/github_rt_periodic_pre.ll" \
+        "$KFUSION/test/github_rt_periodic_multitu_pre.ll" || return 1
     shopt -s nullglob
     for plat in "$KFUSION/test/platform_"*; do
         [ -d "$plat" ] || continue

@@ -8,6 +8,7 @@
 |------|------|
 | 脚本 | [`scripts/README.md`](scripts/README.md) |
 | Manifest | [`manifests/README.md`](manifests/README.md) |
+| Pass 能力 | [`docs/PASS__Pass能力.md`](docs/PASS__Pass能力.md) |
 | 示例 | [`examples/README.md`](examples/README.md) |
 | plc-cc 入口 | [`scripts/plc-cc__低抖动编译器`](scripts/plc-cc__低抖动编译器) |
 
