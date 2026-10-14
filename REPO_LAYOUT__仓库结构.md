@@ -37,7 +37,7 @@ kfusion/
 
 | 文件 | 说明 |
 |------|------|
-| `kernel_version__内核版本.txt` | 手工记录的内核版本；脚本请用 `uname -r` |
-| `gpio_map_info__GPIO映射.txt` | 某次 GPIO 映射导出，供 PLC 示例对照 |
+| `docs/kernel_version__内核版本.txt` | 手工记录的内核版本；脚本请用 `uname -r` |
+| `docs/gpio_map_info__GPIO映射.txt` | 某次 GPIO 映射导出，供 PLC 示例对照 |
 
 维护与贡献约定见 [`docs/DEV__开发指南.md`](docs/DEV__开发指南.md)。
