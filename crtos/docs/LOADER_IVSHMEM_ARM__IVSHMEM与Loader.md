@@ -58,3 +58,14 @@ sudo chrt -f 90 ./loader /path/to/guest/elf args...
 - `third_party/crtos/Installation.md` — IVSHMEM region splitting  
 - `third_party/crtos/crtos-drivers/README.md` — shadow mmap semantics  
 - `third_party/crtos/crtos-loader/README.md` — SCHED_FIFO requirement  
+
+---
+
+## Pi 4B 状态（2026-10-15）
+
+Pi4 的 cell `crtos/jailhouse_overlay_pi4/configs/arm64/rpi4-nuttx.c` 已**预留同款 IVSHMEM 布局**
+（`0x1faf0000` 起，`shmem_dev_id=1 / peers=3 / BDF 0`，与 root cell `00:00.0` 对端），
+并在 `pci_devices` 中声明——**cell 层已就绪，可与 root cell 建立共享内存**。
+
+但与 Pi5 相同，**NuttX 侧驱动 + Linux 侧 `shadow/ivshmem` 栈尚未移植**（属下一步"remote syscall"工作）。
+当前 Pi4 里程碑（NuttX 启动 + 实时抖动实测）不依赖 IVSHMEM，故未阻塞。

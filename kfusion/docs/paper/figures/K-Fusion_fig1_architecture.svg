@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="471.96pt" height="291.6pt" viewBox="0 0 471.96 291.6" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-10-15T08:48:38.331682</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.10.8, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 291.6 
+L 471.96 291.6 
+L 471.96 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 29.52 36.0288 
+L 442.44 36.0288 
+L 442.44 122.5152 
+L 29.52 122.5152 
+z
+" clip-path="url(#pdde18750e1)" style="fill: #ffffff; stroke: #000000; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 40.68 43.7904 
+L 219.24 43.7904 
+L 219.24 64.8576 
+L 40.68 64.8576 
+z
+" clip-path="url(#pdde18750e1)" style="fill: #f2f2f2; stroke: #000000; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 40.68 69.2928 
+L 219.24 69.2928 
+L 219.24 90.36 
+L 40.68 90.36 
+z
+" clip-path="url(#pdde18750e1)" style="fill: #f2f2f2; stroke: #000000; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 241.56 43.7904 
+L 420.12 43.7904 
+L 420.12 64.8576 
+L 241.56 64.8576 
+z
+" clip-path="url(#pdde18750e1)" style="fill: #f2f2f2; stroke: #000000; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 241.56 69.2928 
+L 420.12 69.2928 
+L 420.12 90.36 
+L 241.56 90.36 
+z
+" clip-path="url(#pdde18750e1)" style="fill: #f2f2f2; stroke: #000000; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 223.472953 51.552 
+Q 230.399859 51.552 236.096927 51.552 
+" clip-path="url(#pdde18750e1)" style="fill: none; stroke: #000000; stroke-width: 1.1; stroke-linecap: round"/>
+    <path d="M 231.696927 49.352 
+L 236.096927 51.552 
+L 231.696927 53.752 
+z
+" clip-path="url(#pdde18750e1)" style="stroke: #000000; stroke-width: 1.1; stroke-linecap: round"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 237.327047 60.4224 
+Q 230.400141 60.4224 224.703073 60.4224 
+" clip-path="url(#pdde18750e1)" style="fill: none; stroke: #000000; stroke-width: 1.1; stroke-linecap: round"/>
+    <path d="M 229.103073 62.6224 
+L 224.703073 60.4224 
+L 229.103073 58.2224 
+z
+" clip-path="url(#pdde18750e1)" style="stroke: #000000; stroke-width: 1.1; stroke-linecap: round"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 29.52 100.3392 
+L 442.44 100.3392 
+L 442.44 119.1888 
+L 29.52 119.1888 
+z
+" clip-path="url(#pdde18750e1)" style="fill: #4472c4; stroke: #4472c4; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_10">
+    <path d="M 68.58 126.9504 
+L 157.86 126.9504 
+L 157.86 141.3648 
+L 68.58 141.3648 
+z
+" clip-path="url(#pdde18750e1)" style="fill: #d9d9d9; stroke: #000000; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_11">
+    <path d="M 302.94 126.9504 
+L 392.22 126.9504 
+L 392.22 141.3648 
+L 302.94 141.3648 
+z
+" clip-path="url(#pdde18750e1)" style="fill: #d9d9d9; stroke: #000000; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_12">
+    <path d="M 29.52 169.0848 
+L 442.44 169.0848 
+L 442.44 226.7424 
+L 29.52 226.7424 
+z
+" clip-path="url(#pdde18750e1)" style="fill: #ffffff; stroke: #000000; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_13">
+    <path d="M 40.68 177.9552 
+L 219.24 177.9552 
+L 219.24 200.1312 
+L 40.68 200.1312 
+z
+" clip-path="url(#pdde18750e1)" style="fill: #f2f2f2; stroke: #000000; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_14">
+    <path d="M 241.56 177.9552 
+L 420.12 177.9552 
+L 420.12 200.1312 
+L 241.56 200.1312 
+z
+" clip-path="url(#pdde18750e1)" style="fill: #f2f2f2; stroke: #000000; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_15">
+    <path d="M 29.52 204.5664 
+L 442.44 204.5664 
+L 442.44 221.1984 
+L 29.52 221.1984 
+z
+" clip-path="url(#pdde18750e1)" style="fill: #4472c4; stroke: #4472c4; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_16">
+    <path d="M 185.76 230.0688 
+L 286.2 230.0688 
+L 286.2 244.4832 
+L 185.76 244.4832 
+z
+" clip-path="url(#pdde18750e1)" style="fill: #d9d9d9; stroke: #000000; stroke-linejoin: miter"/>
+   </g>
+   <g id="line2d_1">
+    <path d="M 230.4 36.0288 
+L 230.4 122.5152 
+" clip-path="url(#pdde18750e1)" style="fill: none; stroke: #000000; stroke-width: 0.8; stroke-linecap: square"/>
+   </g>
+   <g id="text_1">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start" x="29.52" y="19.105712" transform="rotate(-0 29.52 19.105712)">(a) cRTOS</text>
+   </g>
+   <g id="text_2">
+    <text style="font-weight: 700; font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="124.38" y="32.135375" transform="rotate(-0 124.38 32.135375)">Normal realm</text>
+   </g>
+   <g id="text_3">
+    <text style="font-weight: 700; font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="347.58" y="32.135375" transform="rotate(-0 347.58 32.135375)">Real-time realm</text>
+   </g>
+   <g id="text_4">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="129.96" y="57.083375" transform="rotate(-0 129.96 57.083375)">Non-RT / RT processes</text>
+   </g>
+   <g id="text_5">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="129.96" y="82.585775" transform="rotate(-0 129.96 82.585775)">Linux (GPOS)</text>
+   </g>
+   <g id="text_6">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="330.84" y="57.083375" transform="rotate(-0 330.84 57.083375)">RT processes</text>
+   </g>
+   <g id="text_7">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="330.84" y="82.585775" transform="rotate(-0 330.84 82.585775)">NuttX (sRTOS)</text>
+   </g>
+   <g id="text_8">
+    <text style="font-style: italic; font-size: 8px; font-family: 'DejaVu Sans'; text-anchor: middle" x="230.4" y="97.5571" transform="rotate(-0 230.4 97.5571)">remote syscall</text>
+   </g>
+   <g id="text_9">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="235.98" y="112.756344" transform="rotate(-0 235.98 112.756344)">Hypervisor</text>
+   </g>
+   <g id="text_10">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: middle" x="113.22" y="136.641037" transform="rotate(-0 113.22 136.641037)">Non-RT devices</text>
+   </g>
+   <g id="text_11">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: middle" x="347.58" y="136.641037" transform="rotate(-0 347.58 136.641037)">RT devices</text>
+   </g>
+   <g id="text_12">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: start" x="29.52" y="153.270512" transform="rotate(-0 29.52 153.270512)">(b) K-Fusion</text>
+   </g>
+   <g id="text_13">
+    <text style="font-weight: 700; font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="235.98" y="165.052312" transform="rotate(-0 235.98 165.052312)">Single PREEMPT_RT domain</text>
+   </g>
+   <g id="text_14">
+    <text style="font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="129.96" y="191.802575" transform="rotate(-0 129.96 191.802575)">User-space Linux</text>
+   </g>
+   <g id="text_15">
+    <text style="font-weight: 700; font-size: 10px; font-family: 'DejaVu Sans'; text-anchor: middle" x="330.84" y="187.367375" transform="rotate(-0 330.84 187.367375)">Fused module .ko</text>
+   </g>
+   <g id="text_16">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: middle" x="330.84" y="197.070637" transform="rotate(-0 330.84 197.070637)">kthread + hrtimer</text>
+   </g>
+   <g id="text_17">
+    <text style="font-weight: 700; font-size: 11px; font-family: 'DejaVu Sans'; text-anchor: middle; fill: #ffffff" x="235.98" y="215.764744" transform="rotate(-0 235.98 215.764744)">PREEMPT_RT kernel</text>
+   </g>
+   <g id="text_18">
+    <text style="font-size: 9px; font-family: 'DejaVu Sans'; text-anchor: middle" x="235.98" y="239.759437" transform="rotate(-0 235.98 239.759437)">Devices</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pdde18750e1">
+   <rect x="7.2" y="7.2" width="457.56" height="277.2"/>
+  </clipPath>
+ </defs>
+</svg>

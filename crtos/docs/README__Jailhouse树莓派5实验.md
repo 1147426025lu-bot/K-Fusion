@@ -109,3 +109,24 @@ IEEE Access 2025 demonstrated cRTOS on **Pi 4B**; no public Pi5 turnkey release.
 ## Paper use
 
 Keep cRTOS as **literature cross-study** for PLCFusion paper. This tree enables optional same-board hypervisor baseline when hardware time allows.
+
+---
+
+## Pi 4B — cRTOS-like 对照（已完成，2026-10-15）
+
+除上面的 Pi5 脚手架外，本目录含一套**已在 Raspberry Pi 4B 上实测通过**的 Jailhouse + NuttX 移植：
+
+| 产物 | 路径 |
+|------|------|
+| cell 配置（rpi4-nuttx.c） | `../jailhouse_overlay_pi4/configs/arm64/` |
+| NuttX inmate defconfig | `../jailhouse_overlay_pi4/configs/arm64/rpi4-nuttx-nsh-inmate.defconfig` |
+| 启动入口补丁（arm64_head.S） | `../jailhouse_overlay_pi4/patches/` |
+| 部署脚本 | `../jailhouse_overlay_pi4/scripts/deploy_nuttx_cell__部署NuttX_cell.sh` |
+| rtlat 实时抖动 app | `../jailhouse_overlay_pi4/nuttx/apps/benchmarks/rtlat/` |
+| **实测结果** | `../results/COMPARE_Pi4_cRTOS_vs_KFusion__Pi4对比K-Fusion.md` |
+
+**关键读数**：NuttX inmate（CPU1, tickless）60s soak `abs_max = 6 µs`；同板 root cell Linux
+（未调优）`2086 µs` → 同板改善 **347.7×**。
+
+**规格与踩坑记录**：[PI4_NUTTX_INMATE__cell约束与移植规格.md](PI4_NUTTX_INMATE__cell约束与移植规格.md)。
+**实验方案与状态**：[PI4_CRTOS__Pi4对比实验方案.md](PI4_CRTOS__Pi4对比实验方案.md)。

@@ -2,6 +2,8 @@
 
 > 本文件由根目录 `FILES.md` 指向。K-Fusion 仓库统一采用 `name__中文说明.ext` 自文档化命名约定
 >（双下划线后接中文描述），所有文件名均为合法 UTF-8，在 Linux / macOS / Windows(UTF-8 locale) 下均正常解析。
+>
+> 快照日期：**2026-10-15**（含当日新增：crtos/jailhouse_overlay_pi4 移植产物、crtos/results 实测数据、kfusion/docs/paper 论文稿与图）。
 
 ## 顶层文件
 
@@ -15,7 +17,7 @@
 
 ## 顶层目录（按模块）
 
-### `.github/` — 
+### `.github/` —
 
 - `.github/workflows/` （3 文件）
 
@@ -26,9 +28,11 @@
 
 ### `crtos/` — cRTOS / Jailhouse 对照实验脚手架（含 upstream Jailhouse 源码与脚本）
 
-- `crtos/docs/` （5 文件）
+- `crtos/docs/` （9 文件）
+- `crtos/jailhouse_overlay_pi4/` （11 文件）— **NuttX-inmate 移植产物**（cell 配置 / defconfig / 补丁 / 部署脚本 / rtlat app）
+- `crtos/results/` （2 文件）— **Pi4 实测数据**（对照表 + schema 对齐的 JSON）
 - `crtos/logs/` （1 文件）
-- `crtos/scripts/` （28 文件）
+- `crtos/scripts/` （33 文件，含 `pi4/`）
 - `crtos/upstream/` （526 文件）
 
 ### `docs/` — 跨模块文档（开发指南、仓库结构）与已归位的参考文件
@@ -43,7 +47,7 @@
 - `kfusion/README.md/` （1 文件）
 - `kfusion/backend/` （23 文件）
 - `kfusion/diagnostics/` （1 文件）
-- `kfusion/docs/` （52 文件）
+- `kfusion/docs/` （78 文件，含 `paper/` 论文稿与 `figures/`）
 - `kfusion/examples/` （24 文件）
 - `kfusion/frontend/` （2 文件）
 - `kfusion/include/` （5 文件）
@@ -69,14 +73,14 @@
 
 ## 统计
 
-- 入库文件总数：**902**
+- 工作树文件总数：**950**
 - `.github/`：3 文件
 - `compare/`：2 文件
-- `crtos/`：560 文件
+- `crtos/`：582 文件（docs 9 · jailhouse_overlay_pi4 11 · results 2 · logs 1 · scripts 33 · upstream 526）
 - `docs/`：3 文件
-- `kfusion/`：312 文件
+- `kfusion/`：338 文件
 - `results/`：3 文件
 - `scripts/`：1 文件
 - `timedc/`：11 文件
 
-> 提示：本索引为静态快照，新增/重命名文件后请重新生成。
+> 提示：本索引为静态快照，新增/重命名文件后请重新生成。`.workbuddy/`（会话记忆）不纳入统计。

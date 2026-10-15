@@ -1,0 +1,9 @@
+############################################################################
+# apps/benchmarks/rtlat/Make.defs
+#
+# SPDX-License-Identifier: Apache-2.0
+############################################################################
+
+ifneq ($(CONFIG_BENCHMARK_RTLAT),)
+CONFIGURED_APPS += $(APPDIR)/benchmarks/rtlat
+endif

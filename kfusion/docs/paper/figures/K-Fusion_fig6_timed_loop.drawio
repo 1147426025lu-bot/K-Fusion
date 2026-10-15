@@ -1,0 +1,40 @@
+<mxfile host="app.diagrams.net" agent="WorkBuddy" version="22.0.0" type="device">
+  <diagram id="kf-fig6" name="Fig6-TimedLoop">
+    <mxGraphModel dx="1422" dy="798" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" /><mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Kernelized periodic loop: source, control-flow graph, and timing" style="text;html=1;align=left;fontSize=12;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="40" y="10" width="620" height="20" as="geometry" /></mxCell>
+
+        <mxCell id="code" value="1: while (1) {&#10;2:   wait_next_period();   // hrtimer&#10;3:   control_step();       // fused&#10;4:   log_metrics();&#10;5: }" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;align=left;fontFamily=Courier New;fontSize=11;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1"><mxGeometry x="40" y="40" width="320" height="200" as="geometry" /></mxCell>
+        <mxCell id="codesub" value="source C  (&#8594; kernel.o)" style="text;html=1;fontSize=10;fontStyle=2;" vertex="1" parent="1"><mxGeometry x="130" y="244" width="160" height="16" as="geometry" /></mxCell>
+
+        <mxCell id="c0" value="t" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="600" y="46" width="32" height="32" as="geometry" /></mxCell>
+        <mxCell id="s1" value="wait_next_period()" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="546" y="92" width="140" height="30" as="geometry" /></mxCell>
+        <mxCell id="s2" value="control_step() [fused]" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="546" y="142" width="140" height="30" as="geometry" /></mxCell>
+        <mxCell id="s3" value="log_metrics()" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="546" y="192" width="140" height="30" as="geometry" /></mxCell>
+        <mxCell id="a1" style="endArrow=classic;html=1;" edge="1" parent="1" source="c0" target="s1"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="a2" style="endArrow=classic;html=1;" edge="1" parent="1" source="s1" target="s2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="a3" style="endArrow=classic;html=1;" edge="1" parent="1" source="s2" target="s3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="a4" value="next period" style="endArrow=classic;html=1;curved=1;exitX=1;exitY=0.5;entryX=1;entryY=0.5;fontSize=9;" edge="1" parent="1" source="s3" target="c0"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="cfgsub" value="control-flow graph" style="text;html=1;fontSize=10;fontStyle=2;" vertex="1" parent="1"><mxGeometry x="556" y="244" width="160" height="16" as="geometry" /></mxCell>
+
+        <mxCell id="tl0" value="execution timeline (T = nominal period)" style="text;html=1;fontSize=10;fontStyle=2;align=left;" vertex="1" parent="1"><mxGeometry x="40" y="300" width="320" height="16" as="geometry" /></mxCell>
+        <mxCell id="seg1" value="I1" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d9d9d9;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="40" y="322" width="130" height="26" as="geometry" /></mxCell>
+        <mxCell id="seg2" value="I2" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="170" y="322" width="130" height="26" as="geometry" /></mxCell>
+        <mxCell id="seg3" value="I3" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d9d9d9;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="300" y="322" width="130" height="26" as="geometry" /></mxCell>
+        <mxCell id="seg4" value="I4" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="430" y="322" width="130" height="26" as="geometry" /></mxCell>
+        <mxCell id="seg5" value="I5" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d9d9d9;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="560" y="322" width="130" height="26" as="geometry" /></mxCell>
+        <mxCell id="seg6" value="I6" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="690" y="322" width="130" height="26" as="geometry" /></mxCell>
+        <mxCell id="t0" value="0" style="text;html=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="28" y="352" width="24" height="16" as="geometry" /></mxCell>
+        <mxCell id="t1" value="1T" style="text;html=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="158" y="352" width="24" height="16" as="geometry" /></mxCell>
+        <mxCell id="t2" value="2T" style="text;html=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="288" y="352" width="24" height="16" as="geometry" /></mxCell>
+        <mxCell id="t3" value="3T" style="text;html=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="418" y="352" width="24" height="16" as="geometry" /></mxCell>
+        <mxCell id="t4" value="4T" style="text;html=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="548" y="352" width="24" height="16" as="geometry" /></mxCell>
+        <mxCell id="t5" value="5T" style="text;html=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="678" y="352" width="24" height="16" as="geometry" /></mxCell>
+        <mxCell id="t6" value="6T" style="text;html=1;fontSize=9;" vertex="1" parent="1"><mxGeometry x="808" y="352" width="24" height="16" as="geometry" /></mxCell>
+        <mxCell id="tlnote" value="release via hrtimer (kernel)  &#8212;  no wake-up syscall on the hot path" style="text;html=1;fontSize=9;fontStyle=2;align=left;" vertex="1" parent="1"><mxGeometry x="40" y="376" width="620" height="16" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

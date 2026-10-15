@@ -26,7 +26,10 @@ kfusion/
 
 ## crtos/ · timedc/（非主线）
 
-- **crtos/** — Jailhouse Pi5 补丁与 enable 脚本；cRTOS 为论文 **spatial isolation 对照**
+- **crtos/** — Jailhouse 补丁与 enable 脚本；cRTOS 为论文 **spatial isolation 对照**
+  - `crtos/jailhouse_overlay_pi4/` — **Pi4B NuttX-inmate 移植产物**（cell 配置 / defconfig / head.S 补丁 / 部署脚本 / `rtlat` 实时抖动 app）
+  - `crtos/results/` — **Pi4 实测数据**（root_cell vs inmate 对照表 + schema 对齐 JSON）
+  - `crtos/docs/` — 实验方案、cell 约束规格（含实测结果回填）、NuttX 移植笔记
 - **timedc/** — KTC 移植；Timed C 为 **语言层时间语义对照**
 
 ## compare/

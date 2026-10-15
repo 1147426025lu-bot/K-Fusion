@@ -1,0 +1,27 @@
+#
+# For a description of the syntax of this configuration file,
+# see the file kconfig-language.txt in the NuttX tools repository.
+#
+
+config BENCHMARK_RTLAT
+	tristate "Real-time scheduling latency (jitter) benchmark"
+	default n
+	---help---
+		Measure wakeup jitter of a high-priority periodic task
+		(cyclictest-like core). For cRTOS RT-domain measurement.
+
+if BENCHMARK_RTLAT
+
+config BENCHMARK_RTLAT_PROGNAME
+	string "Program name"
+	default "rtlat"
+
+config BENCHMARK_RTLAT_PRIORITY
+	int "rtlat task priority"
+	default 100
+
+config BENCHMARK_RTLAT_STACKSIZE
+	int "rtlat stack size"
+	default 16384
+
+endif

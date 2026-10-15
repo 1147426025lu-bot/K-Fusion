@@ -1,0 +1,36 @@
+<mxfile host="app.diagrams.net" agent="WorkBuddy" version="22.0.0" type="device">
+  <diagram id="kf-fig2" name="Fig2-Toolchain">
+    <mxGraphModel dx="1422" dy="798" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" /><mxCell id="1" parent="0" />
+
+        <mxCell id="lab1" value="build time (compiler)" style="text;html=1;align=left;fontSize=10;fontStyle=2;" vertex="1" parent="1"><mxGeometry x="30" y="12" width="220" height="16" as="geometry" /></mxCell>
+        <mxCell id="lab2" value="run time (kernel)" style="text;html=1;align=left;fontSize=10;fontStyle=2;" vertex="1" parent="1"><mxGeometry x="30" y="238" width="220" height="16" as="geometry" /></mxCell>
+        <mxCell id="pipe" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;dashed=1;" vertex="1" parent="1"><mxGeometry x="20" y="26" width="820" height="430" as="geometry" /></mxCell>
+
+        <mxCell id="b1" value="Manifest +&#10;C source" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;fontSize=10;" vertex="1" parent="1"><mxGeometry x="40" y="66" width="150" height="66" as="geometry" /></mxCell>
+        <mxCell id="b2" value="AST pre-flight&#10;(feasibility)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;fontSize=10;" vertex="1" parent="1"><mxGeometry x="220" y="66" width="130" height="66" as="geometry" /></mxCell>
+        <mxCell id="b3" value="Clang&#10;&#8594; LLVM IR" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;fontSize=10;" vertex="1" parent="1"><mxGeometry x="380" y="66" width="120" height="66" as="geometry" /></mxCell>
+        <mxCell id="b4" value="Kernelization passes&#10;Remap / DCE&#10;Fixed-point / WCET" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;fontSize=10;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="530" y="62" width="190" height="72" as="geometry" /></mxCell>
+        <mxCell id="b5" value="kernel.o&#10;+ validate.json" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;fontSize=10;" vertex="1" parent="1"><mxGeometry x="750" y="66" width="150" height="66" as="geometry" /></mxCell>
+
+        <mxCell id="b6" value="ignite_fused&#10;(link host + stubs)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;fontSize=10;" vertex="1" parent="1"><mxGeometry x="40" y="288" width="150" height="62" as="geometry" /></mxCell>
+        <mxCell id="b7" value="*.ko&#10;(loadable module)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;fontSize=10;" vertex="1" parent="1"><mxGeometry x="230" y="288" width="140" height="62" as="geometry" /></mxCell>
+        <mxCell id="b8" value="Deploy and measure&#10;insmod smoke / soak / stress" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;fontSize=10;" vertex="1" parent="1"><mxGeometry x="410" y="288" width="210" height="62" as="geometry" /></mxCell>
+        <mxCell id="b9" value="results/&#10;CSV + logs" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;fontSize=10;" vertex="1" parent="1"><mxGeometry x="660" y="288" width="140" height="62" as="geometry" /></mxCell>
+
+        <mxCell id="host" value="replaceable host (host module)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e8e8e8;strokeColor=#000000;dashed=1;fontSize=10;" vertex="1" parent="1"><mxGeometry x="40" y="394" width="760" height="40" as="geometry" /></mxCell>
+
+        <mxCell id="e1" style="endArrow=classic;html=1;" edge="1" parent="1" source="b1" target="b2"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e2" style="endArrow=classic;html=1;" edge="1" parent="1" source="b2" target="b3"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e3" style="endArrow=classic;html=1;" edge="1" parent="1" source="b3" target="b4"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e4" style="endArrow=classic;html=1;" edge="1" parent="1" source="b4" target="b5"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e5" style="endArrow=classic;html=1;" edge="1" parent="1" source="b5" target="b6"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e6" style="endArrow=classic;html=1;" edge="1" parent="1" source="b6" target="b7"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e7" style="endArrow=classic;html=1;" edge="1" parent="1" source="b7" target="b8"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e8" style="endArrow=classic;html=1;" edge="1" parent="1" source="b8" target="b9"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e9" value="links into" style="endArrow=classic;html=1;fontSize=9;" edge="1" parent="1" source="host" target="b6"><mxGeometry relative="1" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

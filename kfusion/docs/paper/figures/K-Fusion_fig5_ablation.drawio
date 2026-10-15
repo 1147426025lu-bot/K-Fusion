@@ -1,0 +1,29 @@
+<mxfile host="app.diagrams.net" agent="WorkBuddy" version="22.0.0" type="device">
+  <diagram id="kf-fig5" name="Fig5-Ablation">
+    <mxGraphModel dx="1422" dy="798" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="yaxis" style="endArrow=classic;html=1;strokeColor=#000000;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="100" y="150" as="sourcePoint"/><mxPoint x="100" y="430" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="ylab" value="delta J_max vs default" style="text;html=1;align=left;fontSize=12;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="60" y="120" width="200" height="20" as="geometry" /></mxCell>
+        <mxCell id="zero" style="endArrow=none;html=1;strokeColor=#999999;dashed=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="100" y="330" as="sourcePoint"/><mxPoint x="820" y="330" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="xaxis" style="endArrow=classic;html=1;strokeColor=#000000;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="100" y="330" as="sourcePoint"/><mxPoint x="820" y="330" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="zerolab" value="0" style="text;html=1;fontSize=10;align=right;" vertex="1" parent="1"><mxGeometry x="70" y="320" width="26" height="16" as="geometry" /></mxCell>
+        <mxCell id="poslab" value="+ (worse)" style="text;html=1;fontSize=10;align=right;" vertex="1" parent="1"><mxGeometry x="58" y="200" width="60" height="16" as="geometry" /></mxCell>
+
+        <mxCell id="d_bar" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=#999999;" vertex="1" parent="1"><mxGeometry x="170" y="330" width="70" height="4" as="geometry" /></mxCell>
+        <mxCell id="w_bar" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1"><mxGeometry x="330" y="210" width="70" height="120" as="geometry" /></mxCell>
+        <mxCell id="q_bar" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="490" y="260" width="70" height="70" as="geometry" /></mxCell>
+        <mxCell id="i_bar" value="load&#10;failure" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;dashed=1;fontSize=10;" vertex="1" parent="1"><mxGeometry x="650" y="210" width="70" height="120" as="geometry" /></mxCell>
+
+        <mxCell id="d_lab" value="default&#10;(baseline 0)" style="text;html=1;align=center;fontSize=11;" vertex="1" parent="1"><mxGeometry x="150" y="336" width="110" height="34" as="geometry" /></mxCell>
+        <mxCell id="w_lab" value="WCET marking off" style="text;html=1;align=center;fontSize=11;" vertex="1" parent="1"><mxGeometry x="300" y="336" width="130" height="32" as="geometry" /></mxCell>
+        <mxCell id="q_lab" value="fixed-point off" style="text;html=1;align=center;fontSize=11;" vertex="1" parent="1"><mxGeometry x="465" y="336" width="120" height="32" as="geometry" /></mxCell>
+        <mxCell id="i_lab" value="indirect-callee resolution off" style="text;html=1;align=center;fontSize=11;" vertex="1" parent="1"><mxGeometry x="620" y="336" width="130" height="32" as="geometry" /></mxCell>
+
+        <mxCell id="note" value="schematic. Turning WCET marking off worsens the tail (positive delta); turning indirect-callee resolution off may remove reachable functions and cause a load failure rather than a jitter change." style="text;html=1;align=left;fontSize=10;fontStyle=2;" vertex="1" parent="1"><mxGeometry x="100" y="392" width="720" height="34" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

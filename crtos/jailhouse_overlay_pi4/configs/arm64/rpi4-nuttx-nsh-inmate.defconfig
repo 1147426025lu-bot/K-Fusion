@@ -1,0 +1,98 @@
+#
+# NuttX inmate defconfig: raspberrypi-4b:nsh-inmate
+#
+# 基于 configs/nsh/defconfig 修改，用于把 NuttX 作为 Jailhouse 非根 cell 运行。
+# 状态：2026-10-15 实测通过 —— NuttX inmate 在 CPU1 完整启动 NSH，串口可见可交互。
+# 关键决策：
+#   1. CONFIG_RAM_SIZE=128MB（**十进制 134217728**），RAM_START=0 —— 与 cell 的
+#      预留池(phys 0x10000000, guest-virt 0)对齐；nuttx.bin 链接在
+#      CONFIG_LOAD_BASE=0x480000。
+#      ⚠ CONFIG_RAM_SIZE 是 Kconfig int 类型，写成 0x08000000 会被解析成 0 → 堆为 0 → NSH 起不来。
+#   2. 去掉 CONFIG_USERLED / CONFIG_ARCH_LEDS（LED 走 VideoCore 邮箱 0xfe00b8b8，cell 未分配 → fault）。
+#   3. mini-UART 控制台：由 arch/arm64/src/bcm2711/bcm2711_serial.c 的 CONSOLE_DEV
+#      宏**无条件注册**为 /dev/console（默认 115200 8N1）。注意 CONFIG_SERIAL_CONSOLE
+#      在本 NuttX 版本**不是有效符号**（会被 Kconfig 丢弃），但控制台仍正常——不要依赖它。
+#      NSH 输出走物理 mini-UART(GPIO 14/15)，与 cell 分配的 0xfe215000(AUX 块, ROOTSHARED) 对应。
+#   4. # CONFIG_BOARD_LATE_INITIALIZE is not set —— 关闭 rpi4b_bringup，避免
+#      inmate 启动去碰 cell 未映射的 I2C/PWM/SDMMC/Framebuffer 等 MMIO 而 fault。
+#   5. CONFIG_ARCH_EARLY_PRINT=y —— 早期启动信息也经 mini-UART 输出，便于排错。
+#
+# 配套 cell 配置：crtos/jailhouse_overlay_pi4/configs/arm64/rpi4-nuttx.c
+# 加载（实测可用）：jailhouse cell load rpi4-nuttx nuttx.bin -a 0x480000
+#   —— `-a` 是 **guest 虚拟地址**(不是 phys)。入口点由 cell 的 cpu_reset_address
+#      决定(=0x480000)，与 -a 无关。旧文档里"先 dd pad.bin 再 load"的写法已废弃。
+# 启动入口补丁：arch/arm64/src/common/arm64_head.S 的 mpidr 检查需 nop（见 patches/）。
+#
+
+CONFIG_ARCH="arm64"
+CONFIG_ARCH_ARM64=y
+CONFIG_ARCH_BOARD="raspberrypi-4b"
+# 自写 rtlat：inmate(cRTOS 域)内实时调度抖动测量（cyclictest 内核等价：
+# 高优先级周期任务 + clock_nanosleep(TIMER_ABSTIME) + clock_gettime）。
+# （NuttX 自带 cyclictest 依赖 /dev/timer+TCIOC_*+信号通知，配置太重且编译不过。）
+CONFIG_BENCHMARK_RTLAT=y
+CONFIG_ARCH_BOARD_RASPBERRYPI_4B=y
+CONFIG_ARCH_CHIP="bcm2711"
+CONFIG_ARCH_CHIP_BCM2711=y
+CONFIG_ARCH_EARLY_PRINT=y
+CONFIG_ARCH_INTERRUPTSTACK=4096
+CONFIG_ARCH_IRQPRIO=y
+# 关键：关闭板载自动 LED。bcm2711_board_initialize() 在 CONFIG_ARCH_LEDS 下
+# 会调 board_autoled_initialize() → rpi4b_autoleds.c → bcm2711_mbox_ledset()
+# 走 VideoCore 邮箱(0xfe00b8b8)，而 cell 未映射邮箱 → 启动早期 data abort。
+# （CONFIG_USERLED 是另一个符号，已另行关闭；此处必须关 CONFIG_ARCH_LEDS。）
+# CONFIG_ARCH_LEDS is not set
+CONFIG_BOARD_LOOPSPERMSEC=132954
+# 关闭 board late init：inmate 不需要 I2C/PWM/SDMMC/FB，且那些 MMIO 未映射
+# CONFIG_BOARD_LATE_INITIALIZE is not set
+CONFIG_BUILTIN=y
+CONFIG_DEBUG_ASSERTIONS=y
+CONFIG_DEBUG_FEATURES=y
+CONFIG_DEBUG_FULLOPT=y
+CONFIG_DEBUG_SCHED=y
+CONFIG_DEBUG_SCHED_ERROR=y
+CONFIG_DEBUG_SCHED_WARN=y
+CONFIG_DEBUG_SYMBOLS=y
+CONFIG_DEFAULT_TASK_STACKSIZE=8192
+CONFIG_EXAMPLES_HELLO=y
+CONFIG_EXPERIMENTAL=y
+CONFIG_FS_PROCFS=y
+CONFIG_FS_ROMFS=y
+CONFIG_HAVE_CXX=y
+CONFIG_HAVE_CXXINITIALIZE=y
+CONFIG_IDLETHREAD_STACKSIZE=8192
+CONFIG_INIT_ENTRYPOINT="nsh_main"
+CONFIG_INTELHEX_BINARY=y
+CONFIG_MINIUART_BAUD=115200
+CONFIG_NSH_BUILTIN_APPS=y
+CONFIG_NSH_FILEIOSIZE=512
+CONFIG_NSH_READLINE=y
+CONFIG_PREALLOC_TIMERS=4
+CONFIG_PTHREAD_STACK_MIN=8192
+# 注意：CONFIG_RAM_SIZE 在 Kconfig 中是 int 类型，必须用十进制！
+# 128MB = 134217728，恰好等于 cell 分配给 inmate 的预留池大小(phys 0x10000000 起 128MB)。
+# 写成 0x08000000 会被 int 解析器当成 0 → 堆为 0 → NSH 起不来（已踩坑）。
+CONFIG_RAM_SIZE=134217728
+# CONFIG_RAM_START 同样是 int，0 即可（0x00000000 也解析成 0，但写 0 更明确）
+CONFIG_RAM_START=0
+CONFIG_RAW_BINARY=y
+CONFIG_READLINE_CMD_HISTORY=y
+CONFIG_RR_INTERVAL=200
+CONFIG_SCHED_HPWORK=y
+CONFIG_SCHED_HPWORKPRIORITY=192
+# 无滴答(tickless)调度：用 oneshot 定时器按需编程下一个时间事件，去掉 1ms
+# 周期 tick 的量化误差 → 高优先级任务唤醒延迟从 ~1ms 量级降到 µs 量级（cRTOS 关键）。
+CONFIG_SCHED_TICKLESS=y
+CONFIG_SERIAL_CONSOLE=y
+CONFIG_SPINLOCK=y
+CONFIG_STACK_COLORATION=y
+CONFIG_START_MONTH=11
+CONFIG_START_YEAR=2022
+CONFIG_SYMTAB_ORDEREDBYNAME=y
+CONFIG_SYSTEM_NSH=y
+CONFIG_SYSTEM_SYSTEM=y
+CONFIG_TESTING_GETPRIME=y
+CONFIG_TESTING_OSTEST=y
+# tickless 下 oneshot 以 USEC_PER_TICK 为单位编程；设 1µs 以便高精度唤醒。
+# （配合 CONFIG_SCHED_TICKLESS，无周期性 tick 中断，故 1µs 基准不会带来中断风暴。）
+CONFIG_USEC_PER_TICK=1

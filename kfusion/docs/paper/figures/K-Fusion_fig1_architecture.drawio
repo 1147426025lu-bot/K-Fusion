@@ -1,0 +1,35 @@
+<mxfile host="app.diagrams.net" agent="WorkBuddy" version="22.0.0" type="device">
+  <diagram id="kf-fig1" name="Fig1-Architecture">
+    <mxGraphModel dx="1422" dy="798" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="826" math="0" shadow="0">
+      <root>
+        <mxCell id="0" /><mxCell id="1" parent="0" />
+
+        <mxCell id="ta" value="(a) cRTOS (Baseline A): dual realm under a partitioning hypervisor" style="text;html=1;align=left;fontSize=12;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="40" y="10" width="560" height="20" as="geometry" /></mxCell>
+        <mxCell id="rn" value="Normal realm" style="text;html=1;fontSize=11;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="110" y="30" width="200" height="18" as="geometry" /></mxCell>
+        <mxCell id="rr" value="Real-time realm" style="text;html=1;fontSize=11;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="510" y="30" width="200" height="18" as="geometry" /></mxCell>
+        <mxCell id="outa" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="40" y="50" width="740" height="155" as="geometry" /></mxCell>
+        <mxCell id="diva" style="endArrow=none;html=1;strokeColor=#000000;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="400" y="50" as="sourcePoint"/><mxPoint x="400" y="205" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="n1" value="Non-RT and rich RT processes" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="60" y="64" width="320" height="36" as="geometry" /></mxCell>
+        <mxCell id="n2" value="Rich GPOS (Linux) kernel + modules" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="60" y="106" width="320" height="36" as="geometry" /></mxCell>
+        <mxCell id="r1" value="RT threads and RT processes" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="420" y="64" width="320" height="36" as="geometry" /></mxCell>
+        <mxCell id="r2" value="Swift RTOS (NuttX) kernel" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="420" y="106" width="320" height="36" as="geometry" /></mxCell>
+        <mxCell id="rs1" style="endArrow=classic;html=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="382" y="82" as="sourcePoint"/><mxPoint x="418" y="82" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="rs2" style="endArrow=classic;html=1;" edge="1" parent="1"><mxGeometry relative="1" as="geometry"><mxPoint x="418" y="96" as="sourcePoint"/><mxPoint x="382" y="96" as="targetPoint"/></mxGeometry></mxCell>
+        <mxCell id="rsl" value="remote syscall / shared memory" style="text;html=1;fontSize=9;fontStyle=2;" vertex="1" parent="1"><mxGeometry x="320" y="152" width="200" height="16" as="geometry" /></mxCell>
+        <mxCell id="hv" value="RT Hypervisor  (spatial partitioning, VT-x / ARM-VE)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#4472c4;strokeColor=#4472c4;fontColor=#ffffff;fontStyle=1;fontSize=11;" vertex="1" parent="1"><mxGeometry x="40" y="161" width="740" height="34" as="geometry" /></mxCell>
+        <mxCell id="dv1" value="Non-RT devices" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d9d9d9;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="90" y="216" width="170" height="26" as="geometry" /></mxCell>
+        <mxCell id="dv2" value="RT devices" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d9d9d9;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="500" y="216" width="170" height="26" as="geometry" /></mxCell>
+        <mxCell id="pic" value="PIC: programmable interrupt controller" style="text;html=1;fontSize=9;fontStyle=2;" vertex="1" parent="1"><mxGeometry x="290" y="244" width="260" height="16" as="geometry" /></mxCell>
+
+        <mxCell id="tb" value="(b) K-Fusion (this work): single PREEMPT_RT domain, no hypervisor" style="text;html=1;align=left;fontSize=12;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="40" y="272" width="600" height="20" as="geometry" /></mxCell>
+        <mxCell id="dl" value="Single PREEMPT_RT domain" style="text;html=1;fontSize=11;fontStyle=1;" vertex="1" parent="1"><mxGeometry x="310" y="292" width="200" height="18" as="geometry" /></mxCell>
+        <mxCell id="outb" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=none;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="40" y="312" width="740" height="120" as="geometry" /></mxCell>
+        <mxCell id="bu1" value="User-space Linux services&#10;(network / filesystem / GUI)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="60" y="328" width="320" height="40" as="geometry" /></mxCell>
+        <mxCell id="bu2" value="Fused module .ko&#10;kthread + pinned hrtimer (original C)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f2f2f2;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="420" y="328" width="320" height="40" as="geometry" /></mxCell>
+        <mxCell id="kb" value="PREEMPT_RT kernel  (no hypervisor layer)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#4472c4;strokeColor=#4472c4;fontColor=#ffffff;fontStyle=1;fontSize=11;" vertex="1" parent="1"><mxGeometry x="40" y="380" width="740" height="34" as="geometry" /></mxCell>
+        <mxCell id="dvb" value="Devices" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#d9d9d9;strokeColor=#000000;" vertex="1" parent="1"><mxGeometry x="300" y="432" width="220" height="26" as="geometry" /></mxCell>
+        <mxCell id="nb" value="no second OS, no cross-domain call" style="text;html=1;fontSize=9;fontStyle=2;align=left;" vertex="1" parent="1"><mxGeometry x="40" y="440" width="240" height="16" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
