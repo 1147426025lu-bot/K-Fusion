@@ -4,7 +4,9 @@
 # 环境变量: JH_REPO(可选,默认用仓库内 upstream/jailhouse)  KDIR(可选,默认当前内核)
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-source "$SCRIPT_DIR/../../kfusion/scripts/lib/repo_paths__仓库路径.sh" 2>/dev/null || true
+# 本脚本在 crtos/scripts/pi4/，到仓库根需回退三级
+source "$SCRIPT_DIR/../../../kfusion/scripts/lib/repo_paths__仓库路径.sh" 2>/dev/null || true
+REPO_ROOT="${REPO_ROOT:-$(cd "$SCRIPT_DIR/../../.." && pwd)}"
 
 JH="${JH_REPO:-${CRTOS_JAILHOUSE:-$REPO_ROOT/crtos/upstream/jailhouse}}"
 KREL="$(uname -r)"

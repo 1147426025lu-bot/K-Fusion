@@ -1,0 +1,22 @@
+# 统一换行：脚本/源码在 Windows 检出也保持 LF，
+# 避免 CRLF 导致在 Pi(Linux) 上 `bash: $'\r': command not found`。
+# （历史上多次需在 Pi 上 sed -i 's/\r$//' 的根因。）
+
+*.sh         text eol=lf
+*.ps1        text eol=lf
+*.defconfig  text eol=lf
+*.c          text eol=lf
+*.h          text eol=lf
+*.json       text eol=lf
+*.md         text eol=lf
+Makefile     text eol=lf
+Make.defs    text eol=lf
+Kconfig      text eol=lf
+*.S          text eol=lf
+
+# 二进制（图/包）不做变换
+*.png        binary
+*.jpg        binary
+*.svg        text eol=lf
+*.tar.gz     binary
+*.xz         binary
