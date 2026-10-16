@@ -18,6 +18,12 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO_OVERLAY="$(cd "$HERE/.." && pwd)"         # crtos/jailhouse_overlay_pi4
 PI4_SCRIPTS="$(cd "$HERE/../../scripts/pi4" 2>/dev/null && pwd || echo "")"   # crtos/scripts/pi4
 
+# 兼容：经 pscp 传输后非 ASCII 文件名可能变乱码，故用通配查找子脚本
+BUILD_SH="$(ls "$HERE"/build_nuttx_inmate*.sh 2>/dev/null | head -1 || true)"
+DEPLOY_SH="$(ls "$HERE"/deploy_nuttx_cell*.sh 2>/dev/null | head -1 || true)"
+[ -n "$BUILD_SH" ]  || { echo "FAIL: 未找到 build_nuttx_inmate*.sh" >&2; exit 1; }
+[ -n "$DEPLOY_SH" ] || { echo "FAIL: 未找到 deploy_nuttx_cell*.sh" >&2; exit 1; }
+
 SKIP_BUILD=0
 ROOT_SOAK=0
 while [ $# -gt 0 ]; do
@@ -38,7 +44,7 @@ echo "OK: jailhouse root cell 已激活"
 
 if [ "$SKIP_BUILD" -eq 0 ]; then
   echo "############ 1. 构建 NuttX inmate ############"
-  bash "$HERE/build_nuttx_inmate__构建NuttX_inmate.sh"
+  bash "$BUILD_SH"
 else
   echo "############ 1. 跳过构建（--skip-build）############"
   [ -f "${NUTTX_SRC:-/root/nuttx-build/nuttx}/nuttx.bin" ] \
@@ -46,7 +52,7 @@ else
 fi
 
 echo "############ 2. 编译 cell + 部署启动 ############"
-bash "$HERE/deploy_nuttx_cell__部署NuttX_cell.sh"
+bash "$DEPLOY_SH"
 
 echo "############ 3. inmate 抖动测量（在接串口的主机侧执行）############"
 echo "inmate 输出走物理 mini-UART(GPIO 14/15)，只能从「接串口的那台主机」驱动。请在主机上执行："
@@ -69,5 +75,5 @@ if [ "$ROOT_SOAK" -gt 0 ] 2>/dev/null; then
 fi
 
 echo "############ 完成 ############"
-echo "回顾：inmate(cRTOS 域) 预期 abs_max ≈ 5~6µs（60s soak）；同板 root cell Linux 无调优 ≈ 2086µs。"
+echo "回顾：inmate(cRTOS 域) 15min abs_max ≈ 5µs；同板 root cell Linux（正确 FIFO99+绑核）15min ≈ 96µs。"
 echo "结果对照见 crtos/results/COMPARE_Pi4_cRTOS_vs_KFusion__Pi4对比K-Fusion.md"

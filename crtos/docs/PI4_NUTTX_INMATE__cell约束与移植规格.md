@@ -108,24 +108,27 @@ nsh>
 
 | realm | 平台 | 时长 | avg | **abs_max** | >200µs |
 |---|---|---|---|---|---|
-| **NuttX inmate**（cRTOS 域） | Pi 4B | 60s | **5 µs** | **6 µs** | 0 |
-| root cell Linux（同板，未调优） | Pi 4B | 60s | 71 µs | 2086 µs | 13 |
+| **NuttX inmate**（cRTOS 域） | Pi 4B | **15 min** | **5 µs** | **5 µs** | 0 |
+| root cell Linux（同板，正确配置） | Pi 4B | **15 min** | 18 µs | **96 µs** | 0 |
 
-直方图（inmate 60s）：`5: 59999, 6: 1` → **抖动仅 ±1µs**。
+直方图（inmate 15 min）：`5: 900000` → **90 万次零抖动**（60 s 旧跑为 `5:59999, 6:1`）。
 
-**同板改善**：abs_max **347.7×**、avg **14.2×**。
+**同板改善**：abs_max **19.2×**（96→5µs）、avg **3.6×**（18→5µs）。
+
+> ⚠ 早前记的「root 60s avg 71µs / max 2086µs、改善 347×」系 `cyclictest -Sp3` 被解析成
+> `-p3`（优先级 3）的**误配**结果，**已撤回**。
 
 ### 6.4 与主线 PLCFusion / 文献对照（cross-study）
 
 | 系统 | 平台 | 机制 | 时长 | abs_max | 来源 |
 |---|---|---|---|---|---|
 | K-Fusion 融合 | Pi 5 | 单域 PREEMPT_RT，无 hypervisor | 15 min | 3.391 µs | 仓库实测(fig3) |
-| **NuttX inmate（cRTOS-like）** | **Pi 4B** | **Jailhouse 分区 + NuttX tickless** | **1 min** | **6 µs** | **本工作实测** |
-| root cell Linux | Pi 4B | 同板 Linux（非 RT，未调优） | 1 min | 2086 µs | 本工作实测 |
+| **NuttX inmate（cRTOS-like）** | **Pi 4B** | **Jailhouse 分区 + NuttX tickless** | **15 min** | **5 µs** | **本工作实测** |
+| root cell Linux | Pi 4B | 同板 Linux（非 RT） | 15 min | 96 µs | 本工作实测 |
 | cRTOS | x86-64 | Jailhouse + sRTOS | — | ~4 µs | IEEE Access 2025（引用） |
 
-⚠ 三条硬约束（写入 Threats to Validity）：**板子不同**（Pi4 GIC-400 vs Pi5 GIC-600）、
-**时长不同**（1min vs 15min，abs_max 随窗口增长）、**机制不同**（hypervisor 硬分区 vs 单域）。
+⚠ 两条硬约束（写入 Threats to Validity）：**板子不同**（Pi4 GIC-400 vs Pi5 GIC-600）、
+**机制不同**（hypervisor 硬分区 vs 单域）。时长已对齐（均为 15 min）✓。
 
 详细对照见 `crtos/results/COMPARE_Pi4_cRTOS_vs_KFusion__Pi4对比K-Fusion.md`；
 schema 对齐的测量数据见 `crtos/results/pi4_crtos_soak__Pi4对比测量.json`。

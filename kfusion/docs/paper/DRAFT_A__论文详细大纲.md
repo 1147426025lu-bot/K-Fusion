@@ -290,7 +290,7 @@
 | Fig. 7  | 编译器 | KTC vs K-Fusion 双流水线                        | 绘图                    |
 | Table 1 | 对比  | Related work + design axes                   | 文献                    |
 | Table 2 | 数据  | Pi 主结果（三基线 × soak/stress）                    | `【此处需要实验结果】`          |
-| Table 3 | 数据  | Cross-study：cRTOS(cited) vs K-Fusion(Pi)    | 文献 [1](≈4µs) + K-Fusion 3.391µs(仓库实测) + cRTOS-like 6µs(Pi4 本工作实测) |
+| Table 3 | 数据  | Cross-study：cRTOS(cited) vs K-Fusion(Pi)    | 文献 [1](≈4µs) + K-Fusion 3.391µs(仓库实测) + cRTOS-like 5µs(Pi4 本工作实测,15min) |
 | Table 4 | 数据  | Feasibility 13 manifests                     | 运行 CSV                |
 | Table 5 | 定性  | 部署复杂度：cRTOS vs K-Fusion                     | 分析                    |
 

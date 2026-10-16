@@ -135,25 +135,28 @@ bash measure_pi4_crtos__对比测量.sh
 | Jailhouse 安装并 enable | ✅ | 镜像自带 v0.12-342-gd6e64f90；root cell "Raspberry-Pi4" 占 CPU0-3 |
 | cell 起停验证（gic-demo） | ✅ | inmate-demo running on CPU1；IVSHMEM 建立 |
 | **NuttX inmate 移植** | ✅ | **无公开先例**，本工作首创（见 `PI4_NUTTX_INMATE__cell约束与移植规格.md`） |
-| root cell 基线（realm=root_cell） | ✅ | 60s soak：avg 71µs / max 2086µs / >200µs 13 次 |
-| inmate 抖动（realm=inmate） | ✅ | 自写 `rtlat`：60s soak avg 5µs / max **6µs** / >200µs 0 |
+| root cell 基线（realm=root_cell） | ✅ | 15 min soak：avg 18µs / max **96µs** / >200µs 0（正确 FIFO99+绑核） |
+| inmate 抖动（realm=inmate） | ✅ | 自写 `rtlat`：15 min soak avg **5µs** / max **5µs** / >200µs 0（90 万次零抖动） |
 | 结果落盘（schema 对齐） | ✅ | `crtos/results/pi4_crtos_soak__Pi4对比测量.json` |
 
 ### 7.2 实测读数（协议与 PLCFusion 对齐：`abs_max`、1ms 周期）
 
 | realm | 平台 | 时长 | avg | **abs_max** | >200µs | 备注 |
 |---|---|---|---|---|---|---|
-| root_cell | Pi 4B | 60s | 71 µs | 2086 µs | 13 | 镜像内核是 **SMP PREEMPT 非 PREEMPT_RT**，未调优 |
-| **inmate** | Pi 4B | 60s | 5 µs | **6 µs** | 0 | NuttX tickless（`SCHED_TICKLESS=y`+`USEC_PER_TICK=1`） |
+| root_cell | Pi 4B | **15 min** | 18 µs | **96 µs** | 0 | 正确配置（CPU3/FIFO99/mlockall/1ms）；内核 **SMP PREEMPT 非 PREEMPT_RT** |
+| **inmate** | Pi 4B | **15 min** | 5 µs | **5 µs** | 0 | NuttX tickless（`SCHED_TICKLESS=y`+`USEC_PER_TICK=1`）；90 万次全 5µs |
 
-**同板改善**：abs_max **347.7×**，avg **14.2×**，溢出 13→0。
-**与主线对照**：inmate 6µs 与 K-Fusion fused 3.391µs(Pi5,15min)、cRTOS 文献 ~4µs(x86) 同数量级。
+**同板改善**：abs_max **19.2×**（96→5µs），avg **3.6×**（18→5µs）。
+**与主线对照**：inmate 5µs 与 K-Fusion fused 3.391µs(Pi5,15min)、cRTOS 文献 ~4µs(x86) 同数量级。
 详见 `crtos/results/COMPARE_Pi4_cRTOS_vs_KFusion__Pi4对比K-Fusion.md`。
+
+> ⚠ 修正：早前 60s 记录（root max 2086µs / 改善 347×）系 `cyclictest -Sp3` 被解析成 `-p3`（优先级 3）的**误配**，**已撤回**。
 
 ### 7.3 公平性补强（未做完，建议）
 
-- [ ] inmate 跑 **15min soak** 对齐 K-Fusion 口径（当前仅 1min，abs_max 随窗口增长）。
-- [ ] root cell 用 `isolcpus`/RT 内核复测（当前 2086µs 属"未调优上限估计"）。
+- [x] inmate 跑 **15min soak** 对齐 K-Fusion 口径 → 已完成：max **5µs**。
+- [x] root cell 正确配置（FIFO99+绑核）15min → 已完成：max **96µs**。
+- [ ] （可选）root cell 换 PREEMPT_RT / `isolcpus` 进一步调优。
 - [ ] 统一 `stamp` 与 `raw_log`，供 `kfusion/scripts/paper/paper_summarize_results__论文结果汇总.py` 出图。
 
 ### 7.4 对论文的影响

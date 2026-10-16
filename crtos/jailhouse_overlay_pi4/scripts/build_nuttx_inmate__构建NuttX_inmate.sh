@@ -60,7 +60,10 @@ mkdir -p "$CFGDIR"
 cp "$DEFCONFIG_SRC" "$CFGDIR/defconfig"
 
 echo "== 4. 应用 jailhouse-inmate 补丁（幂等）=="
-bash "$REPO_OVERLAY/patches/apply_patches__应用补丁.sh" "$BUILD/nuttx"
+# 注意：非 ASCII 文件名经 pscp 传输可能变成乱码，故用通配查找而非硬编码中文名
+PATCHER="$(ls "$REPO_OVERLAY"/patches/apply_patches*.sh 2>/dev/null | head -1 || true)"
+[ -n "$PATCHER" ] || { echo "FAIL: 未找到 patches/apply_patches*.sh" >&2; exit 1; }
+bash "$PATCHER" "$BUILD/nuttx"
 
 echo "== 5. configure =="
 cd "$BUILD/nuttx"

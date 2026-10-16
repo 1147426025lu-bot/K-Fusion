@@ -1,0 +1,8 @@
+﻿
+nsh> [Krtlat -i 1000 -l 900000
+rtlat START interval=1000us loops=900000 prio=10
+rtlat RESULT loops=900000 min=5us avg=5us max=5us over200us=0
+rtlat HISTOGRAM us:count (nonzero)
+5:900000 
+rtlat DONE
+nsh> [K

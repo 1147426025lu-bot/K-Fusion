@@ -213,7 +213,7 @@ CROSS-STUDY COMPARISON: cRTOS (cited, x86-64) VS K-FUSION (reproduced, Pi aarch6
 |---|---|---|---|---|
 | cRTOS | Hypervisor partitioning + sRTOS | x86-64 + Jailhouse | ≈ 4 µs | **cited** [1] |
 | K-Fusion | Split kernelization | Pi 5, aarch64, no hypervisor | 3.391 µs (15 min soak) | **reproduced** (repo `K-Fusion_fig3_soak_jitter_real.png`) |
-| *cRTOS-like* (supplementary) | Jailhouse partitioning + NuttX tickless | Pi 4B, aarch64 | 6 µs (60 s soak) | **reproduced** (this work, `crtos/results/`) |
+| *cRTOS-like* (supplementary) | Jailhouse partitioning + NuttX tickless | Pi 4B, aarch64 | 5 µs (15 min soak) | **reproduced** (this work, `crtos/results/`) |
 
 > The supplementary cRTOS-like row is an *open rebuild* of an architecture-equivalent partitioned
 > RTOS on our Pi 4B; it is placed in a **separate** column and is **not** aggregated with the K-Fusion

@@ -1,47 +1,68 @@
 {
   "schema_version": 1,
   "test": "pi4_crtos_like_soak",
-  "stamp": "20261015_2136",
-  "description": "Raspberry Pi 4B 上的 cRTOS-like 对照实验：Jailhouse 分区 + NuttX tickless inmate vs 同板 root cell Linux。测量协议与 kfusion/docs/benchmarks/isolation_ab_results__隔离AB结果.json 对齐（abs_max_ns / duration_min / raw_log / stamp），新增 realm 字段区分域。",
+  "stamp": "20261016_0915",
+  "description": "Raspberry Pi 4B 上的 cRTOS-like 对照：Jailhouse 分区 + NuttX tickless inmate vs 同板 root cell Linux。测量协议与 kfusion/docs/benchmarks/isolation_ab_results__隔离AB结果.json 对齐（abs_max_ns / duration_min / raw_log / stamp），新增 realm 字段区分域。正式口径为 15 min。",
   "protocol": {
     "metric": "period_jitter_abs_max_ns",
-    "task": "SCHED_FIFO 高优先级 + clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME) 周期唤醒",
+    "task": "SCHED_FIFO 高优先级 + 周期 clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME) 唤醒",
     "interval_us": 1000,
     "tool": {
-      "root_cell": "cyclictest (rt-tests, 镜像自带)",
+      "root_cell": "cyclictest (rt-tests)",
       "inmate": "rtlat (自写, crtos/jailhouse_overlay_pi4/nuttx/apps/benchmarks/rtlat)"
     }
   },
   "board": {
     "model": "Raspberry Pi 4B (BCM2711, GIC-400)",
-    "hypervisor": "Jailhouse (镜像版本 v0.12-342-gd6e64f90)"
+    "hypervisor": "Jailhouse v0.12-342-gd6e64f90",
+    "root_kernel_note": "SMP PREEMPT（非 PREEMPT_RT）"
   },
   "results": [
     {
       "realm": "root_cell",
+      "duration_min": 15,
       "cpu": "CPU3",
-      "kernel_note": "镜像内核为 SMP PREEMPT（非 PREEMPT_RT），未做 isolcpus 等调优",
-      "duration_min": 1,
-      "loops": 60000,
-      "avg_ns": 71000,
-      "abs_max_ns": 2086000,
-      "over_200us": 13,
-      "raw_log": "/root/baseline_soak_60s.txt",
-      "stamp": "20261015_phase2"
+      "invocation": "taskset -c 3 cyclictest --mlockall --priority=99 --interval=1000 --loops=900000 --histogram=400",
+      "loops": 900000,
+      "min_ns": 11000,
+      "avg_ns": 18000,
+      "abs_max_ns": 96000,
+      "over_200us": 0,
+      "raw_log": "Pi:/root/kfusion-pi4/results/rootcell_15min.txt",
+      "stamp": "20261015_1421",
+      "note": "正确配置（FIFO99 + 绑核）。同板 Linux 基线。"
     },
     {
       "realm": "inmate",
+      "duration_min": 15,
       "cpu": "CPU1",
-      "kernel_note": "NuttX (Apache NuttX, tickless: CONFIG_SCHED_TICKLESS=y + CONFIG_USEC_PER_TICK=1)",
-      "duration_min": 1,
-      "loops": 60000,
+      "invocation": "rtlat -i 1000 -l 900000",
+      "kernel_note": "Apache NuttX, CONFIG_SCHED_TICKLESS=y + CONFIG_USEC_PER_TICK=1",
+      "loops": 900000,
       "min_ns": 5000,
       "avg_ns": 5000,
-      "abs_max_ns": 6000,
-      "histogram": { "5": 59999, "6": 1 },
+      "abs_max_ns": 5000,
+      "histogram": { "5": 900000 },
       "over_200us": 0,
-      "raw_log": "serial COM11 (115200 8N1)",
-      "stamp": "20261015_2136"
+      "raw_log": "crtos/results/raw/pi4_inmate_rtlat_15min.log",
+      "stamp": "20261016_0915",
+      "note": "90 万次全部落在 5µs —— 零抖动。cRTOS 实时域。"
     }
+  ],
+  "retracted": [
+    {
+      "realm": "root_cell",
+      "duration_min": 1,
+      "avg_ns": 71000,
+      "abs_max_ns": 2086000,
+      "over_200us": 13,
+      "reason": "参数误配：`cyclictest -Sp3` 被解析为 `-S -p3`（优先级 3，FIFO 里几乎最低），并非 FIFO99。该 2086µs 不可用作基线；据此得出的『347× 改善』一并撤回。",
+      "superseded_by": "results[0]（root_cell 15 min, abs_max 96µs）"
+    }
+  ],
+  "notes": [
+    "同板对照（15 min，正确配置）：root_cell max 96µs -> inmate max 5µs，约 19.2×；avg 18µs -> 5µs，约 3.6×。",
+    "跨平台对照（K-Fusion fused Pi5 15min abs_max=3.391µs）与 inmate 5µs 同数量级；但板子/机制不同，不可直接比优劣。",
+    "inmate 输出走物理 mini-UART(GPIO14/15)，只能从接串口的主机侧采集（见 crtos/scripts/pi4/measure_inmate_serial__*）。"
   ]
 }

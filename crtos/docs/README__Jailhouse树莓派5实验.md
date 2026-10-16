@@ -125,8 +125,8 @@ Keep cRTOS as **literature cross-study** for PLCFusion paper. This tree enables 
 | rtlat 实时抖动 app | `../jailhouse_overlay_pi4/nuttx/apps/benchmarks/rtlat/` |
 | **实测结果** | `../results/COMPARE_Pi4_cRTOS_vs_KFusion__Pi4对比K-Fusion.md` |
 
-**关键读数**：NuttX inmate（CPU1, tickless）60s soak `abs_max = 6 µs`；同板 root cell Linux
-（未调优）`2086 µs` → 同板改善 **347.7×**。
+**关键读数（15 min）**：NuttX inmate（CPU1, tickless）`abs_max = 5 µs`（90 万次零抖动）；
+同板 root cell Linux（正确配置 FIFO99+绑核）`96 µs` → 同板改善 **19.2×**。
 
 **规格与踩坑记录**：[PI4_NUTTX_INMATE__cell约束与移植规格.md](PI4_NUTTX_INMATE__cell约束与移植规格.md)。
 **实验方案与状态**：[PI4_CRTOS__Pi4对比实验方案.md](PI4_CRTOS__Pi4对比实验方案.md)。

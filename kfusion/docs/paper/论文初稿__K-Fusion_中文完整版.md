@@ -418,12 +418,12 @@ K-Fusion 与对照方案的设计空间可由九条轴刻画：空间隔离 vs �
 |---|---|---|---|---|
 | cRTOS | Hypervisor 分区 + sRTOS | x86-64 + Jailhouse | ≈ 4 µs | **引用** [1] |
 | K-Fusion | 分裂式内核化（单域） | Pi 5, aarch64, 无 hypervisor | **3.391 µs**（15 min soak） | **实测**（仓库 `K-Fusion_fig3_soak_jitter_real.png`） |
-| *（补充行）* cRTOS-like | Jailhouse 分区 + NuttX tickless | Pi 4B, aarch64 | **6 µs**（60 s soak） | **本工作实测**（`crtos/results/`） |
+| *（补充行）* cRTOS-like | Jailhouse 分区 + NuttX tickless | Pi 4B, aarch64 | **5 µs**（15 min soak，90 万次零抖动） | **本工作实测**（`crtos/results/`） |
 
 > 补充行说明：cRTOS-like 为公开可重建的架构等价实现（无作者原版代码），在本项目 Pi4B 上实测，
 > 与 cRTOS 原文 Pi4「最小 5 µs jitter」量级一致，可作为"同板锚点"支撑 §4.4 的 cross-board 公平性讨论。
-> ⚠ 该行与 K-Fusion 行**板子不同（Pi4 GIC-400 vs Pi5 GIC-600）、时长不同（60 s vs 15 min）**，
-> 不得直接聚合或比较优劣；是否纳入正文由作者决定。
+> ⚠ 该行与 K-Fusion 行**板子不同（Pi4 GIC-400 vs Pi5 GIC-600）**，且 root 侧内核为 SMP PREEMPT（非 RT），
+> 不得直接聚合或比较优劣；时长已对齐（均 15 min）。是否纳入正文由作者决定。
 
 **趋势分析**：须强调，两行对应**不同平台、不同隔离机制**，不可直接比较优劣。合理的表述是：在无 hypervisor 的 aarch64 单域下，融合路径的抖动上界是否与分区方案在同一数量级，以及差异来自"空间隔离的有无"还是"平台差异"。本文不主张击败分区方案，仅陈述在**不同隔离假设**下的权衡。
 

@@ -39,14 +39,18 @@ echo "== 0. 检查 =="
 [ -f "$CELL_SRC" ] || { echo "FAIL: 缺 cell 源 $CELL_SRC" >&2; exit 1; }
 
 echo "== 1. 确保 arm64_head.S 补丁已应用（幂等）=="
-bash "$REPO_OVERLAY/patches/apply_patches__应用补丁.sh" "$NUTTX"
+# 注意：非 ASCII 文件名经 pscp 传输可能变成乱码，故用通配查找而非硬编码中文名
+PATCHER="$(ls "$REPO_OVERLAY"/patches/apply_patches*.sh 2>/dev/null | head -1 || true)"
+[ -n "$PATCHER" ] || { echo "FAIL: 未找到 patches/apply_patches*.sh" >&2; exit 1; }
+bash "$PATCHER" "$NUTTX"
 
 echo "== 2. 编译 cell =="
 cd "$ROOT_DIR"
+OBJ="$(dirname "$CELL_BIN")/rpi4-nuttx.o"
 gcc -c "$CELL_SRC" -I "$JH_HDR/include" -I "$JH_HDR/hypervisor/include" \
-    -ffunction-sections -fdata-sections -o rpi4-nuttx.o
+    -ffunction-sections -fdata-sections -o "$OBJ"
 # 段名是 .data.config（不是 .config）
-objcopy -O binary -j .data.config rpi4-nuttx.o "$CELL_BIN"
+objcopy -O binary -j .data.config "$OBJ" "$CELL_BIN"
 SZ=$(stat -c%s "$CELL_BIN" 2>/dev/null || echo 0)
 echo "cell 大小: ${SZ} bytes"
 [ "$SZ" -gt 0 ] || { echo "FAIL: cell 为 0 字节（objcopy 段名错？）" >&2; exit 1; }
