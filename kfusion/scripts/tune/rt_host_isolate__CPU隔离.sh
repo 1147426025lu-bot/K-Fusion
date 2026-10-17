@@ -294,6 +294,30 @@ auto_enable_l3_if_possible() {
     fi
 }
 
+# L4+ 可选扩展钩子: ISO_L4_HOOK 指向可执行脚本（冒号分隔可多个），setup/teardown
+# 各按序透传执行一次，teardown 按相反顺序还原。默认为空 = 行为与旧版完全一致。
+# 每个钩子负责自己的状态记录与还原（见 iso_l4_extra__*.sh / iso_rtbubbles__*.sh）。
+iso_l4_hook_run() {
+    local hook_list="${ISO_L4_HOOK:-}"
+    [ -z "$hook_list" ] && return 0
+    local hook order
+    if [ "$1" = "teardown" ]; then
+        order="$(echo "$hook_list" | awk -F: '{for(i=NF;i>=1;i--) printf "%s%s", $i, (i>1?":":"")}')"
+    else
+        order="$hook_list"
+    fi
+    # 注意: 不能 local IFS=':'，否则 ${order//:/ } 替换出的空格不分词，整链被当成一个路径
+    for hook in ${order//:/ }; do
+        [ -z "$hook" ] && continue
+        if [ ! -f "$hook" ]; then
+            echo "⚠️ [ISO-L4] 钩子不存在，跳过: $hook"
+            continue
+        fi
+        echo "🔧 [ISO-L4] 扩展钩子 ($1): $(basename "$hook")"
+        PROBE_CPU="$PROBE_CPU" HK_CPUS="${HK_CPUS:-0-2}" bash "$hook" "$1" || true
+    done
+}
+
 do_setup() {
     echo "=== CPU${PROBE_CPU} 隔离 setup (level=${ISOLATION_LEVEL}) ==="
     auto_enable_l3_if_possible
@@ -312,6 +336,7 @@ do_setup() {
         fi
     fi
 
+    iso_l4_hook_run setup
     save_state
     report_cpu3_occupants
     echo "✅ 隔离 setup 完成 (level=${ISOLATION_LEVEL})"
@@ -335,6 +360,7 @@ do_teardown() {
         write_if_possible /proc/sys/kernel/timer_migration "$PREV_TIMER_MIGRATION" || true
     fi
 
+    iso_l4_hook_run teardown
     rm -f "$STATE_FILE"
     echo "✅ 隔离 teardown 完成"
 }

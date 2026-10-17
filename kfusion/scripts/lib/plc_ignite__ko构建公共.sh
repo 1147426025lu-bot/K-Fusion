@@ -289,7 +289,10 @@ plc_ignite_build_l2() {
 
     stubs="${FUSE_NAME}_runtime_stubs.c"
     if [ -f "$test_dir/$stubs" ]; then
-        cp "$test_dir/$stubs" "./$(basename "$stubs")"
+        # 防护: build_dir == test_dir 时源即目标, cp 会报 "same file" 并以 1 退出, 触发 set -e 中止
+        if [ "$build_dir" != "$test_dir" ]; then
+            cp "$test_dir/$stubs" "$build_dir/$(basename "$stubs")"
+        fi
         stubs="$(basename "$stubs")"
     elif [ -f "$stubs" ]; then
         :

@@ -1,0 +1,9 @@
+config EXAMPLES_XSHM
+	bool "xshm: cross-domain shared memory demo (Jailhouse IVSHMEM)"
+	default n
+	---help---
+		NuttX (Jailhouse non-root cell) exchanges a minimal mailbox with the
+		root cell Linux through the Jailhouse IVSHMEM rw_section.
+
+		Requires the cell config to declare the IVSHMEM regions
+		(see crtos/jailhouse_overlay_pi4/configs/arm64/rpi4-nuttx.c).

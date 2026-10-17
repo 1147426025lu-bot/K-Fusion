@@ -3,7 +3,7 @@
 > 本文件由根目录 `FILES.md` 指向。K-Fusion 仓库统一采用 `name__中文说明.ext` 自文档化命名约定
 >（双下划线后接中文描述），所有文件名均为合法 UTF-8，在 Linux / macOS / Windows(UTF-8 locale) 下均正常解析。
 >
-> 快照日期：**2026-10-15**（含当日新增：crtos/jailhouse_overlay_pi4 移植产物、crtos/results 实测数据、kfusion/docs/paper 论文稿与图）。
+> 快照日期：**2026-10-16**（含当日新增：`crtos/results/figures` 两域 vs 单域架构对照 SVG、`crtos/scripts/sync_pi4`、`kfusion/docs/paper` 论文稿与图）。
 
 ## 顶层文件
 
@@ -28,11 +28,11 @@
 
 ### `crtos/` — cRTOS / Jailhouse 对照实验脚手架（含 upstream Jailhouse 源码与脚本）
 
-- `crtos/docs/` （9 文件）
-- `crtos/jailhouse_overlay_pi4/` （11 文件）— **NuttX-inmate 移植产物**（cell 配置 / defconfig / 补丁 / 部署脚本 / rtlat app）
-- `crtos/results/` （2 文件）— **Pi4 实测数据**（对照表 + schema 对齐的 JSON）
+- `crtos/docs/` （10 文件）
+- `crtos/jailhouse_overlay_pi4/` （16 文件）— **NuttX-inmate 移植产物**（cell 配置 / defconfig / 补丁 / 部署脚本 / rtlat + xshm app）
+- `crtos/results/` （6 文件，含 `figures/`）— **Pi4 实测数据 + 架构对照图**（对照表 / schema JSON / 2 张「两域 vs 单域」SVG）
 - `crtos/logs/` （1 文件）
-- `crtos/scripts/` （33 文件，含 `pi4/`）
+- `crtos/scripts/` （38 文件，含 `pi4/`）
 - `crtos/upstream/` （526 文件）
 
 ### `docs/` — 跨模块文档（开发指南、仓库结构）与已归位的参考文件

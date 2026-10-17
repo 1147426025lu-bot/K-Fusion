@@ -18,13 +18,23 @@
 set -euo pipefail
 
 ROOT_DIR="${ROOT_DIR:-/root}"
-TC_TAR="${TC_TAR:-$ROOT_DIR/toolchain.tar.xz}"
-NUTTX_TAR="${NUTTX_TAR:-$ROOT_DIR/nuttx.tar.gz}"
-APPS_TAR="${APPS_TAR:-$ROOT_DIR/apps.tar.gz}"
+# 源码包位置：优先 ROOT_DIR/kfusion-pi4/src（整理后的布局），回退 ROOT_DIR
+SRC_DIR="${SRC_DIR:-}"
+if [ -z "$SRC_DIR" ]; then
+  for d in "$ROOT_DIR/kfusion-pi4/src" "$ROOT_DIR"; do
+    if [ -f "$d/nuttx.tar.gz" ]; then SRC_DIR="$d"; break; fi
+  done
+  SRC_DIR="${SRC_DIR:-$ROOT_DIR}"
+fi
+TC_TAR="${TC_TAR:-$SRC_DIR/toolchain.tar.xz}"
+NUTTX_TAR="${NUTTX_TAR:-$SRC_DIR/nuttx.tar.gz}"
+APPS_TAR="${APPS_TAR:-$SRC_DIR/apps.tar.gz}"
 DEFCONFIG_SRC="${DEFCONFIG_SRC:-$ROOT_DIR/rpi4-nuttx-nsh-inmate.defconfig}"
 BUILD="${BUILD:-$ROOT_DIR/nuttx-build}"
 SCRIPTS_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_OVERLAY="${REPO_OVERLAY:-$(cd "$SCRIPTS_DIR/.." && pwd)}"
+
+echo "（源码包目录 SRC_DIR=$SRC_DIR）"
 
 echo "== 0. 前提检查 =="
 for f in "$TC_TAR" "$NUTTX_TAR" "$APPS_TAR" "$DEFCONFIG_SRC"; do
@@ -58,6 +68,34 @@ echo "== 3. 注入 nsh-inmate defconfig =="
 CFGDIR="$BUILD/nuttx/boards/arm64/bcm2711/raspberrypi-4b/configs/nsh-inmate"
 mkdir -p "$CFGDIR"
 cp "$DEFCONFIG_SRC" "$CFGDIR/defconfig"
+
+echo "== 3b. 注入 overlay apps（xshm / rtlat）=="
+inject_app() {
+  local rel="$1"                                     # 例如 examples/xshm
+  local src="$REPO_OVERLAY/nuttx/apps/$rel"
+  local dst="$BUILD/apps/$rel"
+  local kc="$BUILD/apps/$(dirname "$rel")/Kconfig"
+  if [ ! -d "$src" ]; then
+    echo "WARN: 未找到 $src（跳过 $rel）"
+    return 0
+  fi
+  mkdir -p "$(dirname "$dst")"
+  rm -rf "$dst"
+  cp -r "$src" "$(dirname "$dst")/"
+  if ! grep -q "$rel/Kconfig" "$kc" 2>/dev/null; then
+    if grep -q '^endmenu' "$kc" 2>/dev/null; then
+      sed -i "\|^endmenu|i source \"$dst/Kconfig\"" "$kc"
+    else
+      echo "source \"$dst/Kconfig\"" >> "$kc"
+    fi
+  fi
+  grep -q "$rel/Kconfig" "$kc" \
+    && echo "OK: $rel 已注入并注册" \
+    || { echo "FAIL: $rel Kconfig 注册失败" >&2; exit 1; }
+}
+
+inject_app examples/xshm
+inject_app benchmarks/rtlat
 
 echo "== 4. 应用 jailhouse-inmate 补丁（幂等）=="
 # 注意：非 ASCII 文件名经 pscp 传输可能变成乱码，故用通配查找而非硬编码中文名

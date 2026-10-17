@@ -418,7 +418,7 @@ K-Fusion 与对照方案的设计空间可由九条轴刻画：空间隔离 vs �
 |---|---|---|---|---|
 | cRTOS | Hypervisor 分区 + sRTOS | x86-64 + Jailhouse | ≈ 4 µs | **引用** [1] |
 | K-Fusion | 分裂式内核化（单域） | Pi 5, aarch64, 无 hypervisor | **3.391 µs**（15 min soak） | **实测**（仓库 `K-Fusion_fig3_soak_jitter_real.png`） |
-| *（补充行）* cRTOS-like | Jailhouse 分区 + NuttX tickless | Pi 4B, aarch64 | **5 µs**（15 min soak，90 万次零抖动） | **本工作实测**（`crtos/results/`） |
+| *（补充行）* cRTOS-like | Jailhouse 分区 + NuttX tickless | Pi 4B, aarch64 | **≤ 5.3 µs**（稳态；另含一次可复现启动瞬态 ≈ 52 µs） | **本工作实测**（`crtos/results/`，ns 分辨率） |
 
 > 补充行说明：cRTOS-like 为公开可重建的架构等价实现（无作者原版代码），在本项目 Pi4B 上实测，
 > 与 cRTOS 原文 Pi4「最小 5 µs jitter」量级一致，可作为"同板锚点"支撑 §4.4 的 cross-board 公平性讨论。

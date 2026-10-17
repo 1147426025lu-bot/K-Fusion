@@ -181,14 +181,29 @@ if [ "$STRESS_LOAD_STARTED" = "1" ] && [ -f "${STRESS_LOAD_LOGFILE:-/tmp/plc_rt_
 fi
 
 if [ "$MONITOR_CPU3" = "1" ]; then
-    echo "=== CPU${PROBE} 监控 → ${MONITOR_LOG} ==="
+    # ⚠️ 测量装置自扰（实测）：原实现每 0.5s 做一次 `ps -eLo` 全进程表扫描，且监控进程
+    # 自身可落在探针核上 → 制造 +40~70 IRQ/s 的周期性突发，是 >3µs 尾部事件的主要来源
+    # （20min 消融：328 → 19 次）。以下三点自扰抑制：
+    #   1) 监控子 shell 与所有采样子进程绑到 housekeeping 核（MONITOR_CPU_HK_CPUS）
+    #   2) tasks 列表降频到 MONITOR_PS_EVERY_SEC（默认 30s），IRQ 计数仍高频
+    #   3) 采样间隔 MONITOR_INTERVAL_SEC 可调（默认 0.5s）
+    # 恢复旧行为：MONITOR_PS_EVERY_SEC=0
+    echo "=== CPU${PROBE} 监控 → ${MONITOR_LOG} (自扰抑制: 绑核 ${MONITOR_CPU_HK_CPUS:-0-2}, ps 采样 ${MONITOR_PS_EVERY_SEC:-30}s) ==="
     (
+        HKCPU="${MONITOR_CPU_HK_CPUS:-0-2}"
+        taskset -pc "$HKCPU" $$ >/dev/null 2>&1 || true
+        LAST_PS=0
+        CACHED_TASKS=""
         while true; do
             TS=$(date -Iseconds)
-            IRQ=$(grep arch_timer /proc/interrupts 2>/dev/null | awk -v c="$((PROBE + 1))" '{print $c}')
-            TASKS=$(ps -eLo pid,psr,comm 2>/dev/null | awk -v p="$PROBE" '$2==p {printf "%s:%s ", $1,$3}')
-            echo "$TS irq_cpu${PROBE}=${IRQ:-na} tasks=${TASKS}" >> "$MONITOR_LOG"
-            sleep 0.5
+            NOW=$(date +%s)
+            if [ "${MONITOR_PS_EVERY_SEC:-30}" -le 0 ] || [ $((NOW - LAST_PS)) -ge "${MONITOR_PS_EVERY_SEC:-30}" ]; then
+                CACHED_TASKS=$(taskset -c "$HKCPU" ps -eLo pid,psr,comm 2>/dev/null | awk -v p="$PROBE" '$2==p {printf "%s:%s ", $1,$3}')
+                LAST_PS=$NOW
+            fi
+            IRQ=$(taskset -c "$HKCPU" grep arch_timer /proc/interrupts 2>/dev/null | awk -v c="$((PROBE + 1))" '{print $c}')
+            echo "$TS irq_cpu${PROBE}=${IRQ:-na} tasks=${CACHED_TASKS}" >> "$MONITOR_LOG"
+            sleep "${MONITOR_INTERVAL_SEC:-0.5}"
         done
     ) &
     MONITOR_PID=$!

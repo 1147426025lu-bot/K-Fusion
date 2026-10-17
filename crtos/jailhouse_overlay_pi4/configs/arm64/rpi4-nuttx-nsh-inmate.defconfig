@@ -29,8 +29,24 @@ CONFIG_ARCH_ARM64=y
 CONFIG_ARCH_BOARD="raspberrypi-4b"
 # 自写 rtlat：inmate(cRTOS 域)内实时调度抖动测量（cyclictest 内核等价：
 # 高优先级周期任务 + clock_nanosleep(TIMER_ABSTIME) + clock_gettime）。
-# （NuttX 自带 cyclictest 依赖 /dev/timer+TCIOC_*+信号通知，配置太重且编译不过。）
 CONFIG_BENCHMARK_RTLAT=y
+# NuttX 自带 cyclictest —— 即 rt-tests cyclictest 的 NuttX 移植版，
+# 与 root cell 侧使用的 rt-tests cyclictest **同族同算法**，
+# 用于两侧「同一套测量代码/方法」对照（此前只有 root 侧用 cyclictest、
+# inmate 侧用自写 rtlat，是"两把尺子"，不可直接比对）。
+#
+# ⚠ 只需在**编译期**打开 CONFIG_TIMER=y：<nuttx/timers/timer.h> 里的
+#   TCIOC_* 与 struct timer_status_s 被该符号门控，否则编译报
+#   "'TCIOC_GETSTATUS' undeclared / incomplete type"（-Werror 下直接失败）。
+#   运行期**不需要 /dev/timer 设备**：源码默认 config.wait_method = W_NANOSLEEP、
+#   config.meas_method = M_GETTIME（均 = 0），只有在显式指定 -n 1 / -m 1 时
+#   才会 open(-T 指定的 timer 设备)。
+CONFIG_TIMER=y
+CONFIG_BENCHMARK_CYCLICTEST=y
+# NSH 命令行参数上限：默认 7 太小 ——
+# `rtlat -i 1000 -l 60000 -b 100 -d 3` 有 9 个参数，会被 nsh_parse 拒绝
+# 并报 "nsh: rtlat: too many arguments"（g_fmttoomanyargs, nsh_parse.c）。
+CONFIG_NSH_MAXARGUMENTS=16
 CONFIG_ARCH_BOARD_RASPBERRYPI_4B=y
 CONFIG_ARCH_CHIP="bcm2711"
 CONFIG_ARCH_CHIP_BCM2711=y
@@ -55,6 +71,9 @@ CONFIG_DEBUG_SCHED_WARN=y
 CONFIG_DEBUG_SYMBOLS=y
 CONFIG_DEFAULT_TASK_STACKSIZE=8192
 CONFIG_EXAMPLES_HELLO=y
+# 跨域共享内存 demo：经 Jailhouse IVSHMEM rw_section 与 root cell 双向通信
+# （须配合 cell 的 IVSHMEM 区域；见 configs/arm64/rpi4-nuttx.c）
+CONFIG_EXAMPLES_XSHM=y
 CONFIG_EXPERIMENTAL=y
 CONFIG_FS_PROCFS=y
 CONFIG_FS_ROMFS=y

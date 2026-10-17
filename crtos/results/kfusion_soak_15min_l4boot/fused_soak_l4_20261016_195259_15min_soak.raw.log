@@ -1,0 +1,6 @@
+[ 1304.988839] 🟠 [AI-PLC] unloading profile=fused_soak_l4
+[ 1304.998738] 📁 [AI-PLC] export decim=900284 hist_bins=0 cycles=900284 path=/home/pi/kfusion_results/jitter.bin
+[ 1305.010862] 📁 [AI-PLC] export decim=900284 hist_bins=0 cycles=900284 path=/home/pi/kfusion_results/jitter.bin
+[ 1305.010885] FusedSummary: tag=final cycles=0 min_ns=1000000 max_ns=0 source=fused_hrtimer
+[ 1305.010890] FusedSummary: tag=final cycles=900284 min_ns=-3520 max_ns=11794 spike_resync=99 source=fused_hrtimer_fast
+[ 1305.012925] 🟢 [AI-PLC] unloaded

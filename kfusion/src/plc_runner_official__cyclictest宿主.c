@@ -30,6 +30,7 @@
 #include <linux/sched/types.h>
 
 #include "../include/plc_shm__共享内存.h"
+#include "../include/plc_abi__运行时ABI.h"
 #include "plc_hrtimer_core__定时核心.h"
 
 MODULE_LICENSE("GPL");
@@ -82,16 +83,6 @@ struct thread_param {
 	int node;
 	int tnum;
 	int msr_fd;
-};
-
-struct plc_timespec {
-	long tv_sec;
-	long tv_nsec;
-};
-
-struct plc_itimerspec {
-	struct plc_timespec it_interval;
-	struct plc_timespec it_value;
 };
 
 struct plc_cyclic_timer {
@@ -172,6 +163,9 @@ static int clock_abs_enable = 1;
 static bool jitter_compensation_enable = true;
 static int jitter_resync_thresh_ns = 0;
 static int jitter_ewma_ignore_ns = 2000;
+/* 唤醒目标偏置校准（ns，默认 0=旧行为）。详见 struct plc_hr_comp_cfg.bias_ns 注释：
+ * 只平移抖动分布以最小化 abs_max，不改变峰峰值。 */
+static int jitter_comp_bias_ns = 0;
 static bool jitter_spike_log_enable;
 static bool fused_hist_enable = true;
 static bool fused_wake_timertthread = true;
@@ -200,6 +194,7 @@ module_param(jitter_compensation_enable, bool, 0644);
 module_param(jitter_resync_thresh_ns, int, 0644);
 module_param(measure_grace_default, uint, 0644);
 module_param(jitter_ewma_ignore_ns, int, 0644);
+module_param(jitter_comp_bias_ns, int, 0644);
 module_param(jitter_spike_log_enable, bool, 0644);
 module_param(fused_hist_enable, bool, 0644);
 module_param(fused_wake_timertthread, bool, 0644);
@@ -218,6 +213,7 @@ static struct plc_hr_comp_cfg runner_comp_cfg(void)
 		.enabled = true,
 		.ignore_above_ns = jitter_ewma_ignore_ns,
 		.max_comp_ns = PLC_HR_DEFAULT_MAX_COMP_NS,
+		.bias_ns = jitter_comp_bias_ns,
 	};
 
 	cfg.enabled = jitter_compensation_enable;
@@ -285,7 +281,8 @@ static void fused_comp_reset(void)
 
 static inline void fused_update_compensation(s64 jitter_ns)
 {
-	plc_hr_comp_update(&fused_comp, &runner_comp_cfg(), jitter_ns);
+	struct plc_hr_comp_cfg cfg = runner_comp_cfg();
+	plc_hr_comp_update(&fused_comp, &cfg, jitter_ns);
 }
 
 static void fused_fast_reset(u64 interval_ns)

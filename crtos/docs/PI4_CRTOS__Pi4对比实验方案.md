@@ -1,24 +1,20 @@
 # cRTOS 对比实验方案（Raspberry Pi 4）
 
-> 目标：在 Raspberry Pi 4B 上复现 / 类比 Fixstars cRTOS（Jailhouse + Linux + NuttX/FreeRTOS 实时域），
+> 目标：在 Raspberry Pi 4B 上复现 / 类比 Fixstars cRTOS（Jailhouse + Linux + NuttX/FreeRTOS 实时域），  
 > 与主线 PLCFusion（Pi 5 PREEMPT_RT，单域内核化）做**同维度 jitter 对照**，支撑论文 Table 3（cross-study）。
-
-本文档由 WorkBuddy 在 2026-10-14 基于公开资料与仓库现状起草。脚本在 `crtos/scripts/pi4/`。
 
 ---
 
-## 0. 公平性声明（必须写进论文）
+## 0. 公平性声明
 
-| 维度 | PLCFusion（主线） | cRTOS（本实验） |
-|------|------------------|----------------|
-| 板子 | Raspberry Pi 5（BCM2712, GIC-600） | Raspberry Pi 4B（BCM2711, GIC-400） |
-| 隔离机制 | 编译期 remap + 单 PREEMPT_RT 域，**无 hypervisor** | Jailhouse 静态分区（root cell + inmate） |
-| RT 任务位置 | 内核模块 `.ko` 内 kthread + hrtimer | tRTOS inmate（NuttX/FreeRTOS） |
-| 富功能 | 同域 Linux 用户态 | root cell Linux（GPOS） |
+| 维度      | PLCFusion（主线）                               | cRTOS（本实验）                         |
+| ------- | ------------------------------------------- | ---------------------------------- |
+| 板子      | Raspberry Pi 5（BCM2712, GIC-600）            | Raspberry Pi 4B（BCM2711, GIC-400）  |
+| 隔离机制    | 编译期 remap + 单 PREEMPT_RT 域，**无 hypervisor** | Jailhouse 静态分区（root cell + inmate） |
+| RT 任务位置 | 内核模块 `.ko` 内 kthread + hrtimer              | tRTOS inmate（NuttX/FreeRTOS）       |
+| 富功能     | 同域 Linux 用户态                                | root cell Linux（GPOS）              |
 
-**结论口径**：这是 **cross-board + cross-mechanism** 对照，不是同板对照。
-论文里必须分栏标注（引用 IEEE Access 2025 的 Pi4 数字作为文献锚点，本实验 Pi4 数字作为实测锚点），
-**不得声称"击败 cRTOS"，只能写 trade-off under different isolation assumptions**。
+**结论口径**：这是 **cross-board + cross-mechanism** 对照，不是同板对照。  
 PLCFusion 的卖点（无需 hypervisor、单镜像、LLVM 优化链）与 cRTOS 的卖点（空间硬隔离、Linux 二进制透明）面向不同部署约束。
 
 ---
@@ -26,23 +22,25 @@ PLCFusion 的卖点（无需 hypervisor、单镜像、LLVM 优化链）与 cRTOS
 ## 1. 两条子路径（决定工作量）
 
 ### 路径 A — 作者原版 cRTOS（最忠实，但代码可能未公开）
+
 - 来源：Yang & Shinjo, *Compounded Real-Time Operating Systems for Rich Real-Time Applications*, IEEE Access 2025（筑波大学 + Fixstars）。
 - 该论文**明确在 Pi 4B 上实现**三套 cRTOS（Jailhouse + Linux + NuttX 或 FreeRTOS），报告**最小 5 µs jitter**。
 - 但公开仓库 `fixstars/cRTOS-nuttx` 只发 `qemu-intel64:crtos`（x86）。Pi4 那套代码**是否在公开仓库的分支里未知**。
 - **获取方式**（按顺序尝试）：
   1. `git clone https://github.com/fixstars/cRTOS.git` 后查 `configs/arm64/` 或 `raspberrypi-4b` 相关 cell / NuttX defconfig。
   2. 查 `fixstars/cRTOS-nuttx` 是否有 `raspberrypi-4b:crtos` 配置。
-  3. 邮件作者（sonicyang@softlab.cs.tsukuba.ac.jp）索取 Pi4 分支 / 镜像。
+  3. 邮件作者（<sonicyang@softlab.cs.tsukuba.ac.jp>）索取 Pi4 分支 / 镜像。
 - **阻塞点**：若代码未公开，路径 A 卡住，转路径 B。
 
 ### 路径 B — 公开可重建的 Jailhouse + NuttX/FreeRTOS inmate（默认推荐起步）
+
 - Jailhouse：上游 `siemens/jailhouse` 官方支持 Pi4（`rpi4.cell`），且 `siemens/jailhouse-images` 提供**预构建 Pi4 镜像**（最省事）。
 - tRTOS inmate：Apache NuttX 上游有**实验性 Pi 4B 支持**（`raspberrypi-4b:nsh`），可作为 inmate 跑周期性 RT 任务。
 - FreeRTOS inmate：Jailhouse 自带 `inmates/demos/arm64/` 裸机 demo，可改造成周期测量 inmate（最轻量，优先做"第一个可测 jitter 的实时域"）。
-- **这给出架构等价的 cRTOS 类比**：空间隔离 + 实时域，但不含 Fixstars 的 IVSHMEM remote-syscall 富功能代理。
+- **这给出架构等价的 cRTOS 类比**：空间隔离 + 实时域，但不含 Fixstars 的 IVSHMEM remote-syscall 富功能代理。  
   论文中标注为 "cRTOS-like (open rebuild)"，与路径 A 的 "cRTOS (authors, Pi4)" 区分。
 
-> 建议：**先走路径 B 拿到第一个 Pi4 实测 jitter 数据点**，同时并行尝试路径 A 索取作者代码。
+> 建议：**先走路径 B 拿到第一个 Pi4 实测 jitter 数据点**，同时并行尝试路径 A 索取作者代码。  
 > 两条路径共享同一套 Jailhouse 底座与测量协议。
 
 ---
@@ -84,6 +82,7 @@ bash measure_pi4_crtos__对比测量.sh
 ```
 
 ### 3.1 测量协议（与 PLCFusion 对齐）
+
 - 指标：`abs_max_ns`（周期偏差最大值）、`duration_min`（≥15 min 正式）、`raw_log`、`stamp`。
 - 两种 realm 分别测，JSON 里加 `realm` 字段：
   - `realm=root_cell`：在 root cell Linux 里跑 `cyclictest`（pinned CPU + isolation），作为 "PREEMPT_RT under Jailhouse partition" 对照点。
@@ -95,12 +94,12 @@ bash measure_pi4_crtos__对比测量.sh
 
 ## 4. 与主线 PLCFusion 的映射表（写论文时用）
 
-| PLCFusion 概念 | cRTOS（Pi4）类比 | 备注 |
-|----------------|------------------|------|
-| `.ko` 内 kthread + hrtimer | tRTOS inmate 周期任务 | 架构等价 |
-| 同域 Linux 用户态富功能 | root cell Linux（GPOS） | cRTOS 还有 remote-syscall 跨域代理 |
-| CPU affinity + cgroup 隔离 | Jailhouse 静态分区（硬隔离） | cRTOS 隔离更强 |
-| 编译期 remap（无 hypervisor） | hypervisor 分区（改系统结构） | 根本哲学分歧 |
+| PLCFusion 概念              | cRTOS（Pi4）类比          | 备注                           |
+| ------------------------- | --------------------- | ---------------------------- |
+| `.ko` 内 kthread + hrtimer | tRTOS inmate 周期任务     | 架构等价                         |
+| 同域 Linux 用户态富功能           | root cell Linux（GPOS） | cRTOS 还有 remote-syscall 跨域代理 |
+| CPU affinity + cgroup 隔离  | Jailhouse 静态分区（硬隔离）   | cRTOS 隔离更强                   |
+| 编译期 remap（无 hypervisor）   | hypervisor 分区（改系统结构）  | 根本哲学分歧                       |
 
 ---
 
@@ -125,29 +124,29 @@ bash measure_pi4_crtos__对比测量.sh
 
 ## 7. 实施状态与实测结果（2026-10-15 更新）
 
-> 本节为**实际执行后的回填**。路径选择：**路径 A（作者原版代码）未获取到 Pi4 分支**，转**路径 B（公开重建）**并已完成。
+> 本节为**实际执行后的回填**。路径选择：**路径 A（作者原版代码）未获取到 Pi4 分支**，转**路径 B（公开重建）**&#x5E76;已完成。
 
 ### 7.1 已完成
 
-| 步骤 | 状态 | 说明 |
-|---|---|---|
-| Pi4B 硬件 | ✅ | 独立卡，与 Pi5 主线互不干扰 |
-| Jailhouse 安装并 enable | ✅ | 镜像自带 v0.12-342-gd6e64f90；root cell "Raspberry-Pi4" 占 CPU0-3 |
-| cell 起停验证（gic-demo） | ✅ | inmate-demo running on CPU1；IVSHMEM 建立 |
-| **NuttX inmate 移植** | ✅ | **无公开先例**，本工作首创（见 `PI4_NUTTX_INMATE__cell约束与移植规格.md`） |
-| root cell 基线（realm=root_cell） | ✅ | 15 min soak：avg 18µs / max **96µs** / >200µs 0（正确 FIFO99+绑核） |
-| inmate 抖动（realm=inmate） | ✅ | 自写 `rtlat`：15 min soak avg **5µs** / max **5µs** / >200µs 0（90 万次零抖动） |
-| 结果落盘（schema 对齐） | ✅ | `crtos/results/pi4_crtos_soak__Pi4对比测量.json` |
+| 步骤                            | 状态 | 说明                                                                              |
+| ----------------------------- | -- | ------------------------------------------------------------------------------- |
+| Pi4B 硬件                       | ✅  | 独立卡，与 Pi5 主线互不干扰                                                                |
+| Jailhouse 安装并 enable          | ✅  | 镜像自带 v0.12-342-gd6e64f90；root cell "Raspberry-Pi4" 占 CPU0-3                     |
+| cell 起停验证（gic-demo）           | ✅  | inmate-demo running on CPU1；IVSHMEM 建立                                          |
+| **NuttX inmate 移植**           | ✅  | **无公开先例**，本工作首创（见 `PI4_NUTTX_INMATE__cell约束与移植规格.md`）                           |
+| root cell 基线（realm=root_cell） | ✅  | 15 min soak：avg 18µs / max **96µs** / >200µs 0（正确 FIFO99+绑核）                    |
+| inmate 抖动（realm=inmate）       | ✅  | 自写 `rtlat`：15 min soak avg **5µs** / max **5µs**（⚠ 早期版截断到 µs；ns 复测见 COMPARE §6） |
+| 结果落盘（schema 对齐）               | ✅  | `crtos/results/pi4_crtos_soak__Pi4对比测量.json`                                    |
 
 ### 7.2 实测读数（协议与 PLCFusion 对齐：`abs_max`、1ms 周期）
 
-| realm | 平台 | 时长 | avg | **abs_max** | >200µs | 备注 |
-|---|---|---|---|---|---|---|
-| root_cell | Pi 4B | **15 min** | 18 µs | **96 µs** | 0 | 正确配置（CPU3/FIFO99/mlockall/1ms）；内核 **SMP PREEMPT 非 PREEMPT_RT** |
-| **inmate** | Pi 4B | **15 min** | 5 µs | **5 µs** | 0 | NuttX tickless（`SCHED_TICKLESS=y`+`USEC_PER_TICK=1`）；90 万次全 5µs |
+| realm      | 平台    | 时长         | avg   | **abs_max** | >200µs | 备注                                                                                                                                             |
+| ---------- | ----- | ---------- | ----- | ----------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| root_cell  | Pi 4B | **15 min** | 18 µs | **96 µs**   | 0      | 正确配置（CPU3/FIFO99/mlockall/1ms）；内核 **SMP PREEMPT 非 PREEMPT_RT**                                                                                 |
+| **inmate** | Pi 4B | **15 min** | 5 µs  | **5 µs** ⚠  | 0      | NuttX tickless（`SCHED_TICKLESS=y`+`USEC_PER_TICK=1`）；⚠ 该值由**截断到 µs 的早期 rtlat** 测得，ns 分辨率复测见 COMPARE §6：稳态 ≤ **5.3 µs**，另含一次可复现启动瞬态 ≈ **52 µs** |
 
-**同板改善**：abs_max **19.2×**（96→5µs），avg **3.6×**（18→5µs）。
-**与主线对照**：inmate 5µs 与 K-Fusion fused 3.391µs(Pi5,15min)、cRTOS 文献 ~4µs(x86) 同数量级。
+**同板改善**：abs_max **19.2×**（96→5µs），avg **3.6×**（18→5µs）。  
+**与主线对照**：inmate 5µs 与 K-Fusion fused 3.391µs(Pi5,15min)、cRTOS 文献 ~4µs(x86) 同数量级。  
 详见 `crtos/results/COMPARE_Pi4_cRTOS_vs_KFusion__Pi4对比K-Fusion.md`。
 
 > ⚠ 修正：早前 60s 记录（root max 2086µs / 改善 347×）系 `cyclictest -Sp3` 被解析成 `-p3`（优先级 3）的**误配**，**已撤回**。
@@ -160,6 +159,7 @@ bash measure_pi4_crtos__对比测量.sh
 - [ ] 统一 `stamp` 与 `raw_log`，供 `kfusion/scripts/paper/paper_summarize_results__论文结果汇总.py` 出图。
 
 ### 7.4 对论文的影响
-本实验给论文 Table 3（cross-study）提供了**除"引用值"外的同板实测锚点**：
-「cRTOS-like (open rebuild), Pi 4B aarch64 + Jailhouse」= **6 µs（60s）**，
+
+本实验给论文 Table 3（cross-study）提供了**除"引用值"外的同板实测锚点**：  
+「cRTOS-like (open rebuild), Pi 4B aarch64 + Jailhouse」= **6 µs（60s）**，  
 与 cRTOS 作者原文 Pi4「最小 5µs jitter」量级一致，可支撑"公开可重建、架构等价"的表述。

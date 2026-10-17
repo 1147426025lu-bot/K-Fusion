@@ -28,6 +28,15 @@ struct plc_hr_comp_cfg {
 	bool enabled;
 	s32 ignore_above_ns;
 	s64 max_comp_ns;
+	/*
+	 * 唤醒目标偏置（ns）：在"补偿居中"之上再整体平移唤醒目标点。
+	 * 正值 = 唤醒目标再提前 bias_ns（jitter 整体 -bias），负值 = 推后。
+	 * 用途：抖动分布通常右偏（晚唤醒尾长、早唤醒尾短），单纯 EWMA 居中
+	 * 只保证均值≈0，abs_max 仍被长右尾主导。取 bias≈(max-|min|)/2 可最小化
+	 * abs_max（minimax 校准）。注意：此项只平移分布，**不改变峰峰值**。
+	 * 默认 0 = 旧行为。
+	 */
+	s64 bias_ns;
 };
 
 typedef bool (*plc_hr_stop_fn)(void);

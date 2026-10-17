@@ -9,7 +9,7 @@
     "interval_us": 1000,
     "tool": {
       "root_cell": "cyclictest (rt-tests)",
-      "inmate": "rtlat (自写, crtos/jailhouse_overlay_pi4/nuttx/apps/benchmarks/rtlat)"
+      "inmate": "cyclictest (NuttX 移植版, CONFIG_BENCHMARK_CYCLICTEST=y + CONFIG_TIMER=y) —— 与 root 侧同族工具；另保留自写 rtlat 作交叉验证"
     }
   },
   "board": {
@@ -46,7 +46,26 @@
       "over_200us": 0,
       "raw_log": "crtos/results/raw/pi4_inmate_rtlat_15min.log",
       "stamp": "20261016_0915",
-      "note": "90 万次全部落在 5µs —— 零抖动。cRTOS 实时域。"
+      "note": "⚠ 口径已修正：早期 rtlat 把延迟整数截断到 µs，故 900000 个样本全部落在 [5000,6000) ns，并非“零抖动”。ns 分辨率复测（crtos/results/raw/pi4_inmate_rtlat_60s_allsamples.log）得：稳态 n=59990 时 p50=4870/p99.9=4944/max=5259 ns，另有可复现的启动瞬态 ~52426 ns（idx=4）。详见 COMPARE 文档 §6。"
+    },
+    {
+      "realm": "inmate",
+      "tool": "cyclictest (NuttX 移植版)",
+      "duration_min": 60,
+      "cpu": "CPU1",
+      "invocation": "cyclictest -n 0 -m 0 -q -p 200 -h 200 -l 3600000 -i 1000",
+      "kernel_note": "Apache NuttX, CONFIG_SCHED_TICKLESS=y + CONFIG_USEC_PER_TICK=1",
+      "loops": 3600000,
+      "min_ns": 3000,
+      "avg_ns": 4000,
+      "abs_max_ns": 9000,
+      "histogram": { "3": 40, "4": 169475, "5": 3429913, "6": 491, "7": 34, "9": 47 },
+      "over_200us": 0,
+      "raw_log": "crtos/results/raw/pi4_inmate_cyclictest_1h.log",
+      "figure": "crtos/results/figures/fig_pi4_inmate_cyclictest_1h_dist__1h抖动分布.png",
+      "stamp": "20261016_1305",
+      "measured_elapsed_s": 3621,
+      "note": "与 root 侧同族工具（cyclictest）的正式口径。360 万次唤醒全部落在 3–9 µs，5 µs 占 95.28%，零次 >200 µs。⚠ 与 rtlat 交叉互证一致（rtlat 稳态 p50 4.87 µs）。⚠ 时长（1 h）与 root 基线（15 min）不同，不得直接算改善倍数。⚠ 优先级语义不同：Linux FIFO 99 为最高，NuttX 数字越大越高（SCHED_PRIORITY_MAX=255），故用 -p 200。"
     }
   ],
   "retracted": [
@@ -63,6 +82,9 @@
   "notes": [
     "同板对照（15 min，正确配置）：root_cell max 96µs -> inmate max 5µs，约 19.2×；avg 18µs -> 5µs，约 3.6×。",
     "跨平台对照（K-Fusion fused Pi5 15min abs_max=3.391µs）与 inmate 5µs 同数量级；但板子/机制不同，不可直接比优劣。",
-    "inmate 输出走物理 mini-UART(GPIO14/15)，只能从接串口的主机侧采集（见 crtos/scripts/pi4/measure_inmate_serial__*）。"
+    "inmate 输出走物理 mini-UART(GPIO14/15)，只能从接串口的主机侧采集（见 crtos/scripts/pi4/measure_inmate_serial__*）。",
+    "工具对齐（2026-10-16）：inmate 侧已可运行 cyclictest（NuttX 移植版），输出头与 rt-tests 逐字同名；只需 CONFIG_TIMER=y（编译期取 TCIOC_*/struct timer_status_s）+ CONFIG_BENCHMARK_CYCLICTEST=y，运行期默认 -n 0 -m 0 不需要 /dev/timer。对齐层级 = 同族工具+同参数+同算法+同输出格式（非同一二进制）。",
+    "inmate 1 h（cyclictest）：360 万次全部 3–9 µs，max 9 µs，零 >200 µs；与 cRTOS(Access'25, Pi4B, minimum 5 µs) 同量级（其值带负载、我们为空载，不可直接比优劣）。",
+    "⚠ 尚缺：root cell 侧 1 h 同长基线（当前 root 只有 15 min），补上后才是完全对等的同工具同时长对照。"
   ]
 }

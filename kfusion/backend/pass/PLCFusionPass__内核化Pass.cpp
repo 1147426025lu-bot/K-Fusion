@@ -21,6 +21,7 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/Module.h"
@@ -439,7 +440,7 @@ static bool applyRemapRules(Module &M, CallBase *CB, Function *Callee,
             continue;
         if (Name == "malloc") {
             FunctionType *KmallocTy = FunctionType::get(
-                Type::getInt8PtrTy(Ctx), {Type::getInt64Ty(Ctx)}, false);
+                PointerType::getUnqual(Type::getInt8Ty(Ctx)), {Type::getInt64Ty(Ctx)}, false);
             IRBuilder<> Builder(CB);
             CallInst *NewCall = Builder.CreateCall(
                 getOrInsert(M, Rule.To, KmallocTy),
@@ -454,8 +455,8 @@ static bool applyRemapRules(Module &M, CallBase *CB, Function *Callee,
         }
         if (Name == "realloc") {
             FunctionType *KreallocTy = FunctionType::get(
-                Type::getInt8PtrTy(Ctx),
-                {Type::getInt8PtrTy(Ctx), Type::getInt64Ty(Ctx)}, false);
+                PointerType::getUnqual(Type::getInt8Ty(Ctx)),
+                {PointerType::getUnqual(Type::getInt8Ty(Ctx)), Type::getInt64Ty(Ctx)}, false);
             IRBuilder<> Builder(CB);
             CallInst *NewCall = Builder.CreateCall(
                 getOrInsert(M, Rule.To, KreallocTy),
@@ -555,7 +556,7 @@ static void preserveExportedGlobals(Module &M, bool &Changed) {
         return;
 
     LLVMContext &Ctx = M.getContext();
-    ArrayType *ArrTy = ArrayType::get(Type::getInt8PtrTy(Ctx), Used.size());
+    ArrayType *ArrTy = ArrayType::get(PointerType::getUnqual(Type::getInt8Ty(Ctx)), Used.size());
     Constant *Arr = ConstantArray::get(ArrTy, Used);
     if (!M.getGlobalVariable("llvm.used")) {
         GlobalVariable *LLVMUsed = new GlobalVariable(

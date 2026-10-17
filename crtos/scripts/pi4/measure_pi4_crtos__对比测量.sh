@@ -92,10 +92,14 @@ timeout "$((DURATION_MIN*60+30))" \
   cyclictest --mlockall --smp -Sp"$CPU" -i1000 -p90 -l100000000 \
   -h400 --histfile="$RAW" > "$RAW.stdout" 2>&1 || true
 
-# 解析 abs_max（cyclictest 末行 Max 列）
-ABS_MAX="$(grep -E '^T:' "$RAW.stdout" | awk '{print $7}' | sort -n | tail -1)"
-ABS_MAX="${ABS_MAX:-0}"
-echo "abs_max_ns(解析)=$ABS_MAX"
+# 解析 abs_max：取 cyclictest 状态行 `T: .. Max: N` 的 **最后一个字段**。
+# ⚠ 不能取 $7 —— 该行的字段是 $1=T: $2=0 $3=(tid) $4=P:.. $5=I:.. $6=C: $7=周期数，
+#   取 $7 会得到周期计数而不是 Max。
+# ⚠ cyclictest 的 Max 单位是 **us**（内部 timediff_us 已按 us 截断），故 ×1000 转 ns。
+ABS_MAX_US="$(grep -E '^T:' "$RAW.stdout" | awk '{print $NF}' | sort -n | tail -1)"
+ABS_MAX_US="${ABS_MAX_US:-0}"
+ABS_MAX=$(( ABS_MAX_US * 1000 ))
+echo "abs_max(us)=$ABS_MAX_US -> abs_max_ns=$ABS_MAX"
 
 # 生成与 PLCFusion isolation_ab_results 兼容的 JSON
 python3 - "$OUT" "$RAW" "$ABS_MAX" "$DURATION_MIN" "$STAMP" "$REALM" "$STRESS" <<'PY'

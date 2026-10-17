@@ -80,6 +80,7 @@ insmod_l2_ko() {
         jitter_compensation_enable="${JITTER_COMPENSATION_ENABLE:-1}" \
         jitter_resync_thresh_ns="${JITTER_RESYNC_THRESH_NS:-3000}" \
         jitter_ewma_ignore_ns="${JITTER_EWMA_IGNORE_NS:-5000}" \
+        jitter_comp_bias_ns="${JITTER_COMP_BIAS_NS:-0}" \
         jitter_spike_log_enable="${JITTER_SPIKE_LOG_ENABLE:-0}" \
         fused_hist_enable="${FUSED_HIST_ENABLE:-0}" \
         fused_wake_timertthread="${FUSED_WAKE_TIMERTHREAD:-0}" \
