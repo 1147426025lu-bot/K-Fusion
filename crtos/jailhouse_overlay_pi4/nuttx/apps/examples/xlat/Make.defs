@@ -1,0 +1,3 @@
+ifneq ($(CONFIG_EXAMPLES_XLAT),)
+CONFIGURED_APPS += $(APPDIR)/examples/xlat
+endif

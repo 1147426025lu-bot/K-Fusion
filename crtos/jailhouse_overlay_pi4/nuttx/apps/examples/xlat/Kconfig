@@ -1,0 +1,17 @@
+config EXAMPLES_XLAT
+	bool "xlat: cross-domain latency probe (Jailhouse IVSHMEM)"
+	default n
+	---help---
+		Periodic timestamp probe running inside a NuttX Jailhouse inmate.
+
+		It measures the in-cell wake-up jitter (t_wake - t_deadline) and
+		publishes each sample's timestamps to the IVSHMEM rw_section so
+		that the root cell Linux can measure the cross-domain delivery
+		latency and its jitter.
+
+		The app never prints to the console: the NuttX serial driver is
+		interrupt driven and blocking, so any printf inside the measurement
+		loop would perturb the measured object.
+
+		Requires the cell config to declare the IVSHMEM regions
+		(see crtos/jailhouse_overlay_pi4/configs/arm64/rpi4-nuttx.c).

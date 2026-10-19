@@ -45,10 +45,13 @@
 - Jailhouse 上游 Pi4 支持 + 镜像自带 `rpi4.cell` → enable 成功。
 - 上游 Apache NuttX `raspberrypi-4b` 已**改造为 Jailhouse 非根 cell**（无公开先例，本工作首创），
   完整启动 NSH（细节见 [PI4_NUTTX_INMATE__cell约束与移植规格.md](PI4_NUTTX_INMATE__cell约束与移植规格.md)）。
-- **实测数字（15 min 口径）**：NuttX inmate `abs_max = 5 µs`（⚠ **该 5µs 是早期 `rtlat` 把延迟整数截断到 µs 的结果**，
-  实为样本落在 `[5,6) µs`；ns 分辨率复测见 `../results/COMPARE_Pi4_cRTOS_vs_KFusion__Pi4对比K-Fusion.md` §6
-  —— 稳态 ≤ **5.3 µs**，另含一次**可复现的启动瞬态 ≈ 52 µs**）；同板 root cell Linux
-  （正确配置 CPU3/FIFO99）`96 µs`。与作者原文 Pi4「最小 ~5µs jitter」量级一致 → 已获**同板锚点**。
+- **实测数字（cyclictest 正式口径）**：NuttX inmate **min 3 / avg 4 / max 9 µs**
+  （100 s / 10 万次，`-q`，1 µs 桶；与 1 h / 360 万次同为 **max 9 µs**，
+  见 `../results/INMATE_CYCLICTEST_100S__inmate100秒正式口径.md`）。
+  ⚠ 早期记的「15 min abs_max = 5 µs」是 `rtlat` 把延迟**整数截断到 µs** 的假象
+  （实为样本落在 `[5,6) µs`），已作废。
+  同板 root cell Linux（正确配置 CPU3/FIFO99）：15 min **96 µs**、1 h **760 µs**
+  —— 与 inmate 1 h 的 9 µs 同长度相比，**改善约 84×**。与原文 Pi4「最小 ~5µs jitter」量级一致 → 已获**同板锚点**。
   （早前记的 2086µs 系 cyclictest 参数误配，已撤回。）
 - 结果落盘：`crtos/results/COMPARE_Pi4_cRTOS_vs_KFusion__Pi4对比K-Fusion.md`。
 

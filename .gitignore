@@ -92,3 +92,10 @@ kfusion/test/**/*.wcet_ci_smoke.err
 kfusion/test/.wcet_per_fn_search/
 kfusion/test/.github_rt_periodic_wcet_per_fn/
 kfusion/test/.official_cycletest_multitu_wcet_per_fn/
+
+# --- xlat 跨域/负载档原始样本数据 ---
+# 单文件最大 418 MB（xlat_8h.bin），超过 GitHub 100 MB 硬限；且可由脚本重跑。
+# 入库的是：PNG 图 + root_1h.hist 直方图文本 + 说明文档；原始 .bin 留在 Pi 上。
+# 复现见 crtos/results/xlat/README__数据与复现说明.md
+crtos/results/xlat/*.bin
+crtos/results/xlat/**/*.bin

@@ -125,10 +125,12 @@ Keep cRTOS as **literature cross-study** for PLCFusion paper. This tree enables 
 | rtlat 实时抖动 app | `../jailhouse_overlay_pi4/nuttx/apps/benchmarks/rtlat/` |
 | **实测结果** | `../results/COMPARE_Pi4_cRTOS_vs_KFusion__Pi4对比K-Fusion.md` |
 
-**关键读数（15 min）**：NuttX inmate（CPU1, tickless）`abs_max = 5 µs` ⚠（早期 `rtlat` **截断到 µs**，
-故实为落在 `[5,6) µs`；ns 分辨率复测见 `../results/COMPARE_Pi4_cRTOS_vs_KFusion__Pi4对比K-Fusion.md` §6：
-稳态 ≤ **5.3 µs**，另含一次可复现启动瞬态 ≈ **52 µs**）；
-同板 root cell Linux（正确配置 FIFO99+绑核）`96 µs`。
+**关键读数（cyclictest 正式口径）**：NuttX inmate（CPU1, tickless）**min 3 / avg 4 / max 9 µs**
+（100 s / 10 万次，`-q`，1 µs 桶；同参数 1 h / 360 万次 **max 同为 9 µs**，
+见 `../results/INMATE_CYCLICTEST_100S__inmate100秒正式口径.md`）。
+⚠ 早期「15 min / abs_max 5 µs」是 `rtlat` **截断到 µs** 的假象，已作废。
+同板 root cell Linux（正确配置 FIFO99+绑核）：15 min **96 µs**、1 h **760 µs**
+—— 与 inmate 1 h 的 9 µs 同长度相比，改善约 **84×**。
 
 **规格与踩坑记录**：[PI4_NUTTX_INMATE__cell约束与移植规格.md](PI4_NUTTX_INMATE__cell约束与移植规格.md)。
 **实验方案与状态**：[PI4_CRTOS__Pi4对比实验方案.md](PI4_CRTOS__Pi4对比实验方案.md)。

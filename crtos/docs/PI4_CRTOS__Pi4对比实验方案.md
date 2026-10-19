@@ -135,7 +135,7 @@ bash measure_pi4_crtos__对比测量.sh
 | cell 起停验证（gic-demo）           | ✅  | inmate-demo running on CPU1；IVSHMEM 建立                                          |
 | **NuttX inmate 移植**           | ✅  | **无公开先例**，本工作首创（见 `PI4_NUTTX_INMATE__cell约束与移植规格.md`）                           |
 | root cell 基线（realm=root_cell） | ✅  | 15 min soak：avg 18µs / max **96µs** / >200µs 0（正确 FIFO99+绑核）                    |
-| inmate 抖动（realm=inmate）       | ✅  | 自写 `rtlat`：15 min soak avg **5µs** / max **5µs**（⚠ 早期版截断到 µs；ns 复测见 COMPARE §6） |
+| inmate 抖动（realm=inmate）       | ✅  | cyclictest 100 s（10 万次，`-q`）：min **3** / avg **4** / max **9 µs**（与 1 h 同口径同值，见 `../results/INMATE_CYCLICTEST_100S__inmate100秒正式口径.md`） |
 | 结果落盘（schema 对齐）               | ✅  | `crtos/results/pi4_crtos_soak__Pi4对比测量.json`                                    |
 
 ### 7.2 实测读数（协议与 PLCFusion 对齐：`abs_max`、1ms 周期）
@@ -143,11 +143,15 @@ bash measure_pi4_crtos__对比测量.sh
 | realm      | 平台    | 时长         | avg   | **abs_max** | >200µs | 备注                                                                                                                                             |
 | ---------- | ----- | ---------- | ----- | ----------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | root_cell  | Pi 4B | **15 min** | 18 µs | **96 µs**   | 0      | 正确配置（CPU3/FIFO99/mlockall/1ms）；内核 **SMP PREEMPT 非 PREEMPT_RT**                                                                                 |
-| **inmate** | Pi 4B | **15 min** | 5 µs  | **5 µs** ⚠  | 0      | NuttX tickless（`SCHED_TICKLESS=y`+`USEC_PER_TICK=1`）；⚠ 该值由**截断到 µs 的早期 rtlat** 测得，ns 分辨率复测见 COMPARE §6：稳态 ≤ **5.3 µs**，另含一次可复现启动瞬态 ≈ **52 µs** |
+| root_cell  | Pi 4B | **1 h**    | 20.97 µs | **760 µs** | 0    | 同参数；**窗口拉长 4 倍，极值涨 8 倍** → 极值不可跨窗口比                                                                                            |
+| **inmate** | Pi 4B | **100 s**（10 万次） | **4 µs** | **9 µs** | 0 | NuttX tickless（`SCHED_TICKLESS=y`+`USEC_PER_TICK=1`）；cyclictest `-q`、1 µs 桶；同参数 1 h（360 万次）**max 同为 9 µs**。⚠ 早期「15 min / 5 µs」系 `rtlat` 截断到 µs 的假象，已作废 |
 
-**同板改善**：abs_max **19.2×**（96→5µs），avg **3.6×**（18→5µs）。  
-**与主线对照**：inmate 5µs 与 K-Fusion fused 3.391µs(Pi5,15min)、cRTOS 文献 ~4µs(x86) 同数量级。  
-详见 `crtos/results/COMPARE_Pi4_cRTOS_vs_KFusion__Pi4对比K-Fusion.md`。
+**同板改善（必须同窗口）**：**1 h 口径 abs_max 84×**（root **760 µs** → inmate **9 µs**）。  
+⚠ 早期写的「19.2×（96→5µs）」**已撤回**：96 µs 是 root 的 **15 min**，5 µs 是**截断假象**，
+跨窗口 + 截断值双重误算；同窗口才可比。  
+**与主线对照**：inmate 9 µs 与 cRTOS 文献 Pi4 空载「最小 ~5 µs」同量级（须标注其 5 µs 为"最小值"、
+我们的 9 µs 为"最大值"）。  
+详见 `crtos/results/COMPARE_Pi4_cRTOS_vs_KFusion__Pi4对比K-Fusion.md` §7/§9。
 
 > ⚠ 修正：早前 60s 记录（root max 2086µs / 改善 347×）系 `cyclictest -Sp3` 被解析成 `-p3`（优先级 3）的**误配**，**已撤回**。
 
