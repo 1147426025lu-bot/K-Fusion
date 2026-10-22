@@ -51,9 +51,19 @@ OS = {
 
 
 def nm_undef(nm, obj):
-    out = subprocess.run([nm, "-u", obj], capture_output=True, text=True)
+    """返回 obj 的未定义符号列表。
+
+    ⚠️ 必须检查 nm 的退出码与 stderr：旧实现直接吞掉失败，
+    给它一个「存在但不是目标文件」的路径（如 CMakeLists.txt）会得到空输出，
+    然后报告「闭包大小 0」并成功退出 —— 这种结果不能当正确性证据。
+    """
+    proc = subprocess.run([nm, "-u", obj], capture_output=True, text=True)
+    if proc.returncode != 0:
+        err = (proc.stderr or proc.stdout or "").strip().splitlines()
+        detail = err[0] if err else f"退出码 {proc.returncode}"
+        raise RuntimeError(f"nm 失败（{obj}）：{detail}")
     syms = set()
-    for line in out.stdout.splitlines():
+    for line in proc.stdout.splitlines():
         parts = line.split()
         if parts:
             syms.add(parts[-1])
@@ -76,22 +86,43 @@ def main():
     args = sys.argv[1:]
     nm = "nm"
     if args and args[0] == "--nm":
+        if len(args) < 3:
+            raise SystemExit("--nm 需要一个 nm 路径，且至少一个 target:path")
         nm = args[1]
         args = args[2:]
     if not args:
         raise SystemExit(__doc__)
 
     rows = []
+    errors = []
     for spec in args:
-        name, path = spec.split(":", 1)
-        if not Path(path).exists():
-            print(f"!! 找不到 {path}", file=sys.stderr)
+        name, _, path = spec.partition(":")
+        if not path:
+            errors.append(f"参数格式应为 name:path，收到 {spec!r}")
             continue
-        syms = nm_undef(nm, path)
+        if not Path(path).exists():
+            errors.append(f"找不到 {path}")
+            continue
+        try:
+            syms = nm_undef(nm, path)
+        except RuntimeError as exc:
+            errors.append(str(exc))
+            continue
         cls = {s: classify(s) for s in syms}
         rows.append((name, path, syms, cls))
 
-    print("| 负载 | 闭包大小 | PLC | PURE | OS | 未归类 |")
+    if errors:
+        # 任何一个目标审计失败 → 整体失败。绝不把「读不出来」报成「零依赖」。
+        print("!! 依赖审计失败：", file=sys.stderr)
+        for e in errors:
+            print(f"   - {e}", file=sys.stderr)
+        raise SystemExit(2)
+
+    print("> 口径：这是**单个目标文件**的未定义符号清单及分类，"
+          "**不是**传递依赖闭包证明。")
+    print("> `plc_*` 是抽象层名字，不代表后端无 OS 依赖——还需核对桩实现与签名。")
+    print()
+    print("| 负载 | 未定义符号 | PLC | PURE | OS | 未归类 |")
     print("|---|---|---|---|---|---|")
     for name, path, syms, cls in rows:
         n = lambda k: sum(1 for s in syms if cls[s] == k)

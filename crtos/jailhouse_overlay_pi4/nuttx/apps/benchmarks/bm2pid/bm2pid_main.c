@@ -66,10 +66,14 @@ static struct axis_s g_ax[N_AXES];
 /* 每周期抖动直方图（µs）与执行时间统计 */
 static unsigned long g_hist[HIST_BUCKETS];
 static long long     g_cycles;
-static long long     g_overruns;      /* exec_ns > PERIOD_NS */
+static long long     g_overruns;      /* exec_ns > PERIOD_NS（本周期算得比周期还长） */
+static long long     g_dl_miss;       /* finish > release + PERIOD_NS（真正的完成期限错过） */
+static long long     g_overflow;      /* 抖动 >= HIST_BUCKETS µs，直方图装不下 */
 static long long     g_exec_max_ns;
 static long long     g_exec_sum_ns;
+static long long     g_jit_sum_ns;
 static long long     g_jit_max_ns;
+static long long     g_jit_min_ns = -1;   /* -1 = 尚未记录 */
 
 /* ---------- 定点友好的纯计算 ---------- */
 
@@ -179,8 +183,13 @@ static void hist_add(long long v_ns)
 	if (v_ns < 0)
 		v_ns = -v_ns;
 	us = (long)(v_ns / 1000);
-	if (us >= HIST_BUCKETS)
+	if (us >= HIST_BUCKETS) {
+		/* 真正的直方图溢出：>= 200 µs 的样本装不进表里。
+		 * 旧实现把这种情况也算进 "Histogram Overflows"，但那个字段
+		 * 其实打印的是 exec > period 的次数 —— 两件事被混成了一个。 */
+		g_overflow++;
 		us = HIST_BUCKETS - 1;
+	}
 	g_hist[us]++;
 }
 
@@ -216,6 +225,12 @@ static int run(long cycles)
 		hist_add(jit_ns);
 		if (jit_ns > g_jit_max_ns)
 			g_jit_max_ns = jit_ns;
+		{
+			long long a = jit_ns < 0 ? -jit_ns : jit_ns;
+			g_jit_sum_ns += a;
+			if (g_jit_min_ns < 0 || a < g_jit_min_ns)
+				g_jit_min_ns = a;
+		}
 
 		scan_cycle(1.0e-3);
 
@@ -225,8 +240,13 @@ static int run(long cycles)
 		g_exec_sum_ns += exec_ns;
 		if (exec_ns > g_exec_max_ns)
 			g_exec_max_ns = exec_ns;
+		/* exec > period 只能说明"这一周期算得久"，不代表错过完成期限。
+		 * 真正的 deadline miss 是 f_k > r_k + T（晚醒 900 µs + 执行 200 µs
+		 * 的执行时间没超周期，但本周期已经赶不上交付）。 */
 		if (exec_ns > PERIOD_NS)
 			g_overruns++;
+		if (wake_ns + exec_ns > ts_ns(&next) + PERIOD_NS)
+			g_dl_miss++;
 
 		g_cycles++;
 	}
@@ -266,13 +286,24 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	/* --- 与 cyclictest -q 兼容的直方图 --- */
+	/* --- 与 cyclictest -q 兼容的直方图 ---
+	 *
+	 * 字段语义（2026-10-22 修正，此前三处都写错了）：
+	 *   Min/Avg/Max Latencies : 唤醒抖动 = 实际唤醒 − 标称释放时刻（µs）
+	 *   Histogram Overflows   : 抖动 ≥ 200 µs、直方图表装不下的样本数
+	 *                           （旧实现打印的是 exec > period 的次数，两件事被混了）
+	 *   Deadline Misses       : finish > release + period 的周期数
+	 *                           （旧实现只有 exec > period，那不是 deadline miss）
+	 *   exec_us               : 执行时间（唤醒 → 算完），与抖动是两回事
+	 */
 	printf("\n# Total: %08lld\n", g_cycles);
-	printf("# Min Latencies: %08ld\n", 0L);   /* 见下方说明，不单独统计 min */
+	printf("# Min Latencies: %08lld\n",
+	       (g_jit_min_ns < 0 ? 0LL : g_jit_min_ns) / 1000);
 	printf("# Avg Latencies: %08lld\n",
-	       g_cycles ? (g_exec_sum_ns / g_cycles) / 1000 : 0);
+	       g_cycles ? (g_jit_sum_ns / g_cycles) / 1000 : 0);
 	printf("# Max Latencies: %08lld\n", g_jit_max_ns / 1000);
-	printf("# Histogram Overflows: %08lld\n", g_overruns);
+	printf("# Histogram Overflows: %08lld\n", g_overflow);
+	printf("# Deadline Misses: %08lld\n", g_dl_miss);
 	printf("# Histogram\n");
 	{
 		long b;

@@ -123,6 +123,21 @@ run_grep_fallback() {
                 return 1
             fi
             ;;
+        sext_negative.ll)
+            # 两条扩宽必须各自保持原语义：sext_keep→sext、zext_keep→zext
+            n_sext="$(echo "$out" | grep -c 'sext i32 %x to i64' || true)"
+            n_zext="$(echo "$out" | grep -c 'zext i32 %x to i64' || true)"
+            if [ "$n_sext" != "1" ] || [ "$n_zext" != "1" ]; then
+                echo "❌ sext/zext 语义被改 (sext=$n_sext zext=$n_zext)" >&2
+                return 1
+            fi
+            ;;
+        indirect_select_branch.ll)
+            echo "$out" | grep -q 'call void %fn(ptr %p)' \
+                || { echo "❌ 间接调用被直接化（条件分支丢失）" >&2; return 1; }
+            echo "$out" | grep -q 'call void @plc_kfree(ptr %p)' \
+                || { echo "❌ 同函数双分支未被直接化（矫枉过正）" >&2; return 1; }
+            ;;
         *)
             echo "❌ 未知测试 $name（无 grep 回退）" >&2
             return 1
@@ -138,11 +153,36 @@ run_ll_pass() {
     while IFS= read -r line; do
         [ -n "$line" ] && envargs+=("$line")
     done < <(ll_pass_env "$ll")
-    if [ "${#envargs[@]}" -gt 0 ]; then
-        env "${envargs[@]}" "$OPT" -load-pass-plugin "$PASS_SO" \
-            -passes="$passes" "$ll" -S
-    else
-        "$OPT" -load-pass-plugin "$PASS_SO" -passes="$passes" "$ll" -S
+    # 结构类 fixture 只关心"改写后的形状"，不关心未映射调用的处理策略：
+    # 统一用 keep（保留调用、不黑化、不报错）。策略本身由
+    # run_unmapped_strict_negative 单独验证。
+    envargs=("PLC_FUSION_UNMAPPED_POLICY=keep" "${envargs[@]}")
+    env "${envargs[@]}" "$OPT" -load-pass-plugin "$PASS_SO" \
+        -passes="$passes" "$ll" -S
+}
+
+# 未映射调用在默认（error）策略下必须让 pass 失败，而不是删除调用后"成功"退出。
+run_unmapped_strict_negative() {
+    local ll="$SCRIPT_DIR/unmapped_strict.ll"
+    [ -f "$ll" ] || return 0
+    echo "   ▶ unmapped strict negative（error 策略必须拒绝产出）"
+    local out rc=0
+    out="$(env PLC_FUSION_UNMAPPED_POLICY=error "$OPT" \
+        -load-pass-plugin "$PASS_SO" -passes=plc-fusion-remap "$ll" -S 2>&1)" || rc=$?
+    if [ "$rc" -eq 0 ]; then
+        echo "❌ error 策略下 pass 仍成功退出（应拒绝产出）" >&2
+        echo "$out" >&2
+        return 1
+    fi
+    if ! echo "$out" | grep -q '\[PLCFusion\] ERROR'; then
+        echo "❌ 缺少 [PLCFusion] ERROR 诊断" >&2
+        echo "$out" >&2
+        return 1
+    fi
+    if ! echo "$out" | grep -q 'device_write'; then
+        echo "❌ 诊断里没有指出具体符号 device_write" >&2
+        echo "$out" >&2
+        return 1
     fi
 }
 
@@ -242,6 +282,7 @@ for ll in "$SCRIPT_DIR"/*.ll; do
     name="$(basename "$ll")"
     case "$name" in
         wcet_schedule_smoke.ll) continue ;;
+        unmapped_strict.ll) continue ;;   # 由 error 策略负向用例单独跑
     esac
     if [ "$USE_FILECHECK" = 1 ]; then
         passes="$(ll_pass_pipeline "$ll")"
@@ -256,6 +297,7 @@ for ll in "$SCRIPT_DIR"/*.ll; do
 done
 
 run_wcet_schedule_negative || FAIL=1
+run_unmapped_strict_negative || FAIL=1
 run_rttests_unmapped_probes || FAIL=1
 
 if [ "$FAIL" -ne 0 ]; then

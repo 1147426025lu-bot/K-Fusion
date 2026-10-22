@@ -29,10 +29,12 @@
 #include "llvm/IR/Attributes.h"
 #include "llvm/Passes/PassBuilder.h"
 #include "llvm/Passes/PassPlugin.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "PLCFusionFixedPoint__定点Pass.h"
 #include "KFusionWCETSchedulePass__函数级WCET.h"
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <set>
 #include <string>
 #include <vector>
@@ -254,32 +256,51 @@ static Function *resolveIndirectCalleeImpl(Value *Op, unsigned Depth) {
     if (auto *GEP = dyn_cast<GetElementPtrInst>(Op))
         return resolveGEPFunctionPointer(GEP, Depth + 1);
     if (auto *Sel = dyn_cast<SelectInst>(Op)) {
-        if (Function *T = resolveIndirectCalleeImpl(Sel->getTrueValue(), Depth + 1))
-            return T;
-        return resolveIndirectCalleeImpl(Sel->getFalseValue(), Depth + 1);
+        // 只有在**两个分支解析到同一个函数**时才敢直接化。
+        // 只取第一个候选会把 `select cond, free, release` 改写成无条件调用，
+        // 等于把运行时分支抹掉（最小反例：条件为假时也会 free）。
+        Function *T = resolveIndirectCalleeImpl(Sel->getTrueValue(), Depth + 1);
+        Function *F = resolveIndirectCalleeImpl(Sel->getFalseValue(), Depth + 1);
+        return (T && T == F) ? T : nullptr;
     }
     if (auto *Phi = dyn_cast<PHINode>(Op)) {
+        Function *First = nullptr;
         for (Value *Incoming : Phi->incoming_values()) {
-            if (Function *F = resolveIndirectCalleeImpl(Incoming, Depth + 1))
-                return F;
+            Function *F = resolveIndirectCalleeImpl(Incoming, Depth + 1);
+            if (!F)
+                return nullptr;          // 有任何一个入口解析不出来 → 整体不可证
+            if (!First)
+                First = F;
+            else if (First != F)
+                return nullptr;          // 多目标 → 不可证
         }
+        return First;
     }
     if (auto *Arg = dyn_cast<Argument>(Op)) {
         Function *Parent = Arg->getParent();
-        if (Parent && Depth < 8) {
-            unsigned ArgNo = Arg->getArgNo();
-            for (User *U : Parent->users()) {
-                if (auto *CB = dyn_cast<CallBase>(U)) {
-                    if (CB->getCalledFunction() != Parent)
-                        continue;
-                    if (ArgNo >= CB->arg_size())
-                        continue;
-                    if (Function *F = resolveIndirectCalleeImpl(
-                            CB->getArgOperand(ArgNo), Depth + 1))
-                        return F;
-                }
-            }
+        if (!Parent || Depth >= 8)
+            return nullptr;
+        unsigned ArgNo = Arg->getArgNo();
+        Function *First = nullptr;
+        bool Any = false;
+        for (User *U : Parent->users()) {
+            auto *CB = dyn_cast<CallBase>(U);
+            // 参数还被别处用（存进全局、传给别的函数……）→ 无法穷举实参
+            if (!CB || CB->getCalledFunction() != Parent)
+                return nullptr;
+            if (ArgNo >= CB->arg_size())
+                return nullptr;
+            Function *F =
+                resolveIndirectCalleeImpl(CB->getArgOperand(ArgNo), Depth + 1);
+            if (!F)
+                return nullptr;
+            if (!First)
+                First = F;
+            else if (First != F)
+                return nullptr;
+            Any = true;
         }
+        return Any ? First : nullptr;
     }
     if (auto *BC = dyn_cast<BitCastInst>(Op))
         return resolveIndirectCalleeImpl(BC->getOperand(0), Depth + 1);
@@ -346,11 +367,11 @@ static void resetUnmappedLog() {
 
 static void logUnmapped(StringRef Name) {
     if (gUnmappedLog.insert(Name.str()).second) {
-        // 黑洞化是「静默的错误替换」：指针返回值会被换成立即使用的 nullptr，
-        // 崩溃点离真正原因往往隔了很远（实测 NuttX 上表现为 data abort @0xffff…）。
-        // 所以默认就喊出来，别只写文件。
+        // 未映射 = 没有 plc_* 对应实现。后续怎么处理由 unmappedPolicy() 决定：
+        //   error（默认）→ 记录违例，跑完统一失败，不产出已知错误的产物；
+        //   blackhole   → 开发期行为：删调用、返回值置 0（会把"没执行"伪装成"成功"）。
         std::fprintf(stderr,
-                     "[PLCFusion] WARN: 未映射的外部符号 '%s'，调用已被黑化（返回值置 0）\n"
+                     "[PLCFusion] WARN: 未映射的外部符号 '%s'（无 plc_* 映射）\n"
                      "  如为合法依赖，请加入 isPreservedExternal() 的 kKeep 白名单\n",
                      Name.str().c_str());
         const char *Path = std::getenv("PLC_FUSION_UNMAPPED_LOG");
@@ -364,10 +385,74 @@ static void logUnmapped(StringRef Name) {
     }
 }
 
+// ============================================================================
+// 未映射外部调用的策略
+//
+// 旧行为（默认黑洞化）会把"设备写/同步/配置根本没执行"伪造成"成功返回 0"：
+// 产物看着正常，实际少干活，而且符号审计也发现不了（调用已经没了）。
+// 现在默认 error：收集完所有违例再统一失败，一个目标文件都不产出。
+// 开发期要旧行为请显式 PLC_FUSION_UNMAPPED_POLICY=blackhole（或旧开关 =1）。
+// ============================================================================
+enum class UnmappedPolicy { Error, Keep, Blackhole };
+
+static void warnIfBlackhole() {
+    std::fprintf(stderr,
+                 "[PLCFusion] WARN: 启用 blackhole 策略 —— 未映射调用会被**删除并返回 0**，\n"
+                 "  产物可能少执行设备写/同步/配置，且符号审计看不到（调用已消失）。\n"
+                 "  仅限开发期；正式产物请用 PLC_FUSION_UNMAPPED_POLICY=error（默认）。\n");
+}
+
+static UnmappedPolicy unmappedPolicy() {
+    const char *P = std::getenv("PLC_FUSION_UNMAPPED_POLICY");
+    if (P && P[0]) {
+        if (std::strcmp(P, "keep") == 0)
+            return UnmappedPolicy::Keep;
+        if (std::strcmp(P, "blackhole") == 0) {
+            warnIfBlackhole();
+            return UnmappedPolicy::Blackhole;
+        }
+        if (std::strcmp(P, "error") != 0)
+            std::fprintf(stderr,
+                         "[PLCFusion] WARN: 未知 PLC_FUSION_UNMAPPED_POLICY='%s'，按 error 处理\n",
+                         P);
+        return UnmappedPolicy::Error;
+    }
+    if (envEnabled("PLC_FUSION_BLACKHOLE", false)) {   // 兼容旧开关
+        warnIfBlackhole();
+        return UnmappedPolicy::Blackhole;
+    }
+    return UnmappedPolicy::Error;
+}
+
+static std::vector<std::string> gStrictViolations;
+
+static void noteViolation(CallBase *CB, StringRef What) {
+    std::string S = What.str();
+    if (Function *Caller = CB->getFunction())
+        S += "   (caller: " + Caller->getName().str() + ")";
+    gStrictViolations.push_back(S);
+}
+
+/// 把所有违例一次性喊出来，然后让整个 opt 失败（不产出目标文件）。
+static void flushStrictViolations() {
+    if (gStrictViolations.empty())
+        return;
+    std::fprintf(stderr,
+                 "\n[PLCFusion] ERROR: %u 处调用无法安全转换，严格模式拒绝产出目标文件：\n",
+                 (unsigned)gStrictViolations.size());
+    for (const std::string &S : gStrictViolations)
+        std::fprintf(stderr, "  - %s\n", S.c_str());
+    std::fprintf(stderr,
+                 "  修法：① 加 plc_* 映射；② 若是合法依赖，加进 isPreservedExternal() 的 kKeep；\n"
+                 "        ③ 仅开发期可用 PLC_FUSION_UNMAPPED_POLICY=blackhole 复现旧行为。\n");
+    gStrictViolations.clear();
+    report_fatal_error("PLCFusion: 存在未映射/不可解析的外部调用（严格模式）", false);
+}
+
 static bool applyRemapRules(Module &M, CallBase *CB, Function *Callee,
                             StringRef Name, bool &Changed) {
-        LLVMContext &Ctx = M.getContext();
-        
+    LLVMContext &Ctx = M.getContext();
+
     static const RemapRule kRemap[] = {
         {"printf", "plc_printk"},
         {"puts", "plc_puts"},
@@ -521,16 +606,24 @@ static bool applyRemapRules(Module &M, CallBase *CB, Function *Callee,
     return false;
 }
 
-static bool handleCallBase(Module &M, CallBase *CB, bool &Changed, bool Blackhole) {
+static bool handleCallBase(Module &M, CallBase *CB, bool &Changed,
+                          UnmappedPolicy Policy) {
     Function *Callee = CB->getCalledFunction();
     if (!Callee)
         Callee = resolveIndirectCallee(CB->getCalledOperand());
 
     if (!Callee) {
-        if (Blackhole) {
-            logUnmapped("indirect:unresolved");
+        // 间接调用解析不出唯一目标：既不能证明它安全，也不能猜一个。
+        logUnmapped("indirect:unresolved");
+        switch (Policy) {
+        case UnmappedPolicy::Blackhole:
             blackholeCall(CB, Changed);
             return true;
+        case UnmappedPolicy::Error:
+            noteViolation(CB, "indirect:unresolved");
+            return false;
+        case UnmappedPolicy::Keep:
+            return false;
         }
         return false;
     }
@@ -548,11 +641,17 @@ static bool handleCallBase(Module &M, CallBase *CB, bool &Changed, bool Blackhol
         return true;
 
     logUnmapped(Name);
-    if (!Blackhole)
+    switch (Policy) {
+    case UnmappedPolicy::Blackhole:
+        blackholeCall(CB, Changed);
+        return true;
+    case UnmappedPolicy::Error:
+        noteViolation(CB, Name);
         return false;
-
-    blackholeCall(CB, Changed);
-    return true;
+    case UnmappedPolicy::Keep:
+        return false;
+    }
+    return false;
 }
 
 static void preserveExportedGlobals(Module &M, bool &Changed) {
@@ -758,7 +857,8 @@ static bool runFixedPoint(Module &M) { return runFixedPointConvert(M); }
 
 static bool runRemap(Module &M) {
     bool Changed = false;
-    const bool Blackhole = envEnabled("PLC_FUSION_BLACKHOLE", true);
+    const UnmappedPolicy Policy = unmappedPolicy();
+    gStrictViolations.clear();
     std::vector<CallBase *> Calls;
 
     for (Function &F : M)
@@ -770,8 +870,12 @@ static bool runRemap(Module &M) {
     for (CallBase *CB : Calls) {
         if (!CB->getParent())
             continue;
-        handleCallBase(M, CB, Changed, Blackhole);
+        handleCallBase(M, CB, Changed, Policy);
     }
+
+    // 严格模式：只要有一处无法安全转换，就让整个 pass 失败。
+    // 注意放在循环之后 —— 这样一次能报全，而不是撞到第一个就停。
+    flushStrictViolations();
     return Changed;
 }
 

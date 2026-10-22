@@ -190,32 +190,38 @@ int plc_gettid(void)
 	return (int)gettid();
 }
 
-unsigned long plc_pthread_self(void)
+/* ⚠ ABI 宽度纪律（2026-10-22 修）
+ *
+ * Pass 只把被调符号替换成 plc_*，**不改变实参类型**；所以桩的参数类型必须与
+ * 目标平台的原函数一致。NuttX 里 pthread_t = pid_t = int（32 位）。
+ * 旧实现写成 `unsigned long *thread` 并 `*thread = (unsigned long)tid;`，
+ * 在 AArch64 上是 `str x9,[x8]` —— 8 字节写，会越过 4 字节的 pthread_t 覆盖相邻字段
+ * （cyclictest 的 thread_stats_s 里 id 后面紧邻 int tid，实测哨兵被清零）。
+ */
+pthread_t plc_pthread_self(void)
 {
-	return (unsigned long)pthread_self();
+	return pthread_self();
 }
 
-int plc_pthread_create(unsigned long *thread, void *attr,
+int plc_pthread_create(pthread_t *thread, void *attr,
 		       void *(*start_routine)(void *), void *arg)
 {
-	pthread_t tid;
+	int ret;
 
 	if (!thread || !start_routine)
-		return -EINVAL;
+		return EINVAL;
 
-	if (pthread_create(&tid, (const pthread_attr_t *)attr,
-			   start_routine, arg) != 0)
-		return -errno;
-
-	*thread = (unsigned long)tid;
-	return 0;
+	/* POSIX 与 NuttX 都**返回错误码本身**，不经过 errno。
+	 * 旧实现 `if (pthread_create(...) != 0) return -errno;`
+	 * 在 errno 恰好为 0 时会把失败报成成功（线程没建出来，调用者以为成功了）。 */
+	ret = pthread_create(thread, (const pthread_attr_t *)attr,
+			     start_routine, arg);
+	return ret;
 }
 
-int plc_pthread_join(unsigned long thread, void **retval)
+int plc_pthread_join(pthread_t thread, void **retval)
 {
-	if (pthread_join((pthread_t)thread, retval) != 0)
-		return -errno;
-	return 0;
+	return pthread_join(thread, retval);
 }
 
 /* =====================================================================

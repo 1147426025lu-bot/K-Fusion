@@ -31,7 +31,20 @@
 
 支持：全局 fn-ptr、GEP 表、Store/Load/Alloca、PHI/Select、**实参回溯**（如 bsearch compar）。
 
-未解析 → `PLC_FUSION_UNMAPPED_LOG` 记 `indirect:unresolved`；`PLC_FUSION_BLACKHOLE=1` 时替换为 null 调用。
+⚠️ **必须"唯一目标"才直接化**（2026-10-22 修）：`select`/`phi`/实参回溯只有在
+**所有候选解析到同一个函数**时才返回该函数；否则返回"不可证"，
+不再"取第一个"——旧行为会把 `select cond, free, release` 改写成无条件 `plc_kfree`，抹掉分支。
+
+## 未映射调用的策略（2026-10-22 改：默认拒绝）
+
+| `PLC_FUSION_UNMAPPED_POLICY` | 行为 | 用途 |
+|---|---|---|
+| `error`（**默认**） | 记录全部违例 → 结束时 `report_fatal_error`，**不产出目标文件** | 正式产物 |
+| `keep` | 保留调用不动（不黑化、不报错） | 结构类单测 / 实验 |
+| `blackhole` | 删除调用、返回值置 0，并打印警告 | **仅开发期**（旧 `PLC_FUSION_BLACKHOLE=1` 等价此档） |
+
+> 为什么改默认：黑洞化会把"设备写/同步/配置根本没执行"伪造成"成功返回 0"，
+> 而且符号审计发现不了（调用已经消失）。
 
 ## CI 门禁
 

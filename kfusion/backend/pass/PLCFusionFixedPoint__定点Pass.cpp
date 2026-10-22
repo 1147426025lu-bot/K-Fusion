@@ -260,23 +260,35 @@ class FixedPointConverter {
         return Fix;
     }
 
-    static Value *adjustIntWidth(IRBuilder<> &B, Value *In, Type *DstTy) {
+    /// 把 In 调整到 DstTy 的位宽。
+    ///
+    /// ⚠️ 必须显式给出符号语义：无条件用 ZExt 会把 `sext i32 -1 → i64`
+    /// 变成 `4294967295`（已在 LLVM 18 上复现，且输入根本不含浮点运算）。
+    /// - 定点值是有符号的 → 调用方传 SignedExt=true；
+    /// - 修复既有 CastInst 时 → 传 `castIsSignedExt(C)`，即沿用原 opcode。
+    static Value *adjustIntWidth(IRBuilder<> &B, Value *In, Type *DstTy,
+                                 bool SignedExt) {
         if (In->getType() == DstTy)
             return In;
         unsigned InBits = In->getType()->getScalarSizeInBits();
         unsigned DstBits = DstTy->getScalarSizeInBits();
         if (InBits < DstBits)
-            return B.CreateZExt(In, DstTy);
+            return SignedExt ? B.CreateSExt(In, DstTy) : B.CreateZExt(In, DstTy);
         if (InBits > DstBits)
             return B.CreateTrunc(In, DstTy);
         return In;
     }
 
+    /// 原 CastInst 的符号语义：只有 SExt 是有符号扩展；ZExt/Trunc 都不是。
+    static bool castIsSignedExt(const Instruction *I) {
+        return I->getOpcode() == Instruction::SExt;
+    }
+
     Value *fixMul(Value *A, Value *Rhs, unsigned FB, IRBuilder<> &Builder) {
         IntegerType *IT = Type::getInt64Ty(M.getContext());
         Type *I32 = Type::getInt32Ty(M.getContext());
-        A = adjustIntWidth(Builder, A, IT);
-        Rhs = adjustIntWidth(Builder, Rhs, IT);
+        A = adjustIntWidth(Builder, A, IT, /*SignedExt=*/true);
+        Rhs = adjustIntWidth(Builder, Rhs, IT, /*SignedExt=*/true);
         return Builder.CreateCall(
             getFixMulI64Fn(M),
             {A, Rhs, ConstantInt::get(I32, FB)});
@@ -285,8 +297,8 @@ class FixedPointConverter {
     Value *fixDiv(Value *A, Value *Rhs, unsigned FB, IRBuilder<> &Builder) {
         IntegerType *IT = Type::getInt64Ty(M.getContext());
         Type *I32 = Type::getInt32Ty(M.getContext());
-        A = adjustIntWidth(Builder, A, IT);
-        Rhs = adjustIntWidth(Builder, Rhs, IT);
+        A = adjustIntWidth(Builder, A, IT, /*SignedExt=*/true);
+        Rhs = adjustIntWidth(Builder, Rhs, IT, /*SignedExt=*/true);
         return Builder.CreateCall(
             getFixDivI64Fn(M),
             {A, Rhs, ConstantInt::get(I32, FB)});
@@ -343,7 +355,8 @@ class FixedPointConverter {
 
     Value *intToFixed(Value *Op, unsigned FB, IRBuilder<> &B) {
         IntegerType *IT = Type::getInt64Ty(M.getContext());
-        Value *Ext = adjustIntWidth(B, Op, IT);
+        // 源是 C 的 int（有符号）→ 用 sext，否则负数会变成本值 + 2^32
+        Value *Ext = adjustIntWidth(B, Op, IT, /*SignedExt=*/true);
         return B.CreateShl(Ext, FB);
     }
 
@@ -442,7 +455,7 @@ class FixedPointConverter {
             Type *Dst = Cast->getDestTy();
             if (!Src->isFloatingPointTy() && Dst->isIntegerTy()) {
                 Value *In = Cast->getOperand(0);
-                Value *N = adjustIntWidth(B, In, Dst);
+                Value *N = adjustIntWidth(B, In, Dst, castIsSignedExt(Cast));
                 Map[Inst] = N;
                 Inst->replaceAllUsesWith(N);
                 Inst->eraseFromParent();
@@ -454,7 +467,9 @@ class FixedPointConverter {
                 unsigned FB = fracBits(Src);
                 Value *N = nullptr;
                 if (In->getType()->isIntegerTy()) {
-                    N = adjustIntWidth(B, B.CreateAShr(In, FB), Dst);
+                    // AShr 是有符号语义，后续改宽必须同样有符号
+                    N = adjustIntWidth(B, B.CreateAShr(In, FB), Dst,
+                                       /*SignedExt=*/true);
                 } else {
                     Value *Scaled = B.CreateFMul(
                         In, ConstantFP::get(In->getType(), (double)(1ULL << FB)));
@@ -726,7 +741,7 @@ class FixedPointConverter {
                 Value *In = I->getOperand(0);
                 Value *N = In;
                 if (In->getType() != I->getType() && !I->getType()->isVoidTy())
-                    N = adjustIntWidth(B, In, I->getType());
+                    N = adjustIntWidth(B, In, I->getType(), castIsSignedExt(I));
                 I->replaceAllUsesWith(N);
                 I->eraseFromParent();
                 Changed = true;
@@ -761,7 +776,7 @@ class FixedPointConverter {
                     continue;
                 }
                 if (C->getSrcTy() != Op->getType()) {
-                    Value *N = adjustIntWidth(B, Op, Dst);
+                    Value *N = adjustIntWidth(B, Op, Dst, castIsSignedExt(C));
                     C->replaceAllUsesWith(N);
                     C->eraseFromParent();
                     Any = true;
@@ -818,7 +833,7 @@ class FixedPointConverter {
                 Value *Op = C->getOperand(0);
                 Type *Dst = C->getType();
                 if (C->getSrcTy() != Op->getType()) {
-                    Value *N = adjustIntWidth(B, Op, Dst);
+                    Value *N = adjustIntWidth(B, Op, Dst, castIsSignedExt(C));
                     C->replaceAllUsesWith(N);
                     C->eraseFromParent();
                     Changed = true;
@@ -833,7 +848,8 @@ class FixedPointConverter {
                 if (C->getOpcode() == Instruction::SExt ||
                     C->getOpcode() == Instruction::ZExt ||
                     C->getOpcode() == Instruction::Trunc) {
-                    Value *N = adjustIntWidth(B, Op, Dst);
+                    // 必须沿用原 opcode 的符号语义：把 sext 改成 zext 会改数值。
+                    Value *N = adjustIntWidth(B, Op, Dst, castIsSignedExt(C));
                     C->replaceAllUsesWith(N);
                     C->eraseFromParent();
                     Changed = true;
