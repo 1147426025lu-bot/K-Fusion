@@ -40,6 +40,7 @@
 - `docs/DEV__开发指南.md/` （1 文件）
 - `docs/gpio_map_info__GPIO映射.txt/` （1 文件）
 - `docs/kernel_version__内核版本.txt/` （1 文件）
+- `docs/PAPER_WALKTHROUGH__论文全貌与实验设计.md/` （1 文件）— **项目全貌说明书**（论文赌什么/实验设计四原则/E1–E12 矩阵）
 
 ### `kfusion/` — PLCFusion 内核化工具链主体：LLVM Pass、运行时 ABI、示例、manifest、测量脚本
 
@@ -73,11 +74,11 @@
 
 ## 统计
 
-- 工作树文件总数：**1116**
+- 工作树文件总数：**1117**
 - `.github/`：3 文件
 - `compare/`：2 文件
 - `crtos/`：723 文件（docs 12 · jailhouse_overlay_pi4 24 · results 109 · logs 1 · scripts 51 · upstream 526）
-- `docs/`：3 文件
+- `docs/`：4 文件
 - `kfusion/`：361 文件
 - `results/`：3 文件
 - `scripts/`：1 文件
