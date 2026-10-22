@@ -99,3 +99,6 @@ kfusion/test/.official_cycletest_multitu_wcet_per_fn/
 # 复现见 crtos/results/xlat/README__数据与复现说明.md
 crtos/results/xlat/*.bin
 crtos/results/xlat/**/*.bin
+
+# --- 本地工作目录（不进库）---
+.workbuddy/

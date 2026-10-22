@@ -74,6 +74,23 @@ static bool isPreservedExternal(StringRef Name) {
         "cpu_for_thread_sp", "cpu_for_thread_ua",
         "sched_get_priority_max", "getrlimit", "setrlimit",
         "usleep", "getopt_long", "optarg", "optind", "stdout", "stderr",
+        // NuttX 把 optarg/stdout 之类做成"访问器函数"而非全局变量：
+        //   #define optarg (*(getoptargp()))   #define stdout lib_get_stream(1)
+        // 这些名字不认识就会被 blackholeCall 替换成 nullptr，
+        // 调用点变成 load ptr, ptr null —— 实测在 Pi4 上直接 data abort
+        // （FAR=0xffffffffffffffff，NuttX 异常向量在 0x0，读到的是垃圾）。
+        "getoptargp", "getoptindp", "getopterrp", "getoptoptp", "lib_get_stream",
+        // getopt：短选项版本。漏掉它会被黑洞化成"返回 0"，
+        // 于是 while ((c = getopt(...)) != -1) 永远成立 → 直接掉进 default。
+        // 实测 BM2 因此只打 usage 就退出（cyclictest 用 getopt_long，所以从未暴露）。
+        "getopt", "putchar", "fputc", "strtod", "atoi", "atof", "memcmp", "vprintf",
+        // NuttX 的 errno 是 #define errno (*__errno())，同理是访问器函数
+        "__errno",
+        // 下面三个是「void/int 返回值被黑化后整条调用被删掉」的受害者：
+        //   pthread_setschedparam 被删 → -p 200 的 RT 优先级根本没设上，
+        //   测量看着正常其实口径已变（比崩溃更难发现）。
+        //   ioctl / poll 同理，黑化后返回值变 0，等于谎报成功。
+        "pthread_setschedparam", "ioctl", "poll",
         "alarm", "pause", "sleep", "sched_yield",
         "atexit", "getenv",
         "strcpy", "strcat",
@@ -329,6 +346,13 @@ static void resetUnmappedLog() {
 
 static void logUnmapped(StringRef Name) {
     if (gUnmappedLog.insert(Name.str()).second) {
+        // 黑洞化是「静默的错误替换」：指针返回值会被换成立即使用的 nullptr，
+        // 崩溃点离真正原因往往隔了很远（实测 NuttX 上表现为 data abort @0xffff…）。
+        // 所以默认就喊出来，别只写文件。
+        std::fprintf(stderr,
+                     "[PLCFusion] WARN: 未映射的外部符号 '%s'，调用已被黑化（返回值置 0）\n"
+                     "  如为合法依赖，请加入 isPreservedExternal() 的 kKeep 白名单\n",
+                     Name.str().c_str());
         const char *Path = std::getenv("PLC_FUSION_UNMAPPED_LOG");
         if (!Path || !Path[0])
             return;

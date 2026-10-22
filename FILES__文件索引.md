@@ -3,7 +3,7 @@
 > 本文件由根目录 `FILES.md` 指向。K-Fusion 仓库统一采用 `name__中文说明.ext` 自文档化命名约定
 >（双下划线后接中文描述），所有文件名均为合法 UTF-8，在 Linux / macOS / Windows(UTF-8 locale) 下均正常解析。
 >
-> 快照日期：**2026-10-16**（含当日新增：`crtos/results/figures` 两域 vs 单域架构对照 SVG、`crtos/scripts/sync_pi4`、`kfusion/docs/paper` 论文稿与图）。
+> 快照日期：**2026-10-22**（含当日新增：`crtos/results/figures` 两域 vs 单域架构对照 SVG、`crtos/scripts/sync_pi4`、`kfusion/docs/paper` 论文稿与图）。
 
 ## 顶层文件
 
@@ -28,11 +28,11 @@
 
 ### `crtos/` — cRTOS / Jailhouse 对照实验脚手架（含 upstream Jailhouse 源码与脚本）
 
-- `crtos/docs/` （10 文件）
-- `crtos/jailhouse_overlay_pi4/` （16 文件）— **NuttX-inmate 移植产物**（cell 配置 / defconfig / 补丁 / 部署脚本 / rtlat + xshm app）
-- `crtos/results/` （6 文件，含 `figures/`）— **Pi4 实测数据 + 架构对照图**（对照表 / schema JSON / 2 张「两域 vs 单域」SVG）
+- `crtos/docs/` （12 文件）
+- `crtos/jailhouse_overlay_pi4/` （24 文件）— **NuttX-inmate 移植产物**（cell 配置 / defconfig / 补丁 / 部署脚本 / rtlat + xshm app）
+- `crtos/results/` （109 文件，含 `figures/`）— **Pi4 实测数据 + 架构对照图**（对照表 / schema JSON / 2 张「两域 vs 单域」SVG）
 - `crtos/logs/` （1 文件）
-- `crtos/scripts/` （38 文件，含 `pi4/`）
+- `crtos/scripts/` （51 文件，含 `pi4/`）
 - `crtos/upstream/` （526 文件）
 
 ### `docs/` — 跨模块文档（开发指南、仓库结构）与已归位的参考文件
@@ -47,14 +47,14 @@
 - `kfusion/README.md/` （1 文件）
 - `kfusion/backend/` （23 文件）
 - `kfusion/diagnostics/` （1 文件）
-- `kfusion/docs/` （78 文件，含 `paper/` 论文稿与 `figures/`）
+- `kfusion/docs/` （85 文件，含 `paper/` 论文稿与 `figures/`）
 - `kfusion/examples/` （24 文件）
 - `kfusion/frontend/` （2 文件）
 - `kfusion/include/` （5 文件）
 - `kfusion/manifests/` （22 文件）
-- `kfusion/scripts/` （152 文件）
-- `kfusion/src/` （11 文件）
-- `kfusion/test/` （18 文件）
+- `kfusion/scripts/` （157 文件）
+- `kfusion/src/` （13 文件）
+- `kfusion/test/` （27 文件）
 
 ### `results/` — 本地测量结果落盘目录
 
@@ -73,12 +73,12 @@
 
 ## 统计
 
-- 工作树文件总数：**950**
+- 工作树文件总数：**1116**
 - `.github/`：3 文件
 - `compare/`：2 文件
-- `crtos/`：582 文件（docs 9 · jailhouse_overlay_pi4 11 · results 2 · logs 1 · scripts 33 · upstream 526）
+- `crtos/`：723 文件（docs 12 · jailhouse_overlay_pi4 24 · results 109 · logs 1 · scripts 51 · upstream 526）
 - `docs/`：3 文件
-- `kfusion/`：338 文件
+- `kfusion/`：361 文件
 - `results/`：3 文件
 - `scripts/`：1 文件
 - `timedc/`：11 文件

@@ -1,0 +1,20 @@
+config BENCHMARK_BM2PID
+	bool "bm2pid: 3-axis cascaded PID control benchmark"
+	default n
+	---help---
+		K-Fusion BM2 benchmark: a realistic periodic control workload.
+
+		Three axes, each with a cascaded position/velocity PID, integral
+		anti-windup and an 8-tap FIR on the feedback signal.  Runs at 1 kHz
+		with clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME), exactly like
+		cyclictest, so the jitter numbers are directly comparable.
+
+		Unlike cyclictest it also reports:
+		  - per-cycle execution time and overrun count (exec > period)
+		  - control quality (mean-square and max tracking error)
+
+		The control-quality numbers are what reveals a fixed-point
+		conversion that changed numeric behaviour: jitter may look fine
+		while the controller has silently diverged.
+
+		The hot loop never prints; output happens once at the end.

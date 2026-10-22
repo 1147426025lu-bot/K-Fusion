@@ -1,0 +1,3 @@
+ifneq ($(CONFIG_BENCHMARK_BM2PID),)
+CONFIGURED_APPS += $(APPDIR)/benchmarks/bm2pid
+endif
