@@ -182,6 +182,34 @@ brcmfmac 的 SDIO 流量直接打到被测核。
 → **本项目所有 BM2 测量一律先 `ip link set wlan0 down`**；§4 的 100 s 数据即"HV 开 + 无线关"
 （p50 20、exec 1.156–1.239，与本表一致），历史数据自洽。
 
+### 4.3 BM2 的 1 h 同窗口（2026-10-22，root cell 已完成）
+
+条件：HV 开、CPU3、FIFO 99、1 kHz、无线关闭、**3 600 000 周期跑满**（overruns 0）。
+
+| 负载（均 1 h / 1 kHz / CPU3 / FIFO 99） | min | p50 | p99 | p99.9 | p99.99 | **max** |
+|---|---|---|---|---|---|---|
+| cyclictest（§2 的 1 h 基线） | 12 | —（avg 20.97） | 32 | 49 | 81 | **760 µs** |
+| **BM2 三轴 PID** | 12 | **20** | **44** | **71** | **121** | **1595 µs** |
+
+两条结论：
+
+1. **真实负载的尾部比 cyclictest 更重**（每个分位 1.4–1.5×，极值 2.1×）→
+   用 760 µs 代表"Linux 侧最坏情况"偏乐观；正文并列时必须同时给 1595。
+   （BM2 没有 `mlockall`，且每周期有 1.07 µs 实际计算——未单独验证。）
+2. **60 s → 1 h，分位数几乎不动、极值涨 11.6×**：
+
+   | 窗口 | p50 | p99 | p99.9 | p99.99 | max |
+   |---|---|---|---|---|---|
+   | 60 s | 20 | 44 | 67 | 117 | 137 |
+   | 1 h | 20 | 44 | 71 | 121 | **1595** |
+
+   → §9 口径纪律第 1 条（极值不可跨窗口比）的**直接实验证据**；
+   同时说明 **分位数可跨窗口引用，极值不行**。
+
+> NuttX 侧 1 h【待填】：60 s 冒烟已过（p50 **5 µs**、max **11 µs**、exec 0.967 = gcc 基线版）；
+> 1 h 于 2026-10-22 18:29 起跑，脚本 `crtos/scripts/pi4/bm2_nuttx_run__NuttX域跑BM2.sh`。
+> 原始日志：`crtos/results/raw/bm2_1h_hv.log`。
+
 ---
 
 ## 5. 表 4：跨域回传通道（xlat / IVSHMEM）
@@ -258,12 +286,14 @@ root 侧 busy-poll 收取。**校准方式**：跳变感知（按 >1 ms 跳变�
 | 冻结对照 | `bm2_freeze_compare.png` | T1/T2 抖动重合、执行时间不同 |
 | BM2 四/五配置 | `bm2_{4,5}way_compare.png` | gcc / clang / pass / 冻结 |
 | **跨域 CDF** | `bm2_crossdomain_L_vs_N.png` | **Linux 20 µs vs NuttX 6 µs**（本图最关键） |
+| **HV A/B CDF** | `bm2_hv_ab_cdf.png` | **裸 Linux 11 µs vs root cell 20 µs**（两个平台，整体平移 9 µs） |
 | 五档负载 | `xlat_load_matrix_5tier.png` | 分布叠加 + 分位数柱状 |
 | xlat 三档 | `xlat_{15min,1h,8h}_{jitter,xdomain}_{dist,latency}.png` | 12 张 |
 
 **出图脚本**（都可复用于新数据）：
 - `crtos/scripts/pi4/xlat_nuttx_3way__三配置对比图.py`（直方图叠加 + 分位数，支持 `SUBTITLE`/`SUBPLOT_TITLE`）
 - `crtos/scripts/pi4/bm2_crossdomain_plot__跨域CDF对比.py`（CDF + 分位数，专治"一个域全在一个桶"）
+- `crtos/scripts/pi4/bm2_hist_stats__直方图分位数.py`（直方图 → 分位数/阈值计数，桶顶 199 可识别）
 - `crtos/scripts/pi4/cyclictest_hist_compare__同尺子窗口对比.py`
 - `crtos/scripts/pi4/xlat_load_compare__五档对比图.py`
 
