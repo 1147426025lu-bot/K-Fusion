@@ -102,3 +102,6 @@ crtos/results/xlat/**/*.bin
 
 # --- 本地工作目录（不进库）---
 .workbuddy/
+
+# --- 零散构建残渣 ---
+**/_k.tgz
