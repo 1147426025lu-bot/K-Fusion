@@ -101,7 +101,7 @@ static bool isPreservedExternal(StringRef Name) {
         "hset_init", "hset_destroy", "hset_print_bucket",
         "rt_write_json", "get_tracefs_prefix",
         "__isoc23_strtol", "__isoc23_fscanf", "strtol", "fscanf",
-        "fputs", "fread", "sprintf", "strtok", "strchr",
+        "fputs", "fread", "fwrite", "sprintf", "strtok", "strchr",
         "localtime", "strftime", "uname",
         "setitimer", "setvbuf", "syscall",
         "pthread_attr_init", "pthread_attr_getstack", "pthread_attr_setstack",

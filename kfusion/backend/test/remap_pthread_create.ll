@@ -17,5 +17,6 @@ entry:
   ret i32 %rc
 }
 
+; worker 的定义在模块里出现在调用之前，所以先 CHECK 定义再 CHECK 调用（旧顺序永远匹配不到）
+; CHECK: define {{.*}}@worker
 ; CHECK: call i32 @plc_pthread_create
-; CHECK: define {{.*}} @worker

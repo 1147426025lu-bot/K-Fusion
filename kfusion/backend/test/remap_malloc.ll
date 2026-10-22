@@ -9,5 +9,6 @@ entry:
   ret i8* %p
 }
 
-; CHECK-NOT: call {{.*}} @malloc
-; CHECK: call i8* @plc_kmalloc
+; CHECK-NOT: call {{.*}}@malloc
+; 指针类型随 LLVM 版本变化（16+ 为 opaque ptr），只断言重映射结果
+; CHECK: call {{.*}}@plc_kmalloc

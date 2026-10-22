@@ -16,6 +16,7 @@ entry:
   ret void
 }
 
-; CHECK: store void ()* @fp_target
+; 指针类型随 LLVM 版本变化，用 {{.*}} 吸收
+; CHECK: store {{.*}}@fp_target
 ; CHECK: call void {{.*}}%fn
 ; CHECK-NOT: call void null
