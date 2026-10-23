@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "platforms": [
+    {
+      "name": "linux_kernel",
+      "contexts": ["thread", "softirq"],
+      "allow_mmio": false,
+      "allow_sleep": true,
+      "max_rt_priority": 99,
+      "supports_float": true,
+      "notes": "融合内核模块：不映射设备 MMIO；MMIO 阶段必须留在 NuttX 域"
+    },
+    {
+      "name": "nuttx",
+      "contexts": ["thread"],
+      "allow_mmio": true,
+      "allow_sleep": true,
+      "max_rt_priority": 255,
+      "supports_float": false,
+      "notes": "非根 cell 的 NuttX 任务：只有 thread 上下文"
+    }
+  ]
+}

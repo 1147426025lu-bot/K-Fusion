@@ -1,0 +1,54 @@
+{
+  "version": 1,
+  "task": {
+    "name": "n4_context_not_allowed",
+    "entry": "chain_main",
+    "period_us": 1000,
+    "deadline_us": 800,
+    "notes": "ECoS §10 的最小闭环：Sensor → FIR → PID"
+  },
+  "stages": [
+    {
+      "name": "sensor_prepare",
+      "fn": "sensor_prepare",
+      "depends_on": [],
+      "context": "thread",
+      "effects": [
+        "mmio",
+        "state_write"
+      ],
+      "notes": "读设备寄存器；**只能**在允许 MMIO 的域执行"
+    },
+    {
+      "name": "fir_filter",
+      "fn": "fir_filter",
+      "depends_on": [
+        "sensor_prepare"
+      ],
+      "context": "timer_cb",
+      "effects": [
+        "state_read",
+        "state_write"
+      ]
+    },
+    {
+      "name": "pid_step",
+      "fn": "pid_step",
+      "depends_on": [
+        "fir_filter"
+      ],
+      "context": "thread",
+      "effects": [
+        "state_read",
+        "state_write"
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "name": "actuator_out",
+      "kind": "mmio",
+      "release_id": true
+    }
+  ]
+}
