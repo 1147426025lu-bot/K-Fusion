@@ -30,7 +30,7 @@
 
 - `crtos/docs/` （12 文件）
 - `crtos/jailhouse_overlay_pi4/` （24 文件）— **NuttX-inmate 移植产物**（cell 配置 / defconfig / 补丁 / 部署脚本 / rtlat + xshm app）
-- `crtos/results/` （109 文件，含 `figures/`）— **Pi4 实测数据 + 架构对照图**（对照表 / schema JSON / 2 张「两域 vs 单域」SVG）
+- `crtos/results/` （132 文件，含 `figures/`）— **Pi4 实测数据 + 架构对照图**（对照表 / schema JSON / 2 张「两域 vs 单域」SVG）
 - `crtos/logs/` （1 文件）
 - `crtos/scripts/` （53 文件，含 `pi4/`）
 - `crtos/upstream/` （526 文件）
@@ -48,7 +48,7 @@
 - `kfusion/README.md/` （1 文件）
 - `kfusion/backend/` （23 文件）
 - `kfusion/diagnostics/` （1 文件）
-- `kfusion/docs/` （90 文件，含 `paper/` 论文稿与 `figures/`）
+- `kfusion/docs/` （92 文件，含 `paper/` 论文稿与 `figures/`）
 - `kfusion/examples/` （24 文件）
 - `kfusion/frontend/` （2 文件）
 - `kfusion/include/` （5 文件）
@@ -74,7 +74,7 @@
 
 ## 统计
 
-- 工作树文件总数：**1140**
+- 工作树文件总数：**1171**
 - `.github/`：3 文件
 - `compare/`：2 文件
 - `crtos/`：740 文件（docs 12 · jailhouse_overlay_pi4 24 · results 110 · logs 1 · scripts 53 · upstream 526）
