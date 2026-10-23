@@ -37,12 +37,19 @@ PAT = {
 }
 SER_PAT = re.compile(r"^#\s*stat_(\w+)_us:\s*(.+)$")
 
+# 内核侧经 printk 输出，dmesg 会加「[ 时间戳] PLCPROBE 」前缀；
+# 这里统一剥掉，让同一台解析器同时吃用户态与内核态两块文本。
+DMESG_PAT = re.compile(r"^\s*(?:\[\s*[\d.]+\]\s*)?(?:PLCPROBE\s+)?")
+
 
 def parse(path):
     txt = io.open(path, encoding="utf-8", errors="replace").read()
     info = {"path": path, "probe": None, "period_ns": None, "samples": None,
             "miss": None, "overrun": None, "series": {}}
-    for ln in txt.splitlines():
+    for raw in txt.splitlines():
+        ln = DMESG_PAT.sub("", raw)
+        if not ln.startswith("#"):
+            continue
         m = PAT["probe"].match(ln)
         if m:
             info["probe"] = m.group(1)

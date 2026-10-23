@@ -22,6 +22,7 @@
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
 #include <linux/mm.h>
+#include <linux/math64.h>
 #include <linux/uaccess.h>
 #include <linux/wait.h>
 #include <linux/atomic.h>
@@ -29,9 +30,18 @@
 #include <linux/debugfs.h>
 #include <linux/sched/types.h>
 
+#include <linux/version.h>
+
 #include "../include/plc_shm__共享内存.h"
 #include "../include/plc_abi__运行时ABI.h"
 #include "plc_hrtimer_core__定时核心.h"
+
+/* kthread_complete_and_exit() 是 5.17 才引入的；5.15 及更早只有 complete_and_exit()，
+ * 两者都是 __noreturn、语义相同（都是「结束当前 kthread 并 complete」）。
+ * 加这层宏是为了让同一份源码能在 5.15（Pi4 定制内核）与 6.x 上都能编。 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0)
+#define kthread_complete_and_exit(comp, code) complete_and_exit(comp, code)
+#endif
 
 MODULE_LICENSE("GPL");
 
@@ -96,6 +106,13 @@ struct plc_cyclic_timer {
 	atomic_t overrun_acc;
 	bool active;
 	u64 comp_warmup;
+	/* 统一探针 r/s/f v1（probe_rsf=1 时才用） */
+	ktime_t probe_r;
+	ktime_t probe_prev_s;
+	ktime_t probe_prev_r;
+	ktime_t probe_f;		/* 上一拍的完成时刻 f_k（进入等待时打点） */
+	bool probe_have_prev;
+	bool probe_have_f;
 };
 
 struct fused_fast {
@@ -139,6 +156,180 @@ static struct task_struct *fused_task;
 static struct completion fused_worker_done;
 static struct plc_cyclic_timer fused_cyclic;
 static struct fused_fast fused_fast;
+
+/* ==========================================================================
+ * 统一探针 r/s/f v1（内核侧）
+ *
+ * 契约：kfusion/docs/PROBE_CONTRACT__统一测量契约.md
+ *   r_k 标称释放 / s_k 实际开始 / f_k 完成
+ *   start_lat = s−r   exec = f−s   response = f−r   miss = f−r > T
+ *
+ * **默认关闭**（probe_rsf=0）：关闭时本文件的行为与加探针之前逐字节相同。
+ * 打开后记录三个序列并用 pr_info 输出与用户态同一块文本（前缀 PLCPROBE）。
+ * ========================================================================== */
+static bool probe_rsf;
+module_param(probe_rsf, bool, 0644);
+MODULE_PARM_DESC(probe_rsf, "记录 r/s/f 三时间戳（统一测量契约 v1，默认 0）");
+
+#define PLC_PROBE_BUCKETS 200
+
+struct plc_probe_series {
+	const char *name;
+	unsigned long hist[PLC_PROBE_BUCKETS];
+	u64 n;
+	u64 sum_ns;
+	u64 min_ns;
+	u64 max_ns;
+	u64 over;
+};
+
+static struct plc_probe_series plc_ps_start = { .name = "start_lat", .min_ns = ~0ULL };
+static struct plc_probe_series plc_ps_exec = { .name = "exec", .min_ns = ~0ULL };
+static struct plc_probe_series plc_ps_resp = { .name = "response", .min_ns = ~0ULL };
+static u64 plc_probe_miss;
+
+static void plc_probe_reset_one(struct plc_probe_series *s, const char *name)
+{
+	int i;
+
+	for (i = 0; i < PLC_PROBE_BUCKETS; i++)
+		s->hist[i] = 0;
+	s->name = name;
+	s->n = 0;
+	s->sum_ns = 0;
+	s->min_ns = ~0ULL;
+	s->max_ns = 0;
+	s->over = 0;
+}
+
+static bool plc_probe_dumped;	/* dump 幂等：delete 与 exit 只会输出一次 */
+
+static void plc_probe_reset_all(void)
+{
+	plc_probe_reset_one(&plc_ps_start, "start_lat");
+	plc_probe_reset_one(&plc_ps_exec, "exec");
+	plc_probe_reset_one(&plc_ps_resp, "response");
+	plc_probe_miss = 0;
+	plc_probe_dumped = false;
+}
+
+static void plc_probe_add(struct plc_probe_series *s, s64 v_ns)
+{
+	u64 a = (u64)(v_ns < 0 ? -v_ns : v_ns);
+	unsigned long us = (unsigned long)div_u64(a, 1000);
+
+	if (us >= PLC_PROBE_BUCKETS) {
+		s->over++;
+		us = PLC_PROBE_BUCKETS - 1;
+	}
+	s->hist[us]++;
+	s->n++;
+	s->sum_ns += a;
+	if (a < s->min_ns)
+		s->min_ns = a;
+	if (a > s->max_ns)
+		s->max_ns = a;
+}
+
+static unsigned long plc_probe_pctl(const struct plc_probe_series *s, u32 ppm)
+{
+	u64 c = 0;
+	unsigned long target;
+	int k;
+
+	if (!s->n)
+		return 0;
+	target = (unsigned long)div_u64(s->n * (u64)ppm + 999999ULL, 1000000ULL);
+	for (k = 0; k < PLC_PROBE_BUCKETS; k++) {
+		c += s->hist[k];
+		if (c >= target)
+			return (unsigned long)k;
+	}
+	return PLC_PROBE_BUCKETS - 1;
+}
+
+/* 任务侧：进入等待前调用一次 —— 此刻本拍的工作已经做完，所以这就是 f_k。
+ *
+ * 重要：不能拿「下一拍的 s_{k+1}」当 f_k。两者差一整个周期（实测 exec 会变成
+ * 978~1022 µs，而不是 1 µs 级），并且会把 miss 算成 100%。 */
+static void plc_probe_mark_finish(struct plc_cyclic_timer *ct)
+{
+	if (!probe_rsf || !ct->probe_have_prev)
+		return;
+	ct->probe_f = ktime_get();
+	ct->probe_have_f = true;
+}
+
+/* 任务侧：从等待中返回时调用一次（s_k；并结算上一拍的 exec / response / miss） */
+static void plc_probe_mark(struct plc_cyclic_timer *ct)
+{
+	ktime_t s;
+
+	if (!probe_rsf)
+		return;
+
+	s = ktime_get();
+	if (!ktime_to_ns(ct->probe_r)) {	/* 首拍只建基线 */
+		ct->probe_prev_s = s;
+		ct->probe_prev_r = ct->probe_r;
+		ct->probe_have_prev = true;
+		ct->probe_have_f = false;
+		return;
+	}
+	plc_probe_add(&plc_ps_start, ktime_to_ns(ktime_sub(s, ct->probe_r)));
+
+	if (ct->probe_have_prev && ct->probe_have_f) {
+		s64 exec_ns = ktime_to_ns(ktime_sub(ct->probe_f, ct->probe_prev_s));
+		s64 resp_ns = ktime_to_ns(ktime_sub(ct->probe_f, ct->probe_prev_r));
+
+		plc_probe_add(&plc_ps_exec, exec_ns);
+		plc_probe_add(&plc_ps_resp, resp_ns);
+		if (resp_ns > ktime_to_ns(ct->interval))
+			plc_probe_miss++;
+	}
+	ct->probe_prev_s = s;
+	ct->probe_prev_r = ct->probe_r;
+	ct->probe_have_prev = true;
+	ct->probe_have_f = false;	/* 等本拍的 finish 再置 */
+}
+
+/* 输出与用户态同一块文本（probe_report__统一探针报告.py 可直接解析） */
+static void plc_probe_dump(void)
+{
+	struct plc_probe_series *arr[3];
+	int i;
+
+	if (!probe_rsf || !plc_ps_start.n || plc_probe_dumped)
+		return;
+	plc_probe_dumped = true;
+
+	arr[0] = &plc_ps_start;
+	arr[1] = &plc_ps_exec;
+	arr[2] = &plc_ps_resp;
+
+	pr_info("PLCPROBE # probe: r/s/f v1\n");
+	pr_info("PLCPROBE # period_ns: %lld\n", ktime_to_ns(fused_cyclic.interval));
+	pr_info("PLCPROBE # samples: %llu\n", plc_ps_start.n);
+	pr_info("PLCPROBE # series_us: start_lat exec response  (1us buckets, cap %d)\n",
+		PLC_PROBE_BUCKETS - 1);
+	for (i = 0; i < 3; i++) {
+		struct plc_probe_series *s = arr[i];
+		u64 avg = s->n ? div_u64(s->sum_ns, (u32)s->n) : 0;
+
+		pr_info("PLCPROBE # stat_%s_us: min=%llu.%03llu avg=%llu.%03llu "
+			"p50=%lu p90=%lu p99=%lu p99.9=%lu p99.99=%lu max=%llu.%03llu "
+			"over=%llu n=%llu\n",
+			s->name,
+			s->min_ns / 1000, s->min_ns % 1000,
+			avg / 1000, avg % 1000,
+			plc_probe_pctl(s, 500000), plc_probe_pctl(s, 900000),
+			plc_probe_pctl(s, 990000), plc_probe_pctl(s, 999000),
+			plc_probe_pctl(s, 999900),
+			s->max_ns / 1000, s->max_ns % 1000, s->over, s->n);
+	}
+	pr_info("PLCPROBE # deadline_miss: %llu/%llu (%s)\n",
+		plc_probe_miss, plc_ps_start.n, plc_probe_miss ? "FAIL" : "none");
+}
 
 static struct plc_shm *plc_shm;
 static struct miscdevice plc_misc;
@@ -439,6 +630,9 @@ static enum hrtimer_restart plc_cyclic_handler(struct hrtimer *timer)
 		}
 	}
 
+	if (probe_rsf)
+		ct->probe_r = ct->next_nominal;	/* r_k：本拍的标称释放时刻 */
+
 	if (ct->task && fused_wake_timertthread) {
 		atomic_inc(&ct->pending);
 		wake_up_process(ct->task);
@@ -536,12 +730,15 @@ int plc_sleep(int clockid, int flags, struct plc_timespec *request,
 	if (READ_ONCE(shutdown) || READ_ONCE(shutdown_requested))
 		return 0;
 
+	plc_probe_mark_finish(&fused_cyclic);	/* 本拍工作结束 = f_k */
 	ret = plc_hr_timespec_sleep(
 		(const struct plc_timespec *)request,
 		(struct plc_timespec *)remain);
 	if (ret == -EINTR &&
 	    (READ_ONCE(shutdown) || READ_ONCE(shutdown_requested)))
 		return 0;
+	if (ret == 0)
+		plc_probe_mark(&fused_cyclic);	/* 绝对定时睡眠返回 = 本拍开始 */
 	return ret;
 }
 
@@ -616,6 +813,9 @@ int plc_timer_create(int clockid, void *sevp, void **timerid)
 	atomic_set(&ct->pending, 0);
 	atomic_set(&ct->overrun_acc, 0);
 	ct->interval = ns_to_ktime((u64)cycletest_interval_us * 1000ULL);
+	ct->probe_have_prev = false;
+	ct->probe_r = 0;
+	plc_probe_reset_all();	/* 每次 create/settime 都从零开始计数 */
 	ct->next_nominal = ktime_add_ns(ktime_get(), ct->interval);
 	ct->next_abs = ct->next_nominal;
 	ct->comp_warmup = 0;
@@ -643,6 +843,9 @@ int plc_timer_settime(void *timerid, int flags,
 
 	ct->interval = ns_to_ktime(interval_ns);
 	fused_fast_reset(interval_ns);
+	ct->probe_have_prev = false;
+	ct->probe_r = 0;
+	plc_probe_reset_all();	/* 每次 create/settime 都从零开始计数 */
 	ct->next_nominal = ktime_add_ns(ktime_get(), ct->interval);
 	ct->next_abs = ct->next_nominal;
 	hrtimer_start(&ct->hr, ct->next_abs, HRTIMER_MODE_ABS_PINNED_HARD);
@@ -668,6 +871,7 @@ int plc_timer_delete(void *timerid)
 	ct->active = false;
 	ct->task = NULL;
 	fused_fast.active = false;
+	plc_probe_dump();		/* 计时器销毁时输出统一探针块 */
 	return 0;
 }
 
@@ -701,6 +905,7 @@ int plc_sigwait(const unsigned long *set, int *sig)
 	long ret;
 
 	(void)set;
+	plc_probe_mark_finish(ct);	/* 本拍工作结束 = f_k */
 	for (;;) {
 		if (READ_ONCE(shutdown) || READ_ONCE(shutdown_requested))
 			return -EINTR;
@@ -708,6 +913,7 @@ int plc_sigwait(const unsigned long *set, int *sig)
 			atomic_dec(&ct->pending);
 			if (sig)
 				*sig = FUSED_CYCLIC_SIG;
+			plc_probe_mark(ct);
 			return 0;
 		}
 		ret = wait_event_interruptible(ct->waitq,
@@ -1038,6 +1244,7 @@ static void __exit runner_exit(void)
 	fused_export_samples_file();
 	fused_dump_samples();
 	fused_print_summary("final");
+	plc_probe_dump();	/* 兜底：用户态没调 delete 时也输出统一探针块 */
 
 	debugfs_remove(fused_stats_reset_dentry);
 	debugfs_remove(fused_stats_dentry);

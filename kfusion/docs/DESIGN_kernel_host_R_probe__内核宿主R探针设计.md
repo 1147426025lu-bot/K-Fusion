@@ -1,9 +1,15 @@
-# 内核宿主 R 探针设计（待实现）
+# 内核宿主 R 探针设计
 
-> 状态：**设计，未实现、未编译**。原因：当前 Pi4 上 `/lib/modules/5.15.86/build` 不存在，
-> apt 源里也没有 `raspberrypi-kernel-headers`（Debian 11 arm64 仓库），
-> 无法为这个定制内核（`kernel8-jh.img`，5.15.86-v8+）构建模块。
-> **本文件不含待验证代码，只有改动点与判定标准**，避免再出现"未经编译验证的代码入库"。
+> 状态：**✅ 已实现并实测（2026-10-23）**。结果见 `RESULT_RSF_3domain__三域统一探针.md`：
+> 内核态 `response` p50 = **22 µs**、p99 = 25、p99.9 = 32、miss **0/60012**，三轮复现。
+>
+> **阻塞是怎么解开的**（留给后来者）：不需要 `kernel8-jh.img` 的那份定制树 ——
+> 板上有 `/boot/config-5.15.86`，且 `CONFIG_MODVERSIONS` / `CONFIG_MODULE_SIG` 都没开，
+> 因此用 kernel.org 原版 5.15.86 + `make modules_prepare` 即可（vermagic 精确匹配）。
+> 详见 `RESULT_RSF_3domain` §6 复现命令。
+>
+> 原文（设计阶段）保留如下，改动点与验收标准均已按此落地；
+> 唯一偏离：`plc_probe_dump()` 除在 `plc_timer_delete` 处调用外，还在 `runner_exit` 兜底一次（幂等）。
 >
 > 相关：`PROBE_CONTRACT__统一测量契约.md`（r/s/f v1）、`RESULTS_ALL` §9.0、
 > `RESEARCH_DESIGN_ECoS_v1.0` §13 `feat(cost)`
