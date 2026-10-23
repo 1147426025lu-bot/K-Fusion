@@ -1,0 +1,21 @@
+{
+  "_comment": "反证用：只给 p 的相位、不给 q 也不给 step_us。相位是「全有或全无」——缺一个就让整张图退化为 fail-closed（环按代数环处理），不能把缺的那个默认成 0 µs。0 是个具体断言，不是「不知道」。",
+  "task": {
+    "name": "true_cycle_partial",
+    "entry": "p",
+    "period_us": 1000
+  },
+  "stages": [
+    {
+      "name": "p",
+      "fn": "p",
+      "context": "thread",
+      "offset_us": 0
+    },
+    {
+      "name": "q",
+      "fn": "q",
+      "context": "thread"
+    }
+  ]
+}

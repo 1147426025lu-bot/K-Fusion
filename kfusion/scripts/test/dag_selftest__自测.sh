@@ -154,6 +154,12 @@ expect_grep "给出摘掉延迟边后的相位序" "$OUT" "相位序：p -> q"
 expect_rc "严格模式 --fail-on-cycle 仍然拦（rc=4）" 4 \
     "$PY" "$DAG" "$FIX/true_cycle.summary.json" \
     --stages "$FIX/true_cycle.stages.json" --fail-on-cycle
+# 相位是"全有或全无"：只给一半就整体退化，不能把缺的那个默认成 0 µs
+expect_rc "相位只给一半 → 退化为 fail-closed（rc=5）" 5 \
+    "$PY" "$DAG" "$FIX/true_cycle.summary.json" \
+    --stages "$FIX/true_cycle.partial.stages.json" --fail-on-algebraic
+expect_grep "点名缺相位的阶段" "$(cat "$TMP/out.txt")" \
+    "没有相位" "q" "整体退化为 fail-closed"
 
 echo "=== 12. 跨周期的 DOT：闭合边要一眼看得出来 ==="
 "$PY" "$DAG" "$FIX/true_cycle.summary.json" \

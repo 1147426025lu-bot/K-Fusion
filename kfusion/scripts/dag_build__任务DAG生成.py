@@ -69,7 +69,9 @@
 | 代数环 | 环内每条边 phase(u) ≤ phase(v) | 一拍内首尾相接 ⇒ 无合法执行顺序 | 拒绝，`algebraic_loops[]` |
 | 相位未知 | 函数视图 / 骨架没给 `offset_us`/`step_us` | 无法证明跨了拍边界 | 一律按代数环（fail-closed） |
 
-相位是**人工给的设计事实**（每阶段在一拍内的释放时刻），分析不猜它。
+相位是**人工给的设计事实**（每阶段在一拍内的释放时刻），分析不猜它；
+而且是**全有或全无**——缺一个阶段就让 `phase.known=false` 整体退化，
+不把缺的那个默认成 0 µs（0 是具体断言，不是"不知道"）。
 给了相位之后，`topo_order_delayed` 给出"摘掉闭合边后按相位排"的顺序，
 规划器用它；`topo_order` 在有环时仍为空（严格模式不变）。
 
@@ -633,7 +635,17 @@ def build_stage_graph(summary, skeleton, stats, naive=False):
             ph = None
         if ph is not None:
             dag.phase[name] = float(ph)
+    # 相位是全有或全无：骨架给了 step_us 却没给某个阶段的 offset_us，那个阶段会被
+    # 默认成 0 µs——而 0 是个**具体断言**，不是"不知道"。宁可整体退化为 fail-closed，
+    # 也不能拿假设值去判环（与 Binder "任一入口解不出就整体放弃" 同一条纪律）。
+    missing = [n for n in stage_fns if n not in dag.phase]
     dag.phase_known = explicit_phase or (step is not None)
+    if missing and dag.phase_known:
+        print("!! 这些阶段没有相位（既无 offset_us 也无 step_us）：%s"
+              % ", ".join(missing), file=sys.stderr)
+        print("   → 相位不全，跨周期判定整体退化为 fail-closed（环按代数环处理）",
+              file=sys.stderr)
+        dag.phase_known = False
 
     missing = [f for f in fn2stage if f not in funcs]
     if missing:
