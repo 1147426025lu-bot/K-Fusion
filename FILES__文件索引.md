@@ -48,7 +48,7 @@
 - `kfusion/README.md/` （1 文件）
 - `kfusion/backend/` （23 文件）
 - `kfusion/diagnostics/` （1 文件）
-- `kfusion/docs/` （88 文件，含 `paper/` 论文稿与 `figures/`）
+- `kfusion/docs/` （90 文件，含 `paper/` 论文稿与 `figures/`）
 - `kfusion/examples/` （24 文件）
 - `kfusion/frontend/` （2 文件）
 - `kfusion/include/` （5 文件）
