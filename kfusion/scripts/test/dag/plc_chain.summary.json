@@ -1,5 +1,5 @@
 {
-  "version": 22,
+  "version": 23,
   "module": "/root/K-Fusion/kfusion/analysis/build/ecos_demo/plc_chain.ll",
   "functions": {
     "chain_main": {
@@ -39,6 +39,13 @@
       "unknown_calls": []
     }
   },
+  "callsites": [
+    {"caller": "chain_main", "callee": "sensor_prepare", "args": []},
+    {"caller": "chain_main", "callee": "fir_filter", "args": []},
+    {"caller": "chain_main", "callee": "pid_step", "args": ["-"]}
+  ],
+  "thread_entries": [
+  ],
   "interface_bindings": {
   },
   "alias_stats": {"aa_available": true, "pairs_checked": 148, "coarse_pairs": 0, "split_pairs": 0}

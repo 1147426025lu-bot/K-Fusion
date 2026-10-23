@@ -1,0 +1,120 @@
+{
+  "version": 23,
+  "module": "recursive_arg",
+  "functions": {
+    "top": {
+      "effects": [
+        "state_read"
+      ],
+      "allowed_contexts": [
+        "thread"
+      ],
+      "reads": [],
+      "writes": [],
+      "recursive": false,
+      "calls": [
+        "a_wrap",
+        "b_wrap"
+      ],
+      "unknown_calls": []
+    },
+    "a_wrap": {
+      "effects": [
+        "state_write"
+      ],
+      "allowed_contexts": [
+        "thread"
+      ],
+      "reads": [],
+      "writes": [
+        "@g_x"
+      ],
+      "recursive": false,
+      "calls": [
+        "a_core"
+      ],
+      "unknown_calls": []
+    },
+    "a_core": {
+      "effects": [
+        "state_write"
+      ],
+      "allowed_contexts": [
+        "thread"
+      ],
+      "reads": [],
+      "writes": [
+        "arg:0"
+      ],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "b_wrap": {
+      "effects": [
+        "state_read"
+      ],
+      "allowed_contexts": [
+        "thread"
+      ],
+      "reads": [],
+      "writes": [],
+      "recursive": false,
+      "calls": [
+        "b_core"
+      ],
+      "unknown_calls": []
+    },
+    "b_core": {
+      "effects": [
+        "state_read"
+      ],
+      "allowed_contexts": [
+        "thread"
+      ],
+      "reads": [
+        "arg:0"
+      ],
+      "writes": [],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    }
+  },
+  "callsites": [
+    {
+      "caller": "top",
+      "callee": "a_wrap",
+      "args": []
+    },
+    {
+      "caller": "top",
+      "callee": "b_wrap",
+      "args": [
+        "@g_x"
+      ]
+    },
+    {
+      "caller": "a_wrap",
+      "callee": "a_core",
+      "args": [
+        "@g_x"
+      ]
+    },
+    {
+      "caller": "b_wrap",
+      "callee": "b_core",
+      "args": [
+        "arg:0"
+      ]
+    }
+  ],
+  "thread_entries": [],
+  "interface_bindings": {},
+  "alias_stats": {
+    "aa_available": true,
+    "pairs_checked": 0,
+    "coarse_pairs": 0,
+    "split_pairs": 0
+  }
+}

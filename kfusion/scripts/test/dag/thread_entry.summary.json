@@ -1,0 +1,51 @@
+{
+  "version": 23,
+  "module": "thread_entry",
+  "functions": {
+    "main3": {
+      "effects": [
+        "state_write"
+      ],
+      "allowed_contexts": [
+        "thread"
+      ],
+      "reads": [],
+      "writes": [
+        "@g_shared"
+      ],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "entry_fn": {
+      "effects": [
+        "state_read"
+      ],
+      "allowed_contexts": [
+        "thread"
+      ],
+      "reads": [
+        "arg:0"
+      ],
+      "writes": [],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    }
+  },
+  "callsites": [],
+  "thread_entries": [
+    {
+      "caller": "main3",
+      "entry": "entry_fn",
+      "arg": "@g_shared"
+    }
+  ],
+  "interface_bindings": {},
+  "alias_stats": {
+    "aa_available": true,
+    "pairs_checked": 0,
+    "coarse_pairs": 0,
+    "split_pairs": 0
+  }
+}

@@ -33,6 +33,8 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 
 KIND_STYLE = {
     "call":      dict(color="#6b7280", ls="--", lw=1.2, label="call", arrow="->"),
+    "spawn":     dict(color="#0f766e", ls="--", lw=1.7,
+                      label="spawn (pthread_create)", arrow="->"),
     "data":      dict(color="#1d4ed8", ls="-",  lw=1.8, label="data (RAW)",
                       arrow="->"),
     "anti":      dict(color="#b45309", ls=":",  lw=1.8, label="anti (WAR)",
@@ -165,7 +167,7 @@ def draw(dag, out, title, show_evidence=True):
     handles = [plt.Line2D([], [], color=KIND_STYLE[k]["color"],
                           ls=KIND_STYLE[k]["ls"], lw=KIND_STYLE[k]["lw"],
                           label=KIND_STYLE[k]["label"])
-               for k in ("call", "data", "anti", "conflict", "candidate")
+               for k in ("call", "spawn", "data", "anti", "conflict", "candidate")
                if k in seen_kind]
     if handles:
         ax.legend(handles=handles, loc="upper center", fontsize=7.0,

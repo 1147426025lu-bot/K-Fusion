@@ -1,0 +1,163 @@
+{
+  "version": 23,
+  "module": "/tmp/cyc_n.ll",
+  "functions": {
+    "arg_decimal": {
+      "effects": ["state_read", "external"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": ["alloca:arg_decimal:t12"],
+      "writes": [],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": ["strtol"]
+    },
+    "check_args_logic": {
+      "effects": ["blocking_io", "state_read", "state_write", "external"],
+      "allowed_contexts": ["thread"],
+      "reads": ["@config.11", "@config.12", "@config.13", "@config.7", "@config.9"],
+      "writes": ["@config.7", "@config.9"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": ["lib_get_stream"]
+    },
+    "init_thread_param": {
+      "effects": ["state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": [],
+      "writes": ["arg:0", "arg:5"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "main": {
+      "effects": ["sleep", "blocking_io", "state_read", "state_write", "external"],
+      "allowed_contexts": ["thread"],
+      "reads": ["@config.0", "@config.1", "@config.10", "@config.11", "@config.12", "@config.13", "@config.3", "@config.4", "@config.5", "@config.6", "@config.7", "@config.8", "@config.9", "@running", "@timerfd", "alloca:arg_decimal:t12", "alloca:main:t1", "alloca:print_hist:t11", "heap:?", "heap:calloc#2", "heap:calloc#3"],
+      "writes": ["@config.0", "@config.1", "@config.10", "@config.11", "@config.12", "@config.13", "@config.2", "@config.3", "@config.4", "@config.5", "@config.6", "@config.7", "@config.8", "@config.9", "@polltimer", "@running", "@timerfd", "alloca:main:t0", "alloca:print_hist:t11", "heap:calloc#2", "heap:calloc#3", "heap:malloc#4", "heap:malloc#5"],
+      "recursive": false,
+      "calls": ["check_args_logic", "init_thread_param", "parse_args", "print_help", "print_hist", "print_stat"],
+      "unknown_calls": ["calloc", "close", "free", "getpid", "lib_get_stream", "malloc"]
+    },
+    "parse_args": {
+      "effects": ["state_read", "state_write", "external"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": ["alloca:arg_decimal:t12", "heap:?"],
+      "writes": ["@config.0", "@config.1", "@config.10", "@config.11", "@config.12", "@config.13", "@config.2", "@config.3", "@config.4", "@config.5", "@config.6", "@config.7", "@config.8", "@config.9"],
+      "recursive": false,
+      "calls": ["arg_decimal"],
+      "unknown_calls": ["getopt_long", "getoptargp", "getoptindp"]
+    },
+    "print_help": {
+      "effects": ["blocking_io"],
+      "allowed_contexts": ["thread"],
+      "reads": [],
+      "writes": [],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "print_hist": {
+      "effects": ["blocking_io", "state_read", "state_write", "external"],
+      "allowed_contexts": ["thread"],
+      "reads": ["@config.3", "@config.4", "alloca:print_hist:t11", "arg:0", "heap:?"],
+      "writes": ["alloca:print_hist:t11"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": ["putchar"]
+    },
+    "print_stat": {
+      "effects": ["blocking_io", "state_read"],
+      "allowed_contexts": ["thread"],
+      "reads": ["arg:0", "heap:?"],
+      "writes": [],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "testthread": {
+      "effects": ["sleep", "blocking_io", "state_read", "state_write", "external"],
+      "allowed_contexts": ["thread"],
+      "reads": ["@config.12", "@config.13", "@config.2", "@config.3", "@running", "@timerfd", "alloca:testthread:t10", "alloca:testthread:t7", "alloca:testthread:t8", "alloca:testthread:t9", "arg:0", "heap:?"],
+      "writes": ["alloca:testthread:t6", "alloca:testthread:t8", "alloca:testthread:t9", "heap:?"],
+      "recursive": false,
+      "calls": ["timediff_us", "timediff_us_timer", "timerdev_getstatus", "tsnorm"],
+      "unknown_calls": ["clock_gettime", "gettid", "poll"]
+    },
+    "timediff_us": {
+      "effects": ["pure"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": [],
+      "writes": [],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "timediff_us_timer": {
+      "effects": ["pure"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": [],
+      "writes": [],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "timerdev_getstatus": {
+      "effects": ["blocking_io", "state_read"],
+      "allowed_contexts": ["thread"],
+      "reads": ["@timerfd"],
+      "writes": [],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "tsnorm": {
+      "effects": ["state_read", "state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": ["arg:0"],
+      "writes": ["arg:0"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    }
+  },
+  "callsites": [
+    {"caller": "main", "callee": "parse_args", "args": ["-", "arg:1"]},
+    {"caller": "main", "callee": "print_help", "args": []},
+    {"caller": "main", "callee": "check_args_logic", "args": []},
+    {"caller": "main", "callee": "print_help", "args": []},
+    {"caller": "main", "callee": "init_thread_param", "args": ["heap:malloc#5", "-", "-", "-", "-", "heap:malloc#4", "-"]},
+    {"caller": "main", "callee": "print_stat", "args": ["heap:?", "-"]},
+    {"caller": "main", "callee": "print_hist", "args": ["heap:calloc#2", "-"]},
+    {"caller": "parse_args", "callee": "arg_decimal", "args": ["heap:?"]},
+    {"caller": "parse_args", "callee": "arg_decimal", "args": ["heap:?"]},
+    {"caller": "parse_args", "callee": "arg_decimal", "args": ["heap:?"]},
+    {"caller": "parse_args", "callee": "arg_decimal", "args": ["heap:?"]},
+    {"caller": "parse_args", "callee": "arg_decimal", "args": ["heap:?"]},
+    {"caller": "parse_args", "callee": "arg_decimal", "args": ["heap:?"]},
+    {"caller": "parse_args", "callee": "arg_decimal", "args": ["heap:?"]},
+    {"caller": "parse_args", "callee": "arg_decimal", "args": ["heap:?"]},
+    {"caller": "parse_args", "callee": "arg_decimal", "args": ["heap:?"]},
+    {"caller": "parse_args", "callee": "arg_decimal", "args": ["heap:?"]},
+    {"caller": "testthread", "callee": "timerdev_getstatus", "args": ["alloca:testthread:t8"]},
+    {"caller": "testthread", "callee": "tsnorm", "args": ["alloca:testthread:t9"]},
+    {"caller": "testthread", "callee": "timerdev_getstatus", "args": ["alloca:testthread:t8"]},
+    {"caller": "testthread", "callee": "tsnorm", "args": ["alloca:testthread:t9"]},
+    {"caller": "testthread", "callee": "timediff_us", "args": ["-", "-"]},
+    {"caller": "testthread", "callee": "timerdev_getstatus", "args": ["alloca:testthread:t10"]},
+    {"caller": "testthread", "callee": "timediff_us_timer", "args": ["-", "-"]},
+    {"caller": "testthread", "callee": "timediff_us", "args": ["-", "-"]}
+  ],
+  "thread_entries": [
+    {"caller": "main", "entry": "testthread", "arg": "heap:malloc#5"}
+  ],
+  "interface_bindings": {
+    "arg_decimal": {"0": ["heap:?"]},
+    "init_thread_param": {"0": ["heap:malloc#5"], "5": ["heap:malloc#4"]},
+    "parse_args": {"1": ["arg:1"]},
+    "print_hist": {"0": ["heap:calloc#2"]},
+    "print_stat": {"0": ["heap:?"]},
+    "timerdev_getstatus": {"0": ["alloca:testthread:t10", "alloca:testthread:t8"]},
+    "tsnorm": {"0": ["alloca:testthread:t9"]}
+  },
+  "alias_stats": {"aa_available": true, "pairs_checked": 3521, "coarse_pairs": 0, "split_pairs": 0}
+}

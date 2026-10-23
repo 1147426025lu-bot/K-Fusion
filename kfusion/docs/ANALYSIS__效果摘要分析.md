@@ -277,16 +277,22 @@ alias_stats: {'aa_available': True, 'pairs_checked': 3521,
 本文的 `reads` / `writes` / `calls` 是 `dag_build__任务DAG生成.py` 的唯一输入。
 那份文档处理的是本文**刻意不处理**的问题：区域名跨函数怎么比、传播导致的假环怎么抑制。
 
-三条衔接约定（改本文输出时必须同步）：
+五条衔接约定（改本文输出时必须同步）：
 
-1. **`arg:N` 是函数局部名**，跨函数不可直接比较。DAG 侧靠 `interface_bindings`
-   （形参 → 所有调用点传入的区域）分三级：唯一绑定→已证 / 多绑定→候选 / 无绑定→标记未闭合。
+1. **`arg:N` 是函数局部名**，跨函数不可直接比较。DAG 侧靠 `callsites`
+   （调用点明细，可递归）+ `thread_entries` + `interface_bindings`（兜底）围成三级：
+   唯一绑定→已证 / 多绑定→候选 / 无绑定→标记未闭合。
    → **不要**为了"让 DAG 好看"而在本文里把 `arg:N` 改名成别的形态，语义会丢。
-2. **`calls` 是 DAG 侧的唯一顺序来源**。它只记直接调用；`pthread_create` 这类
-   "把函数指针交给外部 API"的线程入口**不在里面**——`cyclictest` 的
-   `main → testthread` 就是这样，最终靠数据边补回。若将来要补，应单独导出
-   `thread_entries`，不要塞进 `calls`（否则会把"创建即执行"错当成调用）。
-3. **区域名只在同一次分析内可比**。`heap:<callee>#<N>` 的 `N` 是模块级单调计数，
+2. **`calls` 只记直接调用**。`pthread_create` 这类"把函数指针交给外部 API"的线程入口
+   **不在里面**（`cyclictest` 的 `main → testthread` 就是），已在 v23 单独导出为
+   `thread_entries`（`{caller, entry, arg}`），**不要塞进 `calls`**——
+   否则会把"创建即执行"错当成调用，还会污染调用图的可达性计算。
+3. **`callsites` 是接口闭合的唯一依据**。聚合的 `interface_bindings` 丢了调用者身份，
+   遇到相对名 `arg:K` 就解不动；`callsites` 才能递归。两者都输出，聚合视图只作兜底。
+4. **区域名只在同一次分析内可比**。`heap:<callee>#<N>` 的 `N` 是模块级单调计数，
    换优化级别就会变。跨 module 合并摘要在当前版本**不支持**。
+5. **`heap:?` 有三种成因，别混为一谈**：经内存 load（31）、外部 API 返回（18）、
+   `phi` 合流（2）——合计 51 处出现，去重后是 7 个不同名字。用 `PLC_EFFECT_SUMMARY_WHY=1` 可以把产生点逐条打出来
+   （默认关闭，不污染正常输出）。
 
 见 `DAG__任务依赖图生成.md`。

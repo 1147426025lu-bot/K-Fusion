@@ -22,17 +22,23 @@
 
 ---
 
-## 2. 边的四类语义（方向性不同，绝不能混）
+## 2. 边的语义（方向性不同，绝不能混）
 
 | kind | 条件 | 约束 | 可证性 |
 |---|---|---|---|
 | `call` | A（传递地）调用 B | A 在 B 之前 | 可证 |
+| `spawn` | A 用 `pthread_create` 启动 B | A 在 B 的首次执行之前 | 可证 |
 | `data` | A 写 r，B 读 r（RAW） | A 在 B 之前 | 可证（r 须为模块级具体区域） |
 | `anti` | A 读 r，B 写 r（WAR） | A 在 B 之前 | 可证；**已有反向 RAW 时不再重复** |
 | `conflict` | A 写 r，B 也写 r（WAW） | **无方向**：只禁止重排/融合 | 可证 |
 | `candidate` | 区域只到 `arg:N`（多绑定） | 不详 | **未证明**，不得当依赖 |
 
 `conflict` 单独一类是关键：两条有向边同时画 a→b 与 b→a，读图的人会以为存在环，而实际是"谁先谁后自由，但两者不能合并、不能调换"。
+
+`spawn` 也必须单列，不能并进 `call`：`pthread_create(tid, attr, entry, arg)` 是把 `entry`
+交给库/内核去**起**，调用图里根本没有这条边（`main` 的 `calls` 里没有 `testthread`），
+而且"创建即执行"与"直接调用"的时序语义不同。本项目里跨域任务就是线程，
+这条关系必须显式建模——否则最该关心的一类依赖恰好是盲区。
 
 ---
 
@@ -86,26 +92,40 @@ $ dag_build … caller_trap.summary.json --naive --fail-on-cycle
 
 ---
 
-## 4. 区域名的三级具体化（`arg:N` 不能跨函数硬比）
+## 4. 接口闭合：把 `arg:N` 变成真名
 
 `arg:N` 是**函数局部**名字：`fir_filter` 的 `arg:0` 与 `pid_step` 的 `arg:0` 是两个不相干的对象。
-直接按名字配对会造出大量假边。为此 pass v22 新增 `interface_bindings`：
+直接按名字配对会造出大量假边。闭接口就是把它换成模块级真名，并明确"换不出来时是什么情况"。
 
-```json
-"interface_bindings": {
-  "stage_a": { "0": ["@buf_x"] },              // 唯一调用点、唯一区域
-  "stage_b": { "0": ["@buf_x", "@buf_y"] },    // 两个调用点绑到不同对象
-  "parse_args": { "1": ["arg:1"] }             // 绑定本身还是相对名
-}
+### 4.1 三个信息源，可靠性从高到低
+
+| 来源 | 内容 | 能不能递归 |
+|---|---|---|
+| `callsites` | 谁、在哪个调用点、每个实参是什么区域 | **能**（实参本身是上层的 `arg:K` 时继续往上解）|
+| `thread_entries` | `pthread_create` 的 `(entry, arg)`：entry 的 `arg:0` 就是那个 `arg` | 能（arg 也可能是上层的 `arg:K`）|
+| `interface_bindings` | 形参 → 全部调用点区域的聚合 | 不能（丢了调用者身份，只知道"有几种"）|
+
+前两个是 pass v23 新增的。聚合视图单独存在时会丢信息：遇到 `arg:1` 这种相对名，
+不知道是**哪个**调用者传的，就没法再往上走一层。
+
+递归解析 `b_core` 的 `arg:0` 的实际路径：
+
+```
+b_core  arg:0  ← b_wrap 调用点传的是 arg:0（b_wrap 自己的形参）
+               ← top   调用点传的是 @g_x
+        ⇒ @g_x                                   （两跳，聚合视图做不到）
 ```
 
-DAG 生成器据此分三级：
+深度上限 4，且带 `(函数, 区域)` 的已访问集合防环。**只要有一个入口解不出来就整体放弃**
+（返回 `none`），不允许"部分正确"——半对的区域名比没有更危险。
+
+### 4.2 解析结果三态
 
 | 级别 | 条件 | 处理 |
 |---|---|---|
-| **proven** | 唯一调用点、绑到唯一具体区域 | 落地成真名，可连 `data` |
-| **alternatives** | 多个调用点绑到不同区域 | 真信息但不确定这一拍走哪条 → `candidate` |
-| **unresolved** | 未被调用 / 绑定仍是相对名 / `heap:?` | **零信息**，不造边，节点标 `interface_unresolved` |
+| **proven** | 所有入口都解到同一个具体区域 | 落地成真名，可连 `data` |
+| **alternatives** | 解出多个不同区域 | 真信息但不确定这一拍走哪条 → `candidate` |
+| **unresolved** | 解不出（未被调用 / 相对名 / `heap:?`） | **零信息**，不造边，节点标 `interface_unresolved` |
 
 第三级最容易搞错。两个函数都带未解析的 `arg:0`，**同名不代表任何别名关系**——
 为它造边是纯噪声；但"不造边"也不能被读成"没有依赖"。
@@ -113,8 +133,6 @@ DAG 生成器据此分三级：
 
 > 实现时踩过一个坑：备选区域内部存成 `alt:@buf_x` 以便区分，但比较前忘了剥前缀，
 > 结果与已证名永远配不上，候选边被**静默丢弃**。静默丢边比多一条噪声边危险得多。
-
----
 
 ## 5. 实测
 
@@ -148,11 +166,11 @@ $ bash kfusion/scripts/ecos_demo__效果摘要端到端.sh      # 第 6 步
 | 指标 | 值 |
 |---|---|
 | 节点 | 13 |
-| 边 | 17（call 11 / data 5 / conflict 1） |
+| 边 | 17（call 11 / **spawn 1** / data 4 / conflict 1） |
 | 候选 | 0 |
 | 环 | 无 |
-| 区域：唯一绑定 / 多绑定 / 未解析 | 5 / 0 / 8 |
-| `interface_bindings` 覆盖的被调函数 | 7 |
+| 区域：唯一绑定 / 多绑定 / 未解析 | **6** / 0 / **7**（v22 时是 5 / 0 / 8）|
+| `callsites` / `thread_entries` | 25 条 / 1 条（`main → testthread`）|
 
 拓扑序：
 
@@ -165,7 +183,7 @@ main → init_thread_param → parse_args → arg_decimal → check_args_logic
 ![cyclictest DAG](figures/dag/cyclictest_dag.png)
 
 > 图：`kfusion/docs/figures/dag/cyclictest_dag.png`（橙色框 = 接口未闭合的节点）
-> 数据：`figures/dag/cyc_dag_out.json`　画图：`dag_plot__DAG绘图.py`
+> 数据：`figures/dag/cyclictest.dag.json`　画图：`dag_plot__DAG绘图.py`
 
 **手审两例**（对着源码看，不是只看统计）：
 
@@ -175,11 +193,51 @@ main → init_thread_param → parse_args → arg_decimal → check_args_logic
    两条边落在**不同字段**上（RAW 在 .11/.12/.13，WAW 在 .7/.9），可以并存。
    这正是"同一对节点可以有多种约束"的例子。
 
-2. `main → testthread [data] @config.*`
-   —— `testthread` 不在 `main.calls` 里（它是 `pthread_create` 的函数指针参数，
-   **调用图看不见线程入口**）。这条依赖是数据边补回来的：
-   `main` 写好 `config` 才创建线程，线程读 `config`。
-   这说明**只靠调用图会漏掉跨线程依赖**——也说明数据边不是调用图的冗余装饰。
+2. `main → testthread [spawn] pthread_create(testthread)`
+   —— `testthread` 不在 `main.calls` 里（它是 `pthread_create` 的函数指针参数）。
+   v22 只能靠数据边"猜"到这条依赖（`main` 写 `@config.*`、线程读）；
+   v23 由 `thread_entries` 直接给出，并升级成语义正确的 `spawn`。
+   同时 `testthread` 的 `arg:0` 被绑到 `heap:malloc#5`（创建时传入的那个结构体），
+   所以它不再出现在 `interface_unresolved` 里。
+
+   → 教训：**只靠调用图会漏掉跨线程依赖**，而这类依赖恰恰是本项目最关心的。
+   顺带说明数据边不是调用图的冗余装饰——在 v22 里它是唯一的补救手段。
+
+### 5.3 接口闭合的收益与剩余缺口
+
+先弄清 `heap:?` 到底是什么（pass 的 `PLC_EFFECT_SUMMARY_WHY=1` 会打印产生点）：
+
+| 产生方式 | 条数 |
+|---|---|
+| 经内存 `load ptr, ptr` 得到的指针（如 `par->hist`）| **31** |
+| 外部调用返回的指针（全部是 `getoptargp()` / `getoptindp()`）| **18** |
+| `phi ptr` 合流 | **2** |
+| 合计（区域**出现次数**，去重后是 7 个不同名字）| **51** |
+
+按函数：`parse_args` 28（几乎都是 `getoptargp` 及其 load）、`print_hist` 15、`main` 5、
+`testthread` 2、`print_stat` 1。
+
+本轮的闭合只做了**模块内可证**的那两类：
+
+| 机制 | 效果 |
+|---|---|
+| 递归 `callsites` | `arg:N` 可跨多层解析（构造用例 `b_core.arg:0 → @g_x` 两跳）|
+| `thread_entries` | `testthread.arg:0 → heap:malloc#5`；`main→testthread` 升级为 `spawn` |
+| 净效果 | 唯一绑定 5 → **6**，未解析 8 → **7**，边数不变但边类型更准（data → spawn）|
+
+**剩余 7 个未闭合区域，缺口是明确的，不是含糊的**：
+
+1. **经内存读出的指针**（31 条）——需要 points-to / field-sensitive 分析。
+   我们只有"根对象"级别的划分，`par->hist` 这种"结构体字段指向另一块内存"跨不过去。
+2. **外部函数返回的指针**（18 条）——需要**API 指针摘要**（如 `getoptargp() → 静态缓冲区`）。
+   这跟 `kKeep` 白名单是同一类知识：由人声明，不靠分析猜。
+3. **PHI 合流**（2 条）——需要路径敏感或至少值集分析。
+
+> 注意：这 7 个未闭合区域都落在 `main`、`parse_args`、`print_hist`、`print_stat`、`testthread`
+> 五个节点上，而它们相对 `main` 的顺序已由 `call`/`spawn` 边定死。
+> 未判定的是**兄弟节点之间**的顺序（例如 `print_hist` 与 `testthread`）——
+> 这恰好是最可能被并行/融合的部分。所以这是**真缺口**，不能因为"它们都是 main 的子节点"
+> 就当作无害。
 
 ---
 
@@ -205,8 +263,11 @@ main → init_thread_param → parse_args → arg_decimal → check_args_logic
    所以看起来的"环"未必是同一拍内的环。
 5. **`conflict` 只表达"不可重排"**，拓扑序里这两种节点的先后是任意的，
    不能当成执行建议。
-6. **未闭合的接口是真缺口**。`cyclictest` 有 5 个节点带 `interface_unresolved`
-   （`heap:?` / `arg:0`），它们的跨阶段依赖**未判定**，不是"没有依赖"。
+6. **未闭合的接口是真缺口**。`cyclictest` 仍有 5 个节点带 `interface_unresolved`
+   （`heap:?` 及 `print_stat` 的 `arg:0`），跨阶段依赖**未判定**，不是"没有依赖"。
+   缺口分类见 §5.3：内存 load 31 条 / 外部 API 18 条 / PHI 2 条。
+7. **`callsites` 假设闭世界**：只统计本模块内的调用点。若某函数还会被模块外的代码调用，
+   它的"唯一绑定"就可能不唯一，而分析看不见。当前只在单模块（cyclictest / plc_chain）上验证。
 
 ---
 
@@ -229,7 +290,8 @@ bash scripts/test/dag_selftest__自测.sh python3
 ```
 
 自测覆盖：示例对照、陷阱 1/2/3、`--naive` 反证、真环检出、三级具体化、
-退出码契约（3=与人工图不符 / 4=有环）、DOT 产物。
+递归两跳解析、线程入口绑定（`spawn` ≠ `call`）、
+退出码契约（3=与人工图不符 / 4=有环）、DOT 产物。**21/21**。
 
 ---
 
@@ -242,5 +304,19 @@ DAG 已经能给出"谁在谁之前"和"谁不能和谁合并"，够 `FusionPlan
 2. 每个节点的 `effects`（能否进目标域）；
 3. 每个节点的 `exec` 实测（融合的收益估计）。
 
-仍缺的两块：**跨周期依赖**（决定反馈环能不能合并）与**接口闭合**
-（把 `heap:?` / 相对 `arg:N` 变成具体区域，需要调用点敏感的指针分析）。
+接口闭合已经做完**模块内可证**的那部分（递归 `callsites` + `thread_entries`，
+见 §4），剩下的缺口是分类明确的：
+
+| 缺口 | 条数 | 需要什么 |
+|---|---|---|
+| 经内存 load 得到的指针 | 31 | points-to / field-sensitive |
+| 外部 API 返回的指针 | 18 | API 指针摘要（人声明，如 `getoptargp() → 静态缓冲`）|
+| `phi` 合流 | 2 | 路径敏感或值集分析 |
+
+**跨周期依赖**仍未建模：第 k 拍与第 k+1 拍之间的关系（真正的反馈回路）不在图里。
+这一项对融合决策影响最大——没有它，`pid_step → sensor_prepare` 这种反馈环
+在图上根本看不见，会让人误以为整条链可以任意切分。
+
+所以进 PR 4 之前要想清楚一件事：第一版融合**只在拍内**做
+（把同一拍的几个阶段合并/换域），跨拍的反馈环一律不碰。这样 `FusionPlanner`
+的搜索空间是合法的，而不是建立在"图上没有环"这个假前提上。

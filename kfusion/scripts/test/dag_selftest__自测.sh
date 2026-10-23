@@ -70,7 +70,7 @@ if [ "$RC" = 0 ] && ! printf '%s' "$OUT" | grep -q "环"; then
 else
     bad "预期无环，实际 rc=$RC"
 fi
-expect_grep "调用-数据重叠被解释掉" "$OUT" "call 1 / data 0" "调用已解释 1"
+expect_grep "调用-数据重叠被解释掉" "$OUT" "call 1 / spawn 0 / data 0" "调用已解释 1"
 
 echo "=== 3. 反证：--naive 关掉抑制后必须成环 ==="
 expect_rc "--naive 检出环（rc=4）" 4 \
@@ -103,12 +103,23 @@ else
     ok "接口未闭合的节点没有出边（零信息不造边）"
 fi
 
-echo "=== 7. 退出码契约 ==="
+echo "=== 7. 接口闭合：两层相对名（聚合视图做不到）==="
+OUT="$("$PY" "$DAG" "$FIX/recursive_arg.summary.json" 2>&1)"
+expect_grep "b_core 的 arg:0 递归两跳解到 @g_x" "$OUT" "a_core" "b_core" "[data    ] @g_x"
+expect_grep "两处 arg:0 都被具体化" "$OUT" "唯一绑定 2" "完全未解析 0"
+
+echo "=== 8. 线程入口：spawn ≠ call，且 arg:0 被绑定 ==="
+OUT="$("$PY" "$DAG" "$FIX/thread_entry.summary.json" --fail-on-cycle 2>&1)"
+expect_grep "pthread_create → spawn 边" "$OUT" "[spawn   ] pthread_create(entry_fn)"
+expect_grep "线程入口的 arg 绑定到形参 0" "$OUT" "唯一绑定 1"
+expect_grep "创建-数据重叠并入 spawn，不出重复 data 边" "$OUT" "spawn 1 / data 0"
+
+echo "=== 9. 退出码契约 ==="
 expect_rc "人工图写错 → rc=3" 3 \
     "$PY" "$DAG" "$FIX/plc_chain.summary.json" --stages "$SKEL" \
     --expect "fir_filter->sensor_prepare" --fail-on-mismatch
 
-echo "=== 8. DOT 产物 ==="
+echo "=== 10. DOT 产物 ==="
 "$PY" "$DAG" "$FIX/plc_chain.summary.json" --stages "$SKEL" \
     --dot "$TMP/x.dot" --quiet >/dev/null 2>&1
 if [ -s "$TMP/x.dot" ] && grep -q "digraph task_dag" "$TMP/x.dot"; then

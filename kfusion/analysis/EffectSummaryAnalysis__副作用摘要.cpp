@@ -217,6 +217,28 @@ public:
       N = "heap:?";
     }
 
+    // PLC_EFFECT_SUMMARY_WHY=1 时交代"这个区域名是怎么来的"。
+    // 目的：闭接口之前先弄清 heap:? 到底是哪类指针，别对着想象做优化。
+    if (N == "heap:?" || N == "arg:?") {
+      static const bool Why = std::getenv("PLC_EFFECT_SUMMARY_WHY") != nullptr;
+      if (Why) {
+        std::string Dump;
+        raw_string_ostream DS(Dump);
+        DS << "???";
+        if (Root) {
+          if (auto *I = dyn_cast<Instruction>(Root)) {
+            const Function *PF = I->getFunction();
+            DS << (PF ? PF->getName() : "?") << ": ";
+            I->print(DS);
+          } else {
+            DS << "non-inst root: ";
+            Root->print(DS);
+          }
+        }
+        errs() << "[RegionWhy] " << N << " <- " << DS.str() << "\n";
+      }
+    }
+
     Names[Root] = N;
     return N;
   }
@@ -312,10 +334,25 @@ public:
     RegionNamer Namer;
     AliasStat AStat;
 
-    // 接口绑定：被调函数 -> 形参序号 -> 所有调用点传进来的区域。
+    // 接口绑定：被调函数 -> 形参序号 -> 所有调用点传进来的区域（聚合视图）。
     // 用途：DAG 生成时把 `arg:0` 这种**函数局部**的名字具体化。
-    // 只有"全部调用点都绑到同一个具体区域"才允许具体化，否则只能当候选边。
     std::map<std::string, std::map<unsigned, std::set<std::string>>> Interface;
+
+    // 调用点明细：保留"哪个函数、在哪个调用点、传了什么"。
+    // 聚合视图丢掉了调用者身份，遇到 `arg:1`（相对名）就没法继续解析；
+    // 有了明细才能递归到上层调用者，这是接口闭合的关键。
+    struct SiteRec {
+      std::string Caller;
+      std::string Callee;
+      std::vector<std::string> Args;   // 非指针实参记 "-"，保持下标对齐
+    };
+    std::vector<SiteRec> Sites;
+
+    // 线程入口：pthread_create(thread, attr, entry, arg) 把 entry 交给内核/库去起线程，
+    // 所以 entry **不在调用图里**（main 的 calls 里没有 testthread）。
+    // 这是本项目的核心场景（跨域任务就是线程），必须单独建模，不能塞进 calls
+    // ——"创建即执行"和"直接调用"的时序语义不同。
+    std::vector<SiteRec> ThreadEntries;
 
     // 拿到函数级 AA（opt 的标准 pipeline 会注册 AAManager / BasicAA）
     FunctionAnalysisManager *FAM = nullptr;
@@ -375,13 +412,42 @@ public:
             S.Sites[CN.str()].push_back(CB);
 
             // 登记这次调用把哪个区域绑到了形参上（供 DAG 生成具体化 arg:N）
+            SiteRec R;
+            R.Caller = FName;
+            R.Callee = CN.str();
+            R.Args.reserve(CB->arg_size());
             for (unsigned i = 0; i < CB->arg_size(); i++) {
               Value *A = CB->getArgOperand(i);
-              if (!A->getType()->isPointerTy())
+              if (!A->getType()->isPointerTy()) {
+                R.Args.push_back("-");
                 continue;
-              Interface[CN.str()][i].insert(Namer.of(A, ArgMap));
+              }
+              std::string Reg = Namer.of(A, ArgMap);
+              Interface[CN.str()][i].insert(Reg);
+              R.Args.push_back(Reg);
             }
+            if (Sites.size() < 4096)      // 上限：避免巨型模块把 JSON 撑爆
+              Sites.push_back(std::move(R));
             continue;
+          }
+
+          /* 线程入口：pthread_create(tid, attr, entry, arg)
+           * entry 是交给库去"起"的函数，调用图看不见它；
+           * arg 就是 entry 的第 0 个形参实际指向的对象。
+           * 单独记 `thread_entries`，不并进 calls（语义不同）。 */
+          if (CN == "pthread_create" && CB->arg_size() >= 4) {
+            Value *EntryV = CB->getArgOperand(2)->stripPointerCasts();
+            if (auto *Entry = dyn_cast<Function>(EntryV)) {
+              SiteRec R;
+              R.Caller = FName;
+              R.Callee = Entry->getName().str();
+              Value *ThreadArg = CB->getArgOperand(3);
+              R.Args.push_back(ThreadArg->getType()->isPointerTy()
+                                   ? Namer.of(ThreadArg, ArgMap)
+                                   : "-");
+              if (ThreadEntries.size() < 256)
+                ThreadEntries.push_back(std::move(R));
+            }
           }
 
           /* 外部声明：按名字判效果 */
@@ -516,7 +582,7 @@ public:
     // ---- 3. 输出 JSON ----
     std::string Buf;
     raw_string_ostream OS(Buf);
-    OS << "{\n  \"version\": 22,\n  \"module\": \"" << M.getModuleIdentifier()
+    OS << "{\n  \"version\": 23,\n  \"module\": \"" << M.getModuleIdentifier()
        << "\",\n  \"functions\": {\n";
     bool FirstFn = true;
     for (auto &KV : Sum) {
@@ -582,6 +648,28 @@ public:
       OS << "]\n    }";
     }
     OS << "\n  },\n";
+
+    // 调用点明细（供 DAG 侧递归解析相对名 arg:N）
+    OS << "  \"callsites\": [";
+    for (size_t i = 0; i < Sites.size(); i++) {
+      const SiteRec &R = Sites[i];
+      OS << (i ? ",\n" : "\n") << "    {\"caller\": \"" << R.Caller
+         << "\", \"callee\": \"" << R.Callee << "\", \"args\": [";
+      for (size_t k = 0; k < R.Args.size(); k++)
+        OS << (k ? ", " : "") << "\"" << R.Args[k] << "\"";
+      OS << "]}";
+    }
+    OS << "\n  ],\n";
+
+    // 线程入口（pthread_create 的 entry 与它的 arg）
+    OS << "  \"thread_entries\": [";
+    for (size_t i = 0; i < ThreadEntries.size(); i++) {
+      const SiteRec &R = ThreadEntries[i];
+      OS << (i ? ",\n" : "\n") << "    {\"caller\": \"" << R.Caller
+         << "\", \"entry\": \"" << R.Callee << "\", \"arg\": \""
+         << (R.Args.empty() ? "-" : R.Args[0]) << "\"}";
+    }
+    OS << "\n  ],\n";
 
     // 接口绑定：形参 -> 调用点区域集合（长度 > 1 表示多态，不能具体化）
     OS << "  \"interface_bindings\": {";

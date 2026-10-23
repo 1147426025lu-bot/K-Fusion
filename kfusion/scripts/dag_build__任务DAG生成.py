@@ -88,30 +88,94 @@ def short(region, limit=40):
 
 # ---------------------------------------------------------------- 区域具体化
 
-def concretize(fn, regions, bindings, stats):
-    """返回 (proven, alternatives, unresolved)，三级语义见文件头。"""
-    proven, alts, unresolved = set(), set(), set()
-    for r in regions or []:
-        if is_concrete(r):
-            proven.add(r)
-            continue
-        if r.startswith("arg:"):
-            idx = r[4:]
-            bound = (bindings.get(fn) or {}).get(idx) or []
-            concrete = sorted(b for b in bound if is_concrete(b))
-            if len(concrete) == 1 and len(bound) == 1:
-                proven.add(concrete[0])
-                stats["concretized"] += 1
-            elif len(concrete) >= 1:
-                alts.update("alt:" + b for b in concrete)
+class Binder:
+    """把函数局部的 `arg:N` 具体化。
+
+    三个信息源（按可靠性从高到低）：
+      1. `callsites`   —— 调用点明细：谁、在哪个调用点、传了什么。**可以递归**
+                          （实参本身是上层的 arg:K 时，继续往上解）
+      2. `thread_entries` —— pthread_create 的 (entry, arg)：entry 的 arg:0 就是那个 arg
+      3. `interface_bindings` —— 聚合视图，只在没有 callsites 时兜底（丢掉了调用者身份）
+
+    解析结果三态（见文件头）：unique / multi / none。`none` 是**零信息**，
+    调用方必须据此标"接口未闭合"，不能当成"没有别名"。
+    """
+
+    MAX_DEPTH = 4          # 递归深度：超过就放弃（宁缺勿错）
+
+    def __init__(self, summary):
+        self.bindings = summary.get("interface_bindings") or {}
+        self.sites = {}        # callee -> [(caller, args)]
+        self.threads = {}      # entry  -> [(caller, arg_region)]
+        for rec in summary.get("callsites") or []:
+            self.sites.setdefault(rec["callee"], []).append(
+                (rec["caller"], rec.get("args") or []))
+        for rec in summary.get("thread_entries") or []:
+            self.threads.setdefault(rec["entry"], []).append(
+                (rec["caller"], rec.get("arg")))
+
+    def _incoming(self, fn, idx):
+        """fn 的第 idx 个形参，在所有调用点收到的区域（含线程入口来源）。"""
+        out = []
+        for caller, args in self.sites.get(fn) or ():
+            k = int(idx)
+            if k < len(args) and args[k] != "-":
+                out.append((caller, args[k]))
+        # 线程入口：entry 的形参 0 来自 pthread_create 的第 4 个实参
+        if idx == "0":
+            for caller, reg in self.threads.get(fn) or ():
+                if reg and reg != "-":
+                    out.append((caller, reg))
+        if not out:      # 没有明细 → 退回聚合绑定（无调用者身份，只能看唯一性）
+            for reg in (self.bindings.get(fn) or {}).get(str(idx)) or []:
+                out.append((None, reg))
+        return out
+
+    def resolve(self, fn, region, depth=0, seen=None):
+        """返回 (status, regions)；status ∈ {unique, multi, none}。"""
+        if is_concrete(region):
+            return "unique", {region}
+        if not region.startswith("arg:"):
+            return "none", set()          # heap:? 等：零信息
+
+        key = (fn, region)
+        seen = set() if seen is None else seen
+        if depth > self.MAX_DEPTH or key in seen:
+            return "none", set()          # 环 / 太深：不猜
+        seen = seen | {key}
+
+        incoming = self._incoming(fn, region[4:])
+        if not incoming:
+            return "none", set()
+
+        out = set()
+        for caller, reg in incoming:
+            st, rs = self.resolve(caller, reg, depth + 1, seen) if caller else \
+                ("unique", {reg}) if is_concrete(reg) else ("none", set())
+            if st == "none":
+                # 有一个入口解不出来 → 整体不可证（宁可标未闭合，不要半对）
+                return "none", set()
+            out |= rs
+        if not out:
+            return "none", set()
+        return ("unique" if len(out) == 1 else "multi"), out
+
+    def concretize(self, fn, regions, stats):
+        """返回 (proven, alternatives, unresolved)。"""
+        proven, alts, unresolved = set(), set(), set()
+        for r in regions or []:
+            st, rs = self.resolve(fn, r)
+            if st == "unique" and len(rs) == 1:
+                proven |= rs
+                if not is_concrete(r):
+                    stats["concretized"] += 1
+            elif st in ("unique", "multi") and rs:
+                alts |= {"alt:" + x for x in rs}
                 stats["multi_binding"] += 1
             else:
                 unresolved.add(r)
                 stats["unresolved"] += 1
-            continue
-        unresolved.add(r)
-        stats["unresolved"] += 1
-    return proven, alts, unresolved
+        return proven, alts, unresolved
 
 
 # ---------------------------------------------------------------- 调用可达性
@@ -170,7 +234,9 @@ class Dag:
         if not naive:
             # 冗余抑制 a：call 已保证顺序时，同向 data/anti 是多余的
             for (a, b, kind) in list(self.edges):
-                if kind in ("data", "anti") and (a, b, "call") in self.edges:
+                callish = (a, b, "call") in self.edges or \
+                          (a, b, "spawn") in self.edges
+                if kind in ("data", "anti") and callish:
                     self.edges[(a, b, "call")]["evidence"] |= \
                         self.edges.pop((a, b, kind))["evidence"]
             # 冗余抑制 b（陷阱 1）：反向 RAW 已存在时，同区域的 WAR 不是独立约束
@@ -316,14 +382,14 @@ def derive_edges(dag, R, W, A, skip_pairs=(), naive=False):
 
 def build_function_graph(summary, stats, naive=False):
     funcs = summary.get("functions") or {}
-    bindings = summary.get("interface_bindings") or {}
+    binder = Binder(summary)
     g = direct_calls(summary)
     dag = Dag()
 
     R, W, A, U = {}, {}, {}, {}
     for fn, info in funcs.items():
-        r, ra, ru = concretize(fn, info.get("reads"), bindings, stats)
-        w, wa, wu = concretize(fn, info.get("writes"), bindings, stats)
+        r, ra, ru = binder.concretize(fn, info.get("reads"), stats)
+        w, wa, wu = binder.concretize(fn, info.get("writes"), stats)
         R[fn], W[fn], A[fn] = r, w, (ra | wa)
         U[fn] = ru | wu
         dag.add_node(fn, effects=info.get("effects") or [],
@@ -335,6 +401,17 @@ def build_function_graph(summary, stats, naive=False):
         for b in (g.get(a) or ()):
             if b in funcs:
                 dag.add_edge(a, b, "call", ["%s()" % b])
+
+    # 线程入口：pthread_create 把 entry 交给库去起线程 → entry 不在 calls 里。
+    # 语义上是 **spawn**（创建即执行），与"直接调用"不是一回事，单独一类边；
+    # 但它同样产生顺序约束（创建先于该线程的第一次执行），所以参与拓扑。
+    g_aug = {k: set(v) for k, v in g.items()}
+    for entry, lst in binder.threads.items():
+        for caller, _ in lst:
+            if caller in funcs and entry in funcs:
+                dag.add_edge(caller, entry, "spawn", ["pthread_create(%s)" % entry])
+                g_aug.setdefault(caller, set()).add(entry)
+    g = g_aug
 
     # 陷阱 3：调用者/被调者之间不连数据边（区域是传播来的，必成环）
     reach = {fn: reachable(g, fn) for fn in funcs}
@@ -351,7 +428,7 @@ def build_function_graph(summary, stats, naive=False):
 
 def build_stage_graph(summary, skeleton, stats, naive=False):
     funcs = summary.get("functions") or {}
-    bindings = summary.get("interface_bindings") or {}
+    binder = Binder(summary)
     g = direct_calls(summary)
     dag = Dag()
 
@@ -376,8 +453,8 @@ def build_stage_graph(summary, skeleton, stats, naive=False):
         r_all, w_all, a_all, u_all = set(), set(), set(), set()
         for f in fns:
             info = funcs.get(f) or {}
-            r, ra, ru = concretize(f, info.get("reads"), bindings, stats)
-            w, wa, wu = concretize(f, info.get("writes"), bindings, stats)
+            r, ra, ru = binder.concretize(f, info.get("reads"), stats)
+            w, wa, wu = binder.concretize(f, info.get("writes"), stats)
             r_all |= r
             w_all |= w
             a_all |= (ra | wa)
@@ -407,6 +484,13 @@ def build_stage_graph(summary, skeleton, stats, naive=False):
                 b = fn2stage.get(t)
                 if b and b != a:
                     dag.add_edge(a, b, "call", ["%s() → %s()" % (f, t)])
+    # spawn 也跨越阶段边界时同样成边
+    for entry, lst in binder.threads.items():
+        b = fn2stage.get(entry)
+        for caller, _ in lst:
+            a = fn2stage.get(caller)
+            if a and b and a != b:
+                dag.add_edge(a, b, "spawn", ["pthread_create(%s)" % entry])
 
     derive_edges(dag, R, W, A, naive=naive)
     return dag
@@ -416,6 +500,7 @@ def build_stage_graph(summary, skeleton, stats, naive=False):
 
 KIND_STYLE = {
     "call": dict(color="#6b7280", style="dashed", label="call"),
+    "spawn": dict(color="#0f766e", style="dashed", label="spawn(thread)"),
     "data": dict(color="#1d4ed8", style="solid", label="data RAW"),
     "anti": dict(color="#b45309", style="dotted", label="anti WAR"),
     "conflict": dict(color="#7c3aed", style="bold", label="conflict WAW"),
@@ -435,7 +520,7 @@ def to_json(dag, edges, cands, order, cycles, meta, stats):
         "stats": dict(
             nodes=len(dag.nodes), edges=len(edges),
             by_kind={k: sum(1 for e in edges if e["kind"] == k)
-                     for k in ("call", "data", "anti", "conflict")},
+                     for k in ("call", "spawn", "data", "anti", "conflict")},
             candidates=len(cands), **stats),
     }
 
@@ -502,7 +587,8 @@ def parse_expect(s):
 
 def compare(edges, expect):
     """与人工图对照：只比"产生顺序"的已证边（call + data），方向敏感。"""
-    got = {(e["from"], e["to"]) for e in edges if e["kind"] in ("call", "data")}
+    got = {(e["from"], e["to"])
+           for e in edges if e["kind"] in ("call", "spawn", "data")}
     tp, fp, fn = got & expect, got - expect, expect - got
 
     def prf(a, b, c):
@@ -599,8 +685,10 @@ def main():
             for c in cycles:
                 print("  " + " -> ".join(c))
         print("== 统计 ==")
-        print("  边 %d（call %d / data %d / anti %d / conflict %d）· 候选 %d"
+        print("  边 %d（call %d / spawn %d / data %d / anti %d / conflict %d）"
+              "· 候选 %d"
               % (len(edges), doc["stats"]["by_kind"]["call"],
+                 doc["stats"]["by_kind"]["spawn"],
                  doc["stats"]["by_kind"]["data"],
                  doc["stats"]["by_kind"]["anti"],
                  doc["stats"]["by_kind"]["conflict"], len(cands)))

@@ -2,7 +2,7 @@
   "version": 1,
   "meta": {
     "mode": "functions",
-    "summary": "/tmp/cyc_dag.json",
+    "summary": "/tmp/cyc_v23.json",
     "task": {},
     "note": "proven=true 的边可作为约束；candidates 未经证明，不得当作依赖；conflict 无方向（只禁止重排）"
   },
@@ -131,7 +131,6 @@
         "thread"
       ],
       "interface_unresolved": [
-        "arg:0",
         "heap:?"
       ]
     },
@@ -196,6 +195,16 @@
       "constraint": "禁止重排/融合；不含顺序"
     },
     {
+      "from": "init_thread_param",
+      "to": "testthread",
+      "kind": "data",
+      "evidence": [
+        "heap:malloc#5"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
       "from": "main",
       "to": "check_args_logic",
       "kind": "call",
@@ -258,24 +267,9 @@
     {
       "from": "main",
       "to": "testthread",
-      "kind": "data",
+      "kind": "spawn",
       "evidence": [
-        "@config.12",
-        "@config.13",
-        "@config.2",
-        "@config.3",
-        "@running",
-        "@timerfd"
-      ],
-      "evidence_count": 6,
-      "proven": true
-    },
-    {
-      "from": "main",
-      "to": "timerdev_getstatus",
-      "kind": "data",
-      "evidence": [
-        "@timerfd"
+        "pthread_create(testthread)"
       ],
       "evidence_count": 1,
       "proven": true
@@ -391,14 +385,15 @@
     "edges": 17,
     "by_kind": {
       "call": 11,
-      "data": 5,
+      "spawn": 1,
+      "data": 4,
       "anti": 0,
       "conflict": 1
     },
     "candidates": 0,
-    "concretized": 5,
+    "concretized": 6,
     "multi_binding": 0,
-    "unresolved": 8,
-    "explained_by_call": 12
+    "unresolved": 7,
+    "explained_by_call": 17
   }
 }
