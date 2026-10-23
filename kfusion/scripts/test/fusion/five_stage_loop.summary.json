@@ -1,22 +1,21 @@
 {
   "version": 23,
-  "module": "five_stage_loop",
-  "_comment": "手工录入，字段与 EffectSummaryAnalysis 的输出同构（对照 examples/ecos/five_stage_loop__闭环五阶段示例.c 逐函数抄的读/写区域）。板侧复现时应换成真实摘要：clang -O1 -fno-inline -emit-llvm → opt -effect-summary。留这份是为了让 dag_build 的跨周期判定能在这台没有 LLVM 的机器上跑回归。",
+  "module": "/root/pr5/loop.ll",
   "functions": {
     "loop_main": {
       "effects": ["state_read", "state_write"],
-      "allowed_contexts": ["thread"],
-      "reads": ["@g_act", "@g_dist", "@g_fir_out", "@g_hist", "@g_integ", "@g_out", "@g_plant", "@g_raw", "@g_seed"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": ["@g_act", "@g_fir_out", "@g_hist", "@g_integ", "@g_out", "@g_plant", "@g_raw", "@g_seed"],
       "writes": ["@g_act", "@g_dist", "@g_fir_out", "@g_hist", "@g_integ", "@g_out", "@g_plant", "@g_raw", "@g_seed"],
       "recursive": false,
       "calls": ["stage_clamp", "stage_fir", "stage_pid", "stage_plant", "stage_sample"],
       "unknown_calls": []
     },
-    "stage_sample": {
+    "stage_clamp": {
       "effects": ["state_read", "state_write"],
       "allowed_contexts": ["thread", "softirq"],
-      "reads": ["@g_plant", "@g_seed"],
-      "writes": ["@g_dist", "@g_raw", "@g_seed"],
+      "reads": ["@g_act"],
+      "writes": ["@g_out"],
       "recursive": false,
       "calls": [],
       "unknown_calls": []
@@ -39,15 +38,6 @@
       "calls": [],
       "unknown_calls": []
     },
-    "stage_clamp": {
-      "effects": ["state_read", "state_write"],
-      "allowed_contexts": ["thread", "softirq"],
-      "reads": ["@g_act"],
-      "writes": ["@g_out"],
-      "recursive": false,
-      "calls": [],
-      "unknown_calls": []
-    },
     "stage_plant": {
       "effects": ["state_read", "state_write"],
       "allowed_contexts": ["thread", "softirq"],
@@ -56,13 +46,27 @@
       "recursive": false,
       "calls": [],
       "unknown_calls": []
+    },
+    "stage_sample": {
+      "effects": ["state_read", "state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": ["@g_plant", "@g_seed"],
+      "writes": ["@g_dist", "@g_raw", "@g_seed"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
     }
   },
-  "interface_bindings": {},
-  "alias_stats": {
-    "aa_available": true,
-    "pairs_checked": 0,
-    "coarse_pairs": 0,
-    "split_pairs": 0
-  }
+  "callsites": [
+    {"caller": "loop_main", "callee": "stage_sample", "args": []},
+    {"caller": "loop_main", "callee": "stage_fir", "args": []},
+    {"caller": "loop_main", "callee": "stage_pid", "args": ["-"]},
+    {"caller": "loop_main", "callee": "stage_clamp", "args": []},
+    {"caller": "loop_main", "callee": "stage_plant", "args": []}
+  ],
+  "thread_entries": [
+  ],
+  "interface_bindings": {
+  },
+  "alias_stats": {"aa_available": true, "pairs_checked": 164, "coarse_pairs": 0, "split_pairs": 0}
 }
