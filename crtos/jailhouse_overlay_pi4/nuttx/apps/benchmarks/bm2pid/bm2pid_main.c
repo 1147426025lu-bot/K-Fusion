@@ -63,17 +63,23 @@ struct axis_s {
 
 static struct axis_s g_ax[N_AXES];
 
-/* 每周期抖动直方图（µs）与执行时间统计 */
-static unsigned long g_hist[HIST_BUCKETS];
+/* 跨域统一测量契约（r/s/f 三时间戳 → start_lat / exec / response 三序列）
+ * 契约定义与派生公式见同目录 plc_probe__统一测量探针.h */
+#include "plc_probe__统一测量探针.h"
+
+/* 三时间戳与三条派生序列：
+ *   r_k = 标称释放（本周期 next）      s_k = 唤醒后第一次取时      f_k = 周期体跑完
+ *   start_lat = s−r    exec = f−s    response = f−r
+ */
+static struct plc_probe_series g_p_start;
+static struct plc_probe_series g_p_exec;
+static struct plc_probe_series g_p_resp;
+
 static long long     g_cycles;
 static long long     g_overruns;      /* exec_ns > PERIOD_NS（本周期算得比周期还长） */
-static long long     g_dl_miss;       /* finish > release + PERIOD_NS（真正的完成期限错过） */
-static long long     g_overflow;      /* 抖动 >= HIST_BUCKETS µs，直方图装不下 */
+static long long     g_dl_miss;       /* f_k > r_k + PERIOD_NS（真正的完成期限错过） */
 static long long     g_exec_max_ns;
 static long long     g_exec_sum_ns;
-static long long     g_jit_sum_ns;
-static long long     g_jit_max_ns;
-static long long     g_jit_min_ns = -1;   /* -1 = 尚未记录 */
 
 /* ---------- 定点友好的纯计算 ---------- */
 
@@ -176,23 +182,6 @@ static BM2_SCAN_ATTR void scan_cycle(double dt)
 	}
 }
 
-static void hist_add(long long v_ns)
-{
-	long us;
-
-	if (v_ns < 0)
-		v_ns = -v_ns;
-	us = (long)(v_ns / 1000);
-	if (us >= HIST_BUCKETS) {
-		/* 真正的直方图溢出：>= 200 µs 的样本装不进表里。
-		 * 旧实现把这种情况也算进 "Histogram Overflows"，但那个字段
-		 * 其实打印的是 exec > period 的次数 —— 两件事被混成了一个。 */
-		g_overflow++;
-		us = HIST_BUCKETS - 1;
-	}
-	g_hist[us]++;
-}
-
 static long long ts_ns(const struct timespec *t)
 {
 	return (long long)t->tv_sec * 1000000000LL + t->tv_nsec;
@@ -201,8 +190,12 @@ static long long ts_ns(const struct timespec *t)
 static int run(long cycles)
 {
 	struct timespec next, now;
-	long long wake_ns, exec_ns, jit_ns;
+	long long r_ns, s_ns, f_ns, exec_ns;
 	long long i;
+
+	plc_probe_reset(&g_p_start, "start_lat");
+	plc_probe_reset(&g_p_exec, "exec");
+	plc_probe_reset(&g_p_resp, "response");
 
 	if (clock_gettime(CLOCK_MONOTONIC, &next) != 0)
 		return -1;
@@ -214,29 +207,27 @@ static int run(long cycles)
 			next.tv_nsec -= 1000000000L;
 		}
 
+		r_ns = ts_ns(&next);          /* 标称释放时刻（不随实际唤醒漂移） */
+
 		if (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL) != 0)
 			return -1;
 
 		if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
 			return -1;
-		wake_ns = ts_ns(&now);
+		s_ns = ts_ns(&now);
 
-		jit_ns = wake_ns - ts_ns(&next);
-		hist_add(jit_ns);
-		if (jit_ns > g_jit_max_ns)
-			g_jit_max_ns = jit_ns;
-		{
-			long long a = jit_ns < 0 ? -jit_ns : jit_ns;
-			g_jit_sum_ns += a;
-			if (g_jit_min_ns < 0 || a < g_jit_min_ns)
-				g_jit_min_ns = a;
-		}
+		plc_probe_add(&g_p_start, s_ns - r_ns);   /* start_lat = s − r */
 
 		scan_cycle(1.0e-3);
 
 		if (clock_gettime(CLOCK_MONOTONIC, &now) != 0)
 			return -1;
-		exec_ns = ts_ns(&now) - wake_ns;
+		exec_ns = ts_ns(&now) - s_ns;
+		f_ns = s_ns + exec_ns;
+
+		plc_probe_add(&g_p_exec, exec_ns);        /* exec     = f − s */
+		plc_probe_add(&g_p_resp, f_ns - r_ns);    /* response = f − r */
+
 		g_exec_sum_ns += exec_ns;
 		if (exec_ns > g_exec_max_ns)
 			g_exec_max_ns = exec_ns;
@@ -245,7 +236,7 @@ static int run(long cycles)
 		 * 的执行时间没超周期，但本周期已经赶不上交付）。 */
 		if (exec_ns > PERIOD_NS)
 			g_overruns++;
-		if (wake_ns + exec_ns > ts_ns(&next) + PERIOD_NS)
+		if (f_ns > r_ns + PERIOD_NS)
 			g_dl_miss++;
 
 		g_cycles++;
@@ -298,18 +289,27 @@ int main(int argc, char *argv[])
 	 */
 	printf("\n# Total: %08lld\n", g_cycles);
 	printf("# Min Latencies: %08lld\n",
-	       (g_jit_min_ns < 0 ? 0LL : g_jit_min_ns) / 1000);
+	       (long long)(g_p_start.min_ns == ~0ULL ? 0 : g_p_start.min_ns) / 1000);
 	printf("# Avg Latencies: %08lld\n",
-	       g_cycles ? (g_jit_sum_ns / g_cycles) / 1000 : 0);
-	printf("# Max Latencies: %08lld\n", g_jit_max_ns / 1000);
-	printf("# Histogram Overflows: %08lld\n", g_overflow);
+	       g_cycles ? (long long)(g_p_start.sum_ns / (unsigned long long)g_cycles) / 1000 : 0);
+	printf("# Max Latencies: %08lld\n", (long long)g_p_start.max_ns / 1000);
+	printf("# Histogram Overflows: %08lld\n", (long long)g_p_start.over);
 	printf("# Deadline Misses: %08lld\n", g_dl_miss);
 	printf("# Histogram\n");
 	{
 		long b;
 		for (b = 0; b < HIST_BUCKETS; b++)
-			printf("%06ld %06lu\n", b, g_hist[b]);
+			printf("%06ld %06lu\n", b, g_p_start.hist[b]);
 	}
+
+	/* --- 统一探针块（跨域可比的口径，见 plc_probe__统一测量探针.h）--- */
+	plc_probe_head(PERIOD_NS, (unsigned long long)g_cycles);
+	plc_probe_line(&g_p_start);
+	plc_probe_line(&g_p_exec);
+	plc_probe_line(&g_p_resp);
+	printf("# deadline_miss: %lld/%lld (%s)\n", g_dl_miss, g_cycles,
+	       g_dl_miss ? "FAIL" : "none");
+	printf("# exec_overrun: %lld/%lld\n", g_overruns, g_cycles);
 
 	/* --- 控制质量（定点化若改变数值行为，这里会先露出来）--- */
 	{
