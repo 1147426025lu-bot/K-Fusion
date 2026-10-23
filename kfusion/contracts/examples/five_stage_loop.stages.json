@@ -1,0 +1,50 @@
+{
+  "_comment": "闭环五阶段：用于跨周期依赖实验。与 four_stage_chain 的唯一区别是把环闭上（plant 写 g_plant，sample 下一拍读它），并且**显式给出相位** —— 相位是判定『环跨不跨拍』的唯一依据，不给就只能 fail-closed 判代数环。",
+  "task": {
+    "name": "five_stage_loop",
+    "entry": "loop_main",
+    "period_us": 1000,
+    "deadline_us": 1000,
+    "step_us": 200,
+    "notes": "sample@0 → fir@200 → pid@400 → clamp@600 → plant@800 →(z⁻¹) sample"
+  },
+  "stages": [
+    {
+      "name": "stage_sample",
+      "fn": "stage_sample",
+      "depends_on": [],
+      "context": "thread",
+      "offset_us": 0,
+      "notes": "读 g_plant（上一拍），所以对 plant 的依赖是相位反向的 → 环的闭合边"
+    },
+    {
+      "name": "stage_fir",
+      "fn": "stage_fir",
+      "depends_on": ["stage_sample"],
+      "context": "thread",
+      "offset_us": 200
+    },
+    {
+      "name": "stage_pid",
+      "fn": "stage_pid",
+      "depends_on": ["stage_fir"],
+      "context": "thread",
+      "offset_us": 400
+    },
+    {
+      "name": "stage_clamp",
+      "fn": "stage_clamp",
+      "depends_on": ["stage_pid"],
+      "context": "thread",
+      "offset_us": 600
+    },
+    {
+      "name": "stage_plant",
+      "fn": "stage_plant",
+      "depends_on": ["stage_clamp"],
+      "context": "thread",
+      "offset_us": 800,
+      "notes": "800 µs 写 g_plant，下一拍 0 µs 才被 sample 读到 → 间隔 200 µs"
+    }
+  ]
+}

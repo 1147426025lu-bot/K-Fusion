@@ -57,6 +57,24 @@
     python dag_build__任务DAG生成.py summary.json --stages stages.json
     python dag_build__任务DAG生成.py summary.json --expect "A->B,B->C"
     python dag_build__任务DAG生成.py summary.json --expect ... --fail-on-mismatch
+
+跨周期依赖（v2）：环分两类，判据是相位
+--------------------------------------
+采样控制回路**本来就是环**——执行器写出去，下一拍传感器才读回来。旧版一见环就拒，
+等于宣布"不支持控制回路"。v2 用**相位**把它拆开：
+
+| 类型 | 条件 | 含义 | 处理 |
+|---|---|---|---|
+| 延迟反馈环 | 环内存在边 u→v 且 phase(u) > phase(v) | 该边一拍内不可能满足 ⇒ 读上一拍 ⇒ z⁻¹ | 合法，`recurrences[]` |
+| 代数环 | 环内每条边 phase(u) ≤ phase(v) | 一拍内首尾相接 ⇒ 无合法执行顺序 | 拒绝，`algebraic_loops[]` |
+| 相位未知 | 函数视图 / 骨架没给 `offset_us`/`step_us` | 无法证明跨了拍边界 | 一律按代数环（fail-closed） |
+
+相位是**人工给的设计事实**（每阶段在一拍内的释放时刻），分析不猜它。
+给了相位之后，`topo_order_delayed` 给出"摘掉闭合边后按相位排"的顺序，
+规划器用它；`topo_order` 在有环时仍为空（严格模式不变）。
+
+为什么不猜：把代数环误判成反馈环，板上会算出与设计不符的值，而图上完全看不出来。
+"看起来像反馈环"不是证据。
 """
 import argparse
 import io
@@ -203,6 +221,9 @@ class Dag:
         self.nodes = {}
         self.edges = {}        # (from, to, kind) -> dict
         self.candidates = {}   # (a, b) sorted -> dict
+        self.phase = {}        # 阶段名 -> 一拍内的释放相位（µs）
+        self.period_us = None
+        self.phase_known = False
 
     def add_node(self, name, **kw):
         n = self.nodes.setdefault(name, {"name": name, "fns": []})
@@ -273,11 +294,30 @@ class Dag:
         cands.sort(key=lambda x: (x["from"], x["to"]))
 
         order, cycles = topo(self.nodes, edges)
-        return edges, cands, order, cycles
+
+        # 跨周期依赖：有环才需要判；无环时 phase/recurrence 都是空的
+        recs, algs = classify_cycles(self.nodes, edges, self.phase,
+                                     self.period_us, self.phase_known)
+        delayed = order
+        if cycles:
+            drop = {(c["from"], c["to"])
+                    for r in recs for c in r["closing_edges"]}
+            if drop:
+                # 摘掉延迟边后若能排完，说明剩下的环全是代数环 → 该报错
+                delayed, _ = topo(self.nodes, edges, drop=drop,
+                                  sort_key=(lambda n: self.phase.get(n, 0.0))
+                                  if self.phase_known else None)
+        return edges, cands, order, cycles, recs, algs, delayed
 
 
-def topo(nodes, edges):
-    """只按产生顺序的边排序（call/data/anti）；conflict 无方向，不参与。"""
+def topo(nodes, edges, drop=(), sort_key=None):
+    """只按产生顺序的边排序（call/data/anti）；conflict 无方向，不参与。
+
+    drop：要**忽略**的有向边集合 {(from, to)}——用于"摘掉环闭合边后的拓扑序"
+    （见 `classify_cycles`）。sort_key 给定时按 (key, 名字) 出堆，
+    这样有相位信息时输出的是**相位序**，而相位序才等于真实释放顺序。
+    """
+    import heapq
     names = set(nodes)
     succ = {n: set() for n in names}
     indeg = {n: 0 for n in names}
@@ -285,21 +325,24 @@ def topo(nodes, edges):
         if e["kind"] == "conflict":
             continue
         a, b = e["from"], e["to"]
+        if (a, b) in drop:
+            continue
         if a in names and b in names and b not in succ[a]:
             succ[a].add(b)
             indeg[b] += 1
 
-    import heapq
-    ready = [n for n in names if indeg[n] == 0]
+    prio = (lambda n: (sort_key(n), n)) if sort_key else (lambda n: n)
+    ready = [prio(n) if sort_key else n for n in names if indeg[n] == 0]
     heapq.heapify(ready)
     order = []
     while ready:
-        n = heapq.heappop(ready)
+        item = heapq.heappop(ready)
+        n = item[1] if sort_key else item
         order.append(n)
         for m in sorted(succ[n]):
             indeg[m] -= 1
             if indeg[m] == 0:
-                heapq.heappush(ready, m)
+                heapq.heappush(ready, prio(m) if sort_key else m)
 
     if len(order) == len(names):
         return order, []
@@ -327,6 +370,138 @@ def topo(nodes, edges):
             if dfs(v):
                 break
     return order, ([cyc] if cyc else [sorted(left)])
+
+
+# ---------------------------------------------------------------- 跨周期依赖（反馈环）
+
+def order_succ(nodes, edges, drop=()):
+    """产生顺序关系（call/spawn/data/anti）；conflict 无方向，不参与。"""
+    succ = {n: set() for n in nodes}
+    for e in edges:
+        if e["kind"] == "conflict":
+            continue
+        if (e["from"], e["to"]) in drop:
+            continue
+        if e["from"] in succ and e["to"] in succ:
+            succ[e["from"]].add(e["to"])
+    return succ
+
+
+def tarjan(nodes, succ):
+    """迭代式 Tarjan（避免递归爆栈）：返回强连通分量列表，按最小节点名排序。"""
+    index = {}
+    low = {}
+    on_stack = {}
+    stack = []
+    out = []
+    counter = [0]
+
+    for root in sorted(nodes):
+        if root in index:
+            continue
+        work = [(root, iter(sorted(succ[root])))]
+        index[root] = low[root] = counter[0]
+        counter[0] += 1
+        stack.append(root)
+        on_stack[root] = True
+        while work:
+            v, it = work[-1]
+            descended = False
+            for w in it:
+                if w not in index:
+                    index[w] = low[w] = counter[0]
+                    counter[0] += 1
+                    stack.append(w)
+                    on_stack[w] = True
+                    work.append((w, iter(sorted(succ[w]))))
+                    descended = True
+                    break
+                if on_stack.get(w):
+                    low[v] = min(low[v], index[w])
+            if descended:
+                continue
+            work.pop()
+            if work:
+                low[work[-1][0]] = min(low[work[-1][0]], low[v])
+            if low[v] == index[v]:
+                comp = []
+                while True:
+                    w = stack.pop()
+                    on_stack[w] = False
+                    comp.append(w)
+                    if w == v:
+                        break
+                out.append(set(comp))
+    return sorted(out, key=lambda c: min(c))
+
+
+def classify_cycles(nodes, edges, phase, period_us, phase_known):
+    """把环分成两类。这是"跨周期依赖"的全部内容，判据只有一条：
+
+    > **环里存在一条"相位反向"的边吗？**（生产者相位 > 消费者相位）
+
+    - 有 → **延迟反馈环**（recurrence）。这条边在一拍之内无法满足，
+      只能把读推迟到**下一拍**；这正好是采样控制里 z⁻¹ 的物理含义。
+      环因此是**可实现**的，且延迟是**调度强制的**，不是代码里写的。
+    - 没有（环内每条边的相位都不晚于其消费者）→ **代数环**。
+      所有边都要求"同一拍内先写后读"，而环把它们首尾相接，于是
+      不存在任何合法执行顺序。这不是"优化受限"，是**模型/设计有缺陷**，必须拒。
+
+    为什么不猜：函数视图没有相位信息，此时所有环一律判代数环（fail-closed）。
+    "看起来像反馈环"不是证据——把代数环当反馈环放行，板上会算出与设计不符的值，
+    而图上什么都看不出来。
+    """
+    succ = order_succ(nodes, edges)
+    comps = [c for c in tarjan(nodes, succ) if len(c) > 1]
+    # 自环（节点写自己读自己）在阶段视图里是"同段内状态传递"，不算环
+    recurrences, algebraic = [], []
+
+    for comp in comps:
+        internal = [e for e in edges
+                    if e["kind"] != "conflict"
+                    and e["from"] in comp and e["to"] in comp]
+        back = [e for e in internal
+                if phase.get(e["from"], 0.0) > phase.get(e["to"], 0.0)]
+        ring = sorted(comp, key=lambda n: (phase.get(n, 0.0), n))
+        base = {
+            "ring": ring,
+            "edges": [{"from": e["from"], "to": e["to"], "kind": e["kind"],
+                       "evidence": e.get("evidence") or [],
+                       "phase_from": phase.get(e["from"]),
+                       "phase_to": phase.get(e["to"])}
+                      for e in internal],
+        }
+        if not phase_known:
+            base["why"] = ("无相位信息（函数视图或骨架未给 offset_us/step_us）"
+                           "→ 无法证明环跨越了拍边界，按 fail-closed 判代数环")
+            algebraic.append(base)
+            continue
+        if not back:
+            base["why"] = ("环内每条边的生产者相位都不晚于消费者，"
+                           "即环必须在**同一拍内**闭合 → 不存在合法执行顺序")
+            algebraic.append(base)
+            continue
+        closing = []
+        for e in back:
+            pf, pt = phase[e["from"]], phase[e["to"]]
+            # 未融合时，从生产者写完到消费者读到的最短间隔
+            delay_us = period_us + pt - pf if period_us else None
+            closing.append({
+                "from": e["from"], "to": e["to"],
+                "phase_from": pf, "phase_to": pt,
+                "delay_periods": 1,
+                "delay_us_unmerged": (round(delay_us, 3)
+                                      if delay_us is not None else None),
+                "evidence": e.get("evidence") or [],
+            })
+        base["closing_edges"] = closing
+        base["delay_periods"] = 1
+        base["why"] = ("相位反向边 %s 在一拍内无法满足，只能读到上一拍的值；"
+                       "延迟由调度强制，不是代码里写的 z⁻¹"
+                       % ", ".join("%s→%s" % (c["from"], c["to"])
+                                   for c in closing))
+        recurrences.append(base)
+    return recurrences, algebraic
 
 
 # ---------------------------------------------------------------- 边推导（两视图共用）
@@ -433,7 +608,11 @@ def build_stage_graph(summary, skeleton, stats, naive=False):
     dag = Dag()
 
     fn2stage, stage_fns = {}, {}
-    for st in skeleton.get("stages") or []:
+    task = skeleton.get("task") or {}
+    dag.period_us = task.get("period_us")
+    step = task.get("step_us")
+    explicit_phase = False
+    for k, st in enumerate(skeleton.get("stages") or []):
         name = st["name"]
         fns = st.get("fn")
         fns = [fns] if isinstance(fns, str) else list(fns or [])
@@ -442,6 +621,19 @@ def build_stage_graph(summary, skeleton, stats, naive=False):
                      declared_deps=list(st.get("depends_on") or []))
         for f in fns:
             fn2stage[f] = name
+
+        # 相位：显式 offset_us/phase_us 优先；否则按 step_us 等距铺开；
+        # 两者都没有 = **相位未知**（不是"都为 0"）——这决定了环能不能判成反馈环。
+        ph = st.get("offset_us", st.get("phase_us"))
+        if ph is not None:
+            explicit_phase = True
+        elif step is not None:
+            ph = float(step) * k
+        else:
+            ph = None
+        if ph is not None:
+            dag.phase[name] = float(ph)
+    dag.phase_known = explicit_phase or (step is not None)
 
     missing = [f for f in fn2stage if f not in funcs]
     if missing:
@@ -508,24 +700,46 @@ KIND_STYLE = {
 }
 
 
-def to_json(dag, edges, cands, order, cycles, meta, stats):
+def to_json(dag, edges, cands, order, cycles, meta, stats,
+            recs=None, algs=None, delayed=None):
+    nodes = []
+    for n in sorted(dag.nodes.values(), key=lambda x: x["name"]):
+        n = dict(n)
+        if dag.phase_known and n["name"] in dag.phase:
+            n["phase_us"] = dag.phase[n["name"]]
+        nodes.append(n)
     return {
-        "version": 1,
+        "version": 2,
         "meta": meta,
-        "nodes": sorted(dag.nodes.values(), key=lambda n: n["name"]),
+        "nodes": nodes,
         "edges": edges,
         "candidates": cands,
+        "phase": {
+            "known": dag.phase_known,
+            "unit": "us",
+            "period_us": dag.period_us,
+            "offsets": {k: dag.phase[k] for k in sorted(dag.phase)},
+            "note": "一拍内各阶段的释放相位。跨周期判定只用它——"
+                    "生产者的相位晚于消费者时，该边只能跨拍满足（z⁻¹）。",
+        },
         "topo_order": order,
+        "topo_order_delayed": delayed if delayed is not None else order,
+        "recurrences": recs or [],
+        "algebraic_loops": algs or [],
         "cycles": cycles,
         "stats": dict(
             nodes=len(dag.nodes), edges=len(edges),
             by_kind={k: sum(1 for e in edges if e["kind"] == k)
                      for k in ("call", "spawn", "data", "anti", "conflict")},
-            candidates=len(cands), **stats),
+            candidates=len(cands),
+            recurrences=len(recs or []), algebraic_loops=len(algs or []),
+            **stats),
     }
 
 
-def to_dot(dag, edges, cands, cycles):
+def to_dot(dag, edges, cands, cycles, recs=None, algs=None):
+    algs = algs or []
+    back = {(c["from"], c["to"]) for r in (recs or []) for c in r["closing_edges"]}
     L = ["digraph task_dag {",
          "  rankdir=LR;",
          '  graph [fontname="Helvetica"];',
@@ -545,12 +759,21 @@ def to_dot(dag, edges, cands, cycles):
             label += "\\nctx: " + ",".join(ctx)
         if n.get("interface_unresolved"):
             label += "\\n⚠ iff:" + ",".join(n["interface_unresolved"])
+        if dag.phase_known and name in dag.phase:
+            label += "\\nt=%.0fµs" % dag.phase[name]
         L.append('  "%s" [label="%s"];' % (name, label))
 
     for e in edges:
         st = KIND_STYLE[e["kind"]]
         n_ev = e.get("evidence_count", len(e["evidence"]))
         tip = "\\n".join(e["evidence"][:4]) + ("\\n..." if n_ev > 4 else "")
+        if (e["from"], e["to"]) in back:
+            # 相位反向边 = 环的闭合边 = z⁻¹：画成红色粗线，一眼能看出环在哪断
+            attrs = ('color="#dc2626", style=bold, penwidth=2, '
+                     'label="z⁻¹ %s", constraint=false, tooltip="%s"'
+                     % (st["label"], tip.replace('"', "'")))
+            L.append('  "%s" -> "%s" [%s];' % (e["from"], e["to"], attrs))
+            continue
         attrs = 'color="%s", style=%s, label="%s", tooltip="%s"' % (
             st["color"], st["style"], st["label"], tip.replace('"', "'"))
         if e.get("undirected"):
@@ -565,7 +788,13 @@ def to_dot(dag, edges, cands, cycles):
                  % (e["from"], e["to"], st["color"], st["style"],
                     st["label"], tip.replace('"', "'")))
 
-    if cycles:
+    if algs:
+        L.insert(3, '  graph [label="⛔ 代数环：拍内闭合，无合法执行顺序",'
+                    ' fontcolor="#b91c1c"];')
+    elif recs:
+        L.insert(3, '  graph [label="↻ 延迟反馈环 %d 个（红色 z⁻¹ 边为环闭合处）",'
+                    ' fontcolor="#b45309"];' % len(recs))
+    elif cycles:
         L.insert(3, '  graph [label="⚠ 检测到环，拓扑序不可用",'
                     ' fontcolor="#b91c1c"];')
     L.append("}")
@@ -620,7 +849,10 @@ def main():
     ap.add_argument("--fail-on-mismatch", action="store_true",
                     help="与 --expect 不一致时非零退出（CI 用）")
     ap.add_argument("--fail-on-cycle", action="store_true",
-                    help="检出环时非零退出")
+                    help="检出**任意**环时非零退出（严格模式，CI 用）")
+    ap.add_argument("--fail-on-algebraic", action="store_true",
+                    help="仅当存在**拍内闭合**的非法环时非零退出（rc=5）；"
+                         "延迟反馈环放行")
     ap.add_argument("--naive", action="store_true",
                     help="关掉全部冗余抑制（反证用，产物不可用于决策）")
     ap.add_argument("--quiet", action="store_true")
@@ -638,16 +870,18 @@ def main():
         dag = build_function_graph(summary, stats, naive=args.naive)
         task, mode = {}, "functions"
 
-    edges, cands, order, cycles = dag.finish(naive=args.naive)
+    edges, cands, order, cycles, recs, algs, delayed = dag.finish(naive=args.naive)
     meta = {
         "mode": mode, "summary": args.summary, "task": task,
         "note": "proven=true 的边可作为约束；candidates 未经证明，不得当作依赖；"
-                "conflict 无方向（只禁止重排）",
+                "conflict 无方向（只禁止重排）；recurrences 是相位反向边给出的"
+                "真实反馈环（延迟 1 拍），algebraic_loops 是拍内闭合的非法环",
     }
     if args.naive:
         meta["naive"] = True
         meta["note"] += "；⚠ 本次用 --naive，抑制全关，产物不可用于决策"
-    doc = to_json(dag, edges, cands, order, cycles, meta, stats)
+    doc = to_json(dag, edges, cands, order, cycles, meta, stats,
+                  recs, algs, delayed)
 
     if args.expect:
         doc["compare"] = compare(edges, parse_expect(args.expect))
@@ -658,7 +892,7 @@ def main():
             f.write("\n")
     if args.dot:
         with io.open(args.dot, "w", encoding="utf-8", newline="\n") as f:
-            f.write(to_dot(dag, edges, cands, cycles))
+            f.write(to_dot(dag, edges, cands, cycles, recs, algs))
 
     if not args.quiet:
         print("== 节点 %d（%s 视图） ==" % (len(dag.nodes), mode))
@@ -679,9 +913,32 @@ def main():
                 print("  %-20s -> %-20s %s"
                       % (e["from"], e["to"], ", ".join(e["evidence"][:3])))
         print("== 拓扑序 ==")
-        print("  " + (" -> ".join(order) if order else "（有环，不可用）"))
+        if order:
+            print("  " + " -> ".join(order))
+        elif doc["topo_order_delayed"]:
+            print("  （严格拓扑序不可用：有环）")
+            print("  摘掉延迟边后的相位序：" + " -> ".join(doc["topo_order_delayed"]))
+        else:
+            print("  （有环，不可用）")
+        if recs:
+            print("== ↻ 延迟反馈环 %d 个（合法：延迟由调度强制为 1 拍）==" % len(recs))
+            for r in recs:
+                print("  环：" + " -> ".join(r["ring"]))
+                for c in r["closing_edges"]:
+                    d = c.get("delay_us_unmerged")
+                    print("    闭合边 %s→%s：相位 %.0f→%.0f µs，"
+                          "未融合时间隔 %s" % (
+                              c["from"], c["to"], c["phase_from"],
+                              c["phase_to"],
+                              ("%.0f µs" % d) if d is not None else "?（未给 period_us）"))
+                    print("      证据：" + (", ".join(c["evidence"][:4]) or "-"))
+        if algs:
+            print("== ⛔ 代数环 %d 个（拍内闭合，无合法执行顺序）==" % len(algs))
+            for r in algs:
+                print("  环：" + " -> ".join(r["ring"]))
+                print("    " + r["why"])
         if cycles:
-            print("== ⚠ 环 ==")
+            print("== 闭环路径（原始走向，供人工核对）==")
             for c in cycles:
                 print("  " + " -> ".join(c))
         print("== 统计 ==")
@@ -723,6 +980,8 @@ def main():
 
     if cycles and args.fail_on_cycle:
         rc = rc or 4
+    if algs and args.fail_on_algebraic:
+        rc = rc or 5
     return rc
 
 

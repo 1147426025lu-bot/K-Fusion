@@ -1,0 +1,39 @@
+{
+  "version": 2,
+  "_comment": "代数环用例：相位**已知**且两个阶段同相（都在 0 µs 释放），但互相依赖。环内没有任何一条相位反向的边，因此环必须在同一拍内闭合 —— 不存在合法执行顺序。注意与 five_stage_loop 的区别：那张图的环靠一条相位反周边跨拍闭合，是合法的。",
+  "meta": {
+    "mode": "stages",
+    "task": {"name": "algebraic", "period_us": 1000}
+  },
+  "phase": {
+    "known": true,
+    "unit": "us",
+    "period_us": 1000,
+    "offsets": {"p": 0, "q": 0}
+  },
+  "nodes": [
+    {"name": "p", "effects": ["state_read", "state_write"],
+     "contexts": ["thread"], "phase_us": 0},
+    {"name": "q", "effects": ["state_read", "state_write"],
+     "contexts": ["thread"], "phase_us": 0}
+  ],
+  "edges": [
+    {"from": "p", "to": "q", "kind": "data", "evidence": ["@x"],
+     "evidence_count": 1, "proven": true},
+    {"from": "q", "to": "p", "kind": "data", "evidence": ["@y"],
+     "evidence_count": 1, "proven": true}
+  ],
+  "candidates": [],
+  "topo_order": [],
+  "topo_order_delayed": [],
+  "recurrences": [],
+  "algebraic_loops": [
+    {
+      "ring": ["p", "q"],
+      "why": "环内每条边的生产者相位都不晚于消费者，即环必须在同一拍内闭合 → 不存在合法执行顺序"
+    }
+  ],
+  "cycles": [["p", "q", "p"]],
+  "stats": {"nodes": 2, "edges": 2, "candidates": 0,
+            "recurrences": 0, "algebraic_loops": 1}
+}

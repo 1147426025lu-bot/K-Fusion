@@ -1,0 +1,24 @@
+{
+  "_comment": "与 true_cycle.summary.json 配对的阶段骨架。同一张摘要，加了相位之后环的性质完全变了：p 在 0 µs、q 在 200 µs 释放，于是 q→p 这条边在一拍内无法满足，只能读上一拍 —— 它是真实的反馈环，不是代数环。",
+  "task": {
+    "name": "true_cycle",
+    "entry": "p",
+    "period_us": 1000,
+    "step_us": 200,
+    "notes": "两阶段闭环：p 写 x 读 y，q 写 y 读 x"
+  },
+  "stages": [
+    {
+      "name": "p",
+      "fn": "p",
+      "context": "thread",
+      "offset_us": 0
+    },
+    {
+      "name": "q",
+      "fn": "q",
+      "context": "thread",
+      "offset_us": 200
+    }
+  ]
+}

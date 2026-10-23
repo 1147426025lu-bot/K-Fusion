@@ -3,7 +3,10 @@
 > 本文件由根目录 `FILES.md` 指向。K-Fusion 仓库统一采用 `name__中文说明.ext` 自文档化命名约定
 >（双下划线后接中文描述），所有文件名均为合法 UTF-8，在 Linux / macOS / Windows(UTF-8 locale) 下均正常解析。
 >
-> 快照日期：**2026-10-22**（含当日新增：`crtos/results/figures` 两域 vs 单域架构对照 SVG、`crtos/scripts/sync_pi4`、`kfusion/docs/paper` 论文稿与图）。
+> 快照日期：**2026-10-23**（含当日新增：`kfusion/examples/ecos/five_stage_loop__闭环五阶段示例.c`、
+> `kfusion/contracts/examples/five_stage_loop.stages.json`、跨周期回归固件
+> `kfusion/scripts/test/fusion/{five_stage_loop.*, phase_pin.dag.json, algebraic.dag.json}`、
+> `kfusion/scripts/test/dag/true_cycle.stages.json`）。
 
 ## 顶层文件
 
@@ -46,14 +49,16 @@
 
 - `kfusion/CMakeLists.txt/` （1 文件）
 - `kfusion/README.md/` （1 文件）
+- `kfusion/analysis/` （3 文件）— 效果摘要 Pass 源码
 - `kfusion/backend/` （23 文件）
+- `kfusion/contracts/` （19 文件，含 `examples/` 阶段骨架与平台能力）
 - `kfusion/diagnostics/` （1 文件）
 - `kfusion/docs/` （105 文件，含 `paper/` 论文稿与 `figures/`）
-- `kfusion/examples/` （24 文件）
+- `kfusion/examples/` （27 文件，含 `ecos/` 四阶段链与**闭环五阶段**示例）
 - `kfusion/frontend/` （2 文件）
 - `kfusion/include/` （5 文件）
 - `kfusion/manifests/` （22 文件）
-- `kfusion/scripts/` （179 文件）
+- `kfusion/scripts/` （184 文件）
 - `kfusion/src/` （13 文件）
 - `kfusion/test/` （27 文件）
 
@@ -74,12 +79,12 @@
 
 ## 统计
 
-- 工作树文件总数：**1222**
+- 工作树文件总数：**1233**
 - `.github/`：3 文件
 - `compare/`：2 文件
-- `crtos/`：740 文件（docs 12 · jailhouse_overlay_pi4 24 · results 110 · logs 1 · scripts 53 · upstream 526）
+- `crtos/`：760 文件（docs 12 · jailhouse_overlay_pi4 24 · results 110 · logs 1 · scripts 53 · upstream 526）
 - `docs/`：4 文件
-- `kfusion/`：367 文件
+- `kfusion/`：436 文件
 - `results/`：3 文件
 - `scripts/`：1 文件
 - `timedc/`：11 文件

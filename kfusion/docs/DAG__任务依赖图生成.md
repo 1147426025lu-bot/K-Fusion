@@ -241,13 +241,58 @@ main → init_thread_param → parse_args → arg_decimal → check_args_logic
 
 ---
 
-## 6. 环的处理
+## 6. 环的处理：分为「延迟反馈环」与「代数环」
 
-- `true_cycle`（p 写 `@x` 读 `@y`；q 写 `@y` 读 `@x`）→ 报 `p -> q -> p`，`--fail-on-cycle` 返回 **4**。
-- 环**不自动打破**。当前版本只负责"如实报出来"，因为打破环需要语义信息
-  （跨周期依赖 / 双缓冲 / 迭代展开），那是下一阶段的事，不能靠图算法猜。
+旧版一见环就报错。但采样控制回路**本来就是环**——执行器写出去，下一拍传感器才读回来。
+把这种环一棍子打死，等于宣布"规划器不支持控制回路"，那是不可接受的。
+v2 把环分成两类，判据只有一条：**环里有没有一条"相位反向"的边**。
 
-拓扑序在有环时输出"（有环，不可用）"，不给出任何看似可用的顺序。
+| | 条件 | 含义 | 处理 |
+|---|---|---|---|
+| 延迟反馈环 | 环内存在边 `u→v`，相位 `u` > 相位 `v` | 该边在一拍内**不可能**满足，只能读上一拍 ⇒ 就是 z⁻¹ | 合法，延迟 1 拍 |
+| 代数环 | 环内每条边相位都不晚于消费者 | 所有边都要求"同一拍内先写后读"，首尾相接 ⇒ 无合法顺序 | 拒绝（rc=5） |
+| 相位未知 | 函数视图，或骨架没给 `offset_us`/`step_us` | 无法证明环跨了拍边界 | 按代数环处理（fail-closed） |
+
+**为什么不猜**：把代数环误判成反馈环，板上会算出与设计不符的值，而图上完全看不出来。
+所以没有相位信息时一律当非法环——"看起来像反馈环"不是证据。
+
+### 6.1 同一张摘要，两个判决
+
+`true_cycle`（p 写 `@x` 读 `@y`；q 写 `@y` 读 `@x`）跑两遍：
+
+```text
+$ dag_build true_cycle.summary.json                                  # 函数视图，无相位
+== ⛔ 代数环 1 个（拍内闭合，无合法执行顺序）==
+  环：p -> q
+    无相位信息（函数视图或骨架未给 offset_us/step_us）→ 无法证明环跨越了拍边界，按 fail-closed 判代数环
+  → rc = 5（--fail-on-algebraic）
+
+$ dag_build true_cycle.summary.json --stages true_cycle.stages.json  # p@0µs, q@200µs
+== ↻ 延迟反馈环 1 个（合法：延迟由调度强制为 1 拍）==
+  环：p -> q
+    闭合边 q→p：相位 200→0 µs，未融合时间隔 800 µs
+      证据：@y
+  摘掉延迟边后的相位序：p -> q
+  → rc = 0
+```
+
+同一个 `p↔q`，**加了相位就变成合法回路**。这不是放宽标准，是把"什么时候这个环
+物理上可实现"这件事说清楚：`q` 在 200 µs 写，`p` 在下一拍 0 µs 读，间隔 800 µs
+（`period − (phase_q − phase_p)`），一拍之内根本不可能满足，所以它必然是 z⁻¹。
+
+### 6.2 输出字段
+
+- `recurrences[]`：`ring`（按相位排序的环成员）、`closing_edges[]`
+  （`phase_from` / `phase_to` / `delay_periods` / `delay_us_unmerged`）、`why`。
+- `algebraic_loops[]`：`ring` + `why`（哪一条原因判它是拍内闭合）。
+- `topo_order_delayed`：**摘掉所有闭合边之后**的拓扑序，且按相位出堆 ⇒ 对环而言
+  它就是真实的释放顺序。规划器用它；`topo_order` 在有环时仍为空（严格模式不变）。
+- `phase`：`{known, unit, period_us, offsets{阶段: µs}}`。
+- 退出码：`--fail-on-cycle` 仍拦任意环（rc=4，严格模式）；`--fail-on-algebraic`
+  只拦代数环（rc=5）。两者可同时用。
+
+DOT 图里闭合边画成**红色粗线 + `z⁻¹` 标签**，节点上标出相位（`t=200µs`），
+环一眼能看出来断在哪。
 
 ---
 
@@ -259,8 +304,10 @@ main → init_thread_param → parse_args → arg_decimal → check_args_logic
    （由 A→writer→reader→B 传递可得），但不是最简图。只影响图的可读性，不影响拓扑序。
 3. **非流敏感**。只区分"这个函数可能读/写 r"，不区分条件分支；
    一个只在 `if (rare)` 里写的区域，照样算写。
-4. **不区分跨周期**。第 k 拍与第 k+1 拍之间的依赖（真正的反馈回路）没有建模，
-   所以看起来的"环"未必是同一拍内的环。
+4. **跨周期只在"相位已知"时才判**。第 k 拍与第 k+1 拍之间的依赖靠**相位反向**识别，
+   这要求骨架给出 `offset_us` 或 `step_us`。函数视图没有相位，那里的环一律算代数环——
+   这是保守，不是准确。相位本身是**人工输入的设计事实**（每阶段在一拍内的释放时刻），
+   分析不去猜它。
 5. **`conflict` 只表达"不可重排"**，拓扑序里这两种节点的先后是任意的，
    不能当成执行建议。
 6. **未闭合的接口是真缺口**。`cyclictest` 仍有 5 个节点带 `interface_unresolved`
@@ -282,6 +329,13 @@ python3 scripts/dag_build__任务DAG生成.py \
     --expect "sensor_prepare->fir_filter,fir_filter->pid_step" \
     --fail-on-mismatch --dot /tmp/plc_chain.dot
 
+# 跨周期：同一张摘要，给相位 / 不给相位
+python3 scripts/dag_build__任务DAG生成.py scripts/test/dag/true_cycle.summary.json \
+    --fail-on-algebraic                                    # → 代数环，rc=5
+python3 scripts/dag_build__任务DAG生成.py scripts/test/dag/true_cycle.summary.json \
+    --stages scripts/test/dag/true_cycle.stages.json \
+    --fail-on-algebraic --dot /tmp/loop.dot                 # → 反馈环，rc=0
+
 # 全流程（C → IR → 摘要 → 契约 → 门禁 → DAG → 对照）
 bash scripts/ecos_demo__效果摘要端到端.sh
 
@@ -291,7 +345,8 @@ bash scripts/test/dag_selftest__自测.sh python3
 
 自测覆盖：示例对照、陷阱 1/2/3、`--naive` 反证、真环检出、三级具体化、
 递归两跳解析、线程入口绑定（`spawn` ≠ `call`）、
-退出码契约（3=与人工图不符 / 4=有环）、DOT 产物。**21/21**。
+跨周期二分（同一摘要：无相位 → rc=5 / 有相位 → rc=0，并算出 800 µs 闭合间隔）、
+DOT 的 `z⁻¹` 标注、退出码契约（3=与人工图不符 / 4=有环 / 5=代数环）、DOT 产物。**29/29**。
 
 ---
 

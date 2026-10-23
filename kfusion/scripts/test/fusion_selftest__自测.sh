@@ -15,11 +15,19 @@ set -u -o pipefail
 PY="${1:-python3}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLAN="$HERE/../fusion_plan__融合规划.py"
+CODEGEN="$HERE/../fusion_codegen__生成融合代码.py"
 FIX="$HERE/fusion"
 CAPS="$HERE/../../contracts/examples/platform_caps.json"
 PLC="$HERE/../../docs/figures/dag/plc_chain.dag.json"
+LOOP_SRC="$HERE/../../examples/ecos/five_stage_loop__闭环五阶段示例.c"
 TMP="$(mktemp -d 2>/dev/null || echo /tmp/fusion_selftest.$$)"
 mkdir -p "$TMP"
+
+# 执行时间：取 BM2 四阶段的实测量级，闭环多一个 plant
+cat >"$TMP/exec.json" <<'EOF'
+{"stage_sample":0.60,"stage_fir":0.67,"stage_pid":0.28,
+ "stage_clamp":0.28,"stage_plant":0.50}
+EOF
 
 PASS=0
 FAIL=0
@@ -103,6 +111,81 @@ if [ "$A" != "$B" ]; then
 else
     bad "R̂ 没跟随 c 变化（说明代价模型没接上）"
 fi
+
+echo "=== 9. 闭环（跨周期）：环必须能被规划，且死区变化要报出来 ==="
+OUT="$("$PY" "$PLAN" "$FIX/five_stage_loop.dag.json" --platforms "$CAPS" \
+      --platform linux_kernel --release-cost-us 21 --exec-us "$TMP/exec.json" 2>&1)"
+RC=$?
+if [ "$RC" = 0 ]; then ok "闭环有解（rc=0）"; else bad "闭环被拒，rc=$RC"; fi
+expect_grep "整环并成 1 组" "$OUT" "方案：1 组" "g0   stage_sample + stage_fir"
+expect_grep "R̂ = 21 + 2.33 ≈ 23.3" "$OUT" "R̂ ≈ 23.3"
+expect_grep "报出死区时间变化（200 µs → 998 µs，×4.99）" "$OUT" \
+    "反馈环落位" "间隔 200 µs → 998 µs（×4.99）"
+expect_grep "说清环为何是强连通分量、只能整体成组" "$OUT" "不可分性规则下只能整体成组"
+
+echo "=== 10. 死区放大门禁：超过上限必须能让 CI 红 ==="
+expect_rc "×5 超过上限 ×2 → rc=3" 3 \
+    "$PY" "$PLAN" "$FIX/five_stage_loop.dag.json" --platforms "$CAPS" \
+    --platform linux_kernel --release-cost-us 21 --exec-us "$TMP/exec.json" \
+    --max-delay-inflation 2 --fail-on-warning
+expect_grep "warning 指名闭合边与倍数" "$(cat "$TMP/out.txt")" \
+    "死区时间 ×4.99" "超过上限 ×2.00"
+expect_rc "上限给 ×9 时放行（rc=0）" 0 \
+    "$PY" "$PLAN" "$FIX/five_stage_loop.dag.json" --platforms "$CAPS" \
+    --platform linux_kernel --release-cost-us 21 --exec-us "$TMP/exec.json" \
+    --max-delay-inflation 9 --fail-on-warning
+
+echo "=== 11. 代数环：相位已知但环内无边反向 → 必须拒 ==="
+expect_rc "代数环 → rc=2" 2 \
+    "$PY" "$PLAN" "$FIX/algebraic.dag.json" --platforms "$CAPS" --platform nuttx
+expect_grep "说清是代数环、且不是融合算法能绕开的" "$(cat "$TMP/out.txt")" \
+    "代数环" "同一拍内闭合" "不是融合算法能绕开的"
+expect_rc "无相位信息的环同样拒（fail-closed）" 2 \
+    "$PY" "$PLAN" "$FIX/cyclic.dag.json" --platforms "$CAPS" --platform nuttx
+
+echo "=== 12. 相位钉住：读外部输入的阶段不能被前拉 ==="
+OUT="$("$PY" "$PLAN" "$FIX/phase_pin.dag.json" --platforms "$CAPS" \
+      --platform nuttx --release-cost-us 6 2>&1)"
+expect_grep "b 自己当组长（a | b+c，2 组）" "$OUT" "方案：2 组" "g0   a " "g1   b + c"
+expect_grep "拒绝理由说清「等于提前采样」" "$OUT" "提前采样" "前拉 200 µs"
+
+echo "=== 13. 代码生成：结构、摘要、两道守卫 ==="
+"$PY" "$PLAN" "$FIX/five_stage_loop.dag.json" --platforms "$CAPS" \
+    --platform linux_kernel --release-cost-us 21 --exec-us "$TMP/exec.json" \
+    -o "$TMP/plan.json" --quiet >/dev/null 2>&1
+"$PY" "$CODEGEN" "$TMP/plan.json" -o "$TMP/driver.c" \
+    --stage-source "$LOOP_SRC" --call "stage_pid=stage_pid(1000)" \
+    --period-us 1000 --step-us 200 --cycles 60000 \
+    --digest-var g_out --digest-var g_plant \
+    --expect-order "stage_sample,stage_fir,stage_pid,stage_clamp,stage_plant" \
+    >"$TMP/cg.txt" 2>&1
+if [ -s "$TMP/driver.c" ]; then
+    ok "驱动生成（$(grep -c '/\* stage_' "$TMP/driver.c") 条 stage 释放项）"
+else
+    bad "驱动未生成：$(head -2 "$TMP/cg.txt")"
+fi
+PLAN_ROWS="$(sed -n '/kPlan\[\] = {/,/^};/p' "$TMP/driver.c" | grep -c '/\* g0 \*/')"
+FLAT_ROWS="$(sed -n '/kFlat\[\] = {/,/^};/p' "$TMP/driver.c" | grep -c '/\* stage_')"
+if [ "$PLAN_ROWS" = 1 ] && [ "$FLAT_ROWS" = 5 ]; then
+    ok "plan 1 次释放 / flat 5 次释放，工作量同源"
+else
+    bad "释放表不符合预期（plan=$PLAN_ROWS flat=$FLAT_ROWS）"
+fi
+if grep -q 'DIGEST_MIX(g_out)' "$TMP/driver.c" && \
+   grep -q '# digest: %08x' "$TMP/driver.c"; then
+    ok "摘要已注入（跨周期等价的判据）"
+else
+    bad "摘要未注入"
+fi
+expect_rc "执行顺序与相位序不一致 → 拒绝" 1 \
+    "$PY" "$CODEGEN" "$TMP/plan.json" -o "$TMP/d2.c" --stage-source "$LOOP_SRC" \
+    --expect-order "stage_plant,stage_sample"
+expect_grep "说清期望与实际" "$(cat "$TMP/out.txt")" "执行顺序与相位序不一致"
+expect_rc "相位铺不下（800 > 700）→ 拒绝" 1 \
+    "$PY" "$CODEGEN" "$TMP/plan.json" -o "$TMP/d3.c" --stage-source "$LOOP_SRC" \
+    --period-us 700 --step-us 200
+expect_grep "算出 N-1×step 并给出改法" "$(cat "$TMP/out.txt")" \
+    "相位铺不下" "调小 --step-us"
 
 echo
 echo "通过 $PASS / 失败 $FAIL"

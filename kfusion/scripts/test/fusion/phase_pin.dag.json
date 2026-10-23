@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "_comment": "相位钉住用例：b 在 200 µs 释放且读 MMIO（= 采样瞬间写进了控制律），把它并进以 a（0 µs）为头的组会让它提前 200 µs 执行 = 提前采样。规划器必须拒绝这个合并，让 b 自己当组长。",
+  "meta": {
+    "mode": "stages",
+    "task": {"name": "phase_pin", "period_us": 1000, "step_us": 200}
+  },
+  "phase": {
+    "known": true,
+    "unit": "us",
+    "period_us": 1000,
+    "offsets": {"a": 0, "b": 200, "c": 400}
+  },
+  "nodes": [
+    {"name": "a", "effects": ["state_read", "state_write"],
+     "contexts": ["thread"], "phase_us": 0},
+    {"name": "b", "effects": ["state_read", "state_write", "mmio"],
+     "contexts": ["thread"], "phase_us": 200},
+    {"name": "c", "effects": ["state_read", "state_write"],
+     "contexts": ["thread"], "phase_us": 400}
+  ],
+  "edges": [
+    {"from": "a", "to": "b", "kind": "data", "evidence": ["@x"],
+     "evidence_count": 1, "proven": true},
+    {"from": "b", "to": "c", "kind": "data", "evidence": ["@y"],
+     "evidence_count": 1, "proven": true}
+  ],
+  "candidates": [],
+  "topo_order": ["a", "b", "c"],
+  "topo_order_delayed": ["a", "b", "c"],
+  "recurrences": [],
+  "algebraic_loops": [],
+  "cycles": [],
+  "stats": {"nodes": 3, "edges": 2, "candidates": 0,
+            "recurrences": 0, "algebraic_loops": 0}
+}

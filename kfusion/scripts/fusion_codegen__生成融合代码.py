@@ -66,6 +66,13 @@ def main():
     ap.add_argument("--buckets", type=int, default=1024,
                     help="直方图桶数（µs）。实验的 response 可能远超 200，"
                          "默认给大一点，避免全部溢出到桶顶")
+    ap.add_argument("--digest-var", action="append", default=[],
+                    help="要纳入摘要的全局变量名（可重复）。每周期结束累加一次 "
+                         "FNV-1a，打印 '# digest:'。两个模式的摘要必须相同——"
+                         "这是「融合没有改变采样序列」的判据")
+    ap.add_argument("--expect-order", default=None,
+                    help="逗号分隔的阶段执行顺序（应为相位序）。plan 模式展平后"
+                         "必须与之一致，否则延迟语义不成立")
     args = ap.parse_args()
 
     plan = load_json(args.plan)
@@ -74,6 +81,15 @@ def main():
         raise SystemExit("plan 里没有 groups")
 
     stage_names = [m for g in groups for m in g["members"]]
+
+    # 顺序守卫：融合后的执行顺序必须还是相位序。若规划器或手工方案把它改了，
+    # 环闭合边的间隔就不再 ≥ 一拍，采样序列会**静默地**变。
+    if args.expect_order:
+        want = [x.strip() for x in args.expect_order.split(",") if x.strip()]
+        if want != stage_names:
+            raise SystemExit(
+                "执行顺序与相位序不一致：\n  期望 %s\n  实际 %s"
+                % (" -> ".join(want), " -> ".join(stage_names)))
     calls = {}
     for spec in args.call:
         if "=" not in spec:
@@ -88,6 +104,14 @@ def main():
     dl = int(round((args.deadline_us or args.period_us) * 1000))
     n_stage = len(stage_names)
     n_rel = len(groups)
+
+    # flat 模式把 N 个阶段铺在一个周期里：相位跨了周期，越界的释放会与下一拍的
+    # 第一次释放撞车（drift），测出来的 start_lat 就不是释放代价了。
+    if (n_stage - 1) * step > per:
+        raise SystemExit(
+            "相位铺不下：(N-1)×step = %.0f µs > period %.0f µs。\n"
+            "  请调小 --step-us 或加大 --period-us；否则 flat 模式的释放会跨到下一拍。"
+            % ((n_stage - 1) * args.step_us, args.period_us))
 
     # 两种模式的"释放 → 阶段列表"表
     plan_rel = [(g["id"], list(g["members"])) for g in groups]
@@ -109,6 +133,7 @@ def main():
     A("#include <stdio.h>")
     A("#include <stdlib.h>")
     A("#include <string.h>")
+    A("#include <stdint.h>")
     A("#include <time.h>")
     A("#include <errno.h>")
     A("")
@@ -125,6 +150,16 @@ def main():
     A("static struct plc_probe_series g_start, g_work, g_span, g_resp;")
     A("static struct plc_probe_series g_exec_stage[MAX_STAGES];")
     A("")
+    if args.digest_var:
+        A("/* 采样序列摘要：每周期结束时把指定全局量揉进 FNV-1a。")
+        A(" * plan / flat 两个模式的摘要必须逐位相同——两模式的阶段顺序、"
+          "初始值完全相同，")
+        A(" * 唯一差别是释放次数；摘要不同就说明融合改变了数据流，"
+          "而不是只改变了唤醒路径。 */")
+        A("static uint32_t g_digest = 2166136261u;")
+        A("#define DIGEST_MIX(x) do { g_digest ^= (uint32_t)(x); "
+          "g_digest *= 16777619u; } while (0)")
+        A("")
     A("static long long now_ns(void)")
     A("{")
     A("\tstruct timespec t;")
@@ -234,6 +269,9 @@ def main():
     A("\t\tplc_probe_add(&g_work, work);\t\t/* 真实工作量 */")
     A("\t\tplc_probe_add(&g_span, f_last - s_first);\t/* 含空等 */")
     A("\t\tplc_probe_add(&g_resp, f_last - r_first);")
+    if args.digest_var:
+        for v in args.digest_var:
+            A("\t\tDIGEST_MIX(%s);" % v)
     A("\t\tif (f_last - r_first > DEADLINE_NS)")
     A("\t\t\tmisses++;")
     A("\t\tif (work > PERIOD_NS)")
@@ -250,6 +288,8 @@ def main():
     A("\tprintf(\"# deadline_miss: %lld/%ld (%s)\\n\", misses, cycles,")
     A("\t       misses ? \"FAIL\" : \"none\");")
     A("\tprintf(\"# exec_overrun: %lld/%ld\\n\", overruns, cycles);")
+    if args.digest_var:
+        A("\tprintf(\"# digest: %08x\\n\", g_digest);")
     A("\tfor (i = 0; i < %d; i++)" % n_stage)
     A("\t\tplc_probe_line(&g_exec_stage[i]);")
     A("\tplc_probe_hist(&g_start);")
