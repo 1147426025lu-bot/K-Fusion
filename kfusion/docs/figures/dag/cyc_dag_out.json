@@ -1,0 +1,404 @@
+{
+  "version": 1,
+  "meta": {
+    "mode": "functions",
+    "summary": "/tmp/cyc_dag.json",
+    "task": {},
+    "note": "proven=true 的边可作为约束；candidates 未经证明，不得当作依赖；conflict 无方向（只禁止重排）"
+  },
+  "nodes": [
+    {
+      "name": "arg_decimal",
+      "fns": [],
+      "effects": [
+        "state_read",
+        "external"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ]
+    },
+    {
+      "name": "check_args_logic",
+      "fns": [],
+      "effects": [
+        "blocking_io",
+        "state_read",
+        "state_write",
+        "external"
+      ],
+      "contexts": [
+        "thread"
+      ]
+    },
+    {
+      "name": "init_thread_param",
+      "fns": [],
+      "effects": [
+        "state_write"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ]
+    },
+    {
+      "name": "main",
+      "fns": [],
+      "effects": [
+        "sleep",
+        "blocking_io",
+        "state_read",
+        "state_write",
+        "external"
+      ],
+      "contexts": [
+        "thread"
+      ],
+      "interface_unresolved": [
+        "heap:?"
+      ]
+    },
+    {
+      "name": "parse_args",
+      "fns": [],
+      "effects": [
+        "state_read",
+        "state_write",
+        "external"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ],
+      "interface_unresolved": [
+        "heap:?"
+      ]
+    },
+    {
+      "name": "print_help",
+      "fns": [],
+      "effects": [
+        "blocking_io"
+      ],
+      "contexts": [
+        "thread"
+      ]
+    },
+    {
+      "name": "print_hist",
+      "fns": [],
+      "effects": [
+        "blocking_io",
+        "state_read",
+        "state_write",
+        "external"
+      ],
+      "contexts": [
+        "thread"
+      ],
+      "interface_unresolved": [
+        "heap:?"
+      ]
+    },
+    {
+      "name": "print_stat",
+      "fns": [],
+      "effects": [
+        "blocking_io",
+        "state_read"
+      ],
+      "contexts": [
+        "thread"
+      ],
+      "interface_unresolved": [
+        "arg:0",
+        "heap:?"
+      ]
+    },
+    {
+      "name": "testthread",
+      "fns": [],
+      "effects": [
+        "sleep",
+        "blocking_io",
+        "state_read",
+        "state_write",
+        "external"
+      ],
+      "contexts": [
+        "thread"
+      ],
+      "interface_unresolved": [
+        "arg:0",
+        "heap:?"
+      ]
+    },
+    {
+      "name": "timediff_us",
+      "fns": [],
+      "effects": [
+        "pure"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ]
+    },
+    {
+      "name": "timediff_us_timer",
+      "fns": [],
+      "effects": [
+        "pure"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ]
+    },
+    {
+      "name": "timerdev_getstatus",
+      "fns": [],
+      "effects": [
+        "blocking_io",
+        "state_read"
+      ],
+      "contexts": [
+        "thread"
+      ]
+    },
+    {
+      "name": "tsnorm",
+      "fns": [],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "check_args_logic",
+      "to": "parse_args",
+      "kind": "conflict",
+      "evidence": [
+        "@config.7",
+        "@config.9"
+      ],
+      "evidence_count": 2,
+      "proven": true,
+      "undirected": true,
+      "constraint": "禁止重排/融合；不含顺序"
+    },
+    {
+      "from": "main",
+      "to": "check_args_logic",
+      "kind": "call",
+      "evidence": [
+        "check_args_logic()"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "main",
+      "to": "init_thread_param",
+      "kind": "call",
+      "evidence": [
+        "init_thread_param()"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "main",
+      "to": "parse_args",
+      "kind": "call",
+      "evidence": [
+        "parse_args()"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "main",
+      "to": "print_help",
+      "kind": "call",
+      "evidence": [
+        "print_help()"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "main",
+      "to": "print_hist",
+      "kind": "call",
+      "evidence": [
+        "print_hist()"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "main",
+      "to": "print_stat",
+      "kind": "call",
+      "evidence": [
+        "print_stat()"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "main",
+      "to": "testthread",
+      "kind": "data",
+      "evidence": [
+        "@config.12",
+        "@config.13",
+        "@config.2",
+        "@config.3",
+        "@running",
+        "@timerfd"
+      ],
+      "evidence_count": 6,
+      "proven": true
+    },
+    {
+      "from": "main",
+      "to": "timerdev_getstatus",
+      "kind": "data",
+      "evidence": [
+        "@timerfd"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "parse_args",
+      "to": "arg_decimal",
+      "kind": "call",
+      "evidence": [
+        "arg_decimal()"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "parse_args",
+      "to": "check_args_logic",
+      "kind": "data",
+      "evidence": [
+        "@config.11",
+        "@config.12",
+        "@config.13",
+        "@config.7",
+        "@config.9"
+      ],
+      "evidence_count": 5,
+      "proven": true
+    },
+    {
+      "from": "parse_args",
+      "to": "print_hist",
+      "kind": "data",
+      "evidence": [
+        "@config.3",
+        "@config.4"
+      ],
+      "evidence_count": 2,
+      "proven": true
+    },
+    {
+      "from": "parse_args",
+      "to": "testthread",
+      "kind": "data",
+      "evidence": [
+        "@config.12",
+        "@config.13",
+        "@config.2",
+        "@config.3"
+      ],
+      "evidence_count": 4,
+      "proven": true
+    },
+    {
+      "from": "testthread",
+      "to": "timediff_us",
+      "kind": "call",
+      "evidence": [
+        "timediff_us()"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "testthread",
+      "to": "timediff_us_timer",
+      "kind": "call",
+      "evidence": [
+        "timediff_us_timer()"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "testthread",
+      "to": "timerdev_getstatus",
+      "kind": "call",
+      "evidence": [
+        "timerdev_getstatus()"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "testthread",
+      "to": "tsnorm",
+      "kind": "call",
+      "evidence": [
+        "tsnorm()"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    }
+  ],
+  "candidates": [],
+  "topo_order": [
+    "main",
+    "init_thread_param",
+    "parse_args",
+    "arg_decimal",
+    "check_args_logic",
+    "print_help",
+    "print_hist",
+    "print_stat",
+    "testthread",
+    "timediff_us",
+    "timediff_us_timer",
+    "timerdev_getstatus",
+    "tsnorm"
+  ],
+  "cycles": [],
+  "stats": {
+    "nodes": 13,
+    "edges": 17,
+    "by_kind": {
+      "call": 11,
+      "data": 5,
+      "anti": 0,
+      "conflict": 1
+    },
+    "candidates": 0,
+    "concretized": 5,
+    "multi_binding": 0,
+    "unresolved": 8,
+    "explained_by_call": 12
+  }
+}

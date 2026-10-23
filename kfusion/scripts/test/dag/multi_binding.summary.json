@@ -1,0 +1,91 @@
+{
+  "version": 22,
+  "module": "multi_binding",
+  "functions": {
+    "stage_a": {
+      "effects": [
+        "state_write"
+      ],
+      "allowed_contexts": [
+        "thread"
+      ],
+      "reads": [],
+      "writes": [
+        "arg:0"
+      ],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "stage_b": {
+      "effects": [
+        "state_read"
+      ],
+      "allowed_contexts": [
+        "thread"
+      ],
+      "reads": [
+        "arg:0"
+      ],
+      "writes": [],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "stage_c": {
+      "effects": [
+        "state_write"
+      ],
+      "allowed_contexts": [
+        "thread"
+      ],
+      "reads": [],
+      "writes": [
+        "arg:0"
+      ],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "caller": {
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "allowed_contexts": [
+        "thread"
+      ],
+      "reads": [
+        "@buf_x"
+      ],
+      "writes": [
+        "@buf_x"
+      ],
+      "recursive": false,
+      "calls": [
+        "stage_a",
+        "stage_b"
+      ],
+      "unknown_calls": []
+    }
+  },
+  "interface_bindings": {
+    "stage_a": {
+      "0": [
+        "@buf_x"
+      ]
+    },
+    "stage_b": {
+      "0": [
+        "@buf_x",
+        "@buf_y"
+      ]
+    }
+  },
+  "alias_stats": {
+    "aa_available": true,
+    "pairs_checked": 0,
+    "coarse_pairs": 0,
+    "split_pairs": 0
+  }
+}

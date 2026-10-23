@@ -75,12 +75,23 @@ rc_nx=$?
 echo "退出码: $rc_nx"
 [ $rc_nx -eq 0 ] || { echo "❌ nuttx 域被拒了——检查 nuttx 的 allow_mmio"; fail=1; }
 
+step "6) 任务 DAG：从摘要恢复依赖，与人工标注的 Sensor→FIR→PID 对照"
+"$PY" "$KF/scripts/dag_build__任务DAG生成.py" "$OUT/effect_summary.json" \
+    --stages "$KF/contracts/examples/plc_chain.stages.json" \
+    --expect "sensor_prepare->fir_filter,fir_filter->pid_step" \
+    --fail-on-mismatch \
+    -o "$OUT/plc_chain.dag.json" --dot "$OUT/plc_chain.dag.dot"
+rc_dag=$?
+echo "退出码: $rc_dag（0 = 与人工拓扑一致）"
+[ $rc_dag -eq 0 ] || { echo "❌ 自动恢复的 DAG 与人工标注不一致"; fail=1; }
+
 step "结论"
 if [ $fail -eq 0 ]; then
     echo "✅ 端到端成立："
     echo "   ① effects 由 LLVM 从 IR 推出（sensor_prepare 命中 mmio）"
     echo "   ② 同一份契约在 linux_kernel 被拒、在 nuttx 通过"
     echo "   ③ 这就是「sensor_prepare 必须留在 NuttX 侧」的自动依据"
+    echo "   ④ 任务依赖图也是从 IR 恢复的，且与人工拓扑逐条一致"
     echo
     echo "产物都在 $OUT/"
 else

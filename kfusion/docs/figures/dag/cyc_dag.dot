@@ -1,0 +1,36 @@
+digraph task_dag {
+  rankdir=LR;
+  graph [fontname="Helvetica"];
+  node [shape=box, style="rounded,filled", fillcolor="#eef2ff", color="#4338ca", fontname="Helvetica", fontsize=10];
+  edge [fontname="Helvetica", fontsize=8];
+  "arg_decimal" [label="arg_decimal\nstate_read,external\nctx: thread,softirq"];
+  "check_args_logic" [label="check_args_logic\nblocking_io,state_read,state_write,external\nctx: thread"];
+  "init_thread_param" [label="init_thread_param\nstate_write\nctx: thread,softirq"];
+  "main" [label="main\nsleep,blocking_io,state_read,state_write,external\nctx: thread\n⚠ iff:heap:?"];
+  "parse_args" [label="parse_args\nstate_read,state_write,external\nctx: thread,softirq\n⚠ iff:heap:?"];
+  "print_help" [label="print_help\nblocking_io\nctx: thread"];
+  "print_hist" [label="print_hist\nblocking_io,state_read,state_write,external\nctx: thread\n⚠ iff:heap:?"];
+  "print_stat" [label="print_stat\nblocking_io,state_read\nctx: thread\n⚠ iff:arg:0,heap:?"];
+  "testthread" [label="testthread\nsleep,blocking_io,state_read,state_write,external\nctx: thread\n⚠ iff:arg:0,heap:?"];
+  "timediff_us" [label="timediff_us\npure\nctx: thread,softirq"];
+  "timediff_us_timer" [label="timediff_us_timer\npure\nctx: thread,softirq"];
+  "timerdev_getstatus" [label="timerdev_getstatus\nblocking_io,state_read\nctx: thread"];
+  "tsnorm" [label="tsnorm\nstate_read,state_write\nctx: thread,softirq"];
+  "check_args_logic" -> "parse_args" [color="#7c3aed", style=bold, label="conflict WAW", tooltip="@config.7\n@config.9", dir=none];
+  "main" -> "check_args_logic" [color="#6b7280", style=dashed, label="call", tooltip="check_args_logic()"];
+  "main" -> "init_thread_param" [color="#6b7280", style=dashed, label="call", tooltip="init_thread_param()"];
+  "main" -> "parse_args" [color="#6b7280", style=dashed, label="call", tooltip="parse_args()"];
+  "main" -> "print_help" [color="#6b7280", style=dashed, label="call", tooltip="print_help()"];
+  "main" -> "print_hist" [color="#6b7280", style=dashed, label="call", tooltip="print_hist()"];
+  "main" -> "print_stat" [color="#6b7280", style=dashed, label="call", tooltip="print_stat()"];
+  "main" -> "testthread" [color="#1d4ed8", style=solid, label="data RAW", tooltip="@config.12\n@config.13\n@config.2\n@config.3\n..."];
+  "main" -> "timerdev_getstatus" [color="#1d4ed8", style=solid, label="data RAW", tooltip="@timerfd"];
+  "parse_args" -> "arg_decimal" [color="#6b7280", style=dashed, label="call", tooltip="arg_decimal()"];
+  "parse_args" -> "check_args_logic" [color="#1d4ed8", style=solid, label="data RAW", tooltip="@config.11\n@config.12\n@config.13\n@config.7\n..."];
+  "parse_args" -> "print_hist" [color="#1d4ed8", style=solid, label="data RAW", tooltip="@config.3\n@config.4"];
+  "parse_args" -> "testthread" [color="#1d4ed8", style=solid, label="data RAW", tooltip="@config.12\n@config.13\n@config.2\n@config.3"];
+  "testthread" -> "timediff_us" [color="#6b7280", style=dashed, label="call", tooltip="timediff_us()"];
+  "testthread" -> "timediff_us_timer" [color="#6b7280", style=dashed, label="call", tooltip="timediff_us_timer()"];
+  "testthread" -> "timerdev_getstatus" [color="#6b7280", style=dashed, label="call", tooltip="timerdev_getstatus()"];
+  "testthread" -> "tsnorm" [color="#6b7280", style=dashed, label="call", tooltip="tsnorm()"];
+}

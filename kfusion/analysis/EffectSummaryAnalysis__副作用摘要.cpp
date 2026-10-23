@@ -312,6 +312,11 @@ public:
     RegionNamer Namer;
     AliasStat AStat;
 
+    // 接口绑定：被调函数 -> 形参序号 -> 所有调用点传进来的区域。
+    // 用途：DAG 生成时把 `arg:0` 这种**函数局部**的名字具体化。
+    // 只有"全部调用点都绑到同一个具体区域"才允许具体化，否则只能当候选边。
+    std::map<std::string, std::map<unsigned, std::set<std::string>>> Interface;
+
     // 拿到函数级 AA（opt 的标准 pipeline 会注册 AAManager / BasicAA）
     FunctionAnalysisManager *FAM = nullptr;
     {
@@ -368,6 +373,14 @@ public:
             // 内部函数：只记调用关系与调用点，效果靠传播
             S.Callees.insert(CN.str());
             S.Sites[CN.str()].push_back(CB);
+
+            // 登记这次调用把哪个区域绑到了形参上（供 DAG 生成具体化 arg:N）
+            for (unsigned i = 0; i < CB->arg_size(); i++) {
+              Value *A = CB->getArgOperand(i);
+              if (!A->getType()->isPointerTy())
+                continue;
+              Interface[CN.str()][i].insert(Namer.of(A, ArgMap));
+            }
             continue;
           }
 
@@ -503,7 +516,7 @@ public:
     // ---- 3. 输出 JSON ----
     std::string Buf;
     raw_string_ostream OS(Buf);
-    OS << "{\n  \"version\": 21,\n  \"module\": \"" << M.getModuleIdentifier()
+    OS << "{\n  \"version\": 22,\n  \"module\": \"" << M.getModuleIdentifier()
        << "\",\n  \"functions\": {\n";
     bool FirstFn = true;
     for (auto &KV : Sum) {
@@ -569,6 +582,30 @@ public:
       OS << "]\n    }";
     }
     OS << "\n  },\n";
+
+    // 接口绑定：形参 -> 调用点区域集合（长度 > 1 表示多态，不能具体化）
+    OS << "  \"interface_bindings\": {";
+    bool FirstCallee = true;
+    for (auto &CV : Interface) {
+      if (CV.second.empty())
+        continue;
+      OS << (FirstCallee ? "\n" : ",\n") << "    \"" << CV.first << "\": {";
+      FirstCallee = false;
+      bool FirstArg = true;
+      for (auto &AV : CV.second) {
+        OS << (FirstArg ? "" : ", ") << "\"" << AV.first << "\": [";
+        FirstArg = false;
+        bool F3 = true;
+        for (const std::string &R : AV.second) {
+          OS << (F3 ? "" : ", ") << "\"" << R << "\"";
+          F3 = false;
+        }
+        OS << "]";
+      }
+      OS << "}";
+    }
+    OS << "\n  },\n";
+
     OS << "  \"alias_stats\": {"
        << "\"aa_available\": " << (AStat.Available ? "true" : "false")
        << ", \"pairs_checked\": " << AStat.Pairs

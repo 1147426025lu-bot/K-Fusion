@@ -48,12 +48,12 @@
 - `kfusion/README.md/` （1 文件）
 - `kfusion/backend/` （23 文件）
 - `kfusion/diagnostics/` （1 文件）
-- `kfusion/docs/` （92 文件，含 `paper/` 论文稿与 `figures/`）
+- `kfusion/docs/` （100 文件，含 `paper/` 论文稿与 `figures/dag/`）
 - `kfusion/examples/` （24 文件）
 - `kfusion/frontend/` （2 文件）
 - `kfusion/include/` （5 文件）
 - `kfusion/manifests/` （22 文件）
-- `kfusion/scripts/` （157 文件）
+- `kfusion/scripts/` （169 文件）
 - `kfusion/src/` （13 文件）
 - `kfusion/test/` （27 文件）
 
@@ -74,7 +74,7 @@
 
 ## 统计
 
-- 工作树文件总数：**1171**
+- 工作树文件总数：**1202**
 - `.github/`：3 文件
 - `compare/`：2 文件
 - `crtos/`：740 文件（docs 12 · jailhouse_overlay_pi4 24 · results 110 · logs 1 · scripts 53 · upstream 526）

@@ -1,0 +1,141 @@
+{
+  "version": 1,
+  "meta": {
+    "mode": "stages",
+    "summary": "kfusion/scripts/test/dag/plc_chain.summary.json",
+    "task": {
+      "name": "plc_chain",
+      "entry": "chain_main",
+      "period_us": 1000,
+      "deadline_us": 800,
+      "notes": "ECoS §10 的最小闭环：Sensor → FIR → PID"
+    },
+    "note": "proven=true 的边可作为约束；candidates 未经证明，不得当作依赖；conflict 无方向（只禁止重排）"
+  },
+  "nodes": [
+    {
+      "name": "fir_filter",
+      "fns": [
+        "fir_filter"
+      ],
+      "context": "thread",
+      "declared_deps": [
+        "sensor_prepare"
+      ],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ]
+    },
+    {
+      "name": "pid_step",
+      "fns": [
+        "pid_step"
+      ],
+      "context": "thread",
+      "declared_deps": [
+        "fir_filter"
+      ],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ]
+    },
+    {
+      "name": "sensor_prepare",
+      "fns": [
+        "sensor_prepare"
+      ],
+      "context": "thread",
+      "declared_deps": [],
+      "effects": [
+        "mmio",
+        "state_write"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "fir_filter",
+      "to": "pid_step",
+      "kind": "data",
+      "evidence": [
+        "@g_fir_out"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "sensor_prepare",
+      "to": "fir_filter",
+      "kind": "data",
+      "evidence": [
+        "@g_sensor_raw"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    }
+  ],
+  "candidates": [],
+  "topo_order": [
+    "sensor_prepare",
+    "fir_filter",
+    "pid_step"
+  ],
+  "cycles": [],
+  "stats": {
+    "nodes": 3,
+    "edges": 2,
+    "by_kind": {
+      "call": 0,
+      "data": 2,
+      "anti": 0,
+      "conflict": 0
+    },
+    "candidates": 0,
+    "concretized": 0,
+    "multi_binding": 0,
+    "unresolved": 0,
+    "explained_by_call": 0
+  },
+  "compare": {
+    "expect": [
+      [
+        "fir_filter",
+        "pid_step"
+      ],
+      [
+        "sensor_prepare",
+        "fir_filter"
+      ]
+    ],
+    "got": [
+      [
+        "fir_filter",
+        "pid_step"
+      ],
+      [
+        "sensor_prepare",
+        "fir_filter"
+      ]
+    ],
+    "missing": [],
+    "extra": [],
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "match": true
+  }
+}
