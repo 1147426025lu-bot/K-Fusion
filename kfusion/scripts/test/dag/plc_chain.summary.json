@@ -5,8 +5,8 @@
     "chain_main": {
       "effects": ["mmio", "state_read", "state_write"],
       "allowed_contexts": ["thread", "softirq"],
-      "reads": ["@g_fir_hist.0", "@g_fir_hist.1", "@g_fir_hist.2", "@g_fir_hist.3", "@g_fir_hist.4", "@g_fir_hist.5", "@g_fir_hist.6", "@g_fir_hist.7", "@g_fir_out", "@g_pid_integ", "@g_sensor_raw"],
-      "writes": ["@g_fir_hist.0", "@g_fir_hist.1", "@g_fir_hist.2", "@g_fir_hist.3", "@g_fir_hist.4", "@g_fir_hist.5", "@g_fir_hist.6", "@g_fir_hist.7", "@g_fir_out", "@g_pid_integ", "@g_sensor_raw"],
+      "reads": ["@g_fir_hist", "@g_fir_out", "@g_pid_integ", "@g_sensor_raw"],
+      "writes": ["@g_actuator", "@g_fir_hist", "@g_fir_out", "@g_pid_integ", "@g_sensor_raw"],
       "recursive": false,
       "calls": ["fir_filter", "pid_step", "sensor_prepare"],
       "unknown_calls": []
@@ -14,8 +14,8 @@
     "fir_filter": {
       "effects": ["state_read", "state_write"],
       "allowed_contexts": ["thread", "softirq"],
-      "reads": ["@g_fir_hist.0", "@g_fir_hist.1", "@g_fir_hist.2", "@g_fir_hist.3", "@g_fir_hist.4", "@g_fir_hist.5", "@g_fir_hist.6", "@g_fir_hist.7", "@g_sensor_raw"],
-      "writes": ["@g_fir_hist.0", "@g_fir_hist.1", "@g_fir_hist.2", "@g_fir_hist.3", "@g_fir_hist.4", "@g_fir_hist.5", "@g_fir_hist.6", "@g_fir_hist.7", "@g_fir_out"],
+      "reads": ["@g_fir_hist", "@g_sensor_raw"],
+      "writes": ["@g_fir_hist", "@g_fir_out"],
       "recursive": false,
       "calls": [],
       "unknown_calls": []
@@ -24,7 +24,7 @@
       "effects": ["state_read", "state_write"],
       "allowed_contexts": ["thread", "softirq"],
       "reads": ["@g_fir_out", "@g_pid_integ"],
-      "writes": ["@g_pid_integ"],
+      "writes": ["@g_actuator", "@g_pid_integ"],
       "recursive": false,
       "calls": [],
       "unknown_calls": []
@@ -48,5 +48,5 @@
   ],
   "interface_bindings": {
   },
-  "alias_stats": {"aa_available": true, "pairs_checked": 148, "coarse_pairs": 0, "split_pairs": 0}
+  "alias_stats": {"aa_available": true, "pairs_checked": 152, "coarse_pairs": 0, "split_pairs": 0}
 }

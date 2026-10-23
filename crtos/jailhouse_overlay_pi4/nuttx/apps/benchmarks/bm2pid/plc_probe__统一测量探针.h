@@ -34,7 +34,13 @@
 
 #include <stdio.h>
 
+/* 桶数可覆盖：默认 200（0..199 µs）够 BM2/root cell 用；
+ * 但实验里的 response 可能上千 µs（例如"每阶段一次释放"的对照），
+ * 全落进桶顶会让 p50 退化成 199 —— 那不是数据，是夹具的错。
+ * 用方可在 include 前 #define PLC_PROBE_BUCKETS 1024。 */
+#ifndef PLC_PROBE_BUCKETS
 #define PLC_PROBE_BUCKETS 200        /* 0..199 µs，1 µs 桶 */
+#endif
 #define PLC_PROBE_VER     "r/s/f v1.2"
 
 struct plc_probe_series {

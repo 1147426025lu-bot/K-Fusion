@@ -16,11 +16,13 @@
 
 static volatile uint32_t *const sensor_reg = (volatile uint32_t *)SENSOR_BASE;
 
-static int32_t g_sensor_raw;      /* 最近一次采样 */
-static int32_t g_fir_hist[8];     /* FIR 历史窗口 */
-static int32_t g_fir_out;         /* FIR 输出 */
-static int32_t g_pid_integ;       /* PID 积分项 */
-static int32_t g_actuator;        /* 执行器输出 */
+/* 同上：必须外部链接，否则"没人读的输出"会被整段删掉
+ * （实测 g_actuator 曾被优化掉，pid_step 的 writes 里只剩 g_pid_integ）。 */
+int32_t g_sensor_raw;         /* 最近一次采样 */
+int32_t g_fir_hist[8];        /* FIR 历史窗口 */
+int32_t g_fir_out;            /* FIR 输出 */
+int32_t g_pid_integ;          /* PID 积分项 */
+int32_t g_actuator;           /* 执行器输出 */
 
 /* --- 阶段 A：读设备（MMIO）--- */
 void sensor_prepare(void)

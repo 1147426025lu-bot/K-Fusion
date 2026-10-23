@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "nodes": [
+    {
+      "name": "a",
+      "fns": [
+        "a"
+      ],
+      "effects": [
+        "state_read"
+      ],
+      "contexts": [
+        "thread"
+      ]
+    },
+    {
+      "name": "b",
+      "fns": [
+        "b"
+      ],
+      "effects": [
+        "state_read"
+      ],
+      "contexts": [
+        "thread"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "a",
+      "to": "b",
+      "kind": "data",
+      "evidence": [
+        "@x"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "b",
+      "to": "a",
+      "kind": "data",
+      "evidence": [
+        "@y"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    }
+  ],
+  "candidates": [],
+  "topo_order": [],
+  "cycles": [
+    [
+      "a",
+      "b",
+      "a"
+    ]
+  ],
+  "stats": {}
+}

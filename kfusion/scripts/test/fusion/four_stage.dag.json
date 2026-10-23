@@ -1,0 +1,179 @@
+{
+  "version": 1,
+  "meta": {
+    "mode": "stages",
+    "summary": "/root/pr4/summary.json",
+    "task": {
+      "name": "four_stage_chain",
+      "entry": "chain_main",
+      "period_us": 1000,
+      "deadline_us": 1000,
+      "notes": "sample → fir → pid → clamp，靠全局状态串联"
+    },
+    "note": "proven=true 的边可作为约束；candidates 未经证明，不得当作依赖；conflict 无方向（只禁止重排）"
+  },
+  "nodes": [
+    {
+      "name": "stage_clamp",
+      "fns": [
+        "stage_clamp"
+      ],
+      "context": "thread",
+      "declared_deps": [
+        "stage_pid"
+      ],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ]
+    },
+    {
+      "name": "stage_fir",
+      "fns": [
+        "stage_fir"
+      ],
+      "context": "thread",
+      "declared_deps": [
+        "stage_sample"
+      ],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ]
+    },
+    {
+      "name": "stage_pid",
+      "fns": [
+        "stage_pid"
+      ],
+      "context": "thread",
+      "declared_deps": [
+        "stage_fir"
+      ],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ]
+    },
+    {
+      "name": "stage_sample",
+      "fns": [
+        "stage_sample"
+      ],
+      "context": "thread",
+      "declared_deps": [],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "stage_fir",
+      "to": "stage_pid",
+      "kind": "data",
+      "evidence": [
+        "@g_fir_out"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "stage_pid",
+      "to": "stage_clamp",
+      "kind": "data",
+      "evidence": [
+        "@g_act"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "stage_sample",
+      "to": "stage_fir",
+      "kind": "data",
+      "evidence": [
+        "@g_raw"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    }
+  ],
+  "candidates": [],
+  "topo_order": [
+    "stage_sample",
+    "stage_fir",
+    "stage_pid",
+    "stage_clamp"
+  ],
+  "cycles": [],
+  "stats": {
+    "nodes": 4,
+    "edges": 3,
+    "by_kind": {
+      "call": 0,
+      "spawn": 0,
+      "data": 3,
+      "anti": 0,
+      "conflict": 0
+    },
+    "candidates": 0,
+    "concretized": 0,
+    "multi_binding": 0,
+    "unresolved": 0,
+    "explained_by_call": 0
+  },
+  "compare": {
+    "expect": [
+      [
+        "stage_fir",
+        "stage_pid"
+      ],
+      [
+        "stage_pid",
+        "stage_clamp"
+      ],
+      [
+        "stage_sample",
+        "stage_fir"
+      ]
+    ],
+    "got": [
+      [
+        "stage_fir",
+        "stage_pid"
+      ],
+      [
+        "stage_pid",
+        "stage_clamp"
+      ],
+      [
+        "stage_sample",
+        "stage_fir"
+      ]
+    ],
+    "missing": [],
+    "extra": [],
+    "precision": 1.0,
+    "recall": 1.0,
+    "f1": 1.0,
+    "match": true
+  }
+}

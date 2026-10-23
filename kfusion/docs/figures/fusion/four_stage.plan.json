@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "meta": {
+    "dag": "/root/pr4/dag.json",
+    "platform": "linux_kernel",
+    "release_cost_us": 20.0,
+    "assumption": "串行链上 R̂ = G·c + ΣE；c 来自实测，不是拟合参数"
+  },
+  "order": [
+    "stage_sample",
+    "stage_fir",
+    "stage_pid",
+    "stage_clamp"
+  ],
+  "groups": [
+    {
+      "id": "g0",
+      "members": [
+        "stage_sample",
+        "stage_fir",
+        "stage_pid",
+        "stage_clamp"
+      ],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "softirq",
+        "thread"
+      ],
+      "exec_us": 0.0
+    }
+  ],
+  "cost": {
+    "groups": 1,
+    "exec_total_us": 0.0,
+    "predicted_R_us": 20.0,
+    "release_tax_us": 20.0
+  },
+  "merge_opportunities": [],
+  "rejected_segments": []
+}
