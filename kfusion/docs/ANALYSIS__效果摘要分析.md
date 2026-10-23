@@ -162,6 +162,45 @@ chain_main         state_read,state_write,mmio        ctx=thread,softirq
 
 ---
 
+## 5.3 v2 修复（2026-10-23 代码审查后）
+
+审查指出 v1 有三个**设计错误**（不是笔误），全部已改并补了回归：
+
+| 问题 | v1 的错误 | v2 的做法 |
+|---|---|---|
+| `memcpy/memset` 判成 pure | 只想着"会不会睡/碰 MMIO"，忘了**数据依赖**也要靠这张摘要 | 新增 `reads`/`writes` 抽象区域；`memcpy(dst,src)` → writes `arg:0`、reads `arg:1` |
+| 指针参数只判"被写" | `memcpy(out,in,n)` 这种"通过调用写 out"完全漏掉 | load → reads `arg:N`；store → writes `arg:N`；跨过程时把 callee 的 `arg:N` 映射成实参区域 |
+| 递归靠"迭代 64 次上限" | 深非递归链会误标，真递归也可能提前收敛 | 对调用图做 **Tarjan SCC**，只标记 SCC size>1 或自环 |
+
+判断标准也改了：**`pure` 现在是"什么效果都没有"**，不再允许"名字常见所以放行"。
+
+新增 `unknown` 与 `external` 两级：
+
+- `unknown` —— 解析不出的间接调用等，**一律拒绝**（诊断码 `E_UNPROVEN_EFFECT`）
+- `external` —— 名字认识但语义未归档，**默认拒绝**，可 `--allow-external` 显式放行
+
+### 验证
+
+`effect_summary_basic.ll` 从 10 条断言扩到 **26 条**，全部通过：
+
+```
+✅ memcpy_stage: ['state_read','state_write']   reads 含 arg:1 / writes 含 arg:0
+✅ memset_stage: ['state_write']                writes 含 arg:0
+✅ ptr_reader:   reads 含 arg:0
+✅ calls_writer: writes 含 @g_state             （跨过程参数映射正确）
+✅ indirect_caller: ['unknown']                 不含 pure
+✅ pure_libc:    ['pure']                       不含 external
+```
+
+拒绝策略实测：
+
+```
+external 默认            → E_EXTERNAL_UNVERIFIED  rc=1
+external --allow-external → PASS                   rc=0
+unknown  (+ --allow-external) → E_UNPROVEN_EFFECT  rc=1   ← 一律拒
+platform_caps 为空        → rc=2（之前会静默成功）
+```
+
 ## 6. 明确不主张
 
 1. **不证明语义等价**。这是"可能发生什么"的汇总，不是 refinement proof。

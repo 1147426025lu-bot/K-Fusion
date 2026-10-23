@@ -30,7 +30,14 @@ import json
 import os
 import sys
 
-EFFECTS = {"pure", "state_read", "state_write", "mmio", "sleep", "blocking_io", "external"}
+# 已知的结构性效果（这些本身不构成拒绝理由，是否合法由上下文/平台规则决定）
+KNOWN_EFFECTS = {"pure", "state_read", "state_write", "mmio", "sleep", "blocking_io"}
+# 两个"可疑"标记，语义不同：
+#   unknown  —— 分析器没能证明任何东西（含解析不出的间接调用）→ 一律拒绝
+#   external —— 名字认识但语义未归档的外部调用 → 默认拒绝，--allow-external 显式放行
+# 曾经的错误：把 external 混在 EFFECTS 白名单里，于是"标记了未知调用"却不阻止部署，
+# 与 fail-closed 原则直接冲突（2026-10-23 审查 P0）。
+EFFECTS = KNOWN_EFFECTS | {"external", "unknown"}
 CONTEXTS = {"thread", "softirq", "hardirq", "timer_cb"}
 IRQ_CTX = {"softirq", "hardirq"}
 NEED_SLEEP_OK = {"sleep", "blocking_io"}
@@ -95,18 +102,31 @@ def check_time(c, codes):
              f"deadline({d}) > period({p})：单周期内不可能满足")
 
 
-def check_stages(c, platform, codes):
+def check_stages(c, platform, codes, allow_external=False):
     ctxs = set(platform.get("contexts") or [])
     allow_mmio = bool(platform.get("allow_mmio"))
+    allow_sleep = platform.get("allow_sleep")   # None = 未声明
+    supports_float = platform.get("supports_float")
     for i, s in enumerate(c.get("stages") or []):
         w = s.get("name") or f"stages[{i}]"
         ctx = s.get("context")
         eff = s.get("effects") or []
 
-        unknown = [e for e in eff if e not in EFFECTS]
-        for e in unknown:
+        # 完全没听过的效果值
+        for e in [x for x in eff if x not in EFFECTS]:
             diag(codes, "E_EFFECT_UNKNOWN", w,
                  f"效果 '{e}' 不在白名单 → 按 UNKNOWN 拒绝（白名单: {sorted(EFFECTS)}）")
+
+        # 分析器明确标了 unknown：无法证明安全，必须拒
+        if "unknown" in eff:
+            diag(codes, "E_UNPROVEN_EFFECT", w,
+                 "分析器将该阶段标为 unknown（存在解析不出的调用/无法证明的操作）→ 拒绝")
+
+        # external：名字已知但语义未归档；默认拒，需显式 --allow-external
+        if "external" in eff and not allow_external:
+            diag(codes, "E_EXTERNAL_UNVERIFIED", w,
+                 "阶段含 external 调用（语义未归档）→ 默认拒绝；"
+                 "确认安全后可用 --allow-external 放行")
 
         if ctx not in CONTEXTS:
             diag(codes, "E_CONTEXT_UNKNOWN", w, f"context '{ctx}' 不在全局白名单")
@@ -123,6 +143,18 @@ def check_stages(c, platform, codes):
         if "mmio" in eff and not allow_mmio:
             diag(codes, "E_MMIO_FORBIDDEN", w,
                  f"平台 '{platform.get('name')}' 的 allow_mmio=false，但阶段声明了 mmio")
+
+        # allow_sleep：之前 schema 里有这个字段但校验器完全没用（审查指出）
+        if allow_sleep is False:
+            bad = [e for e in eff if e in NEED_SLEEP_OK]
+            if bad:
+                diag(codes, "E_SLEEP_FORBIDDEN", w,
+                     f"平台 '{platform.get('name')}' 的 allow_sleep=false，但阶段声明了 {bad}")
+
+        # supports_float=False 的平台不接受浮点阶段（当前用 fixed 效果名间接表达）
+        if supports_float is False and "float" in eff:
+            diag(codes, "E_FLOAT_FORBIDDEN", w,
+                 f"平台 '{platform.get('name')}' 的 supports_float=false，但阶段声明了 float")
 
 
 def check_deps(c, codes):
@@ -188,6 +220,7 @@ def main():
     platforms_path = None
     only = None
     as_json = False
+    allow_external = False
     i = 1
     while i < len(args):
         if args[i] == "--platforms":
@@ -196,6 +229,9 @@ def main():
         elif args[i] == "--platform":
             only = args[i + 1]
             i += 2
+        elif args[i] == "--allow-external":
+            allow_external = True
+            i += 1
         elif args[i] == "--json":
             as_json = True
             i += 1
@@ -210,6 +246,10 @@ def main():
     base = os.path.dirname(base)                  # examples/ 的上一级 = contracts/
 
     plats = caps.get("platforms") or []
+    if not plats:
+        # 曾经：空列表 → 循环 0 次 → bad=0 → 以成功退出，等于"什么都没检查就说没问题"
+        print("!! platform_caps 里没有任何平台 → 无法判定，按拒绝处理", file=sys.stderr)
+        sys.exit(2)
     if only and only != "all":
         plats = [p for p in plats if p.get("name") == only]
         if not plats:
@@ -222,7 +262,7 @@ def main():
         check_structure(c, codes)
         if not any(d["code"].startswith("E_STRUCT") for d in codes):
             check_time(c, codes)
-            check_stages(c, p, codes)
+            check_stages(c, p, codes, allow_external=allow_external)
             check_deps(c, codes)
         codes += maybe_schema_check(c, caps, base)
         ok = not codes

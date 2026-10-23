@@ -37,7 +37,7 @@ import json
 import sys
 
 EFFECT_ORDER = ["pure", "state_read", "state_write", "mmio", "sleep",
-                "blocking_io", "external"]
+                "blocking_io", "external", "unknown"]
 
 
 def load_json(path):
@@ -46,7 +46,7 @@ def load_json(path):
 
 
 def merge_effects(summary_funcs, fnames, warns, stage_name):
-    """把一个阶段里所有函数的效果取并集。"""
+    """把一个阶段里所有函数的效果取并集（保守：并集意味着"任一处有问题就整段有问题"）。"""
     eff = set()
     for fn in fnames:
         info = summary_funcs.get(fn)
@@ -98,13 +98,29 @@ def main():
         for extra in ("notes",):
             if extra in st:
                 item[extra] = st[extra]
-        # 把摘要里的 allowed_contexts 一并带出，便于人工核对（contract_check 不读这个字段）
-        ctx = set()
+        # 阶段的合法上下文 = 各函数 allowed_contexts 的**交集**。
+        # 曾用并集：只要有一个函数允许 softirq，整段就被放宽成允许 softirq —— 这是安全隐患。
+        # 缺 allowed_contexts 的函数按最保守的 {"thread"} 参与，绝不当成"什么都能跑"。
+        ctx = None
         for f in fnames:
             info = funcs.get(f) or {}
-            ctx |= set(info.get("allowed_contexts") or [])
+            allowed = set(info.get("allowed_contexts") or [])
+            if not allowed:
+                allowed = {"thread"}
+            ctx = allowed if ctx is None else (ctx & allowed)
         if ctx:
             item["derived_allowed_contexts"] = [c for c in ("thread", "softirq") if c in ctx]
+
+        # 抽象读写区域：取并集（保守——任一函数读到/写到，整段就算读到/写到）
+        rd, wr = set(), set()
+        for f in fnames:
+            info = funcs.get(f) or {}
+            rd |= set(info.get("reads") or [])
+            wr |= set(info.get("writes") or [])
+        if rd:
+            item["reads"] = sorted(rd)
+        if wr:
+            item["writes"] = sorted(wr)
         stages_out.append(item)
 
     contract = {

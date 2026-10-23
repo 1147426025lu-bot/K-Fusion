@@ -42,14 +42,23 @@ summary = json.load(io.open(sys.argv[1], encoding="utf-8"))
 funcs = summary.get("functions", {})
 ll = io.open(sys.argv[2], encoding="utf-8").read()
 
-exp_pos, exp_neg = [], []
+exp_pos, exp_neg, exp_rd, exp_wr = [], [], [], []
 for ln in ll.splitlines():
     m = re.match(r"^\s*;\s*EXPECT:\s*(\w+)\s+(.+?)\s*$", ln)
     if m:
         exp_pos.append((m.group(1), [e.strip() for e in m.group(2).split(",")]))
+        continue
     m = re.match(r"^\s*;\s*EXPECT_NOT:\s*(\w+)\s+(.+?)\s*$", ln)
     if m:
         exp_neg.append((m.group(1), [e.strip() for e in m.group(2).split(",")]))
+        continue
+    m = re.match(r"^\s*;\s*EXPECT_READS:\s*(\w+)\s+(\S+)\s*$", ln)
+    if m:
+        exp_rd.append((m.group(1), m.group(2)))
+        continue
+    m = re.match(r"^\s*;\s*EXPECT_WRITES:\s*(\w+)\s+(\S+)\s*$", ln)
+    if m:
+        exp_wr.append((m.group(1), m.group(2)))
 
 fail = 0
 checked = 0
@@ -82,6 +91,34 @@ for fn, bad in exp_neg:
         fail += 1
     else:
         print(f"✅ {fn}: 不含 {bad}（实际 {sorted(got)}）")
+
+for fn, region in exp_rd:
+    info = funcs.get(fn)
+    if info is None:
+        print(f"❌ {fn}: 摘要里没有这个函数")
+        fail += 1
+        continue
+    got = set(info.get("reads") or [])
+    checked += 1
+    if region not in got:
+        print(f"❌ {fn}: reads 应含 {region}，实际 {sorted(got) or '[]'}")
+        fail += 1
+    else:
+        print(f"✅ {fn}: reads 含 {region}")
+
+for fn, region in exp_wr:
+    info = funcs.get(fn)
+    if info is None:
+        print(f"❌ {fn}: 摘要里没有这个函数")
+        fail += 1
+        continue
+    got = set(info.get("writes") or [])
+    checked += 1
+    if region not in got:
+        print(f"❌ {fn}: writes 应含 {region}，实际 {sorted(got) or '[]'}")
+        fail += 1
+    else:
+        print(f"✅ {fn}: writes 含 {region}")
 
 print()
 print(f"检查 {checked} 条，失败 {fail} 条")

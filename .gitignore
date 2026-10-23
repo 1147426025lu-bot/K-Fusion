@@ -14,6 +14,9 @@
 *.o_shipped
 *.ll
 !kfusion/backend/test/*.ll
+# 分析器的回归用例：它们是自测的输入，必须入库，
+# 否则干净克隆后 `effect_summary_selftest` 直接找不到 fixture（2026-10-23 审查 P1）
+!kfusion/analysis/test/*.ll
 *.so
 *.a
 *.cmd
