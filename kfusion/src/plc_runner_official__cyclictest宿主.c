@@ -329,6 +329,21 @@ static void plc_probe_dump(void)
 	}
 	pr_info("PLCPROBE # deadline_miss: %llu/%llu (%s)\n",
 		plc_probe_miss, plc_ps_start.n, plc_probe_miss ? "FAIL" : "none");
+
+	/* 稀疏直方图（画 CDF 用）。一桶一行：pr_info 单行有长度上限，
+	 * 长尾若被截断，CDF 会「看起来更漂亮」——那正是必须避免的失真。 */
+	for (i = 0; i < 3; i++) {
+		struct plc_probe_series *s = arr[i];
+		int k;
+
+		for (k = 0; k < PLC_PROBE_BUCKETS; k++)
+			if (s->hist[k])
+				pr_info("PLCPROBE # hist_%s_us: %d %lu\n",
+					s->name, k, s->hist[k]);
+		if (s->over)
+			pr_info("PLCPROBE # hist_%s_us: over %llu\n",
+				s->name, s->over);
+	}
 }
 
 static struct plc_shm *plc_shm;

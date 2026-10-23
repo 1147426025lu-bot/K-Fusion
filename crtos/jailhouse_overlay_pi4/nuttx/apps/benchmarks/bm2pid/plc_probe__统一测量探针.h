@@ -123,4 +123,20 @@ static inline void plc_probe_line(const struct plc_probe_series *s)
 	       (double)s->max_ns / 1000.0, s->over, s->n);
 }
 
+/* 稀疏直方图：每个非零桶一行。为什么要单独一条：
+ *   `# stat_*` 只有 6 个分位点，画不出 CDF；而 CDF 是「重尾 vs 确定性」最直观的证据。
+ *   一桶一行而不是一行打全部，是因为内核 pr_info 单行有长度上限，长尾会被截断
+ *   （截断后的 CDF 看起来会很漂亮——这正是不能接受的地方）。 */
+static inline void plc_probe_hist(const struct plc_probe_series *s)
+{
+	int k;
+
+	for (k = 0; k < PLC_PROBE_BUCKETS; k++) {
+		if (s->hist[k])
+			printf("# hist_%s_us: %d %lu\n", s->name, k, s->hist[k]);
+	}
+	if (s->over)
+		printf("# hist_%s_us: over %llu\n", s->name, s->over);
+}
+
 #endif /* PLC_PROBE__UNIFIED_H */

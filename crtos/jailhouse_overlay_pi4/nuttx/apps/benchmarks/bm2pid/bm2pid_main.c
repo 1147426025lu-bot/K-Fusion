@@ -311,6 +311,11 @@ int main(int argc, char *argv[])
 	       g_dl_miss ? "FAIL" : "none");
 	printf("# exec_overrun: %lld/%lld\n", g_overruns, g_cycles);
 
+	/* --- 稀疏直方图（画 CDF 用；`# stat_*` 的 6 个分位点不够）--- */
+	plc_probe_hist(&g_p_start);
+	plc_probe_hist(&g_p_exec);
+	plc_probe_hist(&g_p_resp);
+
 	/* --- 控制质量（定点化若改变数值行为，这里会先露出来）--- */
 	{
 		int i;

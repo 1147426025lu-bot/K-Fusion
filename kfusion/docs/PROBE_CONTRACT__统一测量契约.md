@@ -66,7 +66,30 @@
 - `p*` 是 **1 µs 桶**的桶下界（整数）。`min/avg/max` 是 0.001 µs 精度。
 - 前缀 `stat_` 是为了不与旧的兼容行 `# exec_us: avg=…`（cycletest 口径）撞名。
 - 解析器：`crtos/scripts/pi4/probe_report__统一探针报告.py`
-- 实现：`crtos/jailhouse_overlay_pi4/nuttx/apps/benchmarks/bm2pid/plc_probe__统一测量探针.h`（纯 `static inline`，不动物建系统）
+
+### 3.1 稀疏直方图（v1.1 追加，2026-10-23）
+
+`# stat_*` 只有 6 个分位点，**画不出 CDF**；而"重尾 vs 点分布"恰恰是这批实验的核心结论。
+所以追加一段稀疏直方图，**每个非零桶一行**：
+
+```
+# hist_start_lat_us: 17 1
+# hist_start_lat_us: 19 3
+# hist_start_lat_us: 20 41000
+...
+# hist_response_us: over 3        ← >= 桶顶（199 µs）的样本数
+```
+
+两条硬约定：
+
+1. **一桶一行，不要一行打全部**。内核 `pr_info` 单行有长度上限，长尾被截断后
+   CDF 会「看起来更漂亮」——这正是最不能接受的失真。
+2. **溢出样本（`over`）不得拼进曲线**。绘图时若把它挂在桶顶后并连成水平线，
+   读图者会以为"从 199 µs 到无穷都有这个超出概率"，而实际只知道它 ≥199。
+   正确做法：曲线止于最后一个有限桶，溢出数单独在图注里说明。
+
+- 绘图：`crtos/scripts/pi4/probe_cdf_plot__三域CDF.py`
+- 实现：用户态 `plc_probe_hist()`（同一头文件）；内核侧在 `plc_probe_dump()` 里同构输出
 
 ---
 
