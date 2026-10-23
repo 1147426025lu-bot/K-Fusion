@@ -1,0 +1,67 @@
+
+# mode: flat  releases_per_period=5  cycles=60000
+
+# probe: r/s/f v1.2
+# period_ns: 1000000
+# deadline_ns: 1000000
+# samples: 60000
+# release_id: serial 0..59999
+# series_us: start_lat exec response  (1us buckets, cap 1023)
+# stat_start_lat_us: min=17.220 avg=20.641 p50=20 p90=20 p99=23 p99.9=24 p99.99=33 max=80.044 over=0 neg=0 min_signed=17.220 n=300000
+# stat_exec_us: min=2.779 avg=3.076 p50=3 p90=3 p99=3 p99.9=3 p99.99=4 max=6.204 over=0 neg=0 min_signed=2.779 n=60000
+# stat_span_us: min=747.710 avg=800.686 p50=800 p90=800 p99=800 p99.9=803 p99.99=816 max=819.839 over=0 neg=0 min_signed=747.710 n=60000
+# stat_response_us: min=817.757 avg=821.121 p50=821 p90=821 p99=821 p99.9=823 p99.99=836 max=839.715 over=0 neg=0 min_signed=817.757 n=60000
+# deadline_miss: 0/60000 (none)
+# exec_overrun: 0/60000
+# digest: b6eb20b8
+# stat_exec_stage_sample_us: min=0.352 avg=0.531 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=1.148 over=0 neg=0 min_signed=0.352 n=60000
+# stat_exec_stage_fir_us: min=0.703 avg=0.756 p50=0 p90=0 p99=0 p99.9=0 p99.99=1 max=3.426 over=0 neg=0 min_signed=0.703 n=60000
+# stat_exec_stage_pid_us: min=0.407 avg=0.622 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=1.222 over=0 neg=0 min_signed=0.407 n=60000
+# stat_exec_stage_clamp_us: min=0.481 avg=0.593 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=1.408 over=0 neg=0 min_signed=0.481 n=60000
+# stat_exec_stage_plant_us: min=0.334 avg=0.573 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=1.186 over=0 neg=0 min_signed=0.334 n=60000
+# hist_start_lat_us: 17 599
+# hist_start_lat_us: 18 7
+# hist_start_lat_us: 19 29603
+# hist_start_lat_us: 20 254633
+# hist_start_lat_us: 21 828
+# hist_start_lat_us: 22 1931
+# hist_start_lat_us: 23 11938
+# hist_start_lat_us: 24 187
+# hist_start_lat_us: 25 29
+# hist_start_lat_us: 26 27
+# hist_start_lat_us: 27 40
+# hist_start_lat_us: 28 27
+# hist_start_lat_us: 29 27
+# hist_start_lat_us: 30 64
+# hist_start_lat_us: 31 16
+# hist_start_lat_us: 32 9
+# hist_start_lat_us: 33 5
+# hist_start_lat_us: 34 5
+# hist_start_lat_us: 35 4
+# hist_start_lat_us: 36 9
+# hist_start_lat_us: 37 3
+# hist_start_lat_us: 38 3
+# hist_start_lat_us: 39 3
+# hist_start_lat_us: 43 1
+# hist_start_lat_us: 78 1
+# hist_start_lat_us: 80 1
+# hist_response_us: 817 35
+# hist_response_us: 818 90
+# hist_response_us: 819 9
+# hist_response_us: 820 9733
+# hist_response_us: 821 50065
+# hist_response_us: 822 6
+# hist_response_us: 823 2
+# hist_response_us: 824 6
+# hist_response_us: 825 6
+# hist_response_us: 826 10
+# hist_response_us: 827 10
+# hist_response_us: 828 6
+# hist_response_us: 829 2
+# hist_response_us: 830 5
+# hist_response_us: 831 2
+# hist_response_us: 832 4
+# hist_response_us: 833 1
+# hist_response_us: 836 4
+# hist_response_us: 837 3
+# hist_response_us: 839 1

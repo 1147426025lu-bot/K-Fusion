@@ -79,12 +79,12 @@
 
 ## 统计
 
-- 工作树文件总数：**1233**
+- 工作树文件总数：**1232**
 - `.github/`：3 文件
 - `compare/`：2 文件
-- `crtos/`：760 文件（docs 12 · jailhouse_overlay_pi4 24 · results 110 · logs 1 · scripts 53 · upstream 526）
+- `crtos/`：762 文件（docs 12 · jailhouse_overlay_pi4 24 · results 112 · logs 1 · scripts 53 · upstream 526）
 - `docs/`：4 文件
-- `kfusion/`：436 文件
+- `kfusion/`：437 文件
 - `results/`：3 文件
 - `scripts/`：1 文件
 - `timedc/`：11 文件

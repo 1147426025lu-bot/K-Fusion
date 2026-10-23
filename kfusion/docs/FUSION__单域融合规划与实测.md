@@ -1,10 +1,11 @@
 # 单域融合规划与实测（ECoS PR 4 v1 / v2 跨周期）
 
-> 状态：v1 **已实测**（2026-10-23，Pi4B root cell，HV 开）· v2 跨周期**已实现、待板上实测**
+> 状态：v1（拍内）**已实测** 2026-10-23 · v2（跨周期）**已实测** 2026-10-23 18:58
+> 两个实验都在 Pi4B root cell（HV 开）跑，1 kHz × 60 s × 2，CPU3 + FIFO 99，**wlan0 down**
 > 入口：`kfusion/scripts/fusion_plan__融合规划.py`（规划）+ `fusion_codegen__生成融合代码.py`（生成）
 > 测量：`crtos/scripts/pi4/fusion_report__融合对比.py`（对比与归因）
 > 自测：`kfusion/scripts/test/fusion_selftest__自测.sh` → **35/35**
-> 原始日志：`crtos/results/raw/fusion/run_{plan,flat}.log`
+> 原始日志：`crtos/results/raw/fusion/`（四阶段）、`crtos/results/raw/fusion_loop/`（闭环五阶段）
 > 上游：`DAG__任务依赖图生成.md`（依赖图）、`PROBE_CONTRACT__统一测量契约.md`（r/s/f）
 
 ---
@@ -74,6 +75,8 @@
 所以规划器把这一项**单独报出来**（`recurrences[].closing_edges[].inflation`），
 并给一个门禁开关：`--max-delay-inflation 2 --fail-on-warning`。这就是"该不该合"的第一条量化判据。
 
+> 板上核对（§5.6）：模型说 200 → 998 µs，实测派生值 199.3 → 997.9 µs（×5.01），差 0.7 µs 内。
+
 ---
 
 ## 3. 代价模型：三个量全是实测值，不是拟合参数
@@ -128,7 +131,8 @@ driver.c（plan：G 次释放/周期；flat：N 次释放/周期；同一份阶�
 所以**摘要必须逐位相同**；不同就说明融合改变了数据流，而不只是改变了唤醒路径。
 这比"看起来对"强：它是可机检的等价性证据。
 
-> 板侧实测入口已就绪，但本轮**未跑**（Pi 离线）——见 §9 的待办。
+实测：5 s 冒烟 `f82b5f12` = `f82b5f12`；60 s 正式跑 `b6eb20b8` = `b6eb20b8`。
+（两次摘要不同是正常的——周期数不同，摘要覆盖的样本序列长度就不同；**同一轮的两模式**必须相同。）
 
 ---
 
@@ -194,6 +198,58 @@ flat 的 R 里绝大部分是**相位等待**——我们把第 j 个阶段排�
 （plan 模式四段背靠背，缓存是热的）。这条**只是观察**，没有单独做实验证实，
 但值得记下：**同一份工作在不同释放结构下的执行时间也不是常数**。
 它没有影响主结论（61 µs 的税远大于 0.46 µs 的缓存效应）。
+
+---
+
+### 5.6 闭环五阶段（跨周期，2026-10-23 补测）
+
+前面 5.1–5.5 是**无环**的四阶段链。这一节把环闭上（`plant` 写 `g_plant`，`sample` 下一拍读），
+检验 v2 的跨周期部分在板上是否真的成立。
+
+条件：Pi4B root cell（HV 开）、1 kHz、60 s × 2、CPU3 + FIFO 99、**wlan0 down**（eth0 = 192.168.1.3）。
+日志：`crtos/results/raw/fusion_loop/run_{plan,flat}.log`。
+
+**第一关：DAG 由真实 IR 摘要恢复**（不是手写固件）
+
+```text
+clang-16 -S -emit-llvm -O2 -fno-inline -fno-inline-functions
+opt-16 -load-pass-plugin PLCEffectSummary.so -passes=plc-effect-summary
+→ dag_build --stages five_stage_loop.stages.json --fail-on-algebraic
+```
+
+5 条边与人工标注**逐条一致**（P/R/F1 = 1.000），并报出 1 个延迟反馈环：
+`stage_plant→stage_sample`，相位 800→0，闭合间隔 200 µs。**代数环 0 个。**
+
+| 指标 | plan（1 次释放/周期） | flat（5 次释放/周期） |
+|---|---|---|
+| `start_lat` p50 / p99 / p99.99 / max | 20 / 23 / 37 / 42.5 | 20 / 23 / 37 / 44.6 |
+| 单次唤醒 avg | 20.79 | 20.64 |
+| **每周期唤醒税** | **20.79 µs** | **103.20 µs** |
+| 工作量 `exec` avg | 2.14 | 3.08 |
+| 跨度 `span` avg | 2.14 | 800.69 |
+| **响应 R** p50 / avg / p99 / max | 22 / **22.93** / 25 / 45.6 | 821 / **821.12** / 821 / 839.7 |
+| deadline miss | 0/60000 | 0/60000 |
+| **采样序列摘要** | `b6eb20b8` | `b6eb20b8` |
+
+三条结论，全部可机检：
+
+1. **数据流没变**：两个模式的 FNV-1a 摘要**逐位相同**（`b6eb20b8`）。
+   阶段代码、初值、执行顺序都相同，唯一差别是释放次数——摘要相同即采样序列相同。
+   这比"看起来对"强，它是跨周期语义保持的证据而不是论证。
+2. **省 (N−1)·c 精确成立**：唤醒税 103.20 → 20.79，**省 82.42 µs/周期（占 8.2% 周期）**；
+   `(5−1)×20.64 = 82.56`，差 0.14 µs。
+3. **代价模型闭合**：`R̂ = 1×20.79 + 2.14 = 22.93` = 实测 R 均值 **22.929**（差 0.001 µs）。
+   四阶段那次是 22.86，两次都闭合到 0.01 µs 以内——说明"释放税 + 工作量"这个两参数
+   模型在本负载上够用，多出来的不是拟合项。
+
+**死区时间的变化也被数据证实了**（派生量，不是直接探针）：
+flat 的 `span` avg = 800.69 µs 说明 `plant` 确实在 800 µs 才执行，故下一拍 `sample` 读到它时
+间隔 ≈ `1000 − 800.69 = 199.3 µs`；plan 的 `span` = 2.14 µs，间隔 ≈ `1000 − 2.14 = 997.9 µs`。
+**199.3 → 997.9 µs（×5.01）**，与模型预测的 200 → 998 在 0.7 µs 内一致。
+
+次要现象沿用 §5.5 的解释：flat 的逐阶段执行时间普遍偏高（0.36→0.59、0.32→0.62、0.29→0.57），
+总量 2.14 → 3.08（+44%）。每次释放带来的冷启动把后段拖慢了——**这是融合的附带收益，不是代价**，
+但它说明"工作量"本身也随释放结构变，引用 exec 时要带上释放结构。
 
 ---
 
@@ -272,47 +328,57 @@ python crtos/scripts/pi4/fusion_report__融合对比.py run_plan.log run_flat.lo
 
 自测：`bash kfusion/scripts/test/fusion_selftest__自测.sh python3`（35 项）。
 
-### 8.1 闭环（跨周期）待跑清单
+### 8.1 闭环（跨周期）实测：已于 2026-10-23 18:58 跑完
+
+结果见 §5.6，原始日志 `crtos/results/raw/fusion_loop/run_{plan,flat}.log`。
+可复跑的命令如下（Pi4，eth0 = 192.168.1.3，先 `ip link set wlan0 down`）：
 
 ```bash
-# a) 摘要：用 EffectSummaryAnalysis 分析五阶段示例（Pi 上）
-clang -O1 -fno-inline -emit-llvm -c examples/ecos/five_stage_loop__闭环五阶段示例.c -o /root/pr5/loop.ll
-opt -load .../EffectSummary.so -effect-summary /root/pr5/loop.ll -o /dev/null 2> /root/pr5/summary.json
+# a) 摘要：效果摘要由编译器从 IR 推出（禁内联，否则函数被合并）
+clang-16 -S -emit-llvm -O2 -fno-inline -fno-inline-functions -fno-builtin \
+    kfusion/examples/ecos/five_stage_loop__闭环五阶段示例.c -o /root/pr5/loop.ll
+PLC_EFFECT_SUMMARY_OUT=/root/pr5/summary.json \
+    opt-16 -load-pass-plugin kfusion/analysis/build/PLCEffectSummary.so \
+    -passes=plc-effect-summary /root/pr5/loop.ll -S -o /dev/null
 
-# b) DAG：必须报出 1 个延迟反馈环（plant→sample，间隔 200 µs）
-python3 scripts/dag_build__任务DAG生成.py /root/pr5/summary.json \
-    --stages contracts/examples/five_stage_loop.stages.json --fail-on-algebraic \
-    --dot /root/pr5/loop.dot -o /root/pr5/dag.json
+# b) DAG：必须报出 1 个延迟反馈环（plant→sample，间隔 200 µs），代数环 0 个
+python3 kfusion/scripts/dag_build__任务DAG生成.py /root/pr5/summary.json \
+    --stages kfusion/contracts/examples/five_stage_loop.stages.json \
+    --fail-on-algebraic --dot /root/pr5/loop.dot -o /root/pr5/dag.json
 
-# c) 规划 + 生成（带摘要，跨周期等价的判据）
-python3 scripts/fusion_plan__融合规划.py /root/pr5/dag.json \
-    --platforms contracts/examples/platform_caps.json --platform linux_kernel \
+# c) 规划 + 生成（摘要 + 顺序守卫）
+python3 kfusion/scripts/fusion_plan__融合规划.py /root/pr5/dag.json \
+    --platforms kfusion/contracts/examples/platform_caps.json --platform linux_kernel \
     --release-cost-us 21 --exec-us /root/pr5/exec.json \
     --max-delay-inflation 8 -o /root/pr5/plan.json
 
-python3 scripts/fusion_codegen__生成融合代码.py /root/pr5/plan.json -o /root/pr5/driver.c \
-    --stage-source "$PWD/examples/ecos/five_stage_loop__闭环五阶段示例.c" \
+python3 kfusion/scripts/fusion_codegen__生成融合代码.py /root/pr5/plan.json -o /root/pr5/driver.c \
+    --stage-source "$PWD/kfusion/examples/ecos/five_stage_loop__闭环五阶段示例.c" \
     --call "stage_pid=stage_pid(1000)" --period-us 1000 --step-us 200 --cycles 60000 \
     --digest-var g_out --digest-var g_plant \
     --expect-order "stage_sample,stage_fir,stage_pid,stage_clamp,stage_plant"
+
+gcc -O2 -Wall -o /root/pr5/driver /root/pr5/driver.c -lm
 
 # d) 两模式各 60 s；**先比 digest，再比时间**
 chrt -f 99 taskset -c 3 /root/pr5/driver plan 60000 > /root/pr5/run_plan.log
 chrt -f 99 taskset -c 3 /root/pr5/driver flat 60000 > /root/pr5/run_flat.log
 grep '# digest' /root/pr5/run_plan.log /root/pr5/run_flat.log   # 必须相同
-```
 
-【待填实测值】闭环 plan/flat 的 `start_lat`、`R` 分位数与唤醒税——
-预期 wake tax 为 `1×c` vs `5×c`（省 4c ≈ 84 µs），但 **R 的比较必须扣除相位等待**（同 §5.3 口径）。
+# e) 归因（本地）
+python crtos/scripts/pi4/fusion_report__融合对比.py run_plan.log run_flat.log
+```
 
 ---
 
 ## 9. 下一步
 
-- ~~**跨周期依赖**~~：**已做**（`DAG` 文档 §6 + 本文 §2.2/§2.3）。判据是相位反向边，
-  不猜；代数环仍 fail-closed。剩下的实测见 §8.1。
+- ~~**跨周期依赖**~~：**已做并已实测**（`DAG` 文档 §6 + 本文 §2.2/§2.3/§5.6）。
+  判据是相位反向边，不猜；代数环仍 fail-closed；闭环五阶段省 82.42 µs/周期、摘要逐位相同。
 - **多任务真部署**：把 flat 模式换成真正的 N 个线程（含 IPC），看融合省下的
-  是否真的等于 61 µs，还是被 IPC 抵掉/放大。
+  是否真的等于 82.42 µs，还是被 IPC 抵掉/放大。这是目前最大的未验证假设——
+  现有两轮实验都是**同一线程内的多次释放**，不含并发。
 - **该不该合（收益侧）**：现在能拒（相位钉住 / 死区放大），还不能**算**"值不值"。
-  需要把死区变化换成控制代价（例如相位裕度损失），这是跨学科的一步。
-- **NuttX 侧同实验**：`c≈6 µs` 时税只有 3×6=18 µs，可用来验证"融合收益与 c 成正比"这一预测。
+  需要把死区变化（200 → 998 µs）换成控制代价（相位裕度损失），这是跨学科的一步。
+- **NuttX 侧同实验**：按 `(N−1)·c`，闭环五阶段在 NuttX 侧应只省 `4×6 ≈ 24 µs`（Linux 是 82.42），
+  正好用来验证"融合收益与 c 成正比、与 N 线性"这一预测。需要把驱动交叉编到 NuttX 并重建镜像。
