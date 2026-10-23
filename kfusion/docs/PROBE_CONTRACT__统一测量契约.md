@@ -91,6 +91,37 @@
 - 绘图：`crtos/scripts/pi4/probe_cdf_plot__三域CDF.py`
 - 实现：用户态 `plc_probe_hist()`（同一头文件）；内核侧在 `plc_probe_dump()` 里同构输出
 
+### 3.2 v1.2 追加（2026-10-23，审查第 5 条）
+
+三个洞：
+
+| 问题 | 后果 | v1.2 做法 |
+|---|---|---|
+| 相对期限写死等于周期 | `deadline_us` 是契约里的独立字段，D≠T 时 miss 判错 | `# deadline_ns:` 字段；`bm2pid -d <us>`、`cycletest_deadline_us=` 模块参数 |
+| 负时间差被取绝对值 | "定时器到来前就醒了"这类样本被抹成正值 | `neg=<个数>` + `min_signed=<µs>` 单独报告；直方图仍按绝对值分桶 |
+| 没有 release 配对证据 | 合并唤醒/积压时，r/s/f 未必属于同一实例 | `# release_id:` 行 + `backlog=<次数>` |
+
+新增输出（旧日志仍然可解析，字段缺失显示 `?` / `-`）：
+
+```
+# probe: r/s/f v1.2
+# period_ns: 1000000
+# deadline_ns: 600000
+# release_id: serial 0..4999            ← BM2：串行循环，下标即 id
+#       或   callback/consumer paired, backlog=0   ← 内核：回调置位 + 任务消费
+# stat_response_us: min=.. p50=.. max=.. over=0 neg=0 min_signed=18.566 n=5000
+```
+
+**两种配对方式必须分开写**，因为它们证明的东西不同：
+
+- BM2 用户态是 `for` 循环串行执行，第 k 次的 r/s/f **物理上就是同一拍**，`release_id` 是下标，`backlog` 恒 0——**不需要额外机制**。
+- 内核宿主是"回调写 r_k、任务醒来写 s_k/f_k"，靠 `probe_have_*` 配对。若回调连续置位而任务只消费一次，
+  中间那些 release 就丢了——`backlog` 就是这种情况的计数。**它不是 0 时，分位数要用，但极值要打问号。**
+
+**deadline 的实测**：`-d 10`（10 µs 期限，小于实测响应 22 µs）时
+`deadline_miss` 立刻变成 `3000/3000 FAIL`；默认（=period）时 `0/3000`。
+说明这个字段真的在判据里，不是摆设。
+
 ---
 
 ## 4. 各域怎么落地

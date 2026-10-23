@@ -77,7 +77,10 @@ static struct plc_probe_series g_p_resp;
 
 static long long     g_cycles;
 static long long     g_overruns;      /* exec_ns > PERIOD_NS（本周期算得比周期还长） */
-static long long     g_dl_miss;       /* f_k > r_k + PERIOD_NS（真正的完成期限错过） */
+static long long     g_dl_miss;       /* f_k > r_k + D（真正的完成期限错过） */
+/* 相对期限 D。ECoS 的契约里 deadline_us 是独立字段，不能默认等于周期。
+ * 0 表示未指定 → 沿用周期（与旧行为一致）。 */
+static long long     g_deadline_ns;
 static long long     g_exec_max_ns;
 static long long     g_exec_sum_ns;
 
@@ -236,7 +239,9 @@ static int run(long cycles)
 		 * 的执行时间没超周期，但本周期已经赶不上交付）。 */
 		if (exec_ns > PERIOD_NS)
 			g_overruns++;
-		if (f_ns > r_ns + PERIOD_NS)
+		/* 用独立期限 D 而非周期 T：D < T 时会更早判违约，D > T 时更宽松。
+		 * 这与契约里的 task.deadline_us 对齐。 */
+		if (f_ns > r_ns + (g_deadline_ns > 0 ? g_deadline_ns : PERIOD_NS))
 			g_dl_miss++;
 
 		g_cycles++;
@@ -250,17 +255,21 @@ int main(int argc, char *argv[])
 	long cycles = 100000;   /* 100 s @1kHz，与 cyclictest 的 -l 100000 对齐 */
 	int opt;
 
-	while ((opt = getopt(argc, argv, "l:v")) != -1) {
+	while ((opt = getopt(argc, argv, "l:d:v")) != -1) {
 		switch (opt) {
 		case 'l':
 			cycles = strtol(optarg, NULL, 10);
+			break;
+		case 'd':
+			/* 相对期限（µs）。0 = 沿用周期，与旧行为一致 */
+			g_deadline_ns = strtol(optarg, NULL, 10) * 1000LL;
 			break;
 		case 'v':
 			printf("bm2pid: %d axes, cascade PID, FIR %d taps, period %lld ns\n",
 			       N_AXES, FIR_TAPS, PERIOD_NS);
 			break;
 		default:
-			printf("usage: bm2pid [-l cycles] [-v]\n");
+			printf("usage: bm2pid [-l cycles] [-d deadline_us] [-v]\n");
 			return 1;
 		}
 	}
@@ -303,7 +312,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* --- 统一探针块（跨域可比的口径，见 plc_probe__统一测量探针.h）--- */
-	plc_probe_head(PERIOD_NS, (unsigned long long)g_cycles);
+	plc_probe_head(PERIOD_NS, g_deadline_ns, (unsigned long long)g_cycles);
 	plc_probe_line(&g_p_start);
 	plc_probe_line(&g_p_exec);
 	plc_probe_line(&g_p_resp);

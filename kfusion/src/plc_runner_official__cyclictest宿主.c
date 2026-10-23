@@ -181,12 +181,22 @@ struct plc_probe_series {
 	u64 min_ns;
 	u64 max_ns;
 	u64 over;
+	/* v1.2：不能对负时间差取绝对值就当没发生（合并唤醒/时钟调整时真实存在） */
+	u64 neg;
+	s64 min_signed_ns;
+	s64 max_signed_ns;
 };
 
 static struct plc_probe_series plc_ps_start = { .name = "start_lat", .min_ns = ~0ULL };
 static struct plc_probe_series plc_ps_exec = { .name = "exec", .min_ns = ~0ULL };
 static struct plc_probe_series plc_ps_resp = { .name = "response", .min_ns = ~0ULL };
 static u64 plc_probe_miss;
+/* 被"合并掉"的释放次数：回调把 pending 加了几次，任务只消费一次，
+ * 中间那些 release 没有人处理。>0 就说明 r_k/s_k 不是一一对应的。 */
+static u64 plc_probe_backlog;
+/* 探针用的相对期限（ns），由 runner_init 依据 cycletest_deadline_us 换算。
+ * 放在这里（而不是参数区）是因为 plc_probe_mark() 在源文件更靠前的位置就要用。 */
+static s64 plc_probe_deadline_ns;
 
 static void plc_probe_reset_one(struct plc_probe_series *s, const char *name)
 {
@@ -200,6 +210,9 @@ static void plc_probe_reset_one(struct plc_probe_series *s, const char *name)
 	s->min_ns = ~0ULL;
 	s->max_ns = 0;
 	s->over = 0;
+	s->neg = 0;
+	s->min_signed_ns = (s64)0x7FFFFFFFFFFFFFFFLL;   /* 不能用 ULLONG_MAX（转 s64 是 -1） */
+	s->max_signed_ns = 0;
 }
 
 static bool plc_probe_dumped;	/* dump 幂等：delete 与 exit 只会输出一次 */
@@ -210,14 +223,23 @@ static void plc_probe_reset_all(void)
 	plc_probe_reset_one(&plc_ps_exec, "exec");
 	plc_probe_reset_one(&plc_ps_resp, "response");
 	plc_probe_miss = 0;
+	plc_probe_backlog = 0;
 	plc_probe_dumped = false;
 }
 
 static void plc_probe_add(struct plc_probe_series *s, s64 v_ns)
 {
 	u64 a = (u64)(v_ns < 0 ? -v_ns : v_ns);
-	unsigned long us = (unsigned long)div_u64(a, 1000);
+	unsigned long us;
 
+	if (v_ns < 0)
+		s->neg++;
+	if (v_ns < s->min_signed_ns)
+		s->min_signed_ns = v_ns;
+	if (v_ns > s->max_signed_ns)
+		s->max_signed_ns = v_ns;
+
+	us = (unsigned long)div_u64(a, 1000);
 	if (us >= PLC_PROBE_BUCKETS) {
 		s->over++;
 		us = PLC_PROBE_BUCKETS - 1;
@@ -284,7 +306,9 @@ static void plc_probe_mark(struct plc_cyclic_timer *ct)
 
 		plc_probe_add(&plc_ps_exec, exec_ns);
 		plc_probe_add(&plc_ps_resp, resp_ns);
-		if (resp_ns > ktime_to_ns(ct->interval))
+		if (resp_ns > (plc_probe_deadline_ns > 0
+				       ? plc_probe_deadline_ns
+				       : ktime_to_ns(ct->interval)))
 			plc_probe_miss++;
 	}
 	ct->probe_prev_s = s;
@@ -309,7 +333,15 @@ static void plc_probe_dump(void)
 
 	pr_info("PLCPROBE # probe: r/s/f v1\n");
 	pr_info("PLCPROBE # period_ns: %lld\n", ktime_to_ns(fused_cyclic.interval));
+	pr_info("PLCPROBE # deadline_ns: %lld\n",
+		plc_probe_deadline_ns > 0 ? plc_probe_deadline_ns
+					  : ktime_to_ns(fused_cyclic.interval));
 	pr_info("PLCPROBE # samples: %llu\n", plc_ps_start.n);
+	/* 内核宿主是"回调置位 + 任务醒来消费"，所以这里如实标注配对方式：
+	 * r_k 由回调写下，s_k/f_k 由任务侧写下，两者靠 probe_have_* 配对；
+	 * backlog 统计"回调次数 - 任务消费次数"，>0 说明有过合并唤醒。 */
+	pr_info("PLCPROBE # release_id: callback/consumer paired, backlog=%llu\n",
+		plc_probe_backlog);
 	pr_info("PLCPROBE # series_us: start_lat exec response  (1us buckets, cap %d)\n",
 		PLC_PROBE_BUCKETS - 1);
 	for (i = 0; i < 3; i++) {
@@ -318,14 +350,18 @@ static void plc_probe_dump(void)
 
 		pr_info("PLCPROBE # stat_%s_us: min=%llu.%03llu avg=%llu.%03llu "
 			"p50=%lu p90=%lu p99=%lu p99.9=%lu p99.99=%lu max=%llu.%03llu "
-			"over=%llu n=%llu\n",
+			"over=%llu neg=%llu min_signed=%lld.%03lld n=%llu\n",
 			s->name,
 			s->min_ns / 1000, s->min_ns % 1000,
 			avg / 1000, avg % 1000,
 			plc_probe_pctl(s, 500000), plc_probe_pctl(s, 900000),
 			plc_probe_pctl(s, 990000), plc_probe_pctl(s, 999000),
 			plc_probe_pctl(s, 999900),
-			s->max_ns / 1000, s->max_ns % 1000, s->over, s->n);
+			s->max_ns / 1000, s->max_ns % 1000, s->over, s->neg,
+			s->n ? s->min_signed_ns / 1000 : 0,
+			s->n ? (s->min_signed_ns < 0 ? -(s->min_signed_ns % 1000)
+						     : s->min_signed_ns % 1000) : 0,
+			s->n);
 	}
 	pr_info("PLCPROBE # deadline_miss: %llu/%llu (%s)\n",
 		plc_probe_miss, plc_ps_start.n, plc_probe_miss ? "FAIL" : "none");
@@ -355,6 +391,9 @@ static int jitter_probe_cpu = 3;
 static int timerthread_cpu = -1;
 static bool probe_rt_enable = true;
 static ulong cycletest_interval_us = 1000;
+/* 探针用相对期限（µs）。0 = 沿用周期。
+ * ECoS 契约里 deadline_us 是独立字段，不能默认 D == T。 */
+static ulong cycletest_deadline_us;
 static bool shutdown_request;
 
 static char runner_profile_str[32] = "fused";
@@ -389,6 +428,9 @@ module_param(jitter_probe_cpu, int, 0644);
 module_param(timerthread_cpu, int, 0644);
 module_param(probe_rt_enable, bool, 0644);
 module_param(cycletest_interval_us, ulong, 0644);
+module_param(cycletest_deadline_us, ulong, 0644);
+MODULE_PARM_DESC(cycletest_deadline_us,
+		 "相对期限 µs（0 = 等于 period）；探针的 miss 判据 f_k > r_k + D");
 module_param_string(runner_profile, runner_profile_str, sizeof(runner_profile_str), 0644);
 module_param_string(ring_export_path, ring_export_path, sizeof(ring_export_path), 0644);
 module_param_string(plc_tdma_periods_us, plc_tdma_periods_str,
@@ -925,7 +967,14 @@ int plc_sigwait(const unsigned long *set, int *sig)
 		if (READ_ONCE(shutdown) || READ_ONCE(shutdown_requested))
 			return -EINTR;
 		if (atomic_read(&ct->pending) > 0) {
-			atomic_dec(&ct->pending);
+			/* 先读旧值再减：>1 说明这期间有好几次释放被合并到这一拍 */
+			{
+				int _p = atomic_read(&ct->pending);
+
+				atomic_dec(&ct->pending);
+				if (_p > 1)
+					plc_probe_backlog += (u64)(_p - 1);
+			}
 			if (sig)
 				*sig = FUSED_CYCLIC_SIG;
 			plc_probe_mark(ct);
@@ -1205,6 +1254,10 @@ static int __init runner_init(void)
 	fused_par->clock = CLOCK_MONOTONIC;
 	fused_par->signal = FUSED_CYCLIC_SIG;
 	fused_par->interval = cycletest_interval_us;
+	/* 探针用的相对期限（ns）。0 = 沿用周期，与旧行为一致 */
+	plc_probe_deadline_ns = (cycletest_deadline_us > 0)
+				    ? (s64)cycletest_deadline_us * 1000
+				    : (s64)cycletest_interval_us * 1000;
 	fused_par->cpu = effective_timerthread_cpu();
 	fused_par->node = -1;
 	fused_par->tnum = 0;
