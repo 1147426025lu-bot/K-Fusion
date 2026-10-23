@@ -42,7 +42,7 @@ summary = json.load(io.open(sys.argv[1], encoding="utf-8"))
 funcs = summary.get("functions", {})
 ll = io.open(sys.argv[2], encoding="utf-8").read()
 
-exp_pos, exp_neg, exp_rd, exp_wr = [], [], [], []
+exp_pos, exp_neg, exp_rd, exp_wr, exp_wr_ge = [], [], [], [], []
 for ln in ll.splitlines():
     m = re.match(r"^\s*;\s*EXPECT:\s*(\w+)\s+(.+?)\s*$", ln)
     if m:
@@ -59,6 +59,10 @@ for ln in ll.splitlines():
     m = re.match(r"^\s*;\s*EXPECT_WRITES:\s*(\w+)\s+(\S+)\s*$", ln)
     if m:
         exp_wr.append((m.group(1), m.group(2)))
+        continue
+    m = re.match(r"^\s*;\s*EXPECT_WRITES_GE:\s*(\w+)\s+(\d+)\s*$", ln)
+    if m:
+        exp_wr_ge.append((m.group(1), int(m.group(2))))
 
 fail = 0
 checked = 0
@@ -119,6 +123,37 @@ for fn, region in exp_wr:
         fail += 1
     else:
         print(f"✅ {fn}: writes 含 {region}")
+
+for fn, at_least in exp_wr_ge:
+    info = funcs.get(fn)
+    if info is None:
+        print(f"❌ {fn}: 摘要里没有这个函数")
+        fail += 1
+        continue
+    got = set(info.get("writes") or [])
+    checked += 1
+    if len(got) < at_least:
+        print(f"❌ {fn}: writes 应有 ≥{at_least} 个不同区域，实际 {sorted(got)}")
+        fail += 1
+    else:
+        print(f"✅ {fn}: writes 有 {len(got)} 个不同区域 {sorted(got)}")
+
+# 别名一致性：split_pairs 必须为 0（命名太细会漏真依赖）
+astat = summary.get("alias_stats") or {}
+if astat:
+    checked += 1
+    split = astat.get("split_pairs", 0)
+    coarse = astat.get("coarse_pairs", 0)
+    pairs = astat.get("pairs_checked", 0)
+    avail = astat.get("aa_available")
+    if not avail:
+        print("❌ alias_stats: aa_available=false（AA 没拿到，统计无效）")
+        fail += 1
+    elif split:
+        print(f"❌ alias_stats: split_pairs={split} > 0 —— 命名太细，会漏真依赖")
+        fail += 1
+    else:
+        print(f"✅ alias_stats: 检查 {pairs} 对，coarse={coarse}（安全侧），split=0")
 
 print()
 print(f"检查 {checked} 条，失败 {fail} 条")

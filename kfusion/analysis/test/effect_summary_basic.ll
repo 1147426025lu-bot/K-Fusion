@@ -16,6 +16,7 @@ declare void @llvm.memcpy.p0.p0.i64(ptr, ptr, i64, i1)
 declare void @llvm.memset.p0.i64(ptr, i8, i64, i1)
 declare i32 @fwrite(ptr, i64, i64, ptr)
 declare i32 @strlen(ptr)
+declare ptr @malloc(i64)
 
 ; ---------- 纯粹的计算 ----------
 ; EXPECT: pure_math pure
@@ -129,6 +130,43 @@ entry:
 define void @blocking(ptr %p) {
 entry:
   %r = call i32 @fwrite(ptr %p, i64 1, i64 4, ptr null)
+  ret void
+}
+
+; ---------- 别名：两个独立分配必须得到两个不同区域 ----------
+; 旧实现把它们都归到 "heap"，后续 DAG 会连出一条假依赖边。
+; EXPECT: two_allocs state_write
+; EXPECT_WRITES_GE: two_allocs 2
+define void @two_allocs() {
+entry:
+  %a = call ptr @malloc(i64 64)
+  %b = call ptr @malloc(i64 64)
+  store i32 1, ptr %a
+  store i32 2, ptr %b
+  ret void
+}
+
+; 同一对象的两个视图（GEP 偏移）必须归到同一个区域，
+; 否则会漏掉"同一块内存被两处写"的真依赖。
+; EXPECT: same_obj state_write
+; EXPECT_WRITES_GE: same_obj 1
+define void @same_obj(ptr %p) {
+entry:
+  %q = getelementptr i32, ptr %p, i64 1
+  store i32 1, ptr %p
+  store i32 2, ptr %q
+  ret void
+}
+
+; 两个独立栈对象 → 两个不同区域
+; EXPECT: two_allocas state_write
+; EXPECT_WRITES_GE: two_allocas 2
+define void @two_allocas() {
+entry:
+  %x = alloca i32
+  %y = alloca i32
+  store i32 1, ptr %x
+  store i32 2, ptr %y
   ret void
 }
 

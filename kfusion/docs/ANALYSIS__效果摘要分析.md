@@ -201,6 +201,66 @@ unknown  (+ --allow-external) → E_UNPROVEN_EFFECT  rc=1   ← 一律拒
 platform_caps 为空        → rc=2（之前会静默成功）
 ```
 
+## 5.4 别名分析（2026-10-23 追加）
+
+**为什么必须补**：v2 的区域只有三类（`@global` / `arg:N` / `heap`）。所有堆指针
+共用一个 `heap` 名字，等于告诉下游"它们全可能别名"。后续做数据依赖图时，
+A 阶段的每个堆写都会连到 B 阶段的每个堆读——**假边爆炸**，DAG 就没法用了。
+
+### 做法
+
+用 LLVM 的 `getUnderlyingObject`（能穿透 GEP / bitcast / PHI / select）找根对象，
+再按根对象种类给**稳定且唯一**的名字：
+
+| 根对象 | 区域名 |
+|---|---|
+| `GlobalVariable` | `@变量名` |
+| `AllocaInst` | `alloca:<函数>:<名字或序号>` |
+| 分配型调用（malloc/calloc/realloc/kmalloc/operator new…） | `heap:<callee>#<调用点序号>` |
+| `Argument` | `arg:N` |
+| 归不到根 | `heap:?`（保守兜底） |
+
+再用**真实的 `AAManager`** 做一致性校验，输出两个计数：
+
+- `coarse_pairs`：AA 判定 `NoAlias`，但我们给了同一个名字 → **命名太粗**
+  （安全方向：只会多出假依赖边）
+- `split_pairs`：AA 判定 `MustAlias`，但我们给了不同名字 → **命名太细**
+  （危险方向：会漏掉真依赖）
+
+`split_pairs > 0` 直接判失败——这是回归门禁。
+
+### 实测
+
+自测用例（33 条，新增 3 条 alias 用例）：
+
+```
+✅ two_allocs:   writes 有 2 个不同区域 ['heap:malloc#0', 'heap:malloc#1']
+✅ same_obj:     writes 有 1 个不同区域 ['arg:0']        ← GEP 穿透到同一根
+✅ two_allocas:  writes 有 2 个不同区域 ['alloca:two_allocas:x', 'alloca:two_allocas:y']
+✅ alias_stats:  检查 3 对，coarse=0（安全侧），split=0
+```
+
+真实产物（NuttX cyclictest，13 函数，`-O1 -fno-inline`）：
+
+```
+alias_stats: {'aa_available': True, 'pairs_checked': 3521,
+              'coarse_pairs': 0, 'split_pairs': 0}
+区域种类: alloca 16 / arg 7 / heap 12 / @全局 若干
+```
+
+**3521 对指针，两个方向都是 0** —— 说明 `getUnderlyingObject` 的划分在这份代码上
+既不过粗也不过细。这不是"AA 说没问题"，而是"我们的近似与 AA 完全一致"。
+
+### 不主张
+
+1. **不是 full alias analysis**：没有流敏感、没有 field-sensitive（同一个 struct 的
+   两个字段算同一区域）、没有跨函数别名推理（参数间 `noalias` 属性会被忽略）。
+2. `heap:?` 仍是兜底：归不到根的指针依然共用一个名字，会保守地产生假边。
+   这个比例可以统计（`区域种类` 里的 `heap`），但目前未单独计数。
+3. **AA 只用于校验，不用于划分**：区域名完全由 `getUnderlyingObject` 决定，
+   AA 只回答"我们这个划分错没错"。这样做的好处是划分结果可复现、不依赖 AA 的具体实现。
+4. 没有验证 `split_pairs=0` 在所有输入上都成立——只在自测用例和一份真实产物上成立。
+
 ## 6. 明确不主张
 
 1. **不证明语义等价**。这是"可能发生什么"的汇总，不是 refinement proof。

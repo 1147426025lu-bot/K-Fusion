@@ -34,6 +34,8 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/GlobalVariable.h"
 #include "llvm/IR/InstIterator.h"
@@ -45,6 +47,7 @@
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/raw_ostream.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <initializer_list>
 #include <functional>
@@ -153,24 +156,71 @@ bool isPureArithName(StringRef Name) {
                            "log", "pow", "fmod", "sqrt", "floor", "ceil"});
 }
 
-/// 指针属于哪个抽象区域。
-/// 注意 `inttoptr 常量` 不在这里处理——那是 MMIO，由 volatile 判据单独负责。
-std::string regionOf(const Value *V,
-                     const std::map<const Argument *, std::string> &ArgMap) {
-  if (!V)
-    return "heap";
-  V = V->stripPointerCasts();
-  if (auto *GV = dyn_cast<GlobalVariable>(V))
-    return "@" + GV->getName().str();
-  if (auto *GEP = dyn_cast<GEPOperator>(V))
-    return regionOf(GEP->getPointerOperand(), ArgMap);
-  if (auto *A = dyn_cast<Argument>(V)) {
-    auto It = ArgMap.find(A);
-    if (It != ArgMap.end())
-      return It->second;
-  }
-  return "heap";
+/// 分配型调用：返回的是新内存，不同调用点彼此不别名。
+bool isAllocLike(const CallBase *CB) {
+  const Function *F = CB->getCalledFunction();
+  if (!F)
+    return false;
+  return nameHasAny(F->getName(), {"malloc", "calloc", "realloc", "strdup",
+                                   "strndup", "operator new", "operator_new",
+                                   "alloc", "kmalloc", "kzalloc", "vmalloc"});
 }
+
+/// 抽象区域命名器。
+///
+/// v2 的旧实现只分三类（@global / arg:N / heap），于是**所有**堆指针共用一个
+/// "heap" 名字——后续数据依赖图会把它们全判成可能别名，连出一堆假边。
+///
+/// 现在用 `getUnderlyingObject`（能穿透 GEP / bitcast / PHI / select）找到根对象，
+/// 再按根对象的种类给**稳定且唯一**的名字：
+///   @global            全局变量
+///   alloca:<fn>:<id>   某个栈分配
+///   heap:<callee>#<id> 某个分配调用点
+///   arg:N              第 N 个指针参数
+///   heap:?             归不到根（保守兜底）
+///
+/// 注意 `inttoptr 常量` 不在这里处理——那是 MMIO，由 volatile 判据单独负责。
+class RegionNamer {
+  std::map<const Value *, std::string> Names;
+  unsigned Seq = 0;
+
+public:
+  std::string of(const Value *V,
+                 const std::map<const Argument *, std::string> &ArgMap) {
+    if (!V)
+      return "heap:?";
+
+    const Value *Root = getUnderlyingObject(V, 0);
+    auto It = Names.find(Root);
+    if (It != Names.end())
+      return It->second;
+
+    std::string N;
+    if (auto *GV = dyn_cast<GlobalVariable>(Root)) {
+      N = "@" + GV->getName().str();
+    } else if (auto *AI = dyn_cast<AllocaInst>(Root)) {
+      std::string Fn = AI->getFunction() ? AI->getFunction()->getName().str() : "?";
+      N = "alloca:" + Fn + ":" +
+          (AI->hasName() ? AI->getName().str() : ("t" + std::to_string(Seq++)));
+    } else if (auto *CB = dyn_cast<CallBase>(Root)) {
+      if (isAllocLike(CB)) {
+        const Function *F = CB->getCalledFunction();
+        N = "heap:" + (F ? F->getName().str() : "?") + "#" +
+            std::to_string(Seq++);
+      } else {
+        N = "heap:?";
+      }
+    } else if (auto *A = dyn_cast<Argument>(Root)) {
+      auto Ai = ArgMap.find(A);
+      N = (Ai != ArgMap.end()) ? Ai->second : "arg:?";
+    } else {
+      N = "heap:?";
+    }
+
+    Names[Root] = N;
+    return N;
+  }
+};
 
 /// 建立"指针参数 → arg:N"的映射。
 std::map<const Argument *, std::string> buildArgMap(const Function *F) {
@@ -242,12 +292,32 @@ void markRecursion(std::map<std::string, FnSummary> &Sum) {
       StrongConnect(KV.first);
 }
 
+/// 别名分析的量化指标。为什么要它：
+/// 「区域名相同」是我们自己对"可能别名"的保守近似。若 AA 判定 NoAlias 却同名，
+/// 说明命名太粗（会产生假依赖边）；若 AA 判定 MustAlias 却不同名，说明命名太细
+/// （会漏掉真依赖，更危险）。两个计数都输出，任何人都能判断这份摘要可信到什么程度。
+struct AliasStat {
+  bool Available = false;
+  unsigned long long Pairs = 0;
+  unsigned long long Coarse = 0;   // 同名但 NoAlias：命名太粗
+  unsigned long long Split = 0;    // 不同名但 MustAlias：命名太细（危险）
+};
+
 class EffectSummaryAnalysis
     : public PassInfoMixin<EffectSummaryAnalysis> {
 public:
-  PreservedAnalyses run(Module &M, ModuleAnalysisManager &) {
+  PreservedAnalyses run(Module &M, ModuleAnalysisManager &MAM) {
     std::map<std::string, FnSummary> Sum;
     std::map<const Function *, std::string> NameOf;
+    RegionNamer Namer;
+    AliasStat AStat;
+
+    // 拿到函数级 AA（opt 的标准 pipeline 会注册 AAManager / BasicAA）
+    FunctionAnalysisManager *FAM = nullptr;
+    {
+      auto &Proxy = MAM.getResult<FunctionAnalysisManagerModuleProxy>(M);
+      FAM = &Proxy.getManager();
+    }
 
     // ---- 1. 本地扫描 ----
     for (Function &F : M) {
@@ -257,6 +327,12 @@ public:
       NameOf[&F] = FName;
       FnSummary &S = Sum[FName];
       S.Fn = &F;
+
+      AAResults *AA = FAM ? &FAM->getResult<AAManager>(F) : nullptr;
+      if (AA)
+        AStat.Available = true;
+      // 本函数里出现过的内存指针（用于算假别名率）
+      SmallVector<std::pair<const Value *, std::string>, 16> MemOps;
 
       // 指针参数 → 抽象区域名
       std::map<const Argument *, std::string> ArgMap = buildArgMap(&F);
@@ -275,12 +351,12 @@ public:
           // 内存写入型内建：无论有没有函数体都要算读写
           if (isMemWriteCall(CN)) {
             if (CB->arg_size() >= 1) {
-              std::string Dst = regionOf(CB->getArgOperand(0), ArgMap);
+              std::string Dst = Namer.of(CB->getArgOperand(0), ArgMap);
               S.Writes.insert(Dst);
               S.Direct |= kStateWrite;
             }
             if (memCallHasSrc(CN) && CB->arg_size() >= 2) {
-              std::string Src = regionOf(CB->getArgOperand(1), ArgMap);
+              std::string Src = Namer.of(CB->getArgOperand(1), ArgMap);
               S.Reads.insert(Src);
               S.Direct |= kStateRead;
             }
@@ -326,9 +402,10 @@ public:
             S.Direct |= kMmio;
             continue;
           }
-          std::string R = regionOf(LI->getPointerOperand(), ArgMap);
+          std::string R = Namer.of(LI->getPointerOperand(), ArgMap);
           S.Reads.insert(R);
           S.Direct |= kStateRead;
+          MemOps.push_back({LI->getPointerOperand(), R});
           continue;
         }
         if (auto *SI = dyn_cast<StoreInst>(&I)) {
@@ -336,9 +413,10 @@ public:
             S.Direct |= kMmio;
             continue;
           }
-          std::string W = regionOf(SI->getPointerOperand(), ArgMap);
+          std::string W = Namer.of(SI->getPointerOperand(), ArgMap);
           S.Writes.insert(W);
           S.Direct |= kStateWrite;
+          MemOps.push_back({SI->getPointerOperand(), W});
           continue;
         }
         if (isa<AtomicRMWInst>(&I) || isa<AtomicCmpXchgInst>(&I)) {
@@ -348,6 +426,27 @@ public:
         if (isa<FenceInst>(&I)) {
           S.Direct |= kStateWrite;
           continue;
+        }
+      }
+
+      // ---- 本函数的别名一致性检查 ----
+      // 只看前 48 个指针：O(n²) 在这里不是瓶颈（单函数内存操作通常 < 20），
+      // 但病态函数必须有上限，否则一个 10k 条 load 的函数会把分析拖死。
+      if (AA) {
+        size_t Lim = std::min<size_t>(MemOps.size(), 48);
+        for (size_t i = 0; i < Lim; ++i) {
+          for (size_t j = i + 1; j < Lim; ++j) {
+            if (MemOps[i].first == MemOps[j].first)
+              continue;
+            AStat.Pairs++;
+            AliasResult R = AA->alias(MemOps[i].first, MemOps[j].first);
+            if (R == AliasResult::NoAlias &&
+                MemOps[i].second == MemOps[j].second)
+              AStat.Coarse++;    // 同名却证明不别名 → 命名太粗
+            else if (R == AliasResult::MustAlias &&
+                     MemOps[i].second != MemOps[j].second)
+              AStat.Split++;     // 不同名却必然别名 → 命名太细（会漏依赖）
+          }
         }
       }
     }
@@ -383,7 +482,7 @@ public:
                 int n = std::atoi(R.c_str() + 4);
                 for (CallBase *CB : Sit.second)
                   if (n >= 0 && (unsigned)n < CB->arg_size())
-                    Dst.insert(regionOf(CB->getArgOperand(n), CallerArgs));
+                    Dst.insert(Namer.of(CB->getArgOperand(n), CallerArgs));
               } else {
                 Dst.insert(R);
               }
@@ -404,7 +503,7 @@ public:
     // ---- 3. 输出 JSON ----
     std::string Buf;
     raw_string_ostream OS(Buf);
-    OS << "{\n  \"version\": 2,\n  \"module\": \"" << M.getModuleIdentifier()
+    OS << "{\n  \"version\": 21,\n  \"module\": \"" << M.getModuleIdentifier()
        << "\",\n  \"functions\": {\n";
     bool FirstFn = true;
     for (auto &KV : Sum) {
@@ -469,7 +568,13 @@ public:
       }
       OS << "]\n    }";
     }
-    OS << "\n  }\n}\n";
+    OS << "\n  },\n";
+    OS << "  \"alias_stats\": {"
+       << "\"aa_available\": " << (AStat.Available ? "true" : "false")
+       << ", \"pairs_checked\": " << AStat.Pairs
+       << ", \"coarse_pairs\": " << AStat.Coarse
+       << ", \"split_pairs\": " << AStat.Split
+       << "}\n}\n";
     OS.flush();
 
     const char *Out = std::getenv("PLC_EFFECT_SUMMARY_OUT");
