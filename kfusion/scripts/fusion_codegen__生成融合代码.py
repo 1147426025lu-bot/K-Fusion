@@ -80,12 +80,62 @@ def main():
                     help="额外生成 multi 模式：每阶段一个真线程（pthread），"
                          "按各自相位释放。用于检验「融合省下的唤醒税」在真多任务"
                          "部署下是被抵掉还是保持")
+    ap.add_argument("--dag", default=None,
+                    help="原始 DAG。给了就在生成**之前**用独立验证器复检整份方案；"
+                         "不合法直接拒绝生成（PR9-A：不能只信求解器的自述）")
+    ap.add_argument("--platforms", default=None, help="平台能力 JSON（配 --dag）")
+    ap.add_argument("--platform", default=None, help="平台名（缺省取 plan.meta.platform）")
+    ap.add_argument("--release-cost-us", type=float, default=None,
+                    help="验证时用的释放代价（缺省取 plan.meta.release_cost_us）")
+    ap.add_argument("--contract", default=None,
+                    help="时间/控制语义契约（验证绝对周期窗口用）")
+    ap.add_argument("--require-verified", action="store_true",
+                    help="严格模式：方案没有验证凭据就拒绝生成（ECoS 严格入口默认开）")
     args = ap.parse_args()
 
     plan = load_json(args.plan)
     groups = plan.get("groups") or []
     if not groups:
         raise SystemExit("plan 里没有 groups")
+
+    # ---- 验证闸门（PR9-A / P0-1）----
+    # 规划器自述"合法"不算证据：本脚本过去直接吃 plan.json，倒序方案也能
+    # 一路生成出可运行的驱动。现在要么现场复检，要么必须带验证凭据。
+    verified = False
+    if args.dag:
+        import os as _os
+        import sys as _sys
+        _sys.path.insert(0, _os.path.join(
+            _os.path.dirname(_os.path.abspath(__file__)), "ecos"))
+        import plan_verify
+        _dag = load_json(args.dag)
+        _plats = (load_json(args.platforms).get("platforms") or []) if args.platforms else []
+        _name = args.platform or (plan.get("meta") or {}).get("platform")
+        _plat = None
+        for p in _plats:
+            if _name and p.get("name") == _name:
+                _plat = p
+                break
+        if _plat is None and len(_plats) == 1:
+            _plat = _plats[0]
+        if _plat is None:
+            raise SystemExit("--dag 需要 --platforms 与可匹配的 --platform："
+                             "没有平台能力就无法判定域合法性与时间语义")
+        _c = args.release_cost_us
+        if _c is None:
+            _c = float((plan.get("meta") or {}).get("release_cost_us") or 20.0)
+        _contract = load_json(args.contract) if args.contract else None
+        _rep = plan_verify.verify_plan(_dag, plan, _plat, _c, None, None, _contract)
+        if not _rep["ok"]:
+            for e in _rep["errors"]:
+                print("❌ [%s] %s" % (e["code"], e["msg"]), file=sys.stderr)
+            raise SystemExit("方案未通过独立验证器，拒绝生成代码（PR9-A）")
+        verified = True
+    elif (plan.get("verification") or {}).get("ok") is True:
+        verified = "declared"
+    elif args.require_verified:
+        raise SystemExit("严格模式：方案没有验证凭据。请补 --dag（现场复检），"
+                         "或先用 fusion_plan 规划出带 verification 的方案")
 
     stage_names = [m for g in groups for m in g["members"]]
 
@@ -130,6 +180,13 @@ def main():
     A(" *")
     A(" * 方案：%d 组 / %d 阶段  平台 %s"
       % (n_rel, n_stage, (plan.get("meta") or {}).get("platform", "?")))
+    if verified is True:
+        A(" * 方案验证：本次生成前已通过独立 PlanVerifier"
+          "（覆盖/组内序/组间序/域/时间窗/期限）")
+    elif verified == "declared":
+        A(" * 方案验证：凭 plan.verification.ok=true（规划器出具），本次未复检")
+    else:
+        A(" * ⚠ 方案未验证（legacy 对照模式）：产物不得用于论文主张")
     for g in groups:
         A(" *   %-4s %s" % (g["id"], " + ".join(g["members"])))
     A(" *")

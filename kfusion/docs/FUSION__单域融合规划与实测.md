@@ -491,6 +491,106 @@ python crtos/scripts/pi4/fusion_report__融合对比.py run_plan.log run_flat.lo
 
 ---
 
+## 5.11 第二轮审查的三个 P0：全部复现、全部修掉（2026-10-24 晚）
+
+第二轮外部审查（针对 `95293b8`）提了三个 P0。**三个都先复现再改**，没有按文字描述直接改。
+
+### P0-1：`--verify` 不是全局验证器（真漏洞，已复现）
+
+把 `four_stage` 的拓扑序**完全倒过来**写成 4 个单节点组：
+
+```
+拓扑序：stage_sample → stage_fir → stage_pid → stage_clamp
+倒序方案：stage_clamp | stage_pid | stage_fir | stage_sample
+```
+
+旧 `--verify` 输出 **4 个 ✅、exit=0**——先算执行器输出、最后才采样的程序被判"完全合法"。
+原因：它只做「逐组 `group_legal()` + 成员覆盖」，而 `group_legal` 是**局部谓词**，
+天生看不见 A 组与 B 组谁先谁后。加重情节：`fusion_codegen` 直接吃 `plan.json`，
+grep 不到任何验证调用——漏洞可以一路走到产物。
+
+修复（PR9-A）：
+
+- 新增 `kfusion/scripts/ecos/plan_verify.py`：`PlanVerifier` **不调用** `group_legal()`，
+  自己从 DAG 重建拓扑序、同拍边、跨周期闭合边、冲突、未证依赖、域能力，再对
+  **整份方案**做四类校验（完整性 / 执行顺序 / 合法性 / 时间语义）。
+- 跨周期边（`recurrences[].closing_edges`，z⁻¹）显式排除在同拍顺序之外，否则
+  `plant@800 → sample@0` 会被误判越序。
+- 验证器同时检查**不可分性**（组内两人之间不得夹着组外节点）与**组间越序**，
+  两个都报，不互相掩盖。
+- 求解器自己的输出也必须过同一个验证器，结果写进 `plan.verification`；
+  不过就 `rc=3` 并说明"求解器与验证器语义已分叉"。
+- `fusion_codegen` 新增 `--dag`（生成前现场复检）与 `--require-verified`；
+  拒绝时不留下任何产物文件。
+
+修复后同一份倒序方案：
+
+```
+❌ [EDGE_ORDER] 依赖越序：stage_pid→stage_clamp（stage_pid@第1位 未早于 stage_clamp@第0位），证据 @g_act
+❌ [EDGE_ORDER] 依赖越序：stage_sample→stage_fir（…），证据 @g_raw
+rc=3
+```
+
+### P0-2：控制窗口是"相对漂移"，不是绝对时刻（真缺口）
+
+旧实现对每个成员算 `off = c + Σ前序执行`，判 `off > sample_window_us`。
+`off` 是**相对组释放**的偏移，所以：
+
+- 只能发现"被推后"；
+- **发现不了"被前拉"**——而融合把后段前拉到头相位，主要语义风险恰恰是前拉（提前采样）。
+
+修复（PR9-B，时间模型 v4）：新增 `kfusion/scripts/ecos/temporal_model.py`，统一为
+
+```
+inst(m) = head_phase(g) + c + Σ_{k∈g, k 早于 m} C_k
+earliest_us ≤ inst(m) ≤ latest_us        # 绝对周期内时刻
+```
+
+规划器与验证器**共用同一个 `TemporalModel`**，避免"能算出来的"和"能验出来的"两套语义。
+旧 `sample_window_us` 保留为 deprecated 相对漂移通道。
+
+反例（`chain_window.dag.json` + `chain_window.contract.json`，无 `phase_pinned`）：
+
+| 划分 | s3 实际输出时刻 | 窗口 [380,520] | 结论 |
+|---|---|---|---|
+| 全融合 | 22.3 µs | 早于下界 **357.7 µs** | 拒（旧实现会放行） |
+| `s1+s2 \| s3+s4` | 421.0 µs | 在窗内 | **选中**（R≈421.8 µs） |
+| 全拆 | 421.0 µs | 在窗内 | 可行但多付 2 次唤醒 |
+
+这是比 `phase_pinned` 更强的证据：边界由**数值窗口**选出，而不是由一个布尔开关挡住。
+
+**期限不可行**（`chain_window_tight.contract.json`：s3 必须 ≥380 µs 输出，而期限只有 300 µs）：
+规划器 `rc=3` 并明确报"**时间不可行**"，不输出一个"最优但违约"的方案。
+同时修正了旧的误导性文案（曾把时间不可行归为"输入层 / 域不允许"）。
+
+### P0-3：严格门禁没贯穿工具链（成立）
+
+`plc_kernelize__内核化.sh` 找不到契约时是"警告并继续"，只有 `FUSE_REQUIRE_CONTRACT=1` 才拒。
+对 legacy cyclictest 链合理，对 ECoS 论文链不合理。
+
+修复：**不动 legacy 默认行为**，新增独立严格入口 `kfusion/scripts/ecos_build.sh`：
+
+```
+契约校验 → 规划 → 对落盘 plan.json 再独立复检 → 生成（--dag + --require-verified）
+```
+
+退出码语义：`2` 参数/环境问题、`3` 契约或方案不合法、`4` 后端未实现。
+配套 `ecos/contract_validate.py` 专门挡一类静默失效：**契约里 stage 名写错**
+（窗口查不到 → 等于没约束 → 全融合被放行）。这类错误在图上和自测里都看不出来。
+
+`--target linux-kernel` 目前**明确 `rc=4` 并说明缺什么**（融合期体拆 ring-0 + 宿主
+hrtimer 释放 + 复用 LLVM 内核化 Pass 产 `.ko`），不假装能出 `.ko`——静默降级是这类工具最糟的行为。
+
+### 回归
+
+融合自测 **52 → 68**（#19 组间越序、#20 绝对窗口选边界、#21 期限不可行、
+#22 生成器拒绝未验证方案、#23 严格入口四条路径），全绿；DAG 自测 35/35 不受影响。
+
+> 诚实备注：`PlanVerifier` 独立于求解器的**判定过程**，但与规划器共享
+> `temporal_model` 的**语义定义**——这是刻意的，语义必须唯一，否则两边会各说各话。
+
+---
+
 ## 9. 下一步
 
 - ~~**跨周期依赖**~~：**已做并已实测**（§5.6）：闭环省 82.42 µs/周期、摘要逐位相同。
@@ -507,3 +607,10 @@ python crtos/scripts/pi4/fusion_report__融合对比.py run_plan.log run_flat.lo
 - **跨核 / 跨域的真部署**：§5.8 的线程都在同一核上；把不同相位的任务铺到不同核
   （或不同 cell），唤醒代价与"共享全局"的正确性都要重测——那正是 ECoS 的主场，且目前
   已有 Jailhouse 跨域（root cell + NuttX cell）的板上基础可复用。
+- ~~**可信方案验证 / 绝对时间窗口 / 严格入口（P0-1/2/3，PR9-A/B）**~~：**已做**（§5.11，
+  自测 #19–#23）：倒序方案再也不能通过复检；采样/输出的判断从"相对漂移"改成"绝对时刻"；
+  严格入口缺契约即停。
+- **PR9-C 的剩余部分（下一个真正的工程里程碑）**：`ecos_build --target linux-kernel` 目前
+  如实 `rc=4`。要补齐的是把融合期体拆成 ring-0 代码 + 宿主 hrtimer 释放（生成物不能自带
+  `clock_nanosleep()` / `main()`），并复用现有 LLVM 内核化 Pass 与 Kbuild 产出 `.ko`。
+- **L2（把编译器搬进内核/cell）暂缓**：见 `PR9_文献调研_编译器内核化.md` §6 的修订理由。

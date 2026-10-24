@@ -53,25 +53,45 @@
 用 `--release-cost-us` 传进来。**融合省唤醒税是确定性的；相位坍缩（如闭环 798 µs）是另一笔
 独立的收益，旧模型 `G·c+ΣE` 看不见，新模型如实给出。**
 
-合法性（PR6/PR8：fail-closed 与硬约束）
----------------------------------------
+合法性（PR6/PR8/PR9-B：fail-closed 与硬约束）
+---------------------------------------------
 除原有「不可分性 / 域合法 / 相位钉住(phase_pinned) / 期限容量」外，本版新增：
 - PR6：段内含 `interface_unresolved` 节点、或 `conflict`/`candidate` 两端无已证明顺序 → 拒绝；
-- PR8：`--max-feedback-delay-us`（绝对死区上限）超限直接拒绝；每阶段 `sample_window_us` /
-  `output_window_us` 把采样/输出对齐作为正约束守住。
+- PR8：`--max-feedback-delay-us`（绝对死区上限）超限直接拒绝；
+- **PR9-B（v4）**：`--contract` 给出的采样/输出窗口是**绝对周期时刻**
+  `[earliest_us, latest_us]`，实际时刻按 `头相位 + c + 组内偏移` 算，**前拉和推后都拦**。
+  旧语义 `sample_window_us`（相对组释放的漂移）保留，但只抓"推后"，已标 deprecated。
+  另加 `deadline_us`：单段完成超期即判该段不可用。
+
+方案验证（PR9-A）
+-----------------
+`--verify` 用**独立验证器**（`ecos/plan_verify.py`），不再把逐组 `group_legal()`
+的结论当成整份方案合法的证明——那条路径曾让"完全倒序的单节点组"exit=0 通过。
+求解器自己的输出也必须过同一个验证器（写在 plan.verification 里），
+分叉会当场报错而不是悄悄产出错误方案。
 
 用法
 ----
     python fusion_plan__融合规划.py dag.json --platforms caps.json --platform linux_kernel \\
         --release-cost-us 20 -o plan.json
-    python fusion_plan__融合规划.py dag.json --verify plan.json      # 复检一个已有方案
+    python fusion_plan__融合规划.py dag.json --platforms caps.json --platform linux_kernel \\
+        --contract contract.json -o plan.json          # 绝对时间窗口
+    python fusion_plan__融合规划.py dag.json --verify plan.json      # 独立复检
 
-退出码：0 = 有可行方案；2 = 输入不可规划（代数环 / 未给平台）；3 = 无可行方案
+退出码：0 = 有可行方案；2 = 输入不可规划（代数环 / 未给平台）；3 = 无可行方案 / 验证失败
 """
 import argparse
 import io
 import json
+import os
 import sys
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ECOS = os.path.join(_HERE, "ecos")
+if _ECOS not in sys.path:
+    sys.path.insert(0, _ECOS)
+
+import temporal_model  # noqa: E402  （与验证器共用同一套时间语义）
 
 # v1 只用这几种；出现别的就报错，不静默忽略
 ORDER_KINDS = ("call", "spawn", "data", "anti")
@@ -102,12 +122,14 @@ def build_reach(nodes, edges):
 
 
 class Planner:
-    def __init__(self, dag, platform, release_cost_us, exec_us=None, budget_us=None):
+    def __init__(self, dag, platform, release_cost_us, exec_us=None, budget_us=None,
+                 contract=None):
         self.dag = dag
         self.plat = platform
         self.c = float(release_cost_us)
         self.exec_us = exec_us or {}
         self.budget = budget_us
+        self.contract = contract or {}
 
         # 有环时用"摘掉延迟边后的相位序"；strict 拓扑序为空不代表不可规划，
         # 只代表这张图里有反馈——是否合法由 algebraic_loops 决定。
@@ -155,6 +177,17 @@ class Planner:
         self.output_window = {n["name"]: float(n["output_window_us"])
                              for n in (dag.get("nodes") or [])
                              if n.get("output_window_us") is not None}
+        # ---- 统一时间语义（v4）：绝对周期窗口 ----
+        # 与 PlanVerifier 共用同一个 TemporalModel，避免"算得出的"和
+        # "验得出的"是两个不同的定义（那正是 P0-2 的成因）。
+        self.tm = temporal_model.TemporalModel(
+            dag, contract=self.contract, exec_us=self.exec_us,
+            release_cost_us=self.c)
+        if self.max_fb_delay_us is None:
+            self.max_fb_delay_us = self.tm.feedback_max
+        if self.period is None:
+            self.period = self.tm.period
+
         # 反馈死区硬上限：并入同组后闭合边间隔≈一整拍（≤period）。
         # 若上限 < period，则每条反馈闭合边都必须跨组（否则死区必超限）。
         self.fb_must_cut = set()
@@ -278,19 +311,23 @@ class Planner:
                 return False, ("不确定：未证明依赖 %s→%s 落在段内但无已证明顺序，"
                                "不能确定保持原始相对顺序（fail-closed）" % (a, b))
 
-        # 6) 控制语义契约（PR8，硬约束）
+        # 6) 控制语义契约（PR8 v4，硬约束；绝对周期窗口，前拉和推后都抓）
         head = self.group_phase(members)
-        off = self.c  # 成员在组内的执行偏移（相对组释放）
-        for m in members:
-            if m in self.sample_window and off > self.sample_window[m]:
-                return False, ("控制：%s 被并入 %.0f µs 头组，组内偏移 %.0f µs "
-                               "超过采样窗 %.0f µs（采样时刻漂移，破坏物理采样对齐）"
-                               % (m, head, off, self.sample_window[m]))
-            if m in self.output_window and off > self.output_window[m]:
-                return False, ("控制：%s 在组内偏移 %.0f µs 超过输出生效窗 %.0f µs"
-                               "（执行器输出被推后，破坏物理输出对齐）"
-                               % (m, off, self.output_window[m]))
-            off += self.exec_us.get(m, 0.0)
+        for v in self.tm.violations(members, head):
+            return False, v["msg"]
+        # 旧语义（节点级相对漂移）仍支持，仅作 deprecated 通道
+        for v in self.tm.legacy_drift(members, self.sample_window):
+            return False, v["msg"]
+        for v in self.tm.legacy_drift(members, self.output_window):
+            return False, v["msg"]
+        if self.tm.deadline is not None:
+            _rows, fin = self.tm.timeline(members, head)
+            if fin > self.tm.deadline + 1e-9:
+                return False, ("期限：本段排在 %.1f µs、完成于 %.1f µs，"
+                               "超过期限 %.1f µs%s"
+                               % (head, fin, self.tm.deadline,
+                                  "" if self.tm.evidence == "bounded"
+                                  else "［empirical：经验预测］"))
         for (a, b) in self.fb_must_cut:
             if a in mset and b in mset:
                 return False, ("控制：反馈边 %s→%s 若并入同组，死区≈一整拍（%.0f µs）"
@@ -577,6 +614,11 @@ def main():
     ap.add_argument("--max-feedback-delay-us", type=float, default=None,
                     help="反馈闭合边的**绝对**死区上限（µs）。超过则硬性拒绝（PR8），"
                          "不靠 --fail-on-warning。<= period 时每条反馈边都必须跨组")
+    ap.add_argument("--contract", default=None,
+                    help="时间/控制语义契约（v2）。给 {task:{period_us,deadline_us}, "
+                         "timing_constraints:{sample:{stage,earliest_us,latest_us}, "
+                         "actuator:{...}, feedback_delay_max_us}} 即可启用"
+                         "**绝对周期窗口**（PR9-B）；不给则退回 DAG 内联字段")
     ap.add_argument("--fail-on-warning", action="store_true",
                     help="有 warning 时非零退出（CI 用）")
     ap.add_argument("-o", "--out", default=None)
@@ -621,36 +663,25 @@ def main():
         # 允许直接内联 JSON（演示时少建一个文件）
         exec_us = (json.loads(args.exec_us) if args.exec_us.lstrip().startswith("{")
                    else load_json(args.exec_us))
-    planner = Planner(dag, platform, args.release_cost_us, exec_us, args.budget_us)
+    planner = Planner(dag, platform, args.release_cost_us, exec_us, args.budget_us,
+                      contract=(load_json(args.contract) if args.contract else None))
     if args.max_feedback_delay_us is not None:
         planner.apply_feedback_limit(args.max_feedback_delay_us)
 
-    # 复检模式
+    # 复检模式：独立验证器（PR9-A）。不调用 group_legal 的逐组结论当整体结论。
     if args.verify:
+        import plan_verify
         plan = load_json(args.verify)
-        bad = 0
-        for g in plan.get("groups") or []:
-            names = g.get("members") or []
-            idx = [planner.order.index(x) for x in names if x in planner.order]
-            if len(idx) != len(names) or not idx:
-                print("❌ 组 %s 含未知成员 %s" % (g.get("id"), names), file=sys.stderr)
-                bad += 1
-                continue
-            # 连续与否只作提示，合法性交给 group_legal 判（它会报"谁挡住了"）
-            if idx != list(range(min(idx), max(idx) + 1)):
-                print("   · 组 %s 在拓扑序里不连续（%s），按非连续组校验"
-                      % (g.get("id"), names))
-            ok, why = planner.group_legal(names)
-            if not ok:
-                print("❌ 组 %s 非法：%s" % (g.get("id"), why), file=sys.stderr)
-                bad += 1
-            else:
-                print("✅ 组 %s 合法（%s）" % (g.get("id"), why))
-        covered = [m for g in plan.get("groups") or [] for m in g.get("members") or []]
-        if sorted(covered) != sorted(planner.nodes):
-            print("❌ 覆盖不完整：%s" % (set(planner.nodes) - set(covered)), file=sys.stderr)
-            bad += 1
-        return 0 if bad == 0 else 3
+        rep = plan_verify.verify_plan(
+            dag, plan, platform, planner.c, exec_us, args.budget_us,
+            contract=planner.contract)
+        rc = plan_verify.print_report(rep, plan, sys.stdout)
+        if not rep["ok"]:
+            # 再落一份到 stderr，方便 CI 只抓错误流
+            for e in rep["errors"]:
+                print("❌ [%s] %s" % (e["code"], e["msg"]), file=sys.stderr)
+            print("❌ 方案验证失败，禁止进入代码生成", file=sys.stderr)
+        return rc
 
     groups = planner.solve()
     if groups is None:
@@ -666,14 +697,24 @@ def main():
             if not ok:
                 bad_single.append((name, why))
         if bad_single:
-            print("   (a) 这些节点**单独**就进不了平台 %s，任何划分都无解："
-                  % planner.plat.get("name"), file=sys.stderr)
+            timing_only = all(w.startswith("期限") for _, w in bad_single)
+            if timing_only:
+                print("   (a) 这些节点**单独**就已超出期限，任何划分都无解：",
+                      file=sys.stderr)
+            else:
+                print("   (a) 这些节点**单独**就进不了平台 %s，任何划分都无解："
+                      % planner.plat.get("name"), file=sys.stderr)
             for name, why in bad_single[:10]:
                 print("       %-20s %s" % (name, why), file=sys.stderr)
             if len(bad_single) > 10:
                 print("       …共 %d 个" % len(bad_single), file=sys.stderr)
-            print("   → 这属于「输入层」问题（效果未归档 / 域不允许），"
-                  "不是融合算法能解决的。", file=sys.stderr)
+            if timing_only:
+                print("   → 这是**时间不可行**（期限过紧 / 相位太晚 / 释放代价过大），"
+                      "不是融合能解决的：规划器只报不可行，"
+                      "不会输出一个『最优』但违约的方案。", file=sys.stderr)
+            else:
+                print("   → 这属于「输入层」问题（效果未归档 / 域不允许），"
+                      "不是融合算法能解决的。", file=sys.stderr)
         else:
             print("   (b) 单节点都合法，但合并后都不可分（见 rejected_segments）",
                   file=sys.stderr)
@@ -708,7 +749,7 @@ def main():
                           planner.max_fb_delay_us), file=sys.stderr)
                     return 3
     plan = {
-        "version": 3,
+        "version": 4,
         "meta": {
             "dag": args.dag,
             "platform": platform.get("name"),
@@ -717,6 +758,10 @@ def main():
                            "相位未知时退化为 R̂ = G·c + ΣE。c 来自实测，不是拟合参数"),
             "phase_known": planner.phase_known,
             "period_us": planner.period,
+            "deadline_us": planner.tm.deadline,
+            "temporal_source": planner.tm.source,
+            "temporal_evidence": planner.tm.evidence,
+            "contract": args.contract,
             "max_feedback_delay_us": planner.max_fb_delay_us,
         },
         "order": planner.order,
@@ -739,11 +784,25 @@ def main():
             for (i, j), (ok, why) in sorted(planner.legal.items()) if not ok
         ],
     }
+
+    # 求解器的输出必须过**独立**验证器。否则"能算出来的"和"能验出来的"
+    # 又分成两套语义，P0-1 那类漏洞会再长回来。
+    import plan_verify
+    rep = plan_verify.verify_plan(dag, plan, platform, planner.c, exec_us,
+                                  args.budget_us, contract=planner.contract)
+    plan["verification"] = {"ok": rep["ok"], "errors": rep["errors"],
+                           "warnings": rep["warnings"], "stats": rep["stats"]}
+    if not rep["ok"]:
+        print("!! 求解器给出的方案未通过独立验证器——求解器与验证器语义已分叉，"
+              "必须修（不允许把这样的方案交给代码生成）", file=sys.stderr)
+        for e in rep["errors"]:
+            print("   [%s] %s" % (e["code"], e["msg"]), file=sys.stderr)
+        return 3
+
     if args.out:
         with io.open(args.out, "w", encoding="utf-8", newline="\n") as f:
             json.dump(plan, f, ensure_ascii=False, indent=2)
             f.write("\n")
-
     if not args.quiet:
         print("== 平台 %s · 释放代价 c=%.1f µs ==" % (platform.get("name"), planner.c))
         print("== 顺序 ==\n  " + " -> ".join(planner.order))

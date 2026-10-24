@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "task": {
+    "name": "chain_window",
+    "period_us": 1000,
+    "deadline_us": 1000
+  },
+  "timing_constraints": {
+    "sample": {
+      "stage": "s1",
+      "earliest_us": 0,
+      "latest_us": 30
+    },
+    "actuator": {
+      "stage": "s3",
+      "earliest_us": 380,
+      "latest_us": 520
+    },
+    "feedback_delay_max_us": 500
+  },
+  "evidence": {
+    "exec": "empirical",
+    "note": "执行时间来自 BM2 实测量级，不是 WCET 上界；期限结论只能标经验预测"
+  }
+}

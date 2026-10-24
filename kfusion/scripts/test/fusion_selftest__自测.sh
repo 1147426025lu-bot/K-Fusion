@@ -245,5 +245,66 @@ expect_grep "端到端 ≈422（相位跨度 400 + 末组唤醒 + 末组执行�
 expect_grep "说明全融合为何被拒（提前采样）" "$OUT" "提前采样"
 
 echo
+echo "=== 19. P0-1：组间顺序必须被验（倒序方案 → 拒）==="
+expect_rc "完全倒序的单节点组复检必须被拒（rc=3）" 3 \
+    "$PY" "$PLAN" "$FIX/four_stage.dag.json" --platforms "$CAPS" \
+    --platform linux_kernel --verify "$FIX/reversed.plan.json"
+expect_grep "指认具体越序边+证据" "$(cat "$TMP/out.txt")" \
+    "依赖越序" "stage_sample→stage_fir" "@g_raw"
+
+echo "=== 20. P0-2：绝对周期窗口（前拉越界也必须拒，不靠 phase_pinned）==="
+CONTRACT="$HERE/../../contracts/examples/chain_window.contract.json"
+OUT="$("$PY" "$PLAN" "$FIX/chain_window.dag.json" --platforms "$CAPS" --platform nuttx \
+      --release-cost-us 21 --exec-us '{"s1":0.6,"s2":0.67,"s3":0.28,"s4":0.5}' \
+      --contract "$CONTRACT" 2>&1)"
+rc=$?
+if [ "$rc" = 0 ]; then ok "有解（rc=0）"; else bad "被拒，rc=$rc"; fi
+expect_grep "绝对窗口选出 s1+s2 | s3+s4" "$OUT" "方案：2 组" "g1   s3 + s4"
+expect_grep "端到端 ≈421.8" "$OUT" "R̂ ≈ 421.8"
+expect_grep "全融合被拒的理由是**绝对时刻**越窗" "$OUT" \
+    "早于窗口下界 380" "前拉了 357.7"
+
+echo "=== 21. P0-2：期限不可行 → 必须报不可行，不得输出「最优」违约方案 ==="
+expect_rc "矛盾契约 → rc=3" 3 \
+    "$PY" "$PLAN" "$FIX/chain_window.dag.json" --platforms "$CAPS" --platform nuttx \
+    --release-cost-us 21 --exec-us '{"s1":0.6,"s2":0.67,"s3":0.28,"s4":0.5}' \
+    --contract "$HERE/../../contracts/examples/chain_window_tight.contract.json"
+expect_grep "说是时间不可行（不是域问题）" "$(cat "$TMP/out.txt")" "时间不可行"
+
+echo "=== 22. P0-1：代码生成器必须拒绝未通过验证的方案 ==="
+rm -f "$TMP/reversed.c"
+"$PY" "$CODEGEN" "$FIX/reversed.plan.json" -o "$TMP/reversed.c" \
+    --stage-source "$LOOP_SRC" --dag "$FIX/four_stage.dag.json" \
+    --platforms "$CAPS" --platform linux_kernel >"$TMP/out.txt" 2>&1
+rc=$?
+if [ "$rc" != 0 ]; then ok "生成前被拒（rc=$rc）"; else bad "倒序方案竟然生成了代码"; fi
+if [ -f "$TMP/reversed.c" ]; then bad "拒绝后仍留下了产物文件"; else ok "未留下产物（拒绝即停）"; fi
+expect_grep "拒绝理由来自独立验证器" "$(cat "$TMP/out.txt")" "拒绝生成代码"
+
+echo "=== 23. P0-3：ECoS 严格入口（缺契约/契约写错/后端未实现）==="
+ECOS="$HERE/../ecos_build.sh"
+expect_rc "正常链路可跑通" 0 \
+    bash "$ECOS" --dag "$FIX/chain_window.dag.json" --contract "$CONTRACT" \
+    --platforms "$CAPS" --platform nuttx --release-cost-us 21 \
+    --exec-us '{"s1":0.6,"s2":0.67,"s3":0.28,"s4":0.5}' \
+    --source "$LOOP_SRC" --out-dir "$TMP/ecos_ok"
+expect_rc "缺契约 → rc=2（严格入口不接受缺省）" 2 \
+    bash "$ECOS" --dag "$FIX/chain_window.dag.json" --platforms "$CAPS" \
+    --platform nuttx --source "$LOOP_SRC" --out-dir "$TMP/ecos_nocontract"
+cat >"$TMP/bad.contract.json" <<'EOF'
+{"task":{"period_us":1000},
+ "timing_constraints":{"actuator":{"stage":"s3_typo","earliest_us":380,"latest_us":520}}}
+EOF
+expect_rc "契约 stage 名写错 → rc=3（否则窗口静默失效）" 3 \
+    bash "$ECOS" --dag "$FIX/chain_window.dag.json" --contract "$TMP/bad.contract.json" \
+    --platforms "$CAPS" --platform nuttx --source "$LOOP_SRC" --out-dir "$TMP/ecos_bad"
+expect_grep "指出是哪个 stage 写错" "$(cat "$TMP/out.txt")" "s3_typo"
+expect_rc "linux-kernel 后端未实现 → rc=4（不假装能出 .ko）" 4 \
+    bash "$ECOS" --dag "$FIX/chain_window.dag.json" --contract "$CONTRACT" \
+    --platforms "$CAPS" --platform nuttx --release-cost-us 21 \
+    --exec-us '{"s1":0.6,"s2":0.67,"s3":0.28,"s4":0.5}' \
+    --source "$LOOP_SRC" --out-dir "$TMP/ecos_k" --target linux-kernel
+
+echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" = 0 ] || exit 1

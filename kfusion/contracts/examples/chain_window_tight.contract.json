@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "task": {
+    "name": "chain_window_tight",
+    "period_us": 1000,
+    "deadline_us": 300
+  },
+  "timing_constraints": {
+    "actuator": {
+      "stage": "s3",
+      "earliest_us": 380,
+      "latest_us": 520
+    }
+  },
+  "evidence": {
+    "exec": "empirical"
+  },
+  "note": "故意矛盾：s3 必须在 380µs 之后输出，而整条链的期限只有 300µs。任何划分都不可行——规划器必须报不可行，不得输出'最优'非法方案"
+}

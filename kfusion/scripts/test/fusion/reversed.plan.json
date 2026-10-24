@@ -1,0 +1,10 @@
+{
+  "version": 4,
+  "note": "负向夹具（P0-1）：完全倒序的单节点组。每组单独看都合法（单节点，域也合法），覆盖也完整——正因如此，只做逐组校验的旧 --verify 会判它全部通过。修复后必须报 EDGE_ORDER 越序。",
+  "groups": [
+    {"id": "g0", "members": ["stage_clamp"]},
+    {"id": "g1", "members": ["stage_pid"]},
+    {"id": "g2", "members": ["stage_fir"]},
+    {"id": "g3", "members": ["stage_sample"]}
+  ]
+}

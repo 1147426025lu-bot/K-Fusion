@@ -1,0 +1,64 @@
+{
+  "version": 2,
+  "meta": {
+    "mode": "stages",
+    "task": {
+      "name": "chain_window",
+      "period_us": 1000,
+      "deadline_us": 1000,
+      "step_us": 200
+    },
+    "note": "非环 4 段链，无 phase_pinned。s3 的执行器窗口是**绝对周期时刻** [380,520]：全融合会把 s3 前拉到 ~22µs（提前输出），必须被绝对窗口挡住；正确边界是 s1+s2 | s3+s4。这是 P0-2 的反例——旧实现只看'相对组释放的漂移'，会放行全融合"
+  },
+  "phase": {
+    "known": true,
+    "unit": "us",
+    "period_us": 1000,
+    "offsets": {
+      "s1": 0,
+      "s2": 200,
+      "s3": 400,
+      "s4": 600
+    }
+  },
+  "nodes": [
+    {
+      "name": "s1",
+      "effects": ["state_read", "state_write"],
+      "contexts": ["thread", "softirq"],
+      "phase_us": 0
+    },
+    {
+      "name": "s2",
+      "effects": ["state_read", "state_write"],
+      "contexts": ["thread", "softirq"],
+      "phase_us": 200
+    },
+    {
+      "name": "s3",
+      "effects": ["state_read", "state_write"],
+      "contexts": ["thread", "softirq"],
+      "phase_us": 400
+    },
+    {
+      "name": "s4",
+      "effects": ["state_read", "state_write"],
+      "contexts": ["thread", "softirq"],
+      "phase_us": 600
+    }
+  ],
+  "edges": [
+    {"from": "s1", "to": "s2", "kind": "data", "evidence": ["@a"],
+     "evidence_count": 1, "proven": true},
+    {"from": "s2", "to": "s3", "kind": "data", "evidence": ["@b"],
+     "evidence_count": 1, "proven": true},
+    {"from": "s3", "to": "s4", "kind": "data", "evidence": ["@c"],
+     "evidence_count": 1, "proven": true}
+  ],
+  "candidates": [],
+  "topo_order": ["s1", "s2", "s3", "s4"],
+  "topo_order_delayed": ["s1", "s2", "s3", "s4"],
+  "recurrences": [],
+  "algebraic_loops": [],
+  "cycles": []
+}
