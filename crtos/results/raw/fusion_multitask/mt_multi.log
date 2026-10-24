@@ -1,0 +1,22 @@
+
+# mode: multi  threads=5  cycles=60000
+
+# probe: r/s/f v1.2
+# period_ns: 1000000
+# deadline_ns: 1000000
+# samples: 60000
+# release_id: serial 0..59999
+# series_us: start_lat exec response  (1us buckets, cap 1023)
+# stat_start_stage_sample_us: min=18.012 avg=20.775 p50=20 p90=21 p99=21 p99.9=21 p99.99=35 max=38.099 over=0 neg=0 min_signed=18.012 n=60000
+# stat_exec_stage_sample_us: min=0.426 avg=0.500 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=1.241 over=0 neg=0 min_signed=0.426 n=60000
+# stat_start_stage_fir_us: min=18.590 avg=21.361 p50=20 p90=23 p99=23 p99.9=24 p99.99=36 max=71.409 over=0 neg=0 min_signed=18.590 n=60000
+# stat_exec_stage_fir_us: min=0.500 avg=0.813 p50=0 p90=0 p99=0 p99.9=0 p99.99=1 max=4.537 over=0 neg=0 min_signed=0.500 n=60000
+# stat_start_stage_pid_us: min=18.511 avg=20.776 p50=20 p90=20 p99=21 p99.9=22 p99.99=35 max=40.895 over=0 neg=0 min_signed=18.511 n=60000
+# stat_exec_stage_pid_us: min=0.463 avg=0.616 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=1.925 over=0 neg=0 min_signed=0.463 n=60000
+# stat_start_stage_clamp_us: min=18.709 avg=20.930 p50=20 p90=21 p99=21 p99.9=21 p99.99=33 max=44.618 over=0 neg=0 min_signed=18.709 n=60000
+# stat_exec_stage_clamp_us: min=0.407 avg=0.498 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=1.796 over=0 neg=0 min_signed=0.407 n=60000
+# stat_start_stage_plant_us: min=18.552 avg=20.707 p50=20 p90=20 p99=21 p99.9=21 p99.99=36 max=44.318 over=0 neg=0 min_signed=18.552 n=60000
+# stat_exec_stage_plant_us: min=0.370 avg=0.528 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=1.389 over=0 neg=0 min_signed=0.370 n=60000
+# stat_response_us: min=819.034 avg=821.235 p50=821 p90=821 p99=821 p99.9=822 p99.99=836 max=845.077 over=0 neg=0 min_signed=819.034 n=60000
+# deadline_miss: 0/60000 (multi, 末相口径)
+# digest: b6eb20b8

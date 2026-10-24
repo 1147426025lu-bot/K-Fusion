@@ -1,0 +1,56 @@
+ÒY
+nsh> [Kfiveloop plan 60000
+
+# mode: plan  releases_per_period=1  cycles=60000
+
+# probe: r/s/f v1.2
+# period_ns: 1000000
+# deadline_ns: 1000000
+# samples: 60000
+# release_id: serial 0..59999
+# series_us: start_lat exec response  (1us buckets, cap 1023)
+# stat_start_lat_us: min=5.574 avg=5.583 p50=5 p90=5 p99=5 p99.9=5 p99.99=5 max=6.556 over=0 neg=0 min_signed=5.574 n=60000
+# stat_exec_us: min=1.777 avg=1.792 p50=1 p90=1 p99=1 p99.9=1 p99.99=1 max=3.167 over=0 neg=0 min_signed=1.777 n=60000
+# stat_span_us: min=1.777 avg=1.792 p50=1 p90=1 p99=1 p99.9=1 p99.99=1 max=3.167 over=0 neg=0 min_signed=1.777 n=60000
+# stat_response_us: min=7.351 avg=7.374 p50=7 p90=7 p99=7 p99.9=7 p99.99=7 max=9.167 over=0 neg=0 min_signed=7.351 n=60000
+# deadline_miss: 0/60000 (none)
+# exec_overrun: 0/60000
+# digest: b6eb20b8
+# stat_exec_stage_sample_us: min=0.481 avg=0.565 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=1.333 over=0 neg=0 min_signed=0.481 n=60000
+# stat_exec_stage_fir_us: min=0.555 avg=0.562 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.926 over=0 neg=0 min_signed=0.555 n=60000
+# stat_exec_stage_pid_us: min=0.203 avg=0.221 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.592 over=0 neg=0 min_signed=0.203 n=60000
+# stat_exec_stage_clamp_us: min=0.203 avg=0.222 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.555 over=0 neg=0 min_signed=0.203 n=60000
+# stat_exec_stage_plant_us: min=0.203 avg=0.222 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.389 over=0 neg=0 min_signed=0.203 n=60000
+# hist_start_lat_us: 5 59997
+# hist_start_lat_us: 6 3
+# hist_response_us: 7 59997
+# hist_response_us: 8 2
+# hist_response_us: 9 1
+nsh> [Kfiveloop flat 60000
+
+# mode: flat  releases_per_period=5  cycles=60000
+
+# probe: r/s/f v1.2
+# period_ns: 1000000
+# deadline_ns: 1000000
+# samples: 60000
+# release_id: serial 0..59999
+# series_us: start_lat exec response  (1us buckets, cap 1023)
+# stat_start_lat_us: min=4.074 avg=5.636 p50=5 p90=5 p99=5 p99.9=5 p99.99=5 max=10.203 over=0 neg=0 min_signed=4.074 n=300000
+# stat_exec_us: min=3.073 avg=3.149 p50=3 p90=3 p99=3 p99.9=3 p99.99=3 max=3.776 over=0 neg=0 min_signed=3.073 n=60000
+# stat_span_us: min=796.000 avg=800.568 p50=800 p90=800 p99=800 p99.9=800 p99.99=800 max=801.222 over=0 neg=0 min_signed=796.000 n=60000
+# stat_response_us: min=806.129 avg=806.203 p50=806 p90=806 p99=806 p99.9=806 p99.99=806 max=806.870 over=0 neg=0 min_signed=806.129 n=60000
+# deadline_miss: 0/60000 (none)
+# exec_overrun: 0/60000
+# digest: 47649d0c
+# stat_exec_stage_sample_us: min=0.500 avg=0.569 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=1.185 over=0 neg=0 min_signed=0.500 n=60000
+# stat_exec_stage_fir_us: min=0.815 avg=0.884 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=1.018 over=0 neg=0 min_signed=0.815 n=60000
+# stat_exec_stage_pid_us: min=0.500 avg=0.561 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.611 over=0 neg=0 min_signed=0.500 n=60000
+# stat_exec_stage_clamp_us: min=0.555 avg=0.568 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.815 over=0 neg=0 min_signed=0.555 n=60000
+# stat_exec_stage_plant_us: min=0.500 avg=0.569 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.575 over=0 neg=0 min_signed=0.500 n=60000
+# hist_start_lat_us: 4 1
+# hist_start_lat_us: 5 299986
+# hist_start_lat_us: 6 11
+# hist_start_lat_us: 10 2
+# hist_response_us: 806 60000
+nsh> [K

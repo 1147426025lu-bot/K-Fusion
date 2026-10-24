@@ -32,7 +32,7 @@
 ### `crtos/` — cRTOS / Jailhouse 对照实验脚手架（含 upstream Jailhouse 源码与脚本）
 
 - `crtos/docs/` （12 文件）
-- `crtos/jailhouse_overlay_pi4/` （24 文件）— **NuttX-inmate 移植产物**（cell 配置 / defconfig / 补丁 / 部署脚本 / rtlat + xshm app）
+- `crtos/jailhouse_overlay_pi4/` （28 文件）— **NuttX-inmate 移植产物**（cell 配置 / defconfig / 补丁 / 部署脚本 / rtlat + xshm app）
 - `crtos/results/` （132 文件，含 `figures/`）— **Pi4 实测数据 + 架构对照图**（对照表 / schema JSON / 2 张「两域 vs 单域」SVG）
 - `crtos/logs/` （1 文件）
 - `crtos/scripts/` （53 文件，含 `pi4/`）
@@ -79,10 +79,10 @@
 
 ## 统计
 
-- 工作树文件总数：**1232**
+- 工作树文件总数：**1241**
 - `.github/`：3 文件
 - `compare/`：2 文件
-- `crtos/`：762 文件（docs 12 · jailhouse_overlay_pi4 24 · results 112 · logs 1 · scripts 53 · upstream 526）
+- `crtos/`：771 文件（docs 12 · jailhouse_overlay_pi4 24 · results 112 · logs 1 · scripts 53 · upstream 526）
 - `docs/`：4 文件
 - `kfusion/`：437 文件
 - `results/`：3 文件

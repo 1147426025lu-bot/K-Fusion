@@ -187,6 +187,26 @@ expect_rc "相位铺不下（800 > 700）→ 拒绝" 1 \
 expect_grep "算出 N-1×step 并给出改法" "$(cat "$TMP/out.txt")" \
     "相位铺不下" "调小 --step-us"
 
+echo "=== 14. --threads / --entry：真部署模式与 NuttX 入口 ==="
+"$PY" "$CODEGEN" "$TMP/plan.json" -o "$TMP/driver_mt.c" --stage-source "$LOOP_SRC" \
+    --period-us 1000 --step-us 200 --threads --entry fiveloop_main >/dev/null 2>&1
+if grep -q "static int run_multi" "$TMP/driver_mt.c" && \
+   grep -q "pthread_create" "$TMP/driver_mt.c" && \
+   grep -q "sched_setscheduler" "$TMP/driver_mt.c" && \
+   grep -q "int fiveloop_main" "$TMP/driver_mt.c" && \
+   ! grep -q "^int main" "$TMP/driver_mt.c"; then
+    ok "multi 已生成（pthread+FIFO），入口改名 fiveloop_main"
+else
+    bad "--threads/--entry 未生效"
+fi
+"$PY" "$CODEGEN" "$TMP/plan.json" -o "$TMP/d_plain.c" --stage-source "$LOOP_SRC" \
+    --period-us 1000 --step-us 200 --threads >/dev/null 2>&1
+if ! grep -q "define DIGEST_MIX" "$TMP/d_plain.c" && grep -q "int main" "$TMP/d_plain.c"; then
+    ok "不给 --digest-var 时 multi 不掺摘要；--entry 缺省仍是 main"
+else
+    bad "digest/entry 的缺省行为变了"
+fi
+
 echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" = 0 ] || exit 1
