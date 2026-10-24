@@ -1,0 +1,46 @@
+{
+  "version": 2,
+  "meta": {
+    "mode": "stages",
+    "task": {
+      "name": "synth_sleep",
+      "period_us": 1000,
+      "deadline_us": 1000,
+      "step_us": 200
+    },
+    "note": "负向夹具（PR9-C）：io_read 含 sleep 效果。平台表允许（thread 上下文），规划器也会给出方案——但**不能**拿去编 ring-0：周期体里睡眠会直接错过相位。emit --target linux-kernel 必须拒，nuttx 必须放行。"
+  },
+  "phase": {
+    "known": true,
+    "unit": "us",
+    "period_us": 1000,
+    "offsets": {
+      "io_read": 0,
+      "compute": 200
+    }
+  },
+  "nodes": [
+    {
+      "name": "io_read",
+      "effects": ["state_read", "state_write", "sleep"],
+      "contexts": ["thread"],
+      "phase_us": 0
+    },
+    {
+      "name": "compute",
+      "effects": ["state_read", "state_write"],
+      "contexts": ["thread", "softirq"],
+      "phase_us": 200
+    }
+  ],
+  "edges": [
+    {"from": "io_read", "to": "compute", "kind": "data", "evidence": ["@io"],
+     "evidence_count": 1, "proven": true}
+  ],
+  "candidates": [],
+  "topo_order": ["io_read", "compute"],
+  "topo_order_delayed": ["io_read", "compute"],
+  "recurrences": [],
+  "algebraic_loops": [],
+  "cycles": []
+}

@@ -179,10 +179,22 @@ L2 目标：把"融合规划 + 代码生成"搬进 **root cell 内核 / non-root
 ```
 PR9-A 全局方案验证器（独立 PlanVerifier，生成器强制消费）   ✅ 已完成
 PR9-B 时间/控制语义 v4（绝对周期窗口 + 期限 + 证据级别）      ✅ 已完成
-PR9-C 双后端内核化闭环（LLVM→Plan→Linux .ko / NuttX）        ⬜ 未做（ecos_build 现如实 rc=4）
+PR9-C 双后端内核化闭环（LLVM→Plan→Linux .ko / NuttX）        ◐ 生成侧完成
+                                                             （IR + 共享周期体 + 双宿主；
+                                                              三道生成门；26 项后端自测）
+                                                             ⬜ 目标侧构建/加载/比对未做
 PR10  跨域 IPC 最小运行时（IVSHMEM 发布-订阅协议）            ⬜ 未开始
 PR11  跨域联合优化（部署 × 融合联合求解，CP-SAT / 精确枚举做基准）⬜ 未开始
 ```
+
+PR9-C 的生成侧结构（详见 `FUSION__单域融合规划与实测.md` §5.12）：
+
+- `backend/synthesis/fusion_ir.py` —— 归一化 IR（组/相位/调用/禁止效果），两个后端共用；
+- `body_emit.py` —— 周期体只生成**一次**，两个后端逐字节相同（否则实验不可比）；
+- `linux_kernel_emitter.py` —— ring-0 宿主：hrtimer + 每组 FIFO 内核线程，周期体不含任何调度原语；
+- `nuttx_emitter.py` —— NuttX 宿主：单任务 + 绝对时刻睡眠，按组相位释放 G 次/周期；
+- 阶段实现**不在 emitter 里重写**，链接现有 LLVM Pass 产出的 `stage_impl.o`（复用而非另起炉灶）；
+- 三道生成门：验证凭据 / 时间前提 / ring-0 禁止项（`sleep` 阶段只能进 NuttX）。
 
 ### 6.4 若将来重启 L2，前置条件
 

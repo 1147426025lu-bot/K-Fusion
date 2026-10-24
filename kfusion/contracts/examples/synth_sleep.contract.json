@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "task": {
+    "name": "synth_sleep",
+    "period_us": 1000,
+    "deadline_us": 1000
+  },
+  "timing_constraints": {
+    "feedback_delay_max_us": 500
+  },
+  "evidence": {
+    "exec": "empirical"
+  },
+  "note": "本契约不含绝对窗口（io_read 没有采样/输出对齐要求）。它的用途是让方案能被规划出来，从而测『含 sleep 的阶段不能进 ring-0』这道门。"
+}

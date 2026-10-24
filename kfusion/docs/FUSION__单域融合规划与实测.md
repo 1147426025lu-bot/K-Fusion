@@ -591,6 +591,72 @@ hrtimer 释放 + 复用 LLVM 内核化 Pass 产 `.ko`），不假装能出 `.ko`
 
 ---
 
+## 5.12 PR9-C：双后端内核化闭环（生成侧完成，构建在目标侧）
+
+上一轮 `ecos_build --target linux-kernel` 是如实 `rc=4`。本轮把它补成**真后端**，
+但严格区分"生成源码"与"构建出 `.ko`"——本机没有内核树/gcc，构建只能在目标侧做。
+
+### 结构
+
+```
+plan.json（已验证） + dag.json + contract + 阶段源码
+        → fusion_ir.py           归一化 IR（阶段/组/相位/调用/禁止效果）
+            ├── body_emit.py     → ecos_fused_body.{h,c}   ← 两个后端**同一份**（逐字节）
+            ├── linux_kernel_emitter.py → ecos_fused_linux.c + Kbuild
+            └── nuttx_emitter.py        → ecos_nuttx_main.c + Makefile/Kconfig
+```
+
+三处刻意的设计：
+
+1. **周期体只生成一次**。两个后端各自生成的话，"同一方案的两个部署"会被代码差异
+   污染，实验结论就没法归因到宿主。自测里用 `cmp` 逐字节比。
+2. **周期体里没有任何调度原语**：不写 `clock_nanosleep()`、不写 `main()`、不写线程。
+   调度是宿主的事。这条边界直接对应审查的警告——用户态驱动原样塞进内核会睡死。
+3. **阶段实现不在 emitter 里重写**。生成的内核模块链接 `stage_impl.o`，那份对象
+   由**现有 LLVM 内核化 Pass**（`PLCFusionPass__内核化Pass.cpp`）产出，
+   POSIX 映射/定点化/Kbuild 全部复用。生成的 `README.build.txt` 写明这两步。
+
+### 三道生成门
+
+| 门 | 内容 | 失败后果 |
+|---|---|---|
+| 验证凭据 | `plan.verification.ok=true`（PlanVerifier 出具） | 拒（`--allow-unverified` 只产对照物） |
+| 时间前提 | 周期已知、相位已知、组相位在周期内 | 拒（否则相位语义丢失） |
+| ring-0 禁止项 | 阶段含 `sleep`/`blocking_io`/`external`/`unknown` | **只对 linux 目标**拒，nuttx 照常 |
+
+第三条是有实测意义的：平台能力表允许 `sleep`（thread 上下文），规划器也照常
+给出方案，**但同一方案不能进 ring-0**。夹具 `synth_sleep` 就是测这个：
+`emit --target linux-kernel` 报 `ring-0 禁止：io_read —— 含 sleep/blocking_io…`，
+`--target nuttx` 正常生成。这类"方案合法但部署域不合法"的区分，是之前完全没有的。
+
+### 状态（不许含混）
+
+| 项 | 状态 |
+|---|---|
+| 双后端源码生成 | **已完成**，26 项后端自测全绿 |
+| 生成的 C 是否编译过 | **没有**（本机无 gcc/clang/内核头）。`manifest.txt` 里 `built=0` |
+| 真实 `.ko` / NuttX 应用 | **待目标侧**：按 `README.build.txt` 跑 `plc_kernelize` + `make -C $KDIR` |
+| `ecos_build --kdir <内核树>` | 已接好；给了才跑 Kbuild，失败即 `rc=3` |
+| 板上加载、控制输出比对 | **未做**——这是 PR9-C 真正剩下的验收项 |
+
+> 把"生成源码"报成"构建成功"是这类工具最容易犯的错，所以 `built` 字段是显式的，
+> 并且 `ecos_build` 在缺工具链时会打印"生成了源码，**没有**构建"。
+
+### 自测
+
+新增 `kfusion/scripts/test/ecos_synth_selftest__后端自测.sh`，26 项：
+
+- 产物齐全（6 个文件）；周期体无 sleep/main/stdio/pthread
+- 组内调用顺序 = 方案顺序（`g0` 恰好两次调用且 `s1` 在前）
+- ring-0 宿主有 `module_init/exit` + `hrtimer_init` + `kthread_create`，且不含用户态原语
+- 组相位写进 `ecos_phase_ns`（`0, 400000`）
+- 两后端 `body.c` 逐字节相同
+- NuttX 宿主有 `clock_nanosleep(TIMER_ABSTIME)` 且按组相位释放 2 次/周期
+- `synth_sleep`：linux 拒 / nuttx 放行
+- 未验证方案一律拒
+
+---
+
 ## 9. 下一步
 
 - ~~**跨周期依赖**~~：**已做并已实测**（§5.6）：闭环省 82.42 µs/周期、摘要逐位相同。
@@ -610,7 +676,7 @@ hrtimer 释放 + 复用 LLVM 内核化 Pass 产 `.ko`），不假装能出 `.ko`
 - ~~**可信方案验证 / 绝对时间窗口 / 严格入口（P0-1/2/3，PR9-A/B）**~~：**已做**（§5.11，
   自测 #19–#23）：倒序方案再也不能通过复检；采样/输出的判断从"相对漂移"改成"绝对时刻"；
   严格入口缺契约即停。
-- **PR9-C 的剩余部分（下一个真正的工程里程碑）**：`ecos_build --target linux-kernel` 目前
-  如实 `rc=4`。要补齐的是把融合期体拆成 ring-0 代码 + 宿主 hrtimer 释放（生成物不能自带
-  `clock_nanosleep()` / `main()`），并复用现有 LLVM 内核化 Pass 与 Kbuild 产出 `.ko`。
+- ~~**PR9-C 双后端**~~：**生成侧已完成**（§5.12）：IR + 共享周期体 + ring-0 宿主 +
+  NuttX 宿主，三道生成门。**剩余**：在目标侧真正构建 `.ko` 并加载比对控制输出
+  （`ecos_build --kdir <内核树>` 已接好，本机无工具链所以 `built=0`）。
 - **L2（把编译器搬进内核/cell）暂缓**：见 `PR9_文献调研_编译器内核化.md` §6 的修订理由。

@@ -21,10 +21,15 @@
 #     --platforms kfusion/contracts/examples/platform_caps.json \
 #     --platform nuttx --release-cost-us 21 \
 #     --exec-us '{"s1":0.6,"s2":0.67,"s3":0.28,"s4":0.5}' \
-#     --source kfusion/examples/ecos/five_stage_loop__闭环五阶段示例.c \
-#     --out-dir build/ecos_chain_window
+#     --source kfusion/examples/ecos/chain_window__四段窗口示例.c \
+#     --out-dir build/ecos_chain_window \
+#     --target linux-kernel        # 或 nuttx / userspace-driver（默认）
 #
-# 退出码：0 成功｜2 参数/环境问题｜3 契约或方案不合法｜4 后端未实现
+#   --kdir /lib/modules/$(uname -r)/build   # 给了才真的跑 Kbuild 出 .ko
+#   --call stage_pid=stage_pid(1000)        # 阶段函数带参数时给调用表达式
+#
+# 退出码：0 成功（产物是否已构建看 manifest 的 built）｜2 参数/环境问题｜3 契约或方案不合法
+# 本机没有内核树时只生成源码，且会明确写 built=0 —— 不把"生成源码"报成"构建成功"。
 
 set -u -o pipefail
 
@@ -36,6 +41,7 @@ CONTRACT_PY="$HERE/ecos/contract_validate.py"
 
 DAG=""; CONTRACT=""; PLATFORMS=""; PLATFORM=""; SOURCE=""; OUT_DIR=""
 EXEC_US=""; C=""; TARGET="userspace-driver"; STEP_US="200"; PERIOD_US=""
+KDIR=""; CALLS=()
 
 log()  { printf '[ecos] %s\n' "$*"; }
 die()  { printf '[ecos] ❌ %s\n' "$1" >&2; exit "${2:-3}"; }
@@ -55,6 +61,8 @@ while [ $# -gt 0 ]; do
         --period-us)        PERIOD_US="${2:-}"; shift 2 ;;
         --step-us)          STEP_US="${2:-}"; shift 2 ;;
         --target)           TARGET="${2:-}"; shift 2 ;;
+        --kdir)             KDIR="${2:-}"; shift 2 ;;
+        --call)             CALLS+=("${2:-}"); shift 2 ;;
         --strict)           shift ;;   # 本入口恒为严格，保留以兼容审查给的命令行
         -h|--help)          sed -n '2,30p' "${BASH_SOURCE[0]}"; exit 0 ;;
         *)                  die "未知参数 $1" 2 ;;
@@ -94,15 +102,51 @@ verify_args=("$DAG" --platforms "$PLATFORMS" --platform "$PLATFORM"
 [ -n "$EXEC_US" ] && verify_args+=(--exec-us "$EXEC_US")
 "$PY" "$PLAN_PY" "${verify_args[@]}" || die "方案复检未通过，拒绝生成" 3
 
-log "④ 代码生成（--dag 现场复检 + --require-verified）"
-DRIVER="$OUT_DIR/driver.c"
-codegen_args=("$PLAN" -o "$DRIVER" --stage-source "$SOURCE"
-              --dag "$DAG" --platforms "$PLATFORMS" --platform "$PLATFORM"
-              --contract "$CONTRACT" --require-verified
-              --step-us "$STEP_US")
-[ -n "$PERIOD_US" ] && codegen_args+=(--period-us "$PERIOD_US")
-[ -n "$C" ] && codegen_args+=(--release-cost-us "$C")
-"$PY" "$CODEGEN" "${codegen_args[@]}" || die "代码生成失败" 3
+RESULT=""; BUILT=0
+case "$TARGET" in
+userspace-driver)
+    log "④ 代码生成：用户态对照驱动（--dag 现场复检 + --require-verified）"
+    DRIVER="$OUT_DIR/driver.c"
+    codegen_args=("$PLAN" -o "$DRIVER" --stage-source "$SOURCE"
+                  --dag "$DAG" --platforms "$PLATFORMS" --platform "$PLATFORM"
+                  --contract "$CONTRACT" --require-verified
+                  --step-us "$STEP_US")
+    [ -n "$PERIOD_US" ] && codegen_args+=(--period-us "$PERIOD_US")
+    [ -n "$C" ] && codegen_args+=(--release-cost-us "$C")
+    for c in "${CALLS[@]:-}"; do [ -n "$c" ] && codegen_args+=(--call "$c"); done
+    "$PY" "$CODEGEN" "${codegen_args[@]}" || die "代码生成失败" 3
+    RESULT="$DRIVER"
+    ;;
+linux-kernel|nuttx)
+    log "④ 后端合成（$TARGET）：共享周期体 + 宿主"
+    SYNTH="$HERE/../backend/synthesis/emit.py"
+    emit_args=(--plan "$PLAN" --dag "$DAG" --source "$SOURCE"
+               --out-dir "$OUT_DIR/$TARGET" --target "$TARGET"
+               --contract "$CONTRACT")
+    [ -n "$EXEC_US" ] && emit_args+=(--exec-us "$EXEC_US")
+    for c in "${CALLS[@]:-}"; do [ -n "$c" ] && emit_args+=(--call "$c"); done
+    "$PY" "$SYNTH" "${emit_args[@]}" || die "后端合成失败（见上面的拒绝原因）" 3
+    RESULT="$OUT_DIR/$TARGET"
+
+    if [ "$TARGET" = "linux-kernel" ] && [ -n "$KDIR" ]; then
+        command -v make >/dev/null 2>&1 || die "有 --kdir 但没有 make" 2
+        log "⑤ Kbuild（KDIR=$KDIR）"
+        ( cd "$OUT_DIR/linux-kernel" && make -C "$KDIR" M="$PWD" modules ) \
+            || die "Kbuild 失败（vermagic / 内核头 / stage_impl.o 缺失都可能）" 3
+        BUILT=1
+    else
+        cat >&2 <<'EOF'
+[ecos] ⚠ 只生成了源码，**没有**构建 .ko / 应用
+       原因：本机没有目标侧工具链（内核树 / NuttX 树）。
+       构建步骤见产物目录里的 README.build.txt。
+       注意：「生成了源码」不等于「构建成功」——不要把这两件事混着报。
+EOF
+    fi
+    ;;
+*)
+    die "未知 target=$TARGET（可选 userspace-driver | linux-kernel | nuttx）" 2
+    ;;
+esac
 
 # 溯源清单：以后写论文时能说清"这个产物是哪个 DAG/契约/方案生成的"
 MANIFEST="$OUT_DIR/manifest.txt"
@@ -112,8 +156,10 @@ MANIFEST="$OUT_DIR/manifest.txt"
     echo "contract  $CONTRACT"
     echo "platform  $PLATFORM"
     echo "target    $TARGET"
+    echo "built     $BUILT"
     echo "source    $SOURCE"
     echo "plan      $PLAN"
+    echo "result    $RESULT"
     if command -v sha256sum >/dev/null 2>&1; then
         echo "sha256(dag)      $(sha256sum "$DAG" | cut -d' ' -f1)"
         echo "sha256(contract) $(sha256sum "$CONTRACT" | cut -d' ' -f1)"
@@ -122,16 +168,4 @@ MANIFEST="$OUT_DIR/manifest.txt"
 } >"$MANIFEST"
 log "溯源清单 → $MANIFEST"
 
-if [ "$TARGET" = "linux-kernel" ]; then
-    cat >&2 <<'EOF'
-[ecos] ⛔ linux-kernel 后端尚未实现（PR9-C 的剩余部分）
-       本轮只做了「可信方案验证 + 用户态/RTOS 驱动生成」这一段。
-       缺的是：把融合期体拆成 ring-0 代码 + 宿主 hrtimer 释放，
-       并复用现有 LLVM 内核化 Pass 产出 .ko（不能把 clock_nanosleep/main
-       的驱动原样塞进内核）。
-       在补齐之前，本入口不会假装能出 .ko —— 静默降级是这类工具最糟的行为。
-EOF
-    exit 4
-fi
-
-log "✅ 完成：$DRIVER（target=$TARGET）"
+log "✅ 完成：$RESULT（target=$TARGET，built=$BUILT）"

@@ -281,7 +281,7 @@ if [ "$rc" != 0 ]; then ok "生成前被拒（rc=$rc）"; else bad "倒序方案
 if [ -f "$TMP/reversed.c" ]; then bad "拒绝后仍留下了产物文件"; else ok "未留下产物（拒绝即停）"; fi
 expect_grep "拒绝理由来自独立验证器" "$(cat "$TMP/out.txt")" "拒绝生成代码"
 
-echo "=== 23. P0-3：ECoS 严格入口（缺契约/契约写错/后端未实现）==="
+echo "=== 23. P0-3：ECoS 严格入口（缺契约/契约写错/双后端生成）==="
 ECOS="$HERE/../ecos_build.sh"
 expect_rc "正常链路可跑通" 0 \
     bash "$ECOS" --dag "$FIX/chain_window.dag.json" --contract "$CONTRACT" \
@@ -299,11 +299,19 @@ expect_rc "契约 stage 名写错 → rc=3（否则窗口静默失效）" 3 \
     bash "$ECOS" --dag "$FIX/chain_window.dag.json" --contract "$TMP/bad.contract.json" \
     --platforms "$CAPS" --platform nuttx --source "$LOOP_SRC" --out-dir "$TMP/ecos_bad"
 expect_grep "指出是哪个 stage 写错" "$(cat "$TMP/out.txt")" "s3_typo"
-expect_rc "linux-kernel 后端未实现 → rc=4（不假装能出 .ko）" 4 \
+expect_rc "linux-kernel 目标：生成双后端源码（rc=0，本机无内核树故 built=0）" 0 \
     bash "$ECOS" --dag "$FIX/chain_window.dag.json" --contract "$CONTRACT" \
     --platforms "$CAPS" --platform nuttx --release-cost-us 21 \
     --exec-us '{"s1":0.6,"s2":0.67,"s3":0.28,"s4":0.5}' \
-    --source "$LOOP_SRC" --out-dir "$TMP/ecos_k" --target linux-kernel
+    --source "$HERE/../../examples/ecos/chain_window__四段窗口示例.c" \
+    --out-dir "$TMP/ecos_k" --target linux-kernel
+expect_grep "产物里有 ring-0 宿主与共享周期体" "$(cat "$TMP/out.txt")" \
+    "ecos_fused_linux.c" "ecos_fused_body.c"
+if grep -q "built     0" "$TMP/ecos_k/manifest.txt" 2>/dev/null; then
+    ok "manifest 如实记录 built=0（未构建就不报构建成功）"
+else
+    bad "manifest 的 built 字段不对"
+fi
 
 echo
 echo "通过 $PASS / 失败 $FAIL"
