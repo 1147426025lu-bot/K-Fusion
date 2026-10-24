@@ -1,0 +1,43 @@
+{
+  "version": 22,
+  "module": "waw",
+  "functions": {
+    "w1": {
+      "effects": [
+        "state_write"
+      ],
+      "allowed_contexts": [
+        "thread"
+      ],
+      "reads": [],
+      "writes": [
+        "@g_shared"
+      ],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "w2": {
+      "effects": [
+        "state_write"
+      ],
+      "allowed_contexts": [
+        "thread"
+      ],
+      "reads": [],
+      "writes": [
+        "@g_shared"
+      ],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    }
+  },
+  "interface_bindings": {},
+  "alias_stats": {
+    "aa_available": true,
+    "pairs_checked": 0,
+    "coarse_pairs": 0,
+    "split_pairs": 0
+  }
+}

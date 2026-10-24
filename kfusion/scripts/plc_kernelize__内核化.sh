@@ -66,6 +66,53 @@ run_ko() {
     fi
 }
 
+# ---- 契约门禁：ECoS 的合法性检查必须挡在产物生成之前 ----
+# 契约来源（按优先级）：
+#   1) manifest 里的 FUSE_CONTRACT=<path>（相对路径按 kfusion/ 解析）
+#   2) test/<FUSE_NAME>.contract.json（约定位置）
+# 有契约 → 必须通过，否则中止；无契约 → 明确警告并继续（FUSE_REQUIRE_CONTRACT=1 时也中止）。
+run_contract_gate() {
+    local contract="" caps target
+    if [ -n "${FUSE_CONTRACT:-}" ]; then
+        contract="$FUSE_CONTRACT"
+        case "$contract" in
+            /*) ;;
+            *) contract="$PROJECT_ROOT/$contract" ;;
+        esac
+    else
+        [ -f "$PROJECT_ROOT/test/${FUSE_NAME}.contract.json" ] && \
+            contract="$PROJECT_ROOT/test/${FUSE_NAME}.contract.json"
+    fi
+
+    caps="${FUSE_PLATFORM_CAPS:-$PROJECT_ROOT/contracts/examples/platform_caps.json}"
+    target="${FUSE_CONTRACT_PLATFORM:-}"
+
+    if [ -z "$contract" ] || [ ! -f "$contract" ]; then
+        echo "⚠️  [contract] 没有任务契约 → 跳过合法性校验"
+        echo "     注意：这是「没有检查」，不是「检查通过」。"
+        echo "     要启用：manifest 里加 FUSE_CONTRACT=<path>，或设 FUSE_REQUIRE_CONTRACT=1"
+        if [ "${FUSE_REQUIRE_CONTRACT:-0}" = "1" ]; then
+            plc_die "$PLC_E_NOFILE" "严格模式要求任务契约，但没有找到" \
+                "在 $MANIFEST 里加 FUSE_CONTRACT=<path>，或确认 test/${FUSE_NAME}.contract.json"
+        fi
+        return 0
+    fi
+
+    echo "🔒 [contract] 校验 $(basename "$contract")"
+    local -a cargs=("$contract" --platforms "$caps")
+    [ -n "$target" ] && cargs+=(--platform "$target")
+    [ "${FUSE_ALLOW_EXTERNAL:-0}" = "1" ] && cargs+=(--allow-external)
+
+    if ! "${PYTHON_BIN:-python3}" "$SCRIPT_DIR/contract_check__契约校验.py" "${cargs[@]}"; then
+        plc_die "$PLC_E_BUILD" "契约校验未通过，拒绝继续生成产物" \
+            "修契约，或显式放宽（FUSE_ALLOW_EXTERNAL=1 / FUSE_CONTRACT_PLATFORM=<平台>）" \
+            "不要绕过这一步：门禁的意义就是挡住这一步"
+    fi
+    echo "✅ [contract] 通过"
+}
+
+run_contract_gate
+
 case "$STAGE" in
     fuse)
         run_fuse

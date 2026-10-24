@@ -1,0 +1,16 @@
+make -C /root/linux-5.15.86 M=/root/K-Fusion/kfusion/test modules
+make[1]: Entering directory '/root/linux-5.15.86'
+  CC [M]  /root/K-Fusion/kfusion/test/plc_fused_host.o
+/root/K-Fusion/kfusion/test/plc_fused_host.c: In function ‘fused_worker’:
+/root/K-Fusion/kfusion/test/plc_fused_host.c:196:2: error: implicit declaration of function ‘kthread_complete_and_exit’; did you mean ‘complete_and_exit’? [-Werror=implicit-function-declaration]
+  196 |  kthread_complete_and_exit(&fused_done, 0);
+      |  ^~~~~~~~~~~~~~~~~~~~~~~~~
+      |  complete_and_exit
+/root/K-Fusion/kfusion/test/plc_fused_host.c:197:1: error: no return statement in function returning non-void [-Werror=return-type]
+  197 | }
+      | ^
+cc1: some warnings being treated as errors
+make[2]: *** [scripts/Makefile.build:289: /root/K-Fusion/kfusion/test/plc_fused_host.o] Error 1
+make[1]: *** [Makefile:1902: /root/K-Fusion/kfusion/test] Error 2
+make[1]: Leaving directory '/root/linux-5.15.86'
+make: *** [Makefile:8: all] Error 2

@@ -30,6 +30,10 @@ CONFIG_ARCH_BOARD="raspberrypi-4b"
 # 自写 rtlat：inmate(cRTOS 域)内实时调度抖动测量（cyclictest 内核等价：
 # 高优先级周期任务 + clock_nanosleep(TIMER_ABSTIME) + clock_gettime）。
 CONFIG_BENCHMARK_RTLAT=y
+# BM2：三轴级联 PID（跨域统一探针对照负载）
+CONFIG_BENCHMARK_BM2PID=y
+# ECoS PR5：五阶段闭环融合基准（plan / flat 同工作量对照；digest 必须一致）
+CONFIG_BENCHMARK_FIVELOOP=y
 # NuttX 自带 cyclictest —— 即 rt-tests cyclictest 的 NuttX 移植版，
 # 与 root cell 侧使用的 rt-tests cyclictest **同族同算法**，
 # 用于两侧「同一套测量代码/方法」对照（此前只有 root 侧用 cyclictest、
@@ -80,10 +84,14 @@ CONFIG_FS_ROMFS=y
 CONFIG_HAVE_CXX=y
 CONFIG_HAVE_CXXINITIALIZE=y
 CONFIG_IDLETHREAD_STACKSIZE=8192
-CONFIG_INIT_ENTRYPOINT="nsh_main"
+# 无串口时 init 直接进 fiveloop shmwait（argv[0]=shmwait）；ecos_boot 仍可作为 builtin
+CONFIG_INIT_ENTRYPOINT="fiveloop_main"
+CONFIG_INIT_ENTRYNAME="fiveloop"
+CONFIG_INIT_ARGS="\"shmwait\""
+CONFIG_INIT_STACKSIZE=16384
 CONFIG_INTELHEX_BINARY=y
 CONFIG_MINIUART_BAUD=115200
-CONFIG_NSH_BUILTIN_APPS=y
+CONFIG_NSH_BUILTIN_APPS=n
 CONFIG_NSH_FILEIOSIZE=512
 CONFIG_NSH_READLINE=y
 CONFIG_PREALLOC_TIMERS=4

@@ -1,0 +1,34 @@
+{
+  "_comment": "人只写拓扑与上下文；effects 由 EffectSummaryAnalysis 从 IR 推导后填入",
+  "task": {
+    "name": "plc_chain",
+    "entry": "chain_main",
+    "period_us": 1000,
+    "deadline_us": 800,
+    "notes": "ECoS §10 的最小闭环：Sensor → FIR → PID"
+  },
+  "stages": [
+    {
+      "name": "sensor_prepare",
+      "fn": "sensor_prepare",
+      "depends_on": [],
+      "context": "thread",
+      "notes": "读设备寄存器；预期推导出 mmio → 会被 linux_kernel 拒"
+    },
+    {
+      "name": "fir_filter",
+      "fn": "fir_filter",
+      "depends_on": ["sensor_prepare"],
+      "context": "thread"
+    },
+    {
+      "name": "pid_step",
+      "fn": "pid_step",
+      "depends_on": ["fir_filter"],
+      "context": "thread"
+    }
+  ],
+  "observations": [
+    { "name": "actuator_out", "kind": "mmio", "release_id": true }
+  ]
+}

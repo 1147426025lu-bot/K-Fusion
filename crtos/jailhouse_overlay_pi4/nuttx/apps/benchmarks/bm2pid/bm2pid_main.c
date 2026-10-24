@@ -303,7 +303,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* --- 统一探针块（跨域可比的口径，见 plc_probe__统一测量探针.h）--- */
-	plc_probe_head(PERIOD_NS, (unsigned long long)g_cycles);
+	plc_probe_head(PERIOD_NS, PERIOD_NS, (unsigned long long)g_cycles);
 	plc_probe_line(&g_p_start);
 	plc_probe_line(&g_p_exec);
 	plc_probe_line(&g_p_resp);

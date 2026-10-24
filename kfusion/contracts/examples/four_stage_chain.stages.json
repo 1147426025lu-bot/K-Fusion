@@ -1,0 +1,16 @@
+{
+  "_comment": "四阶段纯计算链：用于融合边界实验（无 MMIO，可在 linux_kernel 域合法融合）",
+  "task": {
+    "name": "four_stage_chain",
+    "entry": "chain_main",
+    "period_us": 1000,
+    "deadline_us": 1000,
+    "notes": "sample → fir → pid → clamp，靠全局状态串联"
+  },
+  "stages": [
+    { "name": "stage_sample", "fn": "stage_sample", "depends_on": [], "context": "thread" },
+    { "name": "stage_fir",    "fn": "stage_fir",    "depends_on": ["stage_sample"], "context": "thread" },
+    { "name": "stage_pid",    "fn": "stage_pid",    "depends_on": ["stage_fir"], "context": "thread" },
+    { "name": "stage_clamp",  "fn": "stage_clamp",  "depends_on": ["stage_pid"], "context": "thread" }
+  ]
+}

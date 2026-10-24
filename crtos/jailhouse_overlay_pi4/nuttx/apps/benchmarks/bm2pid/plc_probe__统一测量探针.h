@@ -34,17 +34,30 @@
 
 #include <stdio.h>
 
+/* 桶数可覆盖：默认 200（0..199 µs）够 BM2/root cell 用；
+ * 但实验里的 response 可能上千 µs（例如"每阶段一次释放"的对照），
+ * 全落进桶顶会让 p50 退化成 199 —— 那不是数据，是夹具的错。
+ * 用方可在 include 前 #define PLC_PROBE_BUCKETS 1024。 */
+#ifndef PLC_PROBE_BUCKETS
 #define PLC_PROBE_BUCKETS 200        /* 0..199 µs，1 µs 桶 */
-#define PLC_PROBE_VER     "r/s/f v1"
+#endif
+#define PLC_PROBE_VER     "r/s/f v1.2"
 
 struct plc_probe_series {
 	const char        *name;         /* 序列名，打印用 */
 	unsigned long      hist[PLC_PROBE_BUCKETS];
 	unsigned long long n;            /* 样本数 */
-	unsigned long long sum_ns;
-	unsigned long long min_ns;
-	unsigned long long max_ns;
+	unsigned long long sum_ns;       /* 绝对值和：用于 avg 与直方图 */
+	unsigned long long min_ns;       /* 绝对值最小 */
+	unsigned long long max_ns;       /* 绝对值最大 */
 	unsigned long long over;         /* >= PLC_PROBE_BUCKETS µs 的样本数 */
+
+	/* --- 符号信息（v1.2）：不能对负时间差取绝对值后就当没发生过 ---
+	 * start_lat < 0 表示"定时器到来之前就醒了"，这在合并唤醒/时钟调整时是真实存在的。
+	 * 直方图仍按绝对值分桶（CDF 需要正值），但负值必须单独计数并给出有符号极值。 */
+	unsigned long long neg;          /* v < 0 的样本数 */
+	long long          min_signed_ns;/* 有符号最小值（可能为负） */
+	long long          max_signed_ns;/* 有符号最大值 */
 };
 
 static inline void plc_probe_reset(struct plc_probe_series *s, const char *name)
@@ -59,13 +72,26 @@ static inline void plc_probe_reset(struct plc_probe_series *s, const char *name)
 	s->min_ns = ~0ULL;
 	s->max_ns = 0;
 	s->over = 0;
+	s->neg = 0;
+	s->min_signed_ns = 0x7FFFFFFFFFFFFFFFLL;   /* 不能用 ~0（那是 -1，会污染 min） */
+	s->max_signed_ns = 0;
 }
 
 static inline void plc_probe_add(struct plc_probe_series *s, long long v_ns)
 {
 	unsigned long long a = (unsigned long long)(v_ns < 0 ? -v_ns : v_ns);
-	unsigned long us = (unsigned long)(a / 1000ULL);
+	unsigned long us;
 
+	/* 记录符号，别丢掉 */
+	if (v_ns < 0)
+		s->neg++;
+	if (v_ns < s->min_signed_ns)
+		s->min_signed_ns = v_ns;
+	if (v_ns > s->max_signed_ns)
+		s->max_signed_ns = v_ns;
+
+	/* 直方图按绝对值：CDF 需要单调正的横轴 */
+	us = (unsigned long)(a / 1000ULL);
 	if (us >= PLC_PROBE_BUCKETS) {
 		s->over++;
 		us = PLC_PROBE_BUCKETS - 1;
@@ -97,12 +123,19 @@ static inline unsigned long plc_probe_pctl(const struct plc_probe_series *s,
 	return PLC_PROBE_BUCKETS - 1;
 }
 
-static inline void plc_probe_head(long long period_ns,
+/* deadline_ns <= 0 表示"相对期限 = 周期"（老行为）。
+ * ECoS 的契约里有独立的 deadline_us，不能默认所有任务的 D 都等于 T。 */
+static inline void plc_probe_head(long long period_ns, long long deadline_ns,
 				  unsigned long long samples)
 {
 	printf("\n# probe: %s\n", PLC_PROBE_VER);
 	printf("# period_ns: %lld\n", period_ns);
+	printf("# deadline_ns: %lld\n",
+	       deadline_ns > 0 ? deadline_ns : period_ns);
 	printf("# samples: %llu\n", samples);
+	/* 串行循环：第 k 次迭代的 r_k/s_k/f_k 天然属于同一实例，
+	 * release_id 就是循环下标 0..N-1，不需要额外的序号字段。 */
+	printf("# release_id: serial 0..%llu\n", samples ? samples - 1 : 0);
 	printf("# series_us: start_lat exec response  (1us buckets, cap %d)\n",
 	       PLC_PROBE_BUCKETS - 1);
 }
@@ -113,14 +146,32 @@ static inline void plc_probe_line(const struct plc_probe_series *s)
 
 	/* 前缀用 stat_，避免与旧版兼容行 `# exec_us: avg=…` 撞名 */
 	printf("# stat_%s_us: min=%.3f avg=%.3f p50=%lu p90=%lu p99=%lu "
-	       "p99.9=%lu p99.99=%lu max=%.3f over=%llu n=%llu\n",
+	       "p99.9=%lu p99.99=%lu max=%.3f over=%llu neg=%llu "
+	       "min_signed=%.3f n=%llu\n",
 	       s->name,
 	       (double)(s->min_ns == ~0ULL ? 0 : s->min_ns) / 1000.0,
 	       (double)s->sum_ns / (double)n / 1000.0,
 	       plc_probe_pctl(s, 500000), plc_probe_pctl(s, 900000),
 	       plc_probe_pctl(s, 990000), plc_probe_pctl(s, 999000),
 	       plc_probe_pctl(s, 999900),
-	       (double)s->max_ns / 1000.0, s->over, s->n);
+	       (double)s->max_ns / 1000.0, s->over, s->neg,
+	       s->n ? (double)s->min_signed_ns / 1000.0 : 0.0, s->n);
+}
+
+/* 稀疏直方图：每个非零桶一行。为什么要单独一条：
+ *   `# stat_*` 只有 6 个分位点，画不出 CDF；而 CDF 是「重尾 vs 确定性」最直观的证据。
+ *   一桶一行而不是一行打全部，是因为内核 pr_info 单行有长度上限，长尾会被截断
+ *   （截断后的 CDF 看起来会很漂亮——这正是不能接受的地方）。 */
+static inline void plc_probe_hist(const struct plc_probe_series *s)
+{
+	int k;
+
+	for (k = 0; k < PLC_PROBE_BUCKETS; k++) {
+		if (s->hist[k])
+			printf("# hist_%s_us: %d %lu\n", s->name, k, s->hist[k]);
+	}
+	if (s->over)
+		printf("# hist_%s_us: over %llu\n", s->name, s->over);
 }
 
 #endif /* PLC_PROBE__UNIFIED_H */

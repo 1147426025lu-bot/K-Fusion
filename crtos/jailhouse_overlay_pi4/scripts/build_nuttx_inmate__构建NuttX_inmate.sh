@@ -96,6 +96,8 @@ inject_app() {
 
 inject_app examples/xshm
 inject_app benchmarks/rtlat
+inject_app benchmarks/bm2pid
+inject_app benchmarks/fiveloop
 
 echo "== 4. 应用 jailhouse-inmate 补丁（幂等）=="
 # 注意：非 ASCII 文件名经 pscp 传输可能变成乱码，故用通配查找而非硬编码中文名

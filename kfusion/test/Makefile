@@ -1,11 +1,9 @@
-# 遗留 Makefile — 推荐改用:
-#   bash scripts/deploy/ignite_official_cycletest__cyclictest主线.sh   # L2 runner
-#   FUSE_RUNNER_PROFILE=generic bash scripts/ignite_fused__通用ko构建.sh manifests/manifest_cyclictest__主线压测.env
 obj-m += official_cycletest_mod.o
-official_cycletest_mod-objs := plc_runner_official.o plc_runtime_stubs.o official_cycletest_kernel.o
-KDIR := /lib/modules/$(shell uname -r)/build
+official_cycletest_mod-objs := plc_fused_host.o plc_hrtimer_core.o plc_fused_timer_host.o official_cycletest_runtime_stubs.o plc_pthread_host.o official_cycletest_kernel.o
+KDIR := /root/linux-5.15.86
 PWD := $(shell pwd)
-ccflags-y += -O2 -I../include
+ccflags-y += -O2 -I/root/K-Fusion/kfusion/include -I/root/K-Fusion/kfusion/src -DFUSED_RUN_MAIN=1 -DFUSED_MAIN_ARGS_DEFAULT="\"-p 99 -i 1000 -m -q -h 100000\"" -DFUSED_HAVE_PTHREAD_HOST=1
+
 all:
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 clean:

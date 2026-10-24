@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://github.com/1147426025lu-bot/K-Fusion/contracts/task_contract.schema.json",
-  "title": "K-Fusion 任务契约 v1",
-  "description": "ECoS 的输入契约：声明一个周期任务的时间要求、阶段划分与执行效果。校验器据此做 fail-closed 判定（无法证明合法就拒绝）。",
+  "title": "K-Fusion 任务契约 v1.1",
+  "description": "ECoS 的输入契约。v1.1 相对 v1 的变化：(1) effects 增加 unknown，且 unknown 一律拒绝；(2) 增加 reads/writes 抽象内存区域，供数据依赖判断；(3) fn 允许一个阶段含多个函数；(4) 允许 generated / derived_allowed_contexts 元信息。所有新增字段均为可选，v1 的旧契约仍然合法。",
   "type": "object",
   "required": ["version", "task", "stages"],
   "additionalProperties": false,
@@ -29,7 +29,14 @@
         "additionalProperties": false,
         "properties": {
           "name": { "type": "string", "minLength": 1 },
-          "fn": { "type": "string", "minLength": 1 },
+          "fn": {
+            "oneOf": [
+              { "type": "string", "minLength": 1 },
+              { "type": "array", "minItems": 1,
+                "items": { "type": "string", "minLength": 1 } }
+            ],
+            "description": "该阶段对应的函数；允许一个阶段由多个函数组成（效果按保守规则合并）"
+          },
           "depends_on": { "type": "array", "items": { "type": "string" } },
           "context": {
             "enum": ["thread", "softirq", "hardirq", "timer_cb"],
@@ -39,9 +46,25 @@
             "type": "array",
             "minItems": 1,
             "items": {
-              "enum": ["pure", "state_read", "state_write", "mmio", "sleep", "blocking_io", "external"]
+              "enum": ["pure", "state_read", "state_write", "mmio", "sleep",
+                       "blocking_io", "external", "unknown"]
             },
-            "description": "效果摘要；出现白名单以外的值一律视为 UNKNOWN 并拒绝"
+            "description": "执行效果。unknown = 无法证明安全（含解析不出的间接调用），一律拒绝；external = 名字已知但语义未归档的外部调用，默认拒绝，可用 --allow-external 显式放行"
+          },
+          "reads": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "可能读取的抽象内存区域：@全局名 / arg:N（第 N 个指针参数）/ heap"
+          },
+          "writes": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "可能写入的抽象内存区域，写法同 reads"
+          },
+          "derived_allowed_contexts": {
+            "type": "array",
+            "items": { "enum": ["thread", "softirq"] },
+            "description": "各函数 allowed_contexts 取**交集**后的建议值；仅作参考，contract_check 不据此放行"
           },
           "notes": { "type": "string" }
         }
@@ -58,6 +81,16 @@
           "kind": { "enum": ["mmio", "shm", "log", "none"] },
           "release_id": { "type": "boolean" }
         }
+      }
+    },
+    "generated": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "生成来源元信息；手工写的契约可以没有这个字段",
+      "properties": {
+        "by": { "type": "string" },
+        "summary_module": { "type": "string" },
+        "note": { "type": "string" }
       }
     }
   }

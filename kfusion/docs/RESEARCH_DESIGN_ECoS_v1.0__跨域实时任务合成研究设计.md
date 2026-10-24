@@ -7,7 +7,7 @@
 > **性质**：这是**研究设计 / 拟实现规格**，不是已有结果。
 > 原文第 16 节自己写明：「所有算法、性能改进与 CLI 均为拟实现 / 待验证」。
 >
-> **本仓库对它的核对**（2026-10-23）：
+> **本仓库对它的核对**（2026-10-23，续 2026-10-24）：
 > | 文档引用 | 核对结果 |
 > |---|---|
 > | [R1] 默认严格外部调用策略 | ✅ 属实，且已比文档假设更强：`PLC_FUSION_UNMAPPED_POLICY=error` 默认、
@@ -17,6 +17,11 @@
 > | | `kfusion/scripts/plc_fusion_wcet_per_function_search__函数级Association.py:49-52` |
 > | [R3] 指标不可混用（P1 间隔偏差 / P2 唤醒延迟 / P3 BM2） | ✅ 与 `RESULTS_ALL` §9.0 一致 |
 > | §13「修复 NuttX 行为与签名差异」 | ⏳ 部分已完成：`pthread_t` 写回宽度已修并反汇编验证 |
+> | §13 `feat(contract/analysis/graph)` | ✅ 契约校验 + EffectSummary + `dag_build` 已落地并自测 |
+> | §13 `feat(fusion)` 单域 | ⏳ 用户态 plan/flat/multi 已测（见 `RESULT_ECoS_PR5`）；
+> | | 规划器 `--enumerate` 穷举合法边界；延迟边已从不可分性摘掉；
+> | | NuttX `fiveloop` 已入库并链入 `nuttx.bin`，inmate 串口对照待抓；
+> | | Linux kthread 宿主差分仍缺 |
 >
 > **⚠️ 我补的一条结构性依赖**（原文档未强调）：
 > ECoS 的目标 J(θ) 用「端到端响应时间 R」和「deadline miss M」，

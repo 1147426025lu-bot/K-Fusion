@@ -1,0 +1,45 @@
+{
+  "version": 22,
+  "module": "/root/K-Fusion/kfusion/analysis/build/ecos_demo/plc_chain.ll",
+  "functions": {
+    "chain_main": {
+      "effects": ["mmio", "state_read", "state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": ["@g_fir_hist.0", "@g_fir_hist.1", "@g_fir_hist.2", "@g_fir_hist.3", "@g_fir_hist.4", "@g_fir_hist.5", "@g_fir_hist.6", "@g_fir_hist.7", "@g_fir_out", "@g_pid_integ", "@g_sensor_raw"],
+      "writes": ["@g_fir_hist.0", "@g_fir_hist.1", "@g_fir_hist.2", "@g_fir_hist.3", "@g_fir_hist.4", "@g_fir_hist.5", "@g_fir_hist.6", "@g_fir_hist.7", "@g_fir_out", "@g_pid_integ", "@g_sensor_raw"],
+      "recursive": false,
+      "calls": ["fir_filter", "pid_step", "sensor_prepare"],
+      "unknown_calls": []
+    },
+    "fir_filter": {
+      "effects": ["state_read", "state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": ["@g_fir_hist.0", "@g_fir_hist.1", "@g_fir_hist.2", "@g_fir_hist.3", "@g_fir_hist.4", "@g_fir_hist.5", "@g_fir_hist.6", "@g_fir_hist.7", "@g_sensor_raw"],
+      "writes": ["@g_fir_hist.0", "@g_fir_hist.1", "@g_fir_hist.2", "@g_fir_hist.3", "@g_fir_hist.4", "@g_fir_hist.5", "@g_fir_hist.6", "@g_fir_hist.7", "@g_fir_out"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "pid_step": {
+      "effects": ["state_read", "state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": ["@g_fir_out", "@g_pid_integ"],
+      "writes": ["@g_pid_integ"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "sensor_prepare": {
+      "effects": ["mmio", "state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": [],
+      "writes": ["@g_sensor_raw"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    }
+  },
+  "interface_bindings": {
+  },
+  "alias_stats": {"aa_available": true, "pairs_checked": 148, "coarse_pairs": 0, "split_pairs": 0}
+}
