@@ -208,5 +208,42 @@ else
 fi
 
 echo
+echo "=== 15. PR6：不确定依赖门禁（WAW 冲突无已证明顺序 → 全融合被拒）==="
+OUT="$("$PY" "$PLAN" "$FIX/uncertain.dag.json" --platforms "$CAPS" --platform nuttx --release-cost-us 6 2>&1)"
+rc=$?
+if [ "$rc" = 0 ]; then ok "有解（rc=0）"; else bad "被拒，rc=$rc"; fi
+expect_grep "不是 1 组（冲突挡住全融合）" "$OUT" "方案：2 组"
+expect_grep "指认 WAW 冲突顺序不确定" "$OUT" "WAW 冲突 b/c" "顺序不确定"
+expect_rc "全融合方案复检必须被拒（rc=3）" 3 \
+    "$PY" "$PLAN" "$FIX/uncertain.dag.json" --platforms "$CAPS" --platform nuttx \
+    --verify "$FIX/uncertain.allfused.plan.json"
+expect_grep "复检指出不确定" "$(cat "$TMP/out.txt")" "不确定：WAW 冲突 b/c"
+
+echo "=== 16. PR7：相位感知端到端（融合被相位钉住挡住时如实报大延迟）==="
+OUT="$("$PY" "$PLAN" "$FIX/loop_phasepin.dag.json" --platforms "$CAPS" --platform linux_kernel \
+      --release-cost-us 21 --exec-us "$TMP/exec.json" 2>&1)"
+expect_grep "不是 1 组（环 SCC + 钉住 → 只能全拆）" "$OUT" "方案：5 组"
+expect_grep "端到端 ≈821（不是旧模型 107 唤醒税求和）" "$OUT" "R̂ ≈ 821"
+expect_grep "显式拆出相位跨度" "$OUT" "相位跨度 800"
+
+echo "=== 17. PR8：控制语义硬约束（反馈死区绝对上限 → 全融合被拒，反馈保持 200µs）==="
+expect_rc "全融合方案复检必须被拒（rc=3）" 3 \
+    "$PY" "$PLAN" "$FIX/loop_fb_limit.dag.json" --platforms "$CAPS" --platform linux_kernel \
+    --verify "$FIX/loop_fb_limit.allfused.plan.json"
+expect_grep "复检指出控制：反馈边必须跨组" "$(cat "$TMP/out.txt")" "控制：反馈边" "必须跨组"
+OUT="$("$PY" "$PLAN" "$FIX/loop_fb_limit.dag.json" --platforms "$CAPS" --platform linux_kernel \
+      --release-cost-us 21 --exec-us "$TMP/exec.json" 2>&1)"
+rc=$?
+if [ "$rc" = 0 ]; then ok "给出可行方案（rc=0）"; else bad "被拒，rc=$rc"; fi
+expect_grep "反馈死区保持 200µs（未被拉到 998）" "$OUT" "间隔 200 µs → 200 µs（×1.00）"
+
+echo "=== 18. PR8+边界选择：非环链中间段相位钉住 → 自动选 2 组正确边界 ==="
+OUT="$("$PY" "$PLAN" "$FIX/chain_pin.dag.json" --platforms "$CAPS" --platform nuttx \
+      --release-cost-us 21 --exec-us '{"s1":0.6,"s2":0.67,"s3":0.28,"s4":0.5}' 2>&1)"
+expect_grep "选 2 组（前两段 | 后两段）" "$OUT" "方案：2 组"
+expect_grep "端到端 ≈422（相位跨度 400 + 末组唤醒 + 末组执行）" "$OUT" "R̂ ≈ 421.8"
+expect_grep "说明全融合为何被拒（提前采样）" "$OUT" "提前采样"
+
+echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" = 0 ] || exit 1

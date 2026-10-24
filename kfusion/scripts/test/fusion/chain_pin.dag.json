@@ -1,0 +1,127 @@
+{
+  "version": 2,
+  "meta": {
+    "mode": "stages",
+    "task": {
+      "name": "chain_pin",
+      "period_us": 1000,
+      "step_us": 200
+    },
+    "note": "非环 4 段链；s3 读外部输入(相位钉住)，不能被前拉。全融合会被拒，ECoS 应选 2 组（s1+s2 | s3+s4）作为正确边界"
+  },
+  "phase": {
+    "known": true,
+    "unit": "us",
+    "period_us": 1000,
+    "offsets": {
+      "s1": 0,
+      "s2": 200,
+      "s3": 400,
+      "s4": 600
+    }
+  },
+  "nodes": [
+    {
+      "name": "s1",
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "thread"
+      ],
+      "phase_us": 0
+    },
+    {
+      "name": "s2",
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "thread"
+      ],
+      "phase_us": 200
+    },
+    {
+      "name": "s3",
+      "effects": [
+        "state_read",
+        "state_write",
+        "mmio"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ],
+      "phase_us": 400,
+      "phase_pinned": true
+    },
+    {
+      "name": "s4",
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "thread"
+      ],
+      "phase_us": 600
+    }
+  ],
+  "edges": [
+    {
+      "from": "s1",
+      "to": "s2",
+      "kind": "data",
+      "evidence": [
+        "@a"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "s2",
+      "to": "s3",
+      "kind": "data",
+      "evidence": [
+        "@b"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "s3",
+      "to": "s4",
+      "kind": "data",
+      "evidence": [
+        "@c"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    }
+  ],
+  "candidates": [],
+  "topo_order": [
+    "s1",
+    "s2",
+    "s3",
+    "s4"
+  ],
+  "topo_order_delayed": [
+    "s1",
+    "s2",
+    "s3",
+    "s4"
+  ],
+  "recurrences": [],
+  "algebraic_loops": [],
+  "cycles": [],
+  "stats": {
+    "nodes": 4,
+    "edges": 3,
+    "candidates": 0,
+    "recurrences": 0,
+    "algebraic_loops": 0
+  }
+}

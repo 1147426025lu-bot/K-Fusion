@@ -1,0 +1,15 @@
+{
+  "version": 3,
+  "groups": [
+    {
+      "id": "g0",
+      "members": [
+        "stage_sample",
+        "stage_fir",
+        "stage_pid",
+        "stage_clamp",
+        "stage_plant"
+      ]
+    }
+  ]
+}

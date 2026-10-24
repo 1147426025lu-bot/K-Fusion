@@ -1,0 +1,90 @@
+{
+  "version": 2,
+  "meta": {
+    "mode": "stages",
+    "task": {
+      "name": "uncertain",
+      "period_us": 1000
+    }
+  },
+  "nodes": [
+    {
+      "name": "a",
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "thread"
+      ],
+      "phase_us": 0
+    },
+    {
+      "name": "b",
+      "effects": [
+        "state_write"
+      ],
+      "contexts": [
+        "thread"
+      ],
+      "phase_us": 100
+    },
+    {
+      "name": "c",
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "thread"
+      ],
+      "phase_us": 200
+    }
+  ],
+  "edges": [
+    {
+      "from": "a",
+      "to": "c",
+      "kind": "data",
+      "evidence": [
+        "@g_x"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "b",
+      "to": "c",
+      "kind": "conflict",
+      "evidence": [
+        "@g_shared"
+      ],
+      "evidence_count": 1
+    }
+  ],
+  "candidates": [],
+  "topo_order": [
+    "a",
+    "b",
+    "c"
+  ],
+  "topo_order_delayed": [
+    "a",
+    "b",
+    "c"
+  ],
+  "recurrences": [],
+  "algebraic_loops": [],
+  "cycles": [],
+  "stats": {
+    "nodes": 3,
+    "edges": 2,
+    "by_kind": {
+      "data": 1,
+      "conflict": 1
+    },
+    "candidates": 0,
+    "recurrences": 0,
+    "algebraic_loops": 0
+  }
+}

@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""fusion_plan__融合规划.py — 在单一执行域内选融合边界（ECoS PR 4 第一版）
+"""fusion_plan__融合规划.py — 在单一执行域内选融合边界（ECoS 约束优化器 v3：PR6/7/8）
+
+它回答一个问题：**这段任务图，哪些相邻阶段可以并成一个周期体？**
 
 它回答一个问题：**这段任务图，哪些相邻阶段可以并成一个周期体？**
 
@@ -40,16 +42,23 @@
 时间间隔就仍然 ≥ 一拍——切开也好、并在一组也好，读到的都还是上一拍的值。
 融合真正改变的是**后段的输出相位**（被前拉到组头），这一项单独报出来（"该不该合"）。
 
-代价模型（v1 刻意简单，参数全部显式）
---------------------------------------
-串行链上，末段的端到端响应约等于
+代价模型（PR7：相位感知端到端，参数全部显式）
+---------------------------------------------
+规划器区分两件不同的事：
+- **唤醒税累计 = G·c**：每周期释放 G 次、每次付唤醒代价 c 的累计开销（融合砍掉的就是 (G−1)·c）。
+- **端到端响应 R**（PR7）= 最后一组完成 − 第一组释放相位。串行单资源下每组在头相位一次性
+  释放、组内连续执行，组释放 = max(头相位, 上一组完成)。相位未知时退化为 `R̂ = G·c + ΣE`。
 
-    R̂ = G·c + Σ E_g
-
-其中 `G` 是组数（= 每周期释放次数）、`c` 是**每次释放的唤醒代价**、`E_g` 是组内执行时间之和。
 `c` 不是拍出来的：它来自实测（root cell 的中位唤醒延迟 ≈20 µs，NuttX ≈6 µs），
-用 `--release-cost-us` 传进来。**融合省下来的就是 (G−1)·c**——这部分是确定性的，
-不是统计性的。
+用 `--release-cost-us` 传进来。**融合省唤醒税是确定性的；相位坍缩（如闭环 798 µs）是另一笔
+独立的收益，旧模型 `G·c+ΣE` 看不见，新模型如实给出。**
+
+合法性（PR6/PR8：fail-closed 与硬约束）
+---------------------------------------
+除原有「不可分性 / 域合法 / 相位钉住(phase_pinned) / 期限容量」外，本版新增：
+- PR6：段内含 `interface_unresolved` 节点、或 `conflict`/`candidate` 两端无已证明顺序 → 拒绝；
+- PR8：`--max-feedback-delay-us`（绝对死区上限）超限直接拒绝；每阶段 `sample_window_us` /
+  `output_window_us` 把采样/输出对齐作为正约束守住。
 
 用法
 ----
@@ -125,6 +134,36 @@ class Planner:
                 self.phase[n] = float(ph)
         self.recurrences = dag.get("recurrences") or []
         self.algebraic = dag.get("algebraic_loops") or []
+
+        # ---- 不确定依赖（PR6，fail-closed）----
+        # 规划器过去完全忽略这三类信息；现在读进来并用于合法性判定。
+        self.conflicts = [(e["from"], e["to"])
+                         for e in (dag.get("edges") or [])
+                         if e.get("kind") == "conflict"]
+        self.candidates = dag.get("candidates") or []
+        self.unresolved = {n["name"]: n["interface_unresolved"]
+                          for n in (dag.get("nodes") or [])
+                          if n.get("interface_unresolved")}
+
+        # ---- 控制语义契约（PR8，硬约束）----
+        # 不默认开启：仅当 DAG 显式给出控制窗 / 反馈延迟上限，或命令行指定时才生效。
+        ctrl = dag.get("control") or {}
+        self.max_fb_delay_us = ctrl.get("max_feedback_delay_us")
+        self.sample_window = {n["name"]: float(n["sample_window_us"])
+                             for n in (dag.get("nodes") or [])
+                             if n.get("sample_window_us") is not None}
+        self.output_window = {n["name"]: float(n["output_window_us"])
+                             for n in (dag.get("nodes") or [])
+                             if n.get("output_window_us") is not None}
+        # 反馈死区硬上限：并入同组后闭合边间隔≈一整拍（≤period）。
+        # 若上限 < period，则每条反馈闭合边都必须跨组（否则死区必超限）。
+        self.fb_must_cut = set()
+        if self.max_fb_delay_us is not None and self.period:
+            if self.max_fb_delay_us < float(self.period):
+                for r in self.recurrences:
+                    for c in (r.get("closing_edges") or []):
+                        self.fb_must_cut.add((c["from"], c["to"]))
+        self.legal = {}  # 段合法性表（穷举路径也会用，确保属性存在）
 
     # -------- 相位 --------
     def ph(self, name):
@@ -218,20 +257,74 @@ class Planner:
         if self.period and tot > float(self.period):
             return False, ("单拍容量：段内执行 %.1f µs 超过周期 %.1f µs，"
                            "这组永远跑不完" % (tot, float(self.period)))
+
+        # 5) 不确定依赖（PR6，fail-closed）：未解除的不确定性不允许改变相对结构
+        for m in members:
+            u = self.unresolved.get(m)
+            if u:
+                return False, ("不确定：%s 接口未闭合（%s），效果/上下文可能不完整，"
+                               "域合法性不可信，按 fail-closed 拒绝"
+                               % (m, ",".join(u)))
+        for (a, b) in self.conflicts:
+            if a in mset and b in mset and \
+               a not in self.reach.get(b, set()) and b not in self.reach.get(a, set()):
+                return False, ("不确定：WAW 冲突 %s/%s 落在段内但无已证明顺序，"
+                               "保序融合不能保证 happens-before（顺序不确定）"
+                               % (a, b))
+        for c in self.candidates:
+            a, b = c.get("from"), c.get("to")
+            if a in mset and b in mset and \
+               a not in self.reach.get(b, set()) and b not in self.reach.get(a, set()):
+                return False, ("不确定：未证明依赖 %s→%s 落在段内但无已证明顺序，"
+                               "不能确定保持原始相对顺序（fail-closed）" % (a, b))
+
+        # 6) 控制语义契约（PR8，硬约束）
+        head = self.group_phase(members)
+        off = self.c  # 成员在组内的执行偏移（相对组释放）
+        for m in members:
+            if m in self.sample_window and off > self.sample_window[m]:
+                return False, ("控制：%s 被并入 %.0f µs 头组，组内偏移 %.0f µs "
+                               "超过采样窗 %.0f µs（采样时刻漂移，破坏物理采样对齐）"
+                               % (m, head, off, self.sample_window[m]))
+            if m in self.output_window and off > self.output_window[m]:
+                return False, ("控制：%s 在组内偏移 %.0f µs 超过输出生效窗 %.0f µs"
+                               "（执行器输出被推后，破坏物理输出对齐）"
+                               % (m, off, self.output_window[m]))
+            off += self.exec_us.get(m, 0.0)
+        for (a, b) in self.fb_must_cut:
+            if a in mset and b in mset:
+                return False, ("控制：反馈边 %s→%s 若并入同组，死区≈一整拍（%.0f µs）"
+                               "超过上限 %.0f µs，必须跨组"
+                               % (a, b, float(self.period or 0), self.max_fb_delay_us))
         return True, "ok %.1f µs" % tot
 
     def segment_legal(self, i, j):
         """order[i..j]（连续段）能否并成一个周期体。"""
         return self.group_legal(self.order[i:j + 1])
 
-    # -------- DP：最小化 G·c + ΣE（串行链上即 R̂） --------
-    def solve(self):
+    # -------- DP：最小化端到端响应 R（PR7） --------
+    # 串行单资源下，每组在「组内头相位」一次性释放，组内连续执行；
+    # 组释放时刻 = max(头相位, 上一组完成时刻)。端到端
+    #     R = 最后一组完成 − 第一组释放相位。
+    # 相位未知时头相位全 0 → 退化为 G·c + ΣE（与旧模型一致）。
+    def seg_head(self, i, j):
+        h = None
+        for k in range(i, j + 1):
+            p = self.phase.get(self.order[k], 0.0)
+            if h is None or p < h:
+                h = p
+        return h if h is not None else 0.0
+
+    def solve_dp(self):
         n = len(self.order)
         INF = float("inf")
+        # best[j] = 覆盖 order[0..j-1] 时，最后一组的**绝对完成时刻**（最小化）
         best = [INF] * (n + 1)
         prev = [-1] * (n + 1)
         best[0] = 0.0
         legal = {}
+        first_head = (self.phase.get(self.order[0], 0.0)
+                      if self.phase_known else 0.0)
         for j in range(1, n + 1):
             for i in range(j):
                 if best[i] == INF:
@@ -240,12 +333,15 @@ class Planner:
                 legal[(i, j - 1)] = (ok, why)
                 if not ok:
                     continue
-                # 每加一个组：多付一次释放代价 c；组内执行时间累加
-                seg_exec = sum(self.exec_us.get(m, 0.0)
-                               for m in self.order[i:j])
-                val = best[i] + self.c + seg_exec
-                if val < best[j]:
-                    best[j] = val
+                head = self.seg_head(i, j - 1)
+                # 本组释放 = max(头相位, 上一组完成)；组间有相位间隔则等待，否则连续
+                start = head if head > best[i] else best[i]
+                seg_exec = sum(self.exec_us.get(self.order[k], 0.0)
+                               for k in range(i, j))
+                finish = start + self.c + seg_exec
+                # 端到端 R 相同时，偏好更大段（即更少组 / 更少唤醒税）
+                if finish < best[j] or (finish == best[j] and i > prev[j]):
+                    best[j] = finish
                     prev[j] = i
         self.legal = legal
         if best[n] == INF:
@@ -256,7 +352,96 @@ class Planner:
             groups.append(list(range(i, j)))
             j = i
         groups.reverse()
+        # 端到端 R（相位感知）；相位未知时退化为 G·c + ΣE
+        self.end_to_end_us = best[n] - first_head
         return groups
+
+    def _finish_time(self, named_groups):
+        """给定分组（名字列表），返回最后一组的绝对完成时刻（同 solve 的模型）。"""
+        t = 0.0
+        for g in named_groups:
+            head = min((self.phase.get(m, 0.0) for m in g), default=0.0)
+            start = head if head > t else t
+            seg_exec = sum(self.exec_us.get(m, 0.0) for m in g)
+            t = start + self.c + seg_exec
+        return t
+
+    def feedback_ok(self, groups_idx):
+        if self.max_fb_delay_us is None:
+            return True
+        recs = self.recurrence_report(groups_idx)
+        for r in recs:
+            for c in r["closing_edges"]:
+                d = c.get("delay_us_merged")
+                if d is not None and d > self.max_fb_delay_us:
+                    return False
+        return True
+
+    def solve_exhaustive(self):
+        """反馈硬约束下（PR8）：枚举所有连续划分（N 小，2^(N-1) 种），
+        选端到端 R 最小且反馈死区全部 ≤ 上限的方案。"""
+        n = len(self.order)
+        INF = float("inf")
+        best_groups, best_R = None, INF
+        first_head = (self.phase.get(self.order[0], 0.0)
+                      if self.phase_known else 0.0)
+        for mask in (range(1 << (n - 1)) if n > 1 else [0]):
+            cuts = set()
+            for cut in range(n - 1):
+                if mask & (1 << cut):
+                    cuts.add(cut)
+            groups_idx, start = [], 0
+            for cut in range(n - 1):
+                if cut in cuts:
+                    groups_idx.append(list(range(start, cut + 1)))
+                    start = cut + 1
+            groups_idx.append(list(range(start, n)))
+            if any(not self.segment_legal(g[0], g[-1])[0] for g in groups_idx):
+                continue
+            named = [[self.order[i] for i in g] for g in groups_idx]
+            if not self.feedback_ok(groups_idx):
+                continue
+            R = self._finish_time(named) - first_head
+            if R < best_R:
+                best_R, best_groups = R, groups_idx
+        if best_groups is None:
+            return None
+        self.end_to_end_us = best_R
+        return best_groups
+
+    def solve(self):
+        # 反馈硬约束使「端到端可行」成了全局耦合条件，前缀 DP 无法表达；
+        # 此时退化为小规模穷举（连续划分），保证找到真正可行的边界。
+        if self.fb_must_cut:
+            return self.solve_exhaustive()
+        return self.solve_dp()
+
+    # -------- 控制：反馈死区绝对上限（PR8，硬约束） --------
+    def apply_feedback_limit(self, us):
+        """命令行覆盖反馈闭合边的绝对死区上限，并重算必须跨组的边。"""
+        self.max_fb_delay_us = us
+        self.fb_must_cut = set()
+        if us is not None and self.period and us < float(self.period):
+            for r in self.recurrences:
+                for c in (r.get("closing_edges") or []):
+                    self.fb_must_cut.add((c["from"], c["to"]))
+
+    # -------- 不确定依赖汇总（PR6） --------
+    def uncertainty_report(self):
+        out = {
+            "unresolved_nodes": sorted(self.unresolved.keys()),
+            "conflicts": [list(p) for p in self.conflicts],
+            "candidates": [{"from": c.get("from"), "to": c.get("to")}
+                           for c in self.candidates],
+        }
+        # 这些不确定项是否真的挡住了某个融合段（出现在 rejected_segments 里）
+        blocked = []
+        for (i, j), (ok, why) in getattr(self, "legal", {}).items():
+            if not ok and ("不确定" in why or "接口未闭合" in why):
+                blocked.append({"segment": [self.order[x] for x in range(i, j + 1)],
+                                "reason": why})
+        out["blocked_segments"] = blocked
+        return out
 
     # -------- 相邻两组合并的解释（论文里最有用的一段） --------
     def merge_report(self, groups):
@@ -388,7 +573,10 @@ def main():
                     help="段内执行时间上限（期限可行性）")
     ap.add_argument("--max-delay-inflation", type=float, default=None,
                     help="允许的反馈环死区时间放大倍数（融合把后段前拉，环闭合边因此变长）；"
-                         "超过则记 warning")
+                         "超过则记 warning（相对闸门，需配合 --fail-on-warning 才拒）")
+    ap.add_argument("--max-feedback-delay-us", type=float, default=None,
+                    help="反馈闭合边的**绝对**死区上限（µs）。超过则硬性拒绝（PR8），"
+                         "不靠 --fail-on-warning。<= period 时每条反馈边都必须跨组")
     ap.add_argument("--fail-on-warning", action="store_true",
                     help="有 warning 时非零退出（CI 用）")
     ap.add_argument("-o", "--out", default=None)
@@ -434,6 +622,8 @@ def main():
         exec_us = (json.loads(args.exec_us) if args.exec_us.lstrip().startswith("{")
                    else load_json(args.exec_us))
     planner = Planner(dag, platform, args.release_cost_us, exec_us, args.budget_us)
+    if args.max_feedback_delay_us is not None:
+        planner.apply_feedback_limit(args.max_feedback_delay_us)
 
     # 复检模式
     if args.verify:
@@ -491,7 +681,11 @@ def main():
 
     gs = summarize(planner, groups)
     total_exec = sum(g["exec_us"] for g in gs)
-    predicted = len(gs) * planner.c + total_exec
+    # PR7：相位感知的端到端响应；相位未知时退化为 G·c + ΣE
+    predicted = getattr(planner, "end_to_end_us",
+                       len(gs) * planner.c + total_exec)
+    phase_span = (gs[-1]["release_phase_us"] - gs[0]["release_phase_us"]) \
+        if planner.phase_known else 0.0
     recs = planner.recurrence_report(groups)
     warnings = []
     for r in recs:
@@ -503,15 +697,27 @@ def main():
                     % (c["from"], c["to"], c["inflation"],
                        c["delay_us_unmerged"], c["delay_us_merged"],
                        args.max_delay_inflation))
+    # PR8 硬约束（绝对值）：任何反馈闭合边死区超过绝对上限 → 直接拒绝
+    if planner.max_fb_delay_us is not None:
+        for r in recs:
+            for c in r["closing_edges"]:
+                d1 = c.get("delay_us_merged")
+                if d1 is not None and d1 > planner.max_fb_delay_us:
+                    print("!! 反馈闭合边 %s→%s 死区 %.0f µs 超过绝对上限 %.0f µs，"
+                          "方案被拒（PR8 硬约束）" % (c["from"], c["to"], d1,
+                          planner.max_fb_delay_us), file=sys.stderr)
+                    return 3
     plan = {
-        "version": 2,
+        "version": 3,
         "meta": {
             "dag": args.dag,
             "platform": platform.get("name"),
             "release_cost_us": planner.c,
-            "assumption": "串行链上 R̂ = G·c + ΣE；c 来自实测，不是拟合参数",
+            "assumption": ("端到端 R = 最后一组完成 − 第一组释放相位；"
+                           "相位未知时退化为 R̂ = G·c + ΣE。c 来自实测，不是拟合参数"),
             "phase_known": planner.phase_known,
             "period_us": planner.period,
+            "max_feedback_delay_us": planner.max_fb_delay_us,
         },
         "order": planner.order,
         "groups": gs,
@@ -519,9 +725,12 @@ def main():
         "cost": {
             "groups": len(gs),
             "exec_total_us": round(total_exec, 3),
-            "predicted_R_us": round(predicted, 3),
             "release_tax_us": round(len(gs) * planner.c, 3),
+            "phase_span_us": round(phase_span, 3),
+            "end_to_end_us": round(predicted, 3),
+            "predicted_R_us": round(predicted, 3),
         },
+        "uncertainty": planner.uncertainty_report(),
         "merge_opportunities": planner.merge_report(groups),
         "warnings": warnings,
         "rejected_segments": [
@@ -550,8 +759,12 @@ def main():
                   % (g["id"], " + ".join(g["members"]), g["exec_us"], ph,
                      ",".join(g["contexts"]) or "-"))
         print("== 代价 ==")
-        print("  释放税 %d×%.1f = %.1f µs ｜ 执行 %.1f µs ｜ **R̂ ≈ %.1f µs**"
+        print("  释放税(累计) %d×%.1f = %.1f µs ｜ 执行 %.1f µs ｜ **R̂ ≈ %.1f µs（端到端）**"
               % (len(gs), planner.c, len(gs) * planner.c, total_exec, predicted))
+        if planner.phase_known:
+            print("  端到端分解：相位跨度 %.0f µs ＋ 末组唤醒 %.1f µs ＋ 末组执行 %.1f µs"
+                  % (phase_span, planner.c,
+                     (gs[-1]["exec_us"] if gs else 0.0)))
         if recs:
             print("== ↻ 反馈环落位（采样序列不变，死区时间会变）==")
             for r in recs:
