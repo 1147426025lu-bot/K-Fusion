@@ -633,11 +633,11 @@ plan.json（已验证） + dag.json + contract + 阶段源码
 
 | 项 | 状态 |
 |---|---|
-| 双后端源码生成 | **已完成**，26 项后端自测全绿 |
-| 生成的 C 是否编译过 | **没有**（本机无 gcc/clang/内核头）。`manifest.txt` 里 `built=0` |
-| 真实 `.ko` / NuttX 应用 | **待目标侧**：按 `README.build.txt` 跑 `plc_kernelize` + `make -C $KDIR` |
+| 双后端源码生成 | **已完成**，31 项后端自测全绿 |
+| 生成的 C 是否编译过 | **已在 Pi4 上编译通过**（§5.14）；本机仍无工具链，`manifest.built` 按实际构建填 |
+| 真实 `.ko` / NuttX 应用 | `.ko` **已上板加载、输出正确、可卸载**（§5.14）；NuttX 应用未编 |
 | `ecos_build --kdir <内核树>` | 已接好；给了才跑 Kbuild，失败即 `rc=3` |
-| 板上加载、控制输出比对 | **未做**——这是 PR9-C 真正剩下的验收项 |
+| 板上加载、控制输出比对 | **已完成一次**（4 阶段 / 2 组 / `cw_out=21`）；闭环五阶段未上板 |
 
 > 把"生成源码"报成"构建成功"是这类工具最容易犯的错，所以 `built` 字段是显式的，
 > 并且 `ecos_build` 在缺工具链时会打印"生成了源码，**没有**构建"。
@@ -732,6 +732,62 @@ S_g = max(φ_g, F_{g-1}) + L        F_g = S_g + Σ_{i∈g} C_i
 
 ---
 
+## 5.14 PR9-C 上板：生成的 `.ko` 在 Pi4 上跑通了（2026-10-24 晚）
+
+这一节只写**实测**，不写推断。
+
+### 环境
+
+| 项 | 值 |
+|---|---|
+| 板子 | Raspberry Pi 4B，`demo`，`192.168.1.3` |
+| 内核 | `5.15.86`，`#1 SMP PREEMPT aarch64`，自建 `linux-image-jailhouse 5.15.86+r0` |
+| 内核树 | `/root/linux-5.15.86`（**已 prepare**：`autoconf.h` / `auto.conf` / `fixdep` 齐；`LOCALVERSION=""`、SMP+PREEMPT、无 MODVERSIONS/签名） |
+| 编译器 | 板上 gcc 10.2.1（本机 Windows 无 gcc/clang/make，WSL 被策略禁用） |
+
+### 三个编译期发现的真实缺陷（不编译永远看不到）
+
+1. `struct sched_param` 在 5.15 里定义于 **`uapi/linux/sched/types.h`**，不在 `linux/sched/types.h` → 编译失败。
+2. **`sched_setscheduler_nocheck` 没有导出**（`/proc/kallsyms` 里是 `T`，但无 `EXPORT_SYMBOL`）→ `insmod` 报
+   `Unknown symbol sched_setscheduler_nocheck (err -2)`。改用导出的 `sched_set_fifo()`。
+   **代价必须写清楚**：`sched_set_fifo` 的优先级是 `MAX_RT_PRIO/2`（=50），**不是** BM2 用户态实验用的 FIFO 99。
+   后续做用户态 vs 内核态对比时，这个口径差必须显式声明，或改走同样导出的 `sched_setattr_nocheck`。
+3. 用户态阶段源码 `#include <stdint.h>`，内核里没有 `int32_t` → 生成 `compat/stdint.h`（**只**提供定宽整数
+   typedef，不提供任何 libc），Kbuild 加 `-I$(src)/compat`。用到 `printf/malloc/pthread` 的阶段仍需走
+   `plc_kernelize` 的 LLVM Pass，不能靠这层糊。
+
+### 实测结果（`chain_window`：2 组 `s1+s2 | s3+s4`，周期 1000 µs）
+
+```
+vermagic: 5.15.86 SMP preempt mod_unload aarch64      ← 与运行内核一致
+insmod rc=0
+periods: 8 → 2019 （2 s 内 +2011，名义 2000）
+cw_out  = 21                                          ← 手算一致：7 →(s1)8 →(s2)16 →(s3)13 →(s4)13+8=21
+rmmod rc=0，lsmod 中消失，dmesg "ecos: 已停止"
+```
+
+- **正确性**：`cw_out=21` 与解析计算完全一致；持续 2 s 保持在 21（没有错乱/覆盖）。
+- **调度**：1 kHz 名义下 2 s 跑了 2011 个周期（**+0.55%**）。这是 hrtimer 首次到期 + `hrtimer_forward_now`
+  推进的结果，**未做进一步归因**；精确周期误差要用 BM2 探针测，不拿这个数字当精度结论。
+- **可卸载**：`rmmod` 干净，无残留。
+
+### 复现（目标机上一条命令）
+
+```bash
+bash kfusion/scripts/ecos/deploy_and_load.sh <模块目录> /root/linux-5.15.86 1000
+```
+
+脚本自己完成 Kbuild → insmod → 读观察点（`periods`/各 `--digest-var`）→ rmmod，
+任一步失败就如实报错退出（`rc=3` 构建 / `4` 加载 / `5` 卸载）。
+
+### 仍未做
+
+- 只有**一个**任务图（4 阶段链、2 组）跑过；闭环五阶段（跨周期 z⁻¹）尚未上板。
+- 没有测端到端延迟分布（这是 BM2 探针的活），所以**不能**声称"内核化后抖动如何"。
+- NuttX 后端只生成了源码，没有在 NuttX 树上编过。
+
+---
+
 ## 9. 下一步
 
 - ~~**跨周期依赖**~~：**已做并已实测**（§5.6）：闭环省 82.42 µs/周期、摘要逐位相同。
@@ -751,7 +807,7 @@ S_g = max(φ_g, F_{g-1}) + L        F_g = S_g + Σ_{i∈g} C_i
 - ~~**可信方案验证 / 绝对时间窗口 / 严格入口（P0-1/2/3，PR9-A/B）**~~：**已做**（§5.11，
   自测 #19–#23）：倒序方案再也不能通过复检；采样/输出的判断从"相对漂移"改成"绝对时刻"；
   严格入口缺契约即停。
-- ~~**PR9-C 双后端**~~：**生成侧已完成**（§5.12）：IR + 共享周期体 + ring-0 宿主 +
-  NuttX 宿主，三道生成门。**剩余**：在目标侧真正构建 `.ko` 并加载比对控制输出
-  （`ecos_build --kdir <内核树>` 已接好，本机无工具链所以 `built=0`）。
+- ~~**PR9-C 双后端**~~：**已完成**（§5.12 生成侧 + §5.14 上板）：IR + 共享周期体 + ring-0 宿主 +
+  NuttX 宿主；`.ko` 已在 Pi4 编译、加载、`cw_out=21` 正确、卸载干净。
+  **剩余**：闭环五阶段（z⁻¹）上板、NuttX 树编译、端到端延迟分布（BM2 探针）。
 - **L2（把编译器搬进内核/cell）暂缓**：见 `PR9_文献调研_编译器内核化.md` §6 的修订理由。

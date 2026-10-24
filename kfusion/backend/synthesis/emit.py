@@ -36,6 +36,9 @@ import stage_manifest                      # noqa: E402
 
 def _write(out_dir, name, text):
     p = os.path.join(out_dir, name)
+    parent = os.path.dirname(p)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
     with io.open(p, "w", encoding="utf-8", newline="\n") as f:
         f.write(text)
     return p
@@ -54,6 +57,9 @@ def main():
     ap.add_argument("--exec-us", default=None, help="JSON 或文件：阶段执行时间")
     ap.add_argument("--call", action="append", default=[],
                     help="阶段名=调用表达式，如 stage_pid=stage_pid(1000)")
+    ap.add_argument("--digest-var", action="append", default=[],
+                    help="要发布成只读 sysfs 参数的 int32_t 全局量（可重复）。"
+                         "没有观察点就只能证明『能加载』，证明不了『算得对』")
     ap.add_argument("--allow-unverified", action="store_true",
                     help="允许用未验证方案生成（产物标记为对照用，不得进论文）")
     a = ap.parse_args()
@@ -98,7 +104,8 @@ def main():
     name = "".join(ch if (ch.isalnum() or ch in "_-") else "_" for ch in name)
 
     ir = fusion_ir.FusionIR.from_plan(plan, dag, contract=contract, exec_us=exec_us,
-                                      calls=calls, source_name=name)
+                                      calls=calls, source_name=name,
+                                      digest_vars=a.digest_var)
 
     # ---- 门 2：时间前提 ----
     tv = ir.timing_violations()

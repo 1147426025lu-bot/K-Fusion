@@ -86,11 +86,14 @@ class FusionIR(object):
         self.evidence = evidence
         self.source_name = source_name
         self.meta = meta or {}
+        # 观察变量（板上正确性判据）：宿主把它们发布成只读 sysfs 参数，
+        # 加载后用 cat 读，与用户态参考实现比对。
+        self.digest_vars = []
 
     # ------------------------------------------------------------------
     @classmethod
     def from_plan(cls, plan, dag, contract=None, exec_us=None, calls=None,
-                  source_name="fused"):
+                  source_name="fused", digest_vars=None):
         calls = calls or {}
         exec_us = exec_us or {}
         nodes = {n["name"]: n for n in (dag.get("nodes") or [])}
@@ -155,6 +158,7 @@ class FusionIR(object):
         ir.phase_known = phase_known
         ir.plan_version = plan.get("version")
         ir.verified = bool((plan.get("verification") or {}).get("ok"))
+        ir.digest_vars = [v for v in (digest_vars or []) if v]
         return ir
 
     # ------------------------------------------------------------------
@@ -196,6 +200,7 @@ class FusionIR(object):
             "release_cost_us": self.release_cost_us,
             "evidence": self.evidence,
             "verified": self.verified,
+            "digest_vars": self.digest_vars,
             "groups": [
                 {"id": g.gid, "phase_us": g.phase_us, "exec_us": round(g.exec_us, 3),
                  "body": g.body,

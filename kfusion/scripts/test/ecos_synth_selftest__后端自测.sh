@@ -138,6 +138,33 @@ expect_rc "reversed.plan.json（无验证凭据）→ rc=3" 3 \
     --out-dir "$TMP/unverified" --target nuttx
 expect_grep "说清是被验证门挡住" "$TMP/out.txt" "验证凭据"
 
+echo "=== 9. 编译期约束（上板踩到的坑，锁进生成器）==="
+# 5.15 只导出 sched_set_fifo / sched_setattr_nocheck；
+# sched_setscheduler_nocheck 在 kallsyms 里是 T 但没 EXPORT → insmod 必失败。
+expect_grep "用导出的 sched_set_fifo 设 FIFO" "$TMP/linux/ecos_fused_linux.c" \
+    "sched_set_fifo"
+# 只看代码行：注释里保留"为什么不用它"的说明是好事，不算违规
+if grep -v '^[[:space:]]*[*/]' "$TMP/linux/ecos_fused_linux.c" \
+     | grep -q "sched_setscheduler_nocheck"; then
+    bad "代码里仍在用未导出的 sched_setscheduler_nocheck"
+else
+    ok "代码不调用未导出的 sched_setscheduler_nocheck（注释说明保留）"
+fi
+# 用户态阶段源码含 <stdint.h>，内核里没有 int32_t → 必须带 compat 头
+if [ -f "$TMP/linux/compat/stdint.h" ] && \
+   grep -q "typedef __s32 int32_t" "$TMP/linux/compat/stdint.h"; then
+    ok "compat/stdint.h 提供定宽整数 typedef"
+else
+    bad "缺 compat/stdint.h（阶段源码在内核态会编不过）"
+fi
+expect_grep "Kbuild 挂上 compat 头搜索路径" "$TMP/linux/Kbuild" "-I\$(src)/compat"
+# 观察点：没有它就证明不了"算得对"
+"$PY" "$SYNTH" --plan "$TMP/plan.json" --dag "$FIX/chain_window.dag.json" \
+    --source "$SRC" --out-dir "$TMP/linux_obs" --target linux-kernel \
+    --contract "$CONTRACT" --digest-var cw_out >/dev/null 2>&1
+expect_grep "观察变量发布为只读 sysfs 参数" "$TMP/linux_obs/ecos_fused_linux.c" \
+    "module_param_named(cw_out" "ecos_obs_0 = cw_out" "module_param(periods"
+
 echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" = 0 ] || exit 1

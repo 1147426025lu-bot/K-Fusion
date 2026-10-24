@@ -22,8 +22,31 @@
 BODY_H = "ecos_fused_body.h"
 BODY_C = "ecos_fused_body.c"
 HOST_C = "ecos_fused_linux.c"
+COMPAT_H = "compat/stdint.h"
 KBUILD = "Kbuild"
 README = "README.build.txt"
+
+# 阶段源码通常是用户态 C，第一行就是 #include <stdint.h>；内核里没有这个头，
+# 也没有 int32_t。这里只补**定宽整数 typedef**，不补 libc——用到 printf/malloc/
+# pthread 的阶段必须走 plc_kernelize 的 LLVM Pass 重映射，不能靠这层糊过去。
+_COMPAT_STDINT = """/* 由 ECoS 生成：仅提供定宽整数 typedef，供内核态编译阶段源码用。
+ * 不提供任何 libc 函数。需要 libc 的阶段必须走 LLVM 内核化 Pass。
+ */
+#ifndef _ECOS_COMPAT_STDINT_H
+#define _ECOS_COMPAT_STDINT_H
+#include <linux/types.h>
+
+typedef __s8  int8_t;
+typedef __u8  uint8_t;
+typedef __s16 int16_t;
+typedef __u16 uint16_t;
+typedef __s32 int32_t;
+typedef __u32 uint32_t;
+typedef __s64 int64_t;
+typedef __u64 uint64_t;
+
+#endif /* _ECOS_COMPAT_STDINT_H */
+"""
 
 _LINUX_C = """/* %(name)s —— 由 ECoS 融合方案生成的 ring-0 宿主；不要手改。
  *
@@ -69,6 +92,15 @@ static const s64 ecos_phase_ns[ECOS_GROUPS] = {
 %(phase_ns)s
 };
 
+/* 观察变量：把指定全局量发布成只读 sysfs 参数，加载后可 cat 出来与
+ * 用户态参考实现比对。没有观察点就"加载成功"也证明不了算得对。
+ * 限制：只支持 int32_t 全局量（其余类型请自己在上层转成 int32_t）。 */
+%(digest_decls)s
+
+static unsigned long periods;      /* 已完成周期数（由组 0 计数） */
+module_param(periods, ulong, 0444);
+MODULE_PARM_DESC(periods, "已完成周期数");
+
 static enum hrtimer_restart ecos_tick(struct hrtimer *t)
 {
 	struct ecos_group *g = container_of(t, struct ecos_group, timer);
@@ -85,6 +117,9 @@ static void ecos_run_body(int id)
 	switch (id) {
 %(body_cases)s
 	}
+	if (id == 0)
+		periods++;
+%(digest_update)s
 }
 
 static int ecos_runner(void *data)
@@ -107,7 +142,6 @@ static int __init ecos_init(void)
 
 	for (i = 0; i < ECOS_GROUPS; i++) {
 		struct ecos_group *g = &ecos_groups[i];
-		struct sched_param sp = { .sched_priority = 99 };
 		s64 start;
 
 		init_waitqueue_head(&g->wait);
@@ -121,8 +155,11 @@ static int __init ecos_init(void)
 			pr_err("ecos: kthread_create(%%d) failed\\n", g->id);
 			return PTR_ERR(g->task);
 		}
-		/* FIFO 99 + 绑定单核：与用户态实验口径一致（BM2 的做法） */
-		sched_setscheduler_nocheck(g->task, SCHED_FIFO, &sp);
+		/* 注意：sched_setscheduler_nocheck 在 5.15 **没有导出**（insmod 会报
+		 * Unknown symbol），只有 sched_set_fifo / sched_setattr_nocheck 导出。
+		 * 这里用 sched_set_fifo：SCHED_FIFO + 优先级 MAX_RT_PRIO/2。
+		 */
+		sched_set_fifo(g->task);
 		wake_up_process(g->task);
 
 		/* 首次到期 = 当前时刻 + 组相位（相位是周期内的绝对偏移） */
@@ -158,6 +195,10 @@ _KBUILD = """# 由 ECoS 方案生成；在目标侧（内核树）执行：
 #   make -C <KDIR> M=$PWD modules
 obj-m := %(mod)s.o
 %(mod)s-y := ecos_fused_linux.o ecos_fused_body.o stage_impl.o
+
+# 阶段源码若是用户态 C（#include <stdint.h>），用 compat/ 补定宽整数 typedef。
+# 只补 typedef，不补 libc——用到 libc 的阶段要先过 LLVM 内核化 Pass。
+ccflags-y += -I$(src)/compat
 """
 
 _README = """%(name)s —— 构建说明（必须在内核侧构建）
@@ -173,6 +214,8 @@ _README = """%(name)s —— 构建说明（必须在内核侧构建）
    make -C /lib/modules/$(uname -r)/build M=$(pwd) modules
    sudo insmod %(mod)s.ko period_us=%(period)d
    dmesg | tail
+   cat /sys/module/%(mod)s/parameters/periods
+%(digest_hint)s
    sudo rmmod %(mod)s
 
 注意：
@@ -186,6 +229,14 @@ _README = """%(name)s —— 构建说明（必须在内核侧构建）
 
 def _ns(us):
     return "%.0f" % (float(us) * 1000.0) if us is not None else "0"
+
+
+def _ident(s):
+    out = []
+    for ch in s:
+        out.append(ch if (ch.isalnum() or ch == "_") else "_")
+    s = "".join(out)
+    return s if not s[:1].isdigit() else "v_" + s
 
 
 def emit(ir, module_name, phases_known=True):
@@ -202,15 +253,42 @@ def emit(ir, module_name, phases_known=True):
         "\t{ .id = %d }" % i for i in range(ngroups))
     phase_ns = ", ".join(_ns(g.phase_us) for g in ir.groups)
 
+    # 观察变量：extern 声明 + 只读 sysfs 参数 + 每周期快照
+    decls, updates = [], []
+    for i, v in enumerate(getattr(ir, "digest_vars", []) or []):
+        ident = _ident(v)
+        decls.append("extern int32_t %s;" % v)
+        decls.append("static int32_t ecos_obs_%d;" % i)
+        decls.append('module_param_named(%s, ecos_obs_%d, int, 0444);'
+                     % (ident, i))
+        updates.append("\tecos_obs_%d = %s;" % (i, v))
+    if not decls:
+        decls = ["/* 未指定 --digest-var：没有观察点，只能证明『能加载/能卸载』 */"]
+
+    if getattr(ir, "digest_vars", None):
+        lines = ["   # 观察变量（int32_t 全局量）:"]
+        for v in ir.digest_vars:
+            lines.append("   cat /sys/module/%s/parameters/%s"
+                         % (module_name, _ident(v)))
+        digest_hint = "\n".join(lines)
+    else:
+        digest_hint = ("   # 编译时没给 --digest-var：没有观察点。\n"
+                       "   # 此时只能证明『能加载/能卸载』，**不能**证明算得对。")
+
     host = _LINUX_C % {
         "name": HOST_C, "ngroups": ngroups, "nstages": len(ir.order),
         "period": int(ir.period_us or 0), "evidence": ir.evidence,
         "layout": layout, "group_init": group_init,
         "phase_ns": phase_ns, "body_cases": body_cases,
+        "digest_decls": "\n".join(decls),
+        "digest_update": ("\n".join(updates) if updates
+                          else "\t/* 无观察变量 */"),
     }
     return {
         HOST_C: host,
+        COMPAT_H: _COMPAT_STDINT,
         KBUILD: _KBUILD % {"mod": module_name},
         README: _README % {"name": module_name, "mod": module_name,
-                           "period": int(ir.period_us or 0)},
+                           "period": int(ir.period_us or 0),
+                           "digest_hint": digest_hint},
     }
