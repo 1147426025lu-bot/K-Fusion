@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "task": {
+    "name": "backlog",
+    "period_us": 2000,
+    "deadline_us": 1000
+  },
+  "timing_constraints": {
+    "feedback_delay_max_us": 500
+  },
+  "evidence": {
+    "exec": "empirical"
+  },
+  "note": "期限 1000 µs。执行时间 a=500、b=500（用 --exec-us 传）：真实的端到端完成时刻是 1040 µs（含两次释放代价），必须判违约；若忽略积压只按相位算，会得到 120 µs 而错误放行。"
+}

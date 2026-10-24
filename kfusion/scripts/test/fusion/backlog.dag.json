@@ -1,0 +1,47 @@
+{
+  "version": 2,
+  "meta": {
+    "mode": "stages",
+    "task": {
+      "name": "backlog",
+      "period_us": 2000,
+      "deadline_us": 2000,
+      "step_us": 100
+    },
+    "note": "负向夹具（P0-2）：组间积压。a 在 0 µs 释放、执行 500 µs；b 名义相位 100 µs，但必须等 a 完成。单核顺序执行下 b 的实际开始时刻 = max(100, a 完成) + c。独立按相位算会得到 120 µs，真实完成是 1040 µs——期限 1000 µs 时前者会错误放行。"
+  },
+  "phase": {
+    "known": true,
+    "unit": "us",
+    "period_us": 2000,
+    "offsets": {
+      "a": 0,
+      "b": 100
+    }
+  },
+  "nodes": [
+    {
+      "name": "a",
+      "effects": ["state_read", "state_write"],
+      "contexts": ["thread", "softirq"],
+      "phase_us": 0
+    },
+    {
+      "name": "b",
+      "effects": ["state_read", "state_write"],
+      "contexts": ["thread", "softirq"],
+      "phase_us": 100,
+      "phase_pinned": true
+    }
+  ],
+  "edges": [
+    {"from": "a", "to": "b", "kind": "data", "evidence": ["@x"],
+     "evidence_count": 1, "proven": true}
+  ],
+  "candidates": [],
+  "topo_order": ["a", "b"],
+  "topo_order_delayed": ["a", "b"],
+  "recurrences": [],
+  "algebraic_loops": [],
+  "cycles": []
+}

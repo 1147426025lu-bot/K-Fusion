@@ -81,6 +81,7 @@
 退出码：0 = 有可行方案；2 = 输入不可规划（代数环 / 未给平台）；3 = 无可行方案 / 验证失败
 """
 import argparse
+import hashlib
 import io
 import json
 import os
@@ -100,6 +101,31 @@ ORDER_KINDS = ("call", "spawn", "data", "anti")
 def load_json(p):
     with io.open(p, encoding="utf-8") as f:
         return json.load(f)
+
+
+def _cost_digest(release_cost_us, exec_us):
+    """成本模型摘要：把"这次规划用的 c 与各阶段执行时间"钉死。
+
+    下游（验证器/代码生成）拿 plan 时必须用**同一份**成本，摘要不一致就报错，
+    而不是用缺省 0 悄悄算出另一套结论（P0-1 的成因）。
+    """
+    blob = json.dumps(
+        {"c": round(float(release_cost_us), 6),
+         "e": {k: round(float(v), 6) for k, v in sorted((exec_us or {}).items())}},
+        sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(blob.encode("utf-8")).hexdigest()[:16]
+
+
+def cost_from_plan(plan):
+    """从 plan.cost_model 取 (c, exec_us)；没有就返回 (None, None)。
+
+    这是**唯一**的成本来源。命令行 --exec-us 只能用于"与它核对"，不能替代它。
+    """
+    cm = (plan or {}).get("cost_model") or {}
+    c = cm.get("release_cost_us")
+    e = cm.get("exec_us")
+    return (None if c is None else float(c),
+            None if e is None else {k: float(v) for k, v in e.items()})
 
 
 def build_reach(nodes, edges):
@@ -602,8 +628,9 @@ def main():
     ap.add_argument("dag")
     ap.add_argument("--platforms", required=False, default=None)
     ap.add_argument("--platform", default=None)
-    ap.add_argument("--release-cost-us", type=float, default=20.0,
-                    help="每次释放的唤醒代价（实测中位数；root cell≈20，NuttX≈6）")
+    ap.add_argument("--release-cost-us", type=float, default=None,
+                    help="每次释放的唤醒代价（实测中位数；root cell≈20，NuttX≈6）。"
+                         "缺省 20；复检时以 plan.cost_model 里的值为准")
     ap.add_argument("--exec-us", default=None,
                     help="JSON：{阶段名: 执行时间 µs}，缺省按 0 计（只比组数）")
     ap.add_argument("--budget-us", type=float, default=None,
@@ -663,7 +690,9 @@ def main():
         # 允许直接内联 JSON（演示时少建一个文件）
         exec_us = (json.loads(args.exec_us) if args.exec_us.lstrip().startswith("{")
                    else load_json(args.exec_us))
-    planner = Planner(dag, platform, args.release_cost_us, exec_us, args.budget_us,
+    planner = Planner(dag, platform,
+                      (args.release_cost_us if args.release_cost_us is not None else 20.0),
+                      exec_us, args.budget_us,
                       contract=(load_json(args.contract) if args.contract else None))
     if args.max_feedback_delay_us is not None:
         planner.apply_feedback_limit(args.max_feedback_delay_us)
@@ -672,8 +701,21 @@ def main():
     if args.verify:
         import plan_verify
         plan = load_json(args.verify)
+        cm = plan.get("cost_model") or {}
+        pc, pe = cost_from_plan(plan)
+        base_c = pc if pc is not None else planner.c
+        # 成本模型必须一致：命令行给了 --exec-us 就核对摘要，不许各用一套
+        if exec_us is not None and cm.get("digest") and \
+                _cost_digest(base_c, exec_us) != cm["digest"]:
+            print("!! 复检用的执行时间与方案里的 cost_model 不一致（摘要 %s ≠ %s）"
+                  % (_cost_digest(base_c, exec_us), cm["digest"]), file=sys.stderr)
+            print("   → 规划与复检必须用同一份成本，否则两边会得出不同结论。",
+                  file=sys.stderr)
+            return 2
+        if pe is not None:
+            exec_us = pe          # 以方案为准（P0-1：不传就退化成"执行时间=0"）
         rep = plan_verify.verify_plan(
-            dag, plan, platform, planner.c, exec_us, args.budget_us,
+            dag, plan, platform, base_c, exec_us, args.budget_us,
             contract=planner.contract)
         rc = plan_verify.print_report(rep, plan, sys.stdout)
         if not rep["ok"]:
@@ -722,12 +764,28 @@ def main():
 
     gs = summarize(planner, groups)
     total_exec = sum(g["exec_us"] for g in gs)
-    # PR7：相位感知的端到端响应；相位未知时退化为 G·c + ΣE
-    predicted = getattr(planner, "end_to_end_us",
-                       len(gs) * planner.c + total_exec)
+    # PR9-D：端到端一律走统一递推（含组间积压），不再各处自己算
+    sched = planner.tm.schedule(gs)
+    predicted = (round(sched[-1]["finish_us"] - sched[0]["phase_us"], 3)
+                 if sched else (len(gs) * planner.c + total_exec))
+    dp_pred = getattr(planner, "end_to_end_us", None)
     phase_span = (gs[-1]["release_phase_us"] - gs[0]["release_phase_us"]) \
         if planner.phase_known else 0.0
     recs = planner.recurrence_report(groups)
+
+    # 整份方案的期限检查（唯一判据）：单段检查会**低估**积压，不能替它背书
+    dv = planner.tm.deadline_violation(gs)
+    if dv:
+        print("!! %s" % dv["msg"], file=sys.stderr)
+        for r in sched:
+            if r["backlog_us"] > 0:
+                print("   组 %s：相位 %.1f µs，实际开始 %.1f µs（被前组推迟 %.1f µs）"
+                      % (r["id"], r["phase_us"], r["start_us"], r["backlog_us"]),
+                      file=sys.stderr)
+        print("   → 方案被拒。可以把该组的相位后移、缩短组执行时间，"
+              "或放宽期限；不要拿『单段都合法』当整方案合法的证明。",
+              file=sys.stderr)
+        return 3
     warnings = []
     for r in recs:
         for c in r["closing_edges"]:
@@ -774,6 +832,19 @@ def main():
             "phase_span_us": round(phase_span, 3),
             "end_to_end_us": round(predicted, 3),
             "predicted_R_us": round(predicted, 3),
+            "dp_predicted_R_us": (round(float(dp_pred), 3)
+                                  if dp_pred is not None else None),
+        },
+        # 统一时间线：规划器/验证器/生成器都从这份表读，不再各算一遍
+        "schedule": sched,
+        # 成本模型随方案走：复检与代码生成**必须**用同一份执行时间，
+        # 否则"规划时说满足、复检时按 0 执行时间说也满足"（P0-1 的成因）
+        "cost_model": {
+            "version": 1,
+            "release_cost_us": planner.c,
+            "exec_us": {k: float(v) for k, v in sorted(planner.exec_us.items())},
+            "digest": _cost_digest(planner.c, planner.exec_us),
+            "evidence": planner.tm.evidence,
         },
         "uncertainty": planner.uncertainty_report(),
         "merge_opportunities": planner.merge_report(groups),
@@ -824,6 +895,16 @@ def main():
             print("  端到端分解：相位跨度 %.0f µs ＋ 末组唤醒 %.1f µs ＋ 末组执行 %.1f µs"
                   % (phase_span, planner.c,
                      (gs[-1]["exec_us"] if gs else 0.0)))
+        late = [r for r in sched if r["backlog_us"] > 0]
+        if late:
+            print("  组间积压（前组未完成 → 后组推迟）：%s"
+                  % "，".join("%s 相位 %.0f→实际开始 %.0f（+%.1f）"
+                              % (r["id"], r["phase_us"], r["start_us"], r["backlog_us"])
+                              for r in late))
+        if dp_pred is not None and abs(float(dp_pred) - predicted) > 0.01:
+            print("  ⚠ DP 预测 %.1f µs 与统一时间线 %.1f µs 不一致"
+                  "（两者必须由同一递推给出，请查 solve_dp）"
+                  % (float(dp_pred), predicted))
         if recs:
             print("== ↻ 反馈环落位（采样序列不变，死区时间会变）==")
             for r in recs:

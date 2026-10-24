@@ -61,10 +61,23 @@ def main():
     plan = fusion_ir.load(a.plan)
     dag = fusion_ir.load(a.dag)
     contract = fusion_ir.load(a.contract) if a.contract else None
+    # 成本模型：以方案里的 cost_model 为准；命令行只允许"核对一致"
+    cm = plan.get("cost_model") or {}
     exec_us = None
+    if cm.get("exec_us") is not None:
+        exec_us = {k: float(v) for k, v in cm["exec_us"].items()}
     if a.exec_us:
-        exec_us = (json.loads(a.exec_us) if a.exec_us.lstrip().startswith("{")
-                   else fusion_ir.load(a.exec_us))
+        cli = (json.loads(a.exec_us) if a.exec_us.lstrip().startswith("{")
+               else fusion_ir.load(a.exec_us))
+        cli = {k: float(v) for k, v in cli.items()}
+        if exec_us is not None:
+            norm = lambda d: sorted((k, round(v, 6)) for k, v in d.items())
+            if norm(cli) != norm(exec_us):
+                raise SystemExit("--exec-us 与 plan.cost_model 不一致：\n"
+                                 "  方案   %s\n  命令行 %s\n"
+                                 "  规划/复检/生成必须用同一份成本"
+                                 % (exec_us, cli))
+        exec_us = cli
     calls = {}
     for spec in a.call:
         if "=" not in spec:

@@ -109,6 +109,7 @@ class PlanVerifier(object):
     # ------------------------------------------------------------------
     def verify(self, plan):
         errs, warns = [], []
+        sched = []
         groups = (plan or {}).get("groups") or []
         add = lambda code, msg: errs.append({"code": code, "msg": msg})
 
@@ -258,15 +259,22 @@ class PlanVerifier(object):
                 add("CAPACITY_PERIOD", "单拍容量：组 %s 执行 %.1f µs 超过周期 %.1f µs"
                     % (gid, tot, float(self.tm.period)))
 
-        # ---- 4) 时间语义 ----
+        # ---- 4) 时间语义（走统一时间线，含组间积压）----
+        # 只按相位算会低估完成时刻：前一组没跑完，本组就得推迟。
+        sched = self.tm.schedule(groups)
         for gi, g in enumerate(groups):
             members = [m for m in (g.get("members") or []) if m in self.node]
             if not members:
                 continue
             gid = g.get("id") or ("g%d" % gi)
-            head = self._head_phase(g, members)
-            for v in self.tm.violations(members, head):
-                add(v["code"], "组 %s：%s" % (gid, v["msg"]))
+            row = sched[gi] if gi < len(sched) else None
+            if row is not None:
+                for v in self.tm.violations_at(row):
+                    add(v["code"], "组 %s：%s" % (gid, v["msg"]))
+                if row["backlog_us"] > 0:
+                    warns.append(
+                        "组 %s：相位 %.1f µs，实际开始 %.1f µs（被前组推迟 %.1f µs）"
+                        % (gid, row["phase_us"], row["start_us"], row["backlog_us"]))
             for v in self.tm.legacy_drift(members, self.legacy_sample):
                 add(v["code"], "组 %s：%s" % (gid, v["msg"]))
             for v in self.tm.legacy_drift(members, self.legacy_output):
@@ -291,12 +299,18 @@ class PlanVerifier(object):
                         % (a, b, period,
                            "（未给上限，仅提示）" if cap is None else ""))
 
-        # 4c) 期限
+        # 4c) 期限（含组间积压）
         d = self.tm.deadline_violation(groups)
         if d:
             add(d["code"], d["msg"])
 
-        return self._report(errs, warns, plan)
+        rep = self._report(errs, warns, plan)
+        if sched:
+            rep["stats"]["completion_us"] = sched[-1]["finish_us"]
+            rep["stats"]["backlog_us"] = round(
+                sum(r["backlog_us"] for r in sched), 3)
+            rep["schedule"] = sched
+        return rep
 
     # ------------------------------------------------------------------
     def _head_phase(self, g, members):

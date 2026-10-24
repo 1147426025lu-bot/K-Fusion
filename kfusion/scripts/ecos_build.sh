@@ -40,7 +40,7 @@ CODEGEN="$HERE/fusion_codegen__生成融合代码.py"
 CONTRACT_PY="$HERE/ecos/contract_validate.py"
 
 DAG=""; CONTRACT=""; PLATFORMS=""; PLATFORM=""; SOURCE=""; OUT_DIR=""
-EXEC_US=""; C=""; TARGET="userspace-driver"; STEP_US="200"; PERIOD_US=""
+EXEC_US=""; C=""; TARGET="userspace-driver"; STEP_US=""; STEP_US_OVERRIDE=""; PERIOD_US=""
 KDIR=""; CALLS=()
 
 log()  { printf '[ecos] %s\n' "$*"; }
@@ -59,7 +59,7 @@ while [ $# -gt 0 ]; do
         --exec-us)          EXEC_US="${2:-}"; shift 2 ;;
         --release-cost-us)  C="${2:-}"; shift 2 ;;
         --period-us)        PERIOD_US="${2:-}"; shift 2 ;;
-        --step-us)          STEP_US="${2:-}"; shift 2 ;;
+        --step-us)          STEP_US_OVERRIDE="${2:-}"; shift 2 ;;
         --target)           TARGET="${2:-}"; shift 2 ;;
         --kdir)             KDIR="${2:-}"; shift 2 ;;
         --call)             CALLS+=("${2:-}"); shift 2 ;;
@@ -80,6 +80,40 @@ log "① 契约校验（缺契约/窗口自相矛盾/stage 名写错 → 停）"
 if ! "$PY" "$CONTRACT_PY" "$DAG" "$CONTRACT"; then
     die "契约不合法，拒绝生成产物" 3
 fi
+
+# ---- 节拍参数必须来自契约/DAG，不能用代码生成器的缺省值 ----
+# 缺省会静默给出 period=1000 / step=200，跟真实契约不一致时产物"看着对、跑起来错"。
+read -r K_PERIOD K_STEP <<EOF
+$("$PY" - "$DAG" "$CONTRACT" <<'PY'
+import json, sys
+dag = json.load(open(sys.argv[1], encoding="utf-8"))
+con = json.load(open(sys.argv[2], encoding="utf-8"))
+task = con.get("task") or {}
+ctr = con.get("timing_constraints") or {}
+meta_task = (dag.get("meta") or {}).get("task") or {}
+per = (ctr.get("period_us") or task.get("period_us")
+       or (dag.get("phase") or {}).get("period_us") or meta_task.get("period_us"))
+step = meta_task.get("step_us") or (dag.get("phase") or {}).get("step_us")
+print("%s %s" % (per if per is not None else "", step if step is not None else ""))
+PY
+)
+EOF
+same_num() { awk -v a="$1" -v b="$2" 'BEGIN { exit (a+0 == b+0) ? 0 : 1 }'; }
+
+if [ -n "$PERIOD_US" ] && [ -n "$K_PERIOD" ] && ! same_num "$PERIOD_US" "$K_PERIOD"; then
+    die "--period-us=$PERIOD_US 与契约/DAG 的 $K_PERIOD 不一致（拒绝用两套节拍）" 2
+fi
+if [ -n "$STEP_US_OVERRIDE" ] && [ -n "$K_STEP" ] && ! same_num "$STEP_US_OVERRIDE" "$K_STEP"; then
+    die "--step-us=$STEP_US_OVERRIDE 与 DAG 的 $K_STEP 不一致" 2
+fi
+if [ -n "$PERIOD_US" ]; then PERIOD_SRC="命令行（已与契约一致）"
+elif [ -n "$K_PERIOD" ]; then PERIOD_US="$K_PERIOD"; PERIOD_SRC="契约/DAG"
+else die "契约/DAG 里没有 period_us：无法确定节拍，拒绝生成" 3; fi
+
+if [ -n "$STEP_US_OVERRIDE" ]; then STEP_US="$STEP_US_OVERRIDE"; STEP_SRC="命令行（已与 DAG 一致）"
+elif [ -n "$K_STEP" ]; then STEP_US="$K_STEP"; STEP_SRC="DAG"
+else STEP_US="200"; STEP_SRC="**缺省 200**（DAG 未给 step_us，仅影响 flat 对照模式的相位间隔）"; fi
+log "   节拍：period=${PERIOD_US} µs（${PERIOD_SRC}），step=${STEP_US} µs（${STEP_SRC}）"
 
 log "② 规划（约束优化；不可行就报不可行）"
 PLAN="$OUT_DIR/plan.json"
@@ -113,6 +147,7 @@ userspace-driver)
                   --step-us "$STEP_US")
     [ -n "$PERIOD_US" ] && codegen_args+=(--period-us "$PERIOD_US")
     [ -n "$C" ] && codegen_args+=(--release-cost-us "$C")
+    [ -n "$EXEC_US" ] && codegen_args+=(--exec-us "$EXEC_US")
     for c in "${CALLS[@]:-}"; do [ -n "$c" ] && codegen_args+=(--call "$c"); done
     "$PY" "$CODEGEN" "${codegen_args[@]}" || die "代码生成失败" 3
     RESULT="$DRIVER"

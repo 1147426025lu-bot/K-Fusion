@@ -314,5 +314,34 @@ else
 fi
 
 echo
+echo "=== 24. PR9-D：组间积压必须算进端到端（单段合法 ≠ 整方案合法）==="
+BCON="$HERE/../../contracts/examples/backlog.contract.json"
+expect_rc "a 执行 500、b 等到 540 → 完成 1040 > 期限 1000 → rc=3" 3 \
+    "$PY" "$PLAN" "$FIX/backlog.dag.json" --platforms "$CAPS" --platform nuttx \
+    --release-cost-us 20 --exec-us '{"a":500,"b":500}' --contract "$BCON"
+expect_grep "报出真实完成时刻与积压量" "$(cat "$TMP/out.txt")" \
+    "1040.0" "被前组推迟 420.0"
+expect_grep "说清单段合法不能替整方案背书" "$(cat "$TMP/out.txt")" \
+    "不要拿『单段都合法』当整方案合法的证明"
+
+echo "=== 25. PR9-D：成本模型随方案走（复检不得退化成执行时间=0）==="
+expect_rc "不给 --exec-us 也必须从 plan.cost_model 取成本 → rc=3" 3 \
+    "$PY" "$PLAN" "$FIX/backlog.dag.json" --platforms "$CAPS" --platform nuttx \
+    --release-cost-us 20 --contract "$BCON" --verify "$FIX/backlog.plan.json"
+expect_grep "判的是期限而不是别的" "$(cat "$TMP/out.txt")" "DEADLINE" "1040.0"
+expect_rc "命令行成本与方案不一致 → rc=2（拒绝两套成本）" 2 \
+    "$PY" "$PLAN" "$FIX/backlog.dag.json" --platforms "$CAPS" --platform nuttx \
+    --contract "$BCON" --exec-us '{"a":1,"b":1}' --verify "$FIX/backlog.plan.json"
+expect_grep "说明是成本摘要不一致" "$(cat "$TMP/out.txt")" "cost_model 不一致"
+
+echo "=== 26. PR9-D：节拍参数必须来自契约，不许用生成器缺省值 ==="
+expect_rc "--period-us 与契约冲突 → rc=2" 2 \
+    bash "$ECOS" --dag "$FIX/chain_window.dag.json" --contract "$CONTRACT" \
+    --platforms "$CAPS" --platform nuttx \
+    --source "$HERE/../../examples/ecos/chain_window__四段窗口示例.c" \
+    --out-dir "$TMP/ecos_period" --target nuttx --period-us 500
+expect_grep "指认两边数值" "$(cat "$TMP/out.txt")" "500" "1000" "两套节拍"
+
+echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" = 0 ] || exit 1

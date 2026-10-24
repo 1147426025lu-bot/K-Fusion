@@ -120,9 +120,60 @@ class TemporalModel(object):
         hi = min((w[1] for w in cands if w[1] is not None), default=None)
         return (lo, hi, cands[0][2])
 
+    # -------- 统一时间线（PR9-D：唯一的状态递推）--------
+    def schedule(self, groups):
+        """单核顺序执行的统一时间线。
+
+            S_g = max(φ_g, F_{g-1}) + L
+            F_g = S_g + Σ_{i∈g} C_i
+
+        **为什么必须只此一处**
+
+            规划器 solve_dp() 早就用 max(φ_g, 上一组完成) 递推（否则它会低估算力），
+            但验证器的 response_us() 曾经对每组**独立**按相位算完成时刻再取 max。
+            两者在"组执行时间 > 相位间隔"时不一致，而且低估是危险方向：
+
+            实测反例（backlog 夹具）：a@0 执行 500、b@100 执行 500、L=20
+              · 独立算：max(0+20+500, 100+20+500) = 620 µs  → 期限 1000 判通过
+              · 真实：  F_a=520，S_b=max(100,520)+20=540，F_b=1040 → 违约 40 µs
+
+            所以这里给出唯一实现，规划器/验证器/代码生成都调它。
+            跨域/多核要在此基础上加资源与通信约束，而不是另写一套。
+        """
+        rows = []
+        prev_finish = 0.0
+        for g in groups:
+            members = list(g.get("members") or [])
+            phi = g.get("release_phase_us")
+            phi = float(phi) if phi is not None else 0.0
+            start = max(phi, prev_finish) + self.c
+            exec_sum = sum(float(self.exec_us.get(m, 0.0)) for m in members)
+            finish = start + exec_sum
+            rows.append({
+                "id": g.get("id"),
+                "members": members,
+                "phase_us": round(phi, 3),
+                "backlog_us": round(max(0.0, prev_finish - phi), 3),
+                "start_us": round(start, 3),
+                "finish_us": round(finish, 3),
+                "exec_us": round(exec_sum, 3),
+            })
+            prev_finish = finish
+        return rows
+
+    def stage_instants(self, row):
+        """组内每个阶段的绝对执行时刻（基于**实际**开始时刻，不是相位）。"""
+        off = float(row["start_us"])
+        out = []
+        for m in row["members"]:
+            out.append({"stage": m, "instant_us": round(off, 3),
+                        "offset_us": round(off - float(row["start_us"]), 3)})
+            off += float(self.exec_us.get(m, 0.0))
+        return out
+
     # -------- 时间线 --------
     def timeline(self, members, head_phase):
-        """组内每个成员的绝对执行时刻。
+        """组内每个成员的绝对执行时刻（**不含**组间积压；单段分析用）。
 
         返回 [{stage, offset_us, instant_us}]，offset 是相对组释放的偏移。
         也返回组完成时刻 fin = head + c + ΣC。
@@ -139,33 +190,44 @@ class TemporalModel(object):
         return rows, round(float(head_phase) + off, 3)
 
     # -------- 违规检查 --------
+    def _check_stage_windows(self, stage, instant):
+        w = self.window_of(stage)
+        if not w:
+            return []
+        lo, hi, kind = w
+        label = "采样" if kind == "sample" else "输出生效"
+        bad = []
+        if lo is not None and instant < lo - 1e-9:
+            bad.append({
+                "code": "WINDOW_EARLY", "stage": stage, "kind": kind,
+                "instant_us": instant, "lo": lo, "hi": hi,
+                "msg": ("控制：%s 的%s时刻 %.1f µs 早于窗口下界 %.1f µs"
+                        "（融合把它前拉了 %.1f µs = 提前%s）"
+                        % (stage, label, instant, lo, lo - instant, label)),
+            })
+        if hi is not None and instant > hi + 1e-9:
+            bad.append({
+                "code": "WINDOW_LATE", "stage": stage, "kind": kind,
+                "instant_us": instant, "lo": lo, "hi": hi,
+                "msg": ("控制：%s 的%s时刻 %.1f µs 晚于窗口上界 %.1f µs"
+                        "（%s被推迟 %.1f µs）"
+                        % (stage, label, instant, hi, label, instant - hi)),
+            })
+        return bad
+
     def violations(self, members, head_phase):
-        """绝对窗口违规列表（前拉、推后都抓）。"""
+        """单段检查（规划器搜索时用；按相位当开始时刻，不含组间积压）。"""
         rows, _fin = self.timeline(members, head_phase)
         bad = []
         for r in rows:
-            w = self.window_of(r["stage"])
-            if not w:
-                continue
-            lo, hi, kind = w
-            t = r["instant_us"]
-            label = "采样" if kind == "sample" else "输出生效"
-            if lo is not None and t < lo - 1e-9:
-                bad.append({
-                    "code": "WINDOW_EARLY", "stage": r["stage"], "kind": kind,
-                    "instant_us": t, "lo": lo, "hi": hi,
-                    "msg": ("控制：%s 的%s时刻 %.1f µs 早于窗口下界 %.1f µs"
-                            "（融合把它前拉了 %.1f µs = 提前%s）"
-                            % (r["stage"], label, t, lo, lo - t, label)),
-                })
-            if hi is not None and t > hi + 1e-9:
-                bad.append({
-                    "code": "WINDOW_LATE", "stage": r["stage"], "kind": kind,
-                    "instant_us": t, "lo": lo, "hi": hi,
-                    "msg": ("控制：%s 的%s时刻 %.1f µs 晚于窗口上界 %.1f µs"
-                            "（%s被推迟 %.1f µs）"
-                            % (r["stage"], label, t, hi, label, t - hi)),
-                })
+            bad.extend(self._check_stage_windows(r["stage"], r["instant_us"]))
+        return bad
+
+    def violations_at(self, row):
+        """按**实际开始时刻**检查窗口（验证器用；含组间积压）。"""
+        bad = []
+        for r in self.stage_instants(row):
+            bad.extend(self._check_stage_windows(r["stage"], r["instant_us"]))
         return bad
 
     def legacy_drift(self, members, windows):
@@ -192,37 +254,40 @@ class TemporalModel(object):
 
     # -------- 期限 --------
     def response_us(self, groups, exec_us=None, phase_known=True):
-        """端到端完成时刻（相对周期起点）与响应时间。
+        """端到端完成时刻与响应时间（**含组间积压**，走统一递推）。
 
-        completion = max_g (head_phase(g) + c + ΣC_g)
-        response   = completion − head_phase(第一组)
+        completion = F_末组（schedule 的最后一行）
+        response   = completion − φ_首组
         """
-        ex = exec_us if exec_us is not None else self.exec_us
-        completion, first_head = 0.0, None
-        for g in groups:
-            members = g.get("members") or []
-            head = g.get("release_phase_us")
-            head = float(head) if head is not None else 0.0
-            if first_head is None:
-                first_head = head
-            _rows, fin = self.timeline(members, head)
-            completion = max(completion, fin)
-        if first_head is None:
+        rows = self.schedule(groups)
+        if not rows:
             return 0.0, 0.0
-        return completion, round(completion - first_head, 3)
+        completion = rows[-1]["finish_us"]
+        return completion, round(completion - rows[0]["phase_us"], 3)
 
     def deadline_violation(self, groups):
+        """整份方案的期限检查（含积压）。这是唯一的期限判据。"""
         if self.deadline is None:
             return None
-        completion, resp = self.response_us(groups)
+        rows = self.schedule(groups)
+        if not rows:
+            return None
+        completion = rows[-1]["finish_us"]
+        resp = round(completion - rows[0]["phase_us"], 3)
         if completion > self.deadline + 1e-9:
+            worst = max(rows, key=lambda r: r["backlog_us"])
             return {
                 "code": "DEADLINE", "completion_us": completion,
                 "deadline_us": self.deadline, "response_us": resp,
+                "backlog_us": worst["backlog_us"], "backlog_group": worst["id"],
                 "evidence": self.evidence,
                 "msg": ("期限：末组完成 %.1f µs 超过期限 %.1f µs（超出 %.1f µs）%s"
+                        "%s"
                         % (completion, self.deadline, completion - self.deadline,
                            "" if self.evidence == "bounded"
-                           else "［证据级别 empirical：这是经验预测，不是硬实时证明］")),
+                           else "［证据级别 empirical：这是经验预测，不是硬实时证明］",
+                           ("；其中 %s 因前组未完成被推迟了 %.1f µs"
+                            % (worst["id"], worst["backlog_us"]))
+                           if worst["backlog_us"] > 0 else "")),
             }
         return None

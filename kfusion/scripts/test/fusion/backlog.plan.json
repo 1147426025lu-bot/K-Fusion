@@ -1,0 +1,22 @@
+{
+  "version": 4,
+  "note": "负向夹具（P0-1/P0-2）：2 组方案，完成时刻 1040 µs > 期限 1000 µs。cost_model 里带了执行时间与摘要——复检必须**从方案里读成本**，否则会按执行时间=0 算出 620 µs 而错误放行。",
+  "cost_model": {
+    "version": 1,
+    "release_cost_us": 20.0,
+    "exec_us": {
+      "a": 500.0,
+      "b": 500.0
+    },
+    "digest": "2220d817806a2754",
+    "evidence": "empirical"
+  },
+  "groups": [
+    {"id": "g0", "members": ["a"], "release_phase_us": 0},
+    {"id": "g1", "members": ["b"], "release_phase_us": 100}
+  ],
+  "schedule": [
+    {"id": "g0", "phase_us": 0, "start_us": 20, "finish_us": 520, "backlog_us": 0},
+    {"id": "g1", "phase_us": 100, "start_us": 540, "finish_us": 1040, "backlog_us": 420}
+  ]
+}

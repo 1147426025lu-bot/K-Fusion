@@ -145,8 +145,12 @@ class FusionIR(object):
         if ((contract or {}).get("evidence") or {}).get("exec"):
             evidence = contract["evidence"]["exec"]
 
+        cm = plan.get("cost_model") or {}
+        release_cost = cm.get("release_cost_us")
+        if release_cost is None:
+            release_cost = (plan.get("meta") or {}).get("release_cost_us")
         ir = cls(period, deadline, groups, flat_ir,
-                 float((plan.get("meta") or {}).get("release_cost_us") or 20.0),
+                 float(release_cost if release_cost is not None else 20.0),
                  evidence, source_name)
         ir.phase_known = phase_known
         ir.plan_version = plan.get("version")

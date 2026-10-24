@@ -89,6 +89,9 @@ def main():
                     help="验证时用的释放代价（缺省取 plan.meta.release_cost_us）")
     ap.add_argument("--contract", default=None,
                     help="时间/控制语义契约（验证绝对周期窗口用）")
+    ap.add_argument("--exec-us", default=None,
+                    help="阶段执行时间（JSON 或文件）。给了就与 plan.cost_model 核对摘要；"
+                         "不给则用方案里的 cost_model——**绝不用 0 代替**")
     ap.add_argument("--require-verified", action="store_true",
                     help="严格模式：方案没有验证凭据就拒绝生成（ECoS 严格入口默认开）")
     args = ap.parse_args()
@@ -124,8 +127,29 @@ def main():
         _c = args.release_cost_us
         if _c is None:
             _c = float((plan.get("meta") or {}).get("release_cost_us") or 20.0)
+        # 成本模型必须从方案里取：以前这里传 None，等于"执行时间=0"，
+        # 于是一个真正超期的方案能在生成前复检里被判通过（P0-1）。
+        _cm = plan.get("cost_model") or {}
+        _exec = _cm.get("exec_us")
+        if _exec is not None:
+            _exec = {k: float(v) for k, v in _exec.items()}
+            if _cm.get("release_cost_us") is not None:
+                _c = float(_cm["release_cost_us"])
+        if args.exec_us:
+            _cli = (json.loads(args.exec_us)
+                    if args.exec_us.lstrip().startswith("{")
+                    else json.load(open(args.exec_us, encoding="utf-8")))
+            if _exec is not None:
+                _same = (sorted((k, round(float(v), 6)) for k, v in _cli.items())
+                         == sorted((k, round(float(v), 6)) for k, v in _exec.items()))
+                if not _same:
+                    raise SystemExit("--exec-us 与 plan.cost_model 不一致：\n"
+                                     "  方案 %s\n  命令行 %s\n"
+                                     "  规划/复检/生成必须用同一份成本"
+                                     % (_exec, _cli))
+            _exec = {k: float(v) for k, v in _cli.items()}
         _contract = load_json(args.contract) if args.contract else None
-        _rep = plan_verify.verify_plan(_dag, plan, _plat, _c, None, None, _contract)
+        _rep = plan_verify.verify_plan(_dag, plan, _plat, _c, _exec, None, _contract)
         if not _rep["ok"]:
             for e in _rep["errors"]:
                 print("❌ [%s] %s" % (e["code"], e["msg"]), file=sys.stderr)
