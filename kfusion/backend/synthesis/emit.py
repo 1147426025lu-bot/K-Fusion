@@ -64,9 +64,16 @@ def main():
     ap.add_argument("--probe", action="store_true",
                     help="加死区探针：量环闭合边（上拍末组结束 → 本拍首组开始），"
                          "输出 dz_min/avg/max_ns 与采样数（Linux）/ # dz 行（NuttX）")
-    ap.add_argument("--nuttx-main", default="main",
-                    help="NuttX 后端的入口函数名（默认 main；接进既有 app 骨架时用 "
-                         "fiveloop_main 之类）")
+    ap.add_argument("--nuttx-progname", default=None,
+                    help="NuttX app 的 PROGNAME（默认取模块名）。NuttX 的 builtin "
+                         "注册表按它生成入口符号 <PROGNAME 去横线>_main，"
+                         "源码里的入口名必须与之一致——两者都由这里派生。"
+                         "接进既有 app 骨架时用它对齐（如 fiveloop）")
+    ap.add_argument("--nuttx-main", default=None,
+                    help="NuttX 后端的入口函数名。**一般不用给**：默认由 "
+                         "--nuttx-progname 派生（<PROGNAME 去横线>_main）。"
+                         "显式给时必须与派生值一致，否则报错——"
+                         "不一致会在板上链接期变成 undefined reference")
     ap.add_argument("--xdom", default=None,
                     help="拆分器写的 per-domain meta.json（PR10-C）。给了就在周期体里"
                          "为跨域数据插发布/订阅，并生成 ecos_xdom.{h,c}")
@@ -78,6 +85,10 @@ def main():
     dag = fusion_ir.load(a.dag)
     contract = fusion_ir.load(a.contract) if a.contract else None
     xdom = fusion_ir.load(a.xdom) if a.xdom else None
+    # ring-0 宿主的桥要走 ioremap（IVSHMEM 不在内核线性映射里，直写会 SIGSEGV）
+    if xdom and a.target in ("linux-kernel", "both"):
+        xdom = dict(xdom)
+        xdom["kernel"] = True
     # 成本模型：以方案里的 cost_model 为准；命令行只允许"核对一致"
     cm = plan.get("cost_model") or {}
     exec_us = None
@@ -171,6 +182,22 @@ def main():
         print("❌ %s" % e, file=sys.stderr)
         return 3
 
+    # ⚠ NuttX 产物的入口名校验必须在**任何落盘之前**做完：校验失败时
+    #   不该留下半成品目录（之前是先写 body 再校验，失败后 out-dir 里
+    #   还留着一堆文件，下次跑会误以为"上次生成过了"）。
+    nuttx_files = None
+    if a.target in ("nuttx", "both"):
+        try:
+            nuttx_files = nuttx_em.emit(ir, name,
+                                        main_name=a.nuttx_main,
+                                        probe=getattr(ir, "probe", False),
+                                        xdom=bool(xdom),
+                                        prog_name=a.nuttx_progname)
+        except ValueError as e:
+            # 入口名与 PROGNAME 不一致 → 生成期就拒，不让它跑到板上才炸
+            print("emit: %s" % e, file=sys.stderr)
+            return 2
+
     os.makedirs(a.out_dir, exist_ok=True)
     written = []
     written.append(_write(a.out_dir, "ecos_fused_body.h", body_emit.emit_body_h(ir)))
@@ -193,19 +220,19 @@ def main():
                   file=sys.stderr)
             return 3
 
+    # ⚠ 先把两个后端都生成好、再落盘：生成期校验失败时不能留下半成品目录
+    #   （之前入口名校验放在写盘之后，失败后 out-dir 里还留着一堆文件，
+    #   下次跑会以为"上次生成过了"）。
     if a.target in ("linux-kernel", "both"):
         d = a.out_dir if a.target == "linux-kernel" else os.path.join(a.out_dir, "linux")
         os.makedirs(d, exist_ok=True)
         for fn, text in linux_em.emit(ir, name, xdom=bool(xdom)).items():
             written.append(_write(d, fn, text))
 
-    if a.target in ("nuttx", "both"):
+    if nuttx_files is not None:
         d = a.out_dir if a.target == "nuttx" else os.path.join(a.out_dir, "nuttx")
         os.makedirs(d, exist_ok=True)
-        for fn, text in nuttx_em.emit(ir, name,
-                                      main_name=a.nuttx_main,
-                                      probe=getattr(ir, "probe", False),
-                                      xdom=bool(xdom)).items():
+        for fn, text in nuttx_files.items():
             written.append(_write(d, fn, text))
 
     print("=== ECoS 合成：%s（target=%s）===" % (name, a.target))

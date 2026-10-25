@@ -25,7 +25,7 @@ _H = """/* ecos_fused_body.h —— 由 ECoS 融合方案生成，两个后端�
  * （只 typedef，不含 libc），Kbuild 里以 -I$(src)/compat 引入。 */
 #include <stdint.h>
 
-%(xdom_include)s%(bodies_decl)s
+%(xdom_include)s%(xdom_externs)s%(bodies_decl)s
 #endif /* ECOS_FUSED_BODY_H */
 """
 
@@ -36,9 +36,20 @@ _C = """/* ecos_fused_body.c —— 由 ECoS 融合方案生成，两个后端�
  */
 #include "ecos_fused_body.h"
 
-%(protos)s
+%(protos)s%(externs)s
 
 %(bodies)s"""
+
+
+def _xdom_externs(ir):
+    out, seen = [], set()
+    for item in list((getattr(ir, "xdom", None) or {}).get("publish") or []) + \
+                list((getattr(ir, "xdom", None) or {}).get("subscribe") or []):
+        g = item.get("global")
+        if g and g not in seen:
+            seen.add(g)
+            out.append("extern int32_t %s;\t/* 跨域数据：定义在 stage_impl.c */" % g)
+    return out
 
 
 def emit_body_h(ir):
@@ -54,11 +65,25 @@ def emit_body_h(ir):
         "bodies_decl": "\n".join(decls),
         "xdom_include": ('#include "ecos_xdom.h"\t/* 跨域数据桥（PR10-C） */\n\n'
                          if getattr(ir, "xdom", None) else ""),
+        "xdom_externs": ("\n".join(_xdom_externs(ir)) + "\n"
+                         if _xdom_externs(ir) else ""),
     }
 
 
 def emit_body_c(ir, protos):
     blocks = []
+    # 跨域全局的 extern 声明：这些量定义在 stage_impl.c（阶段源码）里，
+    # 而本文件要通过 &g_xxx / g_xxx 把它们搬过环。不声明就是编译错误——
+    # 这个错只有在真编译时才暴露（本机没有编译器）。
+    # 类型固定为 int32_t：桥的 pub/sub 就按 int32_t 定义，帧格式也只承载 32 位。
+    externs = []
+    seen = set()
+    for item in list((getattr(ir, "xdom", None) or {}).get("publish") or []) + \
+                list((getattr(ir, "xdom", None) or {}).get("subscribe") or []):
+        g = item.get("global")
+        if g and g not in seen:
+            seen.add(g)
+            externs.append("extern int32_t %s;\t/* 跨域数据：定义在 stage_impl.c */" % g)
     for g in ir.groups:
         lines = []
         lines.append("/* 组 %s：释放相位 %s µs，执行 ≈%.2f µs（%d 阶段） */"
@@ -83,4 +108,6 @@ def emit_body_c(ir, protos):
                                                 c["channel"], c.get("to", "?")))
         lines.append("}")
         blocks.append("\n".join(lines))
-    return _C % {"protos": "\n".join(protos), "bodies": "\n\n".join(blocks) + "\n"}
+    return _C % {"protos": "\n".join(protos),
+                 "externs": ("\n" + "\n".join(externs) + "\n") if externs else "",
+                 "bodies": "\n\n".join(blocks) + "\n"}

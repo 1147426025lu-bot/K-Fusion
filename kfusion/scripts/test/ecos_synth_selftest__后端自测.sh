@@ -114,22 +114,47 @@ else
 fi
 
 echo "=== 6. NuttX 宿主：允许睡眠、按组相位释放 G 次/周期 ==="
+# ⚠ 入口名不是随意的：NuttX 的 builtin 注册表按 PROGNAME 引用
+#   <PROGNAME 去横线>_main，源码里的入口名必须与之一致（否则链接期
+#   undefined reference）。这里 PROGNAME=chain_window → 入口 chain_window_main。
 expect_grep "NuttX 用绝对时刻睡眠" "$TMP/nuttx/ecos_nuttx_main.c" \
-    "clock_nanosleep" "TIMER_ABSTIME" "int main"
+    "clock_nanosleep" "TIMER_ABSTIME" "int chain_window_main("
 expect_grep "按组相位释放（2 组）" "$TMP/nuttx/ecos_nuttx_main.c" \
     "ecos_phase_us" "ecos_run_body(i)"
 expect_grep "NuttX 构建骨架" "$TMP/nuttx/Makefile" "PROGNAME" "MAINSRC"
+expect_grep "Makefile 的 PROGNAME 与源码入口名对应" "$TMP/nuttx/Makefile" \
+    "PROGNAME  = chain_window"
 
 echo "=== 6b. NuttX 探针与入口名（A/B 上板用）==="
+# 接进既有 app 骨架：用 --nuttx-progname 对齐那个 app 的 PROGNAME，
+# 入口名由它派生，不另起名字。
 "$PY" "$SYNTH" --plan "$TMP/plan.json" --dag "$FIX/chain_window.dag.json" \
     --source "$SRC" --out-dir "$TMP/nuttx_probe" --target nuttx \
-    --contract "$CONTRACT" --probe --nuttx-main fiveloop_main >/dev/null 2>&1
-expect_grep "入口名可替换（接进既有 app 骨架）" "$TMP/nuttx_probe/ecos_nuttx_main.c" \
+    --contract "$CONTRACT" --probe --nuttx-progname fiveloop >/dev/null 2>&1
+expect_grep "入口名随 PROGNAME 派生（接进既有 app 骨架）" "$TMP/nuttx_probe/ecos_nuttx_main.c" \
     "int fiveloop_main("
+expect_grep "probe 版 Makefile 的 PROGNAME 同步" "$TMP/nuttx_probe/Makefile" \
+    "PROGNAME  = fiveloop"
 expect_grep "NuttX 侧也有 dz 探针（同一量法）" "$TMP/nuttx_probe/ecos_nuttx_main.c" \
     "ecos_dz_report" "# dz:" "dz_lag_sum_us"
 expect_grep "NuttX 仍用绝对时刻睡眠" "$TMP/nuttx_probe/ecos_nuttx_main.c" \
     "clock_nanosleep" "TIMER_ABSTIME"
+
+echo "=== 6c. 入口名与 PROGNAME 不一致 → 生成期就拒（rc=2）==="
+# 这条是踩过的坑：跨域那版 PROGNAME=fiveloop、入口=xdom_main，
+# 板上链接期才报 undefined reference（第一次构建还是靠 libapps.a
+# 里的残留 .o 蒙混过去的）。现在在生成期就拒。
+expect_rc "入口名与 PROGNAME 不一致（rc=2）" 2 \
+    "$PY" "$SYNTH" --plan "$TMP/plan.json" --dag "$FIX/chain_window.dag.json" \
+    --source "$SRC" --out-dir "$TMP/nuttx_bad" --target nuttx \
+    --contract "$CONTRACT" --nuttx-progname fiveloop --nuttx-main xdom_main
+expect_grep "拒绝理由说的是注册表符号" "$TMP/out.txt" \
+    "fiveloop_main" "undefined reference"
+if [ -e "$TMP/nuttx_bad" ]; then
+    bad "拒绝后仍留下半成品目录：$(ls "$TMP/nuttx_bad" | tr '\n' ' ')"
+else
+    ok "拒绝后不留半成品"
+fi
 
 echo "=== 7. 含 sleep 的阶段：linux 拒、nuttx 放行 ==="
 expect_rc "linux-kernel 拒绝 io_read（rc=3）" 3 \
@@ -324,8 +349,11 @@ expect_grep "桥按本域角色选环（root：out=0x0000 in=0x3000）" \
     "$TMP/xe_root/ecos_xdom.c" "ECOS_XDOM_OUT   0x0000u" "ECOS_XDOM_IN    0x3000u"
 expect_grep "nuttx 侧选环相反" "$TMP/xe_nuttx/ecos_xdom.c" \
     "ECOS_XDOM_OUT   0x3000u" "ECOS_XDOM_IN    0x0000u"
-# 桥里不许有调度原语：它只搬字
-expect_absent "桥里没有睡眠/线程/入口" "$TMP/xe_root/ecos_xdom.c" \
+# 桥里不许有调度原语：它只搬字。
+# ⚠ 必须剥掉注释再查：桥的注释里会解释"非 owner 分支里有 usleep"，
+#   直接把注释算进去会把解释文字当成违规（踩过）。
+sed 's:/\*.*\*/::g' "$TMP/xe_root/ecos_xdom.c" | grep '^\s*//' -v > "$TMP/xdom_nc.c"
+expect_absent "桥里没有睡眠/线程/入口（剥注释后）" "$TMP/xdom_nc.c" \
     "usleep" "kthread" "int main"
 
 echo
