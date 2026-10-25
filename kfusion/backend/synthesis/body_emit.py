@@ -25,7 +25,7 @@ _H = """/* ecos_fused_body.h —— 由 ECoS 融合方案生成，两个后端�
  * （只 typedef，不含 libc），Kbuild 里以 -I$(src)/compat 引入。 */
 #include <stdint.h>
 
-%(bodies_decl)s
+%(xdom_include)s%(bodies_decl)s
 #endif /* ECOS_FUSED_BODY_H */
 """
 
@@ -52,6 +52,8 @@ def emit_body_h(ir):
         "verified": "true" if ir.verified else "false（未验证，产物只能用于对照）",
         "evidence": ir.evidence,
         "bodies_decl": "\n".join(decls),
+        "xdom_include": ('#include "ecos_xdom.h"\t/* 跨域数据桥（PR10-C） */\n\n'
+                         if getattr(ir, "xdom", None) else ""),
     }
 
 
@@ -66,9 +68,19 @@ def emit_body_c(ir, protos):
         lines.append("void %s(void)" % g.body)
         lines.append("{")
         for s in g.stages:
+            # 跨域输入：先订阅，再跑这个阶段（否则它读到的还是本域上一拍的旧值）
+            for c in getattr(s, "xdom_sub", []) or []:
+                lines.append("\tecos_xdom_sub(%d, &%s);\t/* 跨域输入：通道 %d，"
+                             "来自 %s 域 */" % (c["channel"], c["global"],
+                                                c["channel"], c.get("from", "?")))
             lines.append("\t%s;\t/* %s，相位 %s µs */"
                          % (s.call, s.name,
                             ("%.0f" % s.phase_us) if s.phase_us is not None else "?"))
+            # 跨域输出：跑完立刻发布（晚发布会把可用时刻推到下一拍）
+            for c in getattr(s, "xdom_pub", []) or []:
+                lines.append("\tecos_xdom_pub(%d, %s);\t/* 跨域输出：通道 %d，"
+                             "发往 %s 域 */" % (c["channel"], c["global"],
+                                                c["channel"], c.get("to", "?")))
         lines.append("}")
         blocks.append("\n".join(lines))
     return _C % {"protos": "\n".join(protos), "bodies": "\n\n".join(blocks) + "\n"}

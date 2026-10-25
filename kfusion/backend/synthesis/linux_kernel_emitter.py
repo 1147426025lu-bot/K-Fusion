@@ -72,6 +72,7 @@ _LINUX_C = """/* %(name)s —— 由 ECoS 融合方案生成的 ring-0 宿主；
 %(probe_includes)s
 
 #include "ecos_fused_body.h"
+%(xdom_include)s
 
 #define ECOS_GROUPS %(ngroups)d
 
@@ -198,7 +199,7 @@ static int __init ecos_init(void)
 {
 	int i;
 	s64 t0;
-
+%(xdom_init)s
 	if (cpu >= 0 && !cpu_online(cpu)) {
 		pr_err("ecos: cpu %%d 不在线（看 /sys/devices/system/cpu/online）\\n", cpu);
 		return -EINVAL;
@@ -278,7 +279,7 @@ MODULE_DESCRIPTION("ECoS fused periodic control (%(ngroups)d groups)");
 _KBUILD = """# 由 ECoS 方案生成；在目标侧（内核树）执行：
 #   make -C <KDIR> M=$PWD modules
 obj-m := %(mod)s.o
-%(mod)s-y := ecos_fused_linux.o ecos_fused_body.o stage_impl.o
+%(mod)s-y := ecos_fused_linux.o ecos_fused_body.o stage_impl.o%(xdom_objs)s
 
 # 阶段源码若是用户态 C（#include <stdint.h>），用 compat/ 补定宽整数 typedef。
 # 只补 typedef，不补 libc——用到 libc 的阶段要先过 LLVM 内核化 Pass。
@@ -326,7 +327,7 @@ def _ident(s):
     return s if not s[:1].isdigit() else "v_" + s
 
 
-def emit(ir, module_name, phases_known=True):
+def emit(ir, module_name, phases_known=True, xdom=False):
     ngroups = len(ir.groups)
     layout = " | ".join(
         "%s@%sµs[%s]" % (g.gid,
@@ -495,11 +496,16 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
         "probe_decls": probe_decls,
         "probe_before": probe_before,
         "probe_after": probe_after,
+        "xdom_init": ("\t/* 跨域数据桥：先把两个环定下来（PR10-C） */\n"
+                      "\tecos_xdom_init();\n" if xdom else ""),
+        "xdom_include": ('#include "ecos_xdom.h"\t/* 跨域数据桥 */\n'
+                         if xdom else ""),
     }
     return {
         HOST_C: host,
         COMPAT_H: _COMPAT_STDINT,
-        KBUILD: _KBUILD % {"mod": module_name},
+        KBUILD: _KBUILD % {"mod": module_name,
+                           "xdom_objs": " ecos_xdom.o" if xdom else ""},
         README: _README % {"name": module_name, "mod": module_name,
                            "period": int(ir.period_us or 0),
                            "digest_hint": digest_hint},

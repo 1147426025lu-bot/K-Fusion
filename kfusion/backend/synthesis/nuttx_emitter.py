@@ -51,6 +51,7 @@ _MAIN_C = """/* %(name)s —— 由 ECoS 融合方案生成的 NuttX 应用；�
 #include <errno.h>
 
 #include "ecos_fused_body.h"
+%(xdom_include)s
 
 #define ECOS_GROUPS %(ngroups)d
 #define ECOS_PERIOD_US %(period)d
@@ -87,6 +88,7 @@ int %(main_name)s(int argc, char *argv[])
 	unsigned long periods = 0;
 	int i;
 
+%(xdom_init)s
 	clock_gettime(CLOCK_MONOTONIC, &now);
 	base = (uint64_t)now.tv_sec * 1000000u + (uint64_t)now.tv_nsec / 1000u;
 
@@ -116,7 +118,7 @@ STACKSIZE = 8192
 MODULE    = $(CONFIG_%(upper)s)
 
 MAINSRC = ecos_nuttx_main.c
-CSRCS   = ecos_fused_body.c stage_impl.c
+CSRCS   = ecos_fused_body.c stage_impl.c%(xdom_srcs)s
 
 include $(APPDIR)/Application.mk
 """
@@ -222,7 +224,7 @@ static void ecos_dz_report(void)
     return defs, before, after, report
 
 
-def emit(ir, module_name, main_name="main", probe=False):
+def emit(ir, module_name, main_name="main", probe=False, xdom=False):
     ngroups = len(ir.groups)
     layout = " | ".join(
         "%s@%sµs[%s]" % (g.gid,
@@ -257,8 +259,13 @@ def emit(ir, module_name, main_name="main", probe=False):
             "t_first_decl": t_first_decl,
             "probe_defs": probe_defs, "probe_before": probe_before,
             "probe_after": probe_after, "probe_report": probe_report,
+            "xdom_init": ("\t/* 跨域数据桥：先把两个环定下来（PR10-C） */\n"
+                          "\tecos_xdom_init();\n" if xdom else ""),
+            "xdom_include": ('#include "ecos_xdom.h"\t/* 跨域数据桥 */\n'
+                             if xdom else ""),
         },
-        MAKEFILE: _MAKEFILE % {"mod": module_name, "upper": upper},
+        MAKEFILE: _MAKEFILE % {"mod": module_name, "upper": upper,
+                               "xdom_srcs": " ecos_xdom.c" if xdom else ""},
         KCONFIG: _KCONFIG % {"mod": module_name, "upper": upper},
         README: _README % {"mod": module_name, "upper": upper},
     }

@@ -32,6 +32,7 @@ import fusion_ir          # noqa: E402
 import linux_kernel_emitter as linux_em  # noqa: E402
 import nuttx_emitter as nuttx_em          # noqa: E402
 import stage_manifest                      # noqa: E402
+import xdom_bridge                         # noqa: E402
 
 
 def _write(out_dir, name, text):
@@ -66,6 +67,9 @@ def main():
     ap.add_argument("--nuttx-main", default="main",
                     help="NuttX 后端的入口函数名（默认 main；接进既有 app 骨架时用 "
                          "fiveloop_main 之类）")
+    ap.add_argument("--xdom", default=None,
+                    help="拆分器写的 per-domain meta.json（PR10-C）。给了就在周期体里"
+                         "为跨域数据插发布/订阅，并生成 ecos_xdom.{h,c}")
     ap.add_argument("--allow-unverified", action="store_true",
                     help="允许用未验证方案生成（产物标记为对照用，不得进论文）")
     a = ap.parse_args()
@@ -73,6 +77,7 @@ def main():
     plan = fusion_ir.load(a.plan)
     dag = fusion_ir.load(a.dag)
     contract = fusion_ir.load(a.contract) if a.contract else None
+    xdom = fusion_ir.load(a.xdom) if a.xdom else None
     # 成本模型：以方案里的 cost_model 为准；命令行只允许"核对一致"
     cm = plan.get("cost_model") or {}
     exec_us = None
@@ -139,7 +144,8 @@ def main():
 
     ir = fusion_ir.FusionIR.from_plan(plan, dag, contract=contract, exec_us=exec_us,
                                       calls=calls, source_name=name,
-                                      digest_vars=a.digest_var, probe=a.probe)
+                                      digest_vars=a.digest_var, probe=a.probe,
+                                      xdom=xdom, subset=bool(xdom))
 
     # ---- 门 2：时间前提 ----
     tv = ir.timing_violations()
@@ -173,10 +179,24 @@ def main():
     written.append(_write(a.out_dir, "fusion_ir.json",
                           json.dumps(ir.to_json(), ensure_ascii=False, indent=2) + "\n"))
 
+    # ---- 跨域数据桥（PR10-C）----
+    # 只在给了 --xdom 时生成；单域产物一个字节都不变。
+    if xdom:
+        for fn, text in xdom_bridge.emit(xdom).items():
+            written.append(_write(a.out_dir, fn, text))
+        print("=== 跨域数据桥 ===")
+        print("  %s" % xdom_bridge.summary(xdom))
+        n_sub = sum(len(s.xdom_sub) for g in ir.groups for s in g.stages)
+        n_pub = sum(len(s.xdom_pub) for g in ir.groups for s in g.stages)
+        if n_sub == 0 and n_pub == 0:
+            print("  ⚠ 本域没有任何发布/订阅——如果它本该有，说明 --xdom 给错了",
+                  file=sys.stderr)
+            return 3
+
     if a.target in ("linux-kernel", "both"):
         d = a.out_dir if a.target == "linux-kernel" else os.path.join(a.out_dir, "linux")
         os.makedirs(d, exist_ok=True)
-        for fn, text in linux_em.emit(ir, name).items():
+        for fn, text in linux_em.emit(ir, name, xdom=bool(xdom)).items():
             written.append(_write(d, fn, text))
 
     if a.target in ("nuttx", "both"):
@@ -184,7 +204,8 @@ def main():
         os.makedirs(d, exist_ok=True)
         for fn, text in nuttx_em.emit(ir, name,
                                       main_name=a.nuttx_main,
-                                      probe=getattr(ir, "probe", False)).items():
+                                      probe=getattr(ir, "probe", False),
+                                      xdom=bool(xdom)).items():
             written.append(_write(d, fn, text))
 
     print("=== ECoS 合成：%s（target=%s）===" % (name, a.target))

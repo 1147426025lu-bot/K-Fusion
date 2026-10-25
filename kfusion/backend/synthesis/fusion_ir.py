@@ -41,6 +41,10 @@ class Stage(object):
         self.effects = list(node.get("effects") or [])
         self.contexts = list(node.get("contexts") or node.get("allowed_contexts") or [])
         self.phase_us = None if phase_us is None else float(phase_us)
+        # 跨域输入/输出（PR10-C）：拆分器按 DAG 边的 evidence 填进来，
+        # 生成器据此在阶段调用前后插订阅/发布。单域方案这两项为空，行为不变。
+        self.xdom_sub = []
+        self.xdom_pub = []
 
     @property
     def ident(self):
@@ -95,7 +99,7 @@ class FusionIR(object):
     # ------------------------------------------------------------------
     @classmethod
     def from_plan(cls, plan, dag, contract=None, exec_us=None, calls=None,
-                  source_name="fused", digest_vars=None, probe=False):
+                  source_name="fused", digest_vars=None, probe=False, xdom=None, subset=False):
         calls = calls or {}
         exec_us = exec_us or {}
         nodes = {n["name"]: n for n in (dag.get("nodes") or [])}
@@ -140,9 +144,19 @@ class FusionIR(object):
         flat_ir = [s.name for g in groups for s in g.stages]
         if flat_plan != flat_ir:
             raise IRError("IR 展平顺序与方案不一致：%s vs %s" % (flat_ir, flat_plan))
-        if order and set(flat_ir) != set(order):
-            raise IRError("方案阶段集合与 DAG 不一致：%s vs %s"
-                          % (sorted(flat_ir), sorted(order)))
+        # 拆分视图：本 plan 只含一个域的阶段，是 DAG 的**子集**。
+        # 漏掉的那些正是对端域要过环传过来的东西，记在 ir.complement 里。
+        complement = []
+        if order:
+            if not subset:
+                if set(flat_ir) != set(order):
+                    raise IRError("方案阶段集合与 DAG 不一致：%s vs %s"
+                                  % (sorted(flat_ir), sorted(order)))
+            else:
+                extra = set(flat_ir) - set(order)
+                if extra:
+                    raise IRError("方案含 DAG 里没有的阶段：%s" % sorted(extra))
+                complement = sorted(set(order) - set(flat_ir))
 
         evidence = "empirical"
         if (contract or {}).get("wcet_us"):
@@ -160,8 +174,23 @@ class FusionIR(object):
         ir.phase_known = phase_known
         ir.plan_version = plan.get("version")
         ir.verified = bool((plan.get("verification") or {}).get("ok"))
+        ir.complement = complement
         ir.digest_vars = [v for v in (digest_vars or []) if v]
         ir.probe = bool(probe)
+
+        # ---- 跨域接线（PR10-C）----
+        # xdom 是拆分器写的 per-domain meta：本域要发布/订阅哪些全局。
+        # 按阶段名挂到 Stage 上，body_emit 就知道在调用前后插什么。
+        ir.xdom = xdom or {}
+        pub_by_stage, sub_by_stage = {}, {}
+        for p in (ir.xdom.get("publish") or []):
+            pub_by_stage.setdefault(p.get("after"), []).append(p)
+        for s in (ir.xdom.get("subscribe") or []):
+            sub_by_stage.setdefault(s.get("before"), []).append(s)
+        for g in groups:
+            for s in g.stages:
+                s.xdom_pub = pub_by_stage.get(s.name, [])
+                s.xdom_sub = sub_by_stage.get(s.name, [])
         return ir
 
     # ------------------------------------------------------------------

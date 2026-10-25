@@ -264,6 +264,70 @@ expect_rc "单域方案仍可生成（门不误伤）" 0 \
     --source "$SRC" --out-dir "$TMP/linux_ok" --target linux-kernel \
     --contract "$CONTRACT" --exec-us '{"s1":0.6,"s2":0.67,"s3":0.28,"s4":0.5}'
 
+
+echo
+echo "=== 12. PR10-C：按域拆分 + 跨域数据桥 ==="
+SPLIT="$HERE/../ecos/split_plan__按域拆分方案.py"
+rm -rf "$TMP/xsplit"
+expect_rc "拆分成功（父方案已验证）" 0 \
+    "$PY" "$SPLIT" "$TMP/xdom.plan.json" --dag "$FIX/xdom_loop.dag.json" \
+    --out-dir "$TMP/xsplit" 2>/dev/null
+for f in interface.json nuttx/plan.json nuttx/meta.json root/plan.json root/meta.json; do
+    if [ -f "$TMP/xsplit/$f" ]; then ok "生成 $f"; else bad "缺 $f"; fi
+done
+expect_grep "两条跨域通道，全局量说清楚" "$TMP/xsplit/interface.json" \
+    "stage_pid" "stage_clamp" "stage_plant" "stage_sample" "g_act" "g_plant"
+expect_grep "nuttx 侧：收 g_plant 在 sample 前，发 g_act 在 pid 后" \
+    "$TMP/xsplit/nuttx/meta.json" "g_act" "g_plant"
+# 方向不能反：root 侧应当是收 g_act、发 g_plant
+expect_grep "root 侧方向相反" "$TMP/xsplit/root/meta.json" "g_act" "g_plant"
+
+# 负向 1：父方案没验证 → 不拆
+expect_rc "未验证父方案 → 拆分拒绝（rc=3）" 3 \
+    "$PY" "$SPLIT" "$FIX/xdom_unverified.plan.json" --dag "$FIX/xdom_loop.dag.json" \
+    --out-dir "$TMP/xsplit_bad"
+expect_grep "拒绝理由说的是缺验证凭据，不是混域" "$TMP/out.txt" "验证凭据"
+# 负向 2：混域 plan（跨域融合）→ 不拆
+expect_rc "混域方案 → 拆分拒绝（rc=3）" 3 \
+    "$PY" "$SPLIT" "$FIX/xdom_mixed.plan.json" --dag "$FIX/xdom_loop.dag.json" \
+    --out-dir "$TMP/xsplit_bad2"
+expect_grep "混域的拒绝理由说的是跨域融合不存在" "$TMP/out.txt" \
+    "跨域" "同一次释放"
+
+# emit：桥文件 + 接线 + 构建文件
+rm -rf "$TMP/xe_nuttx" "$TMP/xe_root"
+expect_rc "nuttx 端生成（带桥）" 0 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/nuttx/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xe_nuttx" --target nuttx --contract "$XCON" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/nuttx/meta.json"
+for f in ecos_xdom.h ecos_xdom.c; do
+    if [ -f "$TMP/xe_nuttx/$f" ]; then ok "nuttx 端生成 $f"; else bad "nuttx 端缺 $f"; fi
+done
+expect_grep "订阅插在 sample 之前、发布插在 pid 之后" \
+    "$TMP/xe_nuttx/ecos_fused_body.c" \
+    "ecos_xdom_sub(1, &g_plant);" "stage_sample();" "ecos_xdom_pub(0, g_act);"
+expect_grep "nuttx Makefile 把桥编进去" "$TMP/xe_nuttx/Makefile" "ecos_xdom.c"
+
+expect_rc "root 端生成（带桥）" 0 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/root/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xe_root" --target linux-kernel --contract "$XCON" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/root/meta.json"
+expect_grep "root Kbuild 把桥链进去" "$TMP/xe_root/Kbuild" "ecos_xdom.o"
+expect_grep "root 侧方向相反（收 g_act 发 g_plant）" \
+    "$TMP/xe_root/ecos_fused_body.c" \
+    "ecos_xdom_sub(0, &g_act);" "ecos_xdom_pub(1, g_plant);"
+expect_grep "桥按本域角色选环（root：out=0x0000 in=0x3000）" \
+    "$TMP/xe_root/ecos_xdom.c" "ECOS_XDOM_OUT   0x0000u" "ECOS_XDOM_IN    0x3000u"
+expect_grep "nuttx 侧选环相反" "$TMP/xe_nuttx/ecos_xdom.c" \
+    "ECOS_XDOM_OUT   0x3000u" "ECOS_XDOM_IN    0x0000u"
+# 桥里不许有调度原语：它只搬字
+expect_absent "桥里没有睡眠/线程/入口" "$TMP/xe_root/ecos_xdom.c" \
+    "usleep" "kthread" "int main"
+
 echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" = 0 ] || exit 1

@@ -4,13 +4,24 @@
     "PR10-B 负向夹具：把整条闭环融成一个组，但成员分属 nuttx / root 两个域。",
     "这是**物理上不存在**的方案（两个 cell 各有内核与调度器，没有『同一次释放』），",
     "验证器必须拒，且理由要说跨域，而不是别的。",
-    "构造方式：把 xdom_loop 的 5 个阶段按拓扑序全塞进 g0。"
+    "构造方式：把 xdom_loop 的 5 个阶段按拓扑序全塞进 g0。",
+    "带一个显式的 verification.ok=true，是为了让拆分器走到『混域』这一路；真实验证由 plan_verify 做，这个字段只是夹具的开关。"
   ],
   "groups": [
     {
       "id": "g0",
-      "members": ["stage_sample", "stage_fir", "stage_pid", "stage_clamp", "stage_plant"],
+      "members": [
+        "stage_sample",
+        "stage_fir",
+        "stage_pid",
+        "stage_clamp",
+        "stage_plant"
+      ],
       "release_phase_us": 0
     }
-  ]
+  ],
+  "verification": {
+    "ok": true,
+    "note": "夹具用：单独测混域拒绝路径"
+  }
 }

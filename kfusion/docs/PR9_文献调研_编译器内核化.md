@@ -190,8 +190,11 @@ PR10  跨域 IPC 最小运行时（IVSHMEM 发布-订阅协议）            ◐
                                                              B：跨域边进 ECoS（域纯度硬约束 + 代价按拍计
                                                                 + 验证器独立复核 + emit 拒绝跨域合成）；
                                                                 顺带改判"环只能整体成组"为错
-                                                             ⬜ C：按域拆成两份产物分别 emit（ecos_build
-                                                                --split-by-domain）
+                                                             C：按域拆分 + 跨域数据桥 ✅
+                                                                （split_plan 按域拆 plan/接口；
+                                                                 emit --xdom 在阶段前后插 pub/sub，
+                                                                 生成 ecos_xdom.{h,c}）
+                                                             ⬜ D：两端一起上板并对数
                                                              门铃受 NuttX 无 PCI 枚举限制，未做。
 PR11  跨域联合优化（部署 × 融合联合求解，CP-SAT / 精确枚举做基准）⬜ 未开始
 ```

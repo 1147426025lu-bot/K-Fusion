@@ -51,6 +51,7 @@
 #define XIPC_KIND_PING   4u   /* root 发的请求，a = 序号，b = 发送 counter 低 32 位 */
 #define XIPC_KIND_STOP   5u   /* 让 inmate 收工 */
 #define XIPC_KIND_MODE   6u   /* 切模式：a = tick_every（0=不推），b = period_us（0=忙等） */
+#define XIPC_KIND_DATA   7u   /* 跨域数据：a = 通道号，b = int32 值（PR10-C） */
 
 struct xipc_slot {
     volatile uint32_t seq;    /* 提交标记：= 生产者在环中的序号 + 1 */
