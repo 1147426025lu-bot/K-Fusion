@@ -1,0 +1,16 @@
+{
+  "version": 4,
+  "_note": [
+    "PR10-B 负向夹具：把整条闭环融成一个组，但成员分属 nuttx / root 两个域。",
+    "这是**物理上不存在**的方案（两个 cell 各有内核与调度器，没有『同一次释放』），",
+    "验证器必须拒，且理由要说跨域，而不是别的。",
+    "构造方式：把 xdom_loop 的 5 个阶段按拓扑序全塞进 g0。"
+  ],
+  "groups": [
+    {
+      "id": "g0",
+      "members": ["stage_sample", "stage_fir", "stage_pid", "stage_clamp", "stage_plant"],
+      "release_phase_us": 0
+    }
+  ]
+}

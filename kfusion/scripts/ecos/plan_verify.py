@@ -38,6 +38,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__))))
 
 import temporal_model  # noqa: E402
+import domain_model    # noqa: E402
 
 
 def _reach(nodes, edges):
@@ -83,9 +84,19 @@ class PlanVerifier(object):
                 self.closing.add(key)
                 self.closing_meta[key] = c
 
-        # 同拍边 = 非闭合边、非冲突边
+        # 时间与跨域两个模型都先建好：后面的"同拍边"定义要用到它们
+        self.tm = temporal_model.TemporalModel(
+            dag, contract=contract, exec_us=self.exec_us,
+            release_cost_us=self.c)
+
+        # 同拍边 = 非闭合边、非冲突边、**非跨域边**
+        # 跨域边与 z⁻¹ 同构：生产者在一个 cell、消费者在另一个 cell，只能在下一个
+        # 周期边界看到它，所以它不约束同一拍内的先后（也不该被它否掉合法方案）。
+        self.dom = domain_model.load(dag, period_us=self.tm.period,
+                                     topo=self.order)
         self.edges = [e for e in (dag.get("edges") or [])
-                      if (e.get("from"), e.get("to")) not in self.closing]
+                      if (e.get("from"), e.get("to")) not in self.closing
+                      and (e.get("from"), e.get("to")) not in self.dom.xdom_set]
         self.same_cycle = [e for e in self.edges if e.get("kind") != "conflict"]
         self.conflicts = [e for e in self.edges if e.get("kind") == "conflict"]
         self.reach = _reach(self.nodes, self.same_cycle)
@@ -95,9 +106,6 @@ class PlanVerifier(object):
                            for n in (dag.get("nodes") or [])
                            if n.get("interface_unresolved")}
 
-        self.tm = temporal_model.TemporalModel(
-            dag, contract=contract, exec_us=self.exec_us,
-            release_cost_us=self.c)
         # 旧语义（节点级相对漂移）仍然支持，但只作 deprecated 通道
         self.legacy_sample = {n["name"]: float(n["sample_window_us"])
                               for n in (dag.get("nodes") or [])
@@ -258,6 +266,13 @@ class PlanVerifier(object):
             if self.tm.period and tot > float(self.tm.period) + 1e-9:
                 add("CAPACITY_PERIOD", "单拍容量：组 %s 执行 %.1f µs 超过周期 %.1f µs"
                     % (gid, tot, float(self.tm.period)))
+            # 3b) 跨域不可融合：融合要求"同一次释放"，两个 cell 各有内核与调度器，
+            #     物理上不存在跨域融合。这条要独立判，不能信规划器自己的结论。
+            if self.dom.mixed(members):
+                add("DOMAIN_MIXED",
+                    "跨域：组 %s 的成员分属 %s，跨域融合不存在"
+                    "（不同 cell 各有内核与调度器），必须切开"
+                    % (gid, " / ".join(self.dom.domains_of(members))))
 
         # ---- 4) 时间语义（走统一时间线，含组间积压）----
         # 只按相位算会低估完成时刻：前一组没跑完，本组就得推迟。
@@ -304,6 +319,24 @@ class PlanVerifier(object):
         if d:
             add(d["code"], d["msg"])
 
+        # 4d) 跨域：每条跨域边多消耗一整拍（不是 µs）
+        #     独立重算一次——规划器算的 extra_periods 不能自证。
+        if self.dom.multi and self.dom.extra_periods:
+            extra = self.dom.extra_latency_us
+            comp = (sched[-1]["finish_us"] if sched else 0.0)
+            if self.tm.deadline is not None and \
+                    comp + extra > float(self.tm.deadline) + 1e-9:
+                add("XDOM_DEADLINE",
+                    "跨域期限：段内完成 %.1f µs ＋ 跨域 %d 拍（%.0f µs）＝ %.1f µs，"
+                    "超过期限 %.1f µs；跨域边 %s"
+                    % (comp, self.dom.extra_periods, extra, comp + extra,
+                       float(self.tm.deadline),
+                       ", ".join("%s→%s" % e for e in self.dom.xdom)))
+            warns.append(
+                "跨域：%d 条跨域边，端到端至少多 %d 拍（%.0f µs，按 %.0f µs/拍）"
+                % (len(self.dom.xdom), self.dom.extra_periods, extra,
+                   float(self.tm.period or 0)))
+
         rep = self._report(errs, warns, plan)
         if sched:
             rep["stats"]["completion_us"] = sched[-1]["finish_us"]
@@ -339,6 +372,10 @@ class PlanVerifier(object):
                 "cross_cycle_edges": len(self.closing),
                 "evidence": self.tm.evidence,
                 "temporal_source": self.tm.source,
+                "domains": self.dom.domains,
+                "cross_domain_edges": len(self.dom.xdom),
+                "cross_domain_periods": self.dom.extra_periods,
+                "cross_domain_extra_us": round(self.dom.extra_latency_us, 3),
             },
         }
 

@@ -93,6 +93,7 @@ if _ECOS not in sys.path:
     sys.path.insert(0, _ECOS)
 
 import temporal_model  # noqa: E402  （与验证器共用同一套时间语义）
+import domain_model    # noqa: E402  （与验证器共用同一套跨域语义）
 
 # v1 只用这几种；出现别的就报错，不静默忽略
 ORDER_KINDS = ("call", "spawn", "data", "anti")
@@ -214,6 +215,23 @@ class Planner:
         if self.period is None:
             self.period = self.tm.period
 
+        # ---- 跨域语义（PR10-B）----
+        # 跨域边与 z⁻¹ 闭合边同构：只能跨拍满足。所以它既不约束同拍顺序，
+        # 又给端到端/死区各加一整拍。语义只在 domain_model 里定义一次。
+        self.dom = domain_model.load(dag, period_us=self.period, topo=self.order)
+
+        # 同拍可达闭包：**摘掉** z⁻¹ 闭合边与跨域边之后再算。
+        # 踩过的坑：不可分性如果用全边闭包，环路会被"绕回来"——clamp 经由
+        # plant→sample 的 z⁻¹ 边能到达 sample，于是 `sample+fir` 被判成
+        # "clamp 必须夹在中间"，跨域切开后每一对相邻阶段都被误拒。
+        # 同拍关系必须只由同拍边决定；验证器一直是这么算的（它只喂 same_cycle 边），
+        # 两边不一致会让"规划说不可行、验证说合法"这种鬼故事出现。
+        same_tick = [e for e in self.edges
+                     if (e.get("from"), e.get("to")) not in self.dom.closing
+                     and (e.get("from"), e.get("to")) not in self.dom.xdom_set
+                     and e.get("kind") != "conflict"]
+        self.reach_same = build_reach(self.nodes, same_tick)
+
         # 反馈死区硬上限：并入同组后闭合边间隔≈一整拍（≤period）。
         # 若上限 < period，则每条反馈闭合边都必须跨组（否则死区必超限）。
         self.fb_must_cut = set()
@@ -264,15 +282,26 @@ class Planner:
         members = list(members)
         mset = set(members)
 
+        # 0) 跨域不可融合（PR10-B，硬约束，不给开关）
+        #    融合的定义是"同一次释放里连续跑几个阶段"。两个 cell 各有自己的内核和
+        #    调度器，不存在"同一次释放"——所以这不是"不划算"，是**物理上做不到**。
+        #    写成可覆盖的开关只会让人误以为调一下就能跨域融合。
+        if self.dom.mixed(members):
+            return False, ("跨域：段内成员分属 %s，融合要求同一次释放，"
+                           "而不同 cell 各有内核与调度器——跨域融合不存在，"
+                           "只能把这一刀切开（代价是端到端多一拍）"
+                           % " / ".join(self.dom.domains_of(members)))
+
         # 1) 不可分性：段外节点不得被"夹"在段内两个成员之间
+        #    只用**同拍**可达（reach_same），否则环路会从 z⁻¹ 边绕回来造成假阳性。
         for x in self.nodes:
             if x in mset:
                 continue
             for a in members:
-                if x not in self.reach[a]:
+                if x not in self.reach_same[a]:
                     continue
                 for b in members:
-                    if a != b and b in self.reach[x]:
+                    if a != b and b in self.reach_same[x]:
                         return False, ("不可分性：%s 必须位于 %s 与 %s 之间"
                                        % (x, a, b))
 
@@ -568,10 +597,16 @@ class Planner:
                 t_cons = self.group_phase(named[gc]) + \
                     self._exec_offset_in_group(named[gc], c["to"])
                 period = float(self.period or 0.0)
-                merged = (period + t_cons - t_prod) if period else None
+                # 跨域闭合边：消费者在**另一个 cell**，只能在再下一个周期边界看到它
+                # ⇒ 间隔多一整拍。这不是估算，PR10 板上量过：1 kHz 下跨域往返
+                # p50 1005.26 µs（≈1.005 拍），而同一共享内存纯通路只要 1.24 µs。
+                xd = 1 if self.dom.is_cross(c["from"], c["to"]) else 0
+                merged = (((1 + xd) * period) + t_cons - t_prod) if period else None
                 old = c.get("delay_us_unmerged")
                 closes.append({
                     "from": c["from"], "to": c["to"],
+                    "cross_domain": bool(xd),
+                    "extra_periods": xd,
                     "producer_offset_us": round(t_prod, 3),
                     "consumer_offset_us": round(t_cons, 3),
                     "delay_us_merged": round(merged, 3) if merged is not None else None,
@@ -581,7 +616,29 @@ class Planner:
                 })
                 if gp != gc:
                     cut.append({"from": c["from"], "to": c["to"],
-                                "from_group": "g%d" % gp, "to_group": "g%d" % gc})
+                                "from_group": "g%d" % gp, "to_group": "g%d" % gc,
+                                "reason": ("cross_domain"
+                                           if self.dom.is_cross(c["from"], c["to"])
+                                           else "external")})
+            # 切开的原因决定结论怎么写：跨域切开是**必然**（两个 cell 不可能同一次
+            # 释放），不是"外部方案越过了不可分性"。混为一谈会让人去查一个不存在的 bug。
+            xdom_cut = [c for c in cut if c["reason"] == "cross_domain"]
+            if not cut:
+                verdict = ("环是强连通分量，不可分性规则下只能整体成组"
+                           "（本规划器不会切开环）")
+            elif len(xdom_cut) == len(cut):
+                verdict = ("环被切开在 %s：**因为这条边跨域**——两个 cell 各有内核与"
+                           "调度器，同一次释放不存在，所以这一刀是必然的，"
+                           "不是方案越权"
+                           % ", ".join("%s(g%s)|%s(g%s)"
+                                       % (c["from"], c["from_group"],
+                                          c["to"], c["to_group"]) for c in cut))
+            else:
+                verdict = ("⚠ 环被切开在 %s：这些边不跨域，不可分性本应挡住，"
+                           "方案来自外部，需复核"
+                           % ", ".join("%s(g%s)|%s(g%s)"
+                                       % (c["from"], c["from_group"],
+                                          c["to"], c["to_group"]) for c in cut))
             out.append({
                 "ring": r["ring"],
                 "closing_edges": closes,
@@ -589,14 +646,9 @@ class Planner:
                              for m, v in gids.items()},
                 "whole_in_one_group": not cut,
                 "cut_at": cut,
-                "verdict": (
-                    ("环是强连通分量，不可分性规则下只能整体成组（本规划器不会切开环）"
-                     if not cut else
-                     "⚠ 环被切开在 %s：不可分性本应挡住，方案来自外部，需复核"
-                     % ", ".join("%s(g%s)|%s(g%s)"
-                                 % (c["from"], c["from_group"],
-                                    c["to"], c["to_group"]) for c in cut))
-                    + "；采样序列逐位不变，但闭合边间隔被拉长——那是回路的死区时间"),
+                "cross_domain_cut": bool(xdom_cut),
+                "verdict": verdict
+                    + "；采样序列逐位不变，但闭合边间隔被拉长——那是回路的死区时间",
             })
         return out
 
@@ -614,6 +666,8 @@ def summarize(planner, groups):
         out.append({
             "id": "g%d" % gi,
             "members": members,
+            "domain": (planner.dom.domains_of(members)[0]
+                       if len(planner.dom.domains_of(members)) == 1 else None),
             "effects": sorted(eff),
             "contexts": sorted(ctx or []),
             "exec_us": round(sum(planner.exec_us.get(m, 0.0) for m in members), 3),
@@ -786,6 +840,29 @@ def main():
               "或放宽期限；不要拿『单段都合法』当整方案合法的证明。",
               file=sys.stderr)
         return 3
+
+    # 跨域：端到端至少多 K 拍（K = 关键路径上的跨域边条数）。
+    # 单位是**拍**不是 µs —— PR10 实测 1 kHz 下跨域 RTT p50 1005.26 µs（≈1.005 拍），
+    # 而同一共享内存的纯通路往返只要 1.24 µs。按 µs 计会把代价算小三个数量级。
+    xd = planner.dom
+    if xd.multi and xd.extra_periods:
+        extra_us = xd.extra_latency_us
+        if planner.tm.deadline is not None:
+            comp = (sched[-1]["finish_us"] if sched else 0.0) + extra_us
+            if comp > planner.tm.deadline + 1e-9:
+                print("!! 跨域期限：段内完成 %.1f µs ＋ 跨域 %d 拍（%s %.0f µs）"
+                      "＝ %.1f µs，超过期限 %.1f µs"
+                      % (sched[-1]["finish_us"] if sched else 0.0,
+                         xd.extra_periods,
+                         "×".join(["%d 条跨域边" % xd.extra_periods,
+                                   "%.0f µs/拍" % float(planner.period or 0)]),
+                         extra_us, comp, planner.tm.deadline), file=sys.stderr)
+                print("   跨域边：%s" % ", ".join("%s→%s" % e for e in xd.xdom),
+                      file=sys.stderr)
+                print("   → 跨域边的代价是**整拍**，不是微秒。要缩短端到端就得减少"
+                      "跨域边（把阶段搬到同一域），或者放宽期限。",
+                      file=sys.stderr)
+                return 3
     warnings = []
     for r in recs:
         for c in r["closing_edges"]:
@@ -821,6 +898,7 @@ def main():
             "temporal_evidence": planner.tm.evidence,
             "contract": args.contract,
             "max_feedback_delay_us": planner.max_fb_delay_us,
+            "cross_domain": planner.dom.report(),
         },
         "order": planner.order,
         "groups": gs,
@@ -832,6 +910,9 @@ def main():
             "phase_span_us": round(phase_span, 3),
             "end_to_end_us": round(predicted, 3),
             "predicted_R_us": round(predicted, 3),
+            "cross_domain_periods": planner.dom.extra_periods,
+            "cross_domain_extra_us": round(planner.dom.extra_latency_us, 3),
+            "end_to_end_with_xdom_us": round(predicted + planner.dom.extra_latency_us, 3),
             "dp_predicted_R_us": (round(float(dp_pred), 3)
                                   if dp_pred is not None else None),
         },
@@ -895,6 +976,15 @@ def main():
             print("  端到端分解：相位跨度 %.0f µs ＋ 末组唤醒 %.1f µs ＋ 末组执行 %.1f µs"
                   % (phase_span, planner.c,
                      (gs[-1]["exec_us"] if gs else 0.0)))
+        if planner.dom.multi:
+            xd = planner.dom
+            print("  跨域：%d 条跨域边 %s ｜ 端到端多 %d 拍 × %.0f µs = %.0f µs "
+                  "⇒ **含跨域 %.1f µs**"
+                  % (len(xd.xdom), ", ".join("%s→%s" % e for e in xd.xdom),
+                     xd.extra_periods, float(planner.period or 0),
+                     xd.extra_latency_us, predicted + xd.extra_latency_us))
+            print("        （跨域边只能跨拍满足；按 µs 计会把代价算小三个数量级，"
+                  "见 PR10 实测 1.005 拍）")
         late = [r for r in sched if r["backlog_us"] > 0]
         if late:
             print("  组间积压（前组未完成 → 后组推迟）：%s"

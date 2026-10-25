@@ -106,6 +106,34 @@ def main():
             return 3
         print("⚠ 未验证方案：产物标记为对照用，不得用于论文主张", file=sys.stderr)
 
+    # ---- 门 0：跨域方案不能合成成一个宿主 ----
+    # 本 emitter 的产物是"一个宿主 + 一个周期体"。如果方案的组分属多个域
+    # （DAG 节点带 domain），把两组塞进同一个模块就等于**绕过了 PR10-B 的硬约束**
+    # （跨域融合不存在），而且生成出来的东西在板上根本跑不起来——
+    # 两个 cell 各有内核，一个 .ko 不可能同时属于两边。
+    # 正确做法：按域拆成两份 plan，各配自己的阶段源码，分别 emit。
+    # 域的权威来源是 DAG 节点；方案里的 group.domain 只是规划器写下来的摘要，
+    # 两处都有时以 DAG 为准（摘要可能与旧版 DAG 对不上）。
+    dag_dom = {n["name"]: n["domain"] for n in (dag.get("nodes") or [])
+               if n.get("domain")}
+    doms = {}
+    for g in (plan.get("groups") or []):
+        for m in (g.get("members") or []):
+            d = dag_dom.get(m) or g.get("domain")
+            if d:
+                doms[m] = d
+    if len(set(doms.values())) > 1:
+        per = {}
+        for m, d in doms.items():
+            per.setdefault(d, []).append(m)
+        print("❌ 跨域方案：本 emitter 只合成**单域**产物，而方案的组分属 %d 个域："
+              % len(set(doms.values())), file=sys.stderr)
+        for d, ms in sorted(per.items()):
+            print("     %-10s %s" % (d, ", ".join(sorted(ms))), file=sys.stderr)
+        print("   → 按域拆成两份 plan、各配自己的阶段源码，分别 emit；"
+              "两端的通信走 PR10 的跨域环，不是一个宿主", file=sys.stderr)
+        return 6
+
     name = a.name or ((dag.get("meta") or {}).get("task") or {}).get("name") or "ecos_fused"
     name = "".join(ch if (ch.isalnum() or ch in "_-") else "_" for ch in name)
 

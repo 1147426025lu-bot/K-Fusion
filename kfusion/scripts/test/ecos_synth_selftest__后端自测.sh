@@ -238,6 +238,32 @@ expect_grep "构建脚本强制刷 mtime（cp -a 保留旧时间戳会导致不�
 expect_grep "镜像校验用本版专有标记，不用第一版就有的串" "$XBUILD" \
     "xipc: session 0x"
 
+# ---------------------------------------------------------------------------
+echo
+echo "=== 11. PR10-B：跨域方案不许合成成单域产物 ==="
+# emitter 的产物是"一个宿主 + 一个周期体"。跨域方案塞进一个模块，等于绕过了
+# "跨域融合不存在"这条硬约束，而且生成物在板上根本跑不起来。
+LOOPSRC="$HERE/../../examples/ecos/five_stage_loop__闭环五阶段示例.c"
+XCON="$HERE/../../contracts/examples/xdom_loop.contract.json"
+EX5='{"stage_sample":0.60,"stage_fir":0.67,"stage_pid":0.28,"stage_clamp":0.28,"stage_plant":0.50}'
+expect_rc "跨域夹具规划成功（域纯度已由规划器保证）" 0 \
+    "$PY" "$PLAN_PY" "$FIX/xdom_loop.dag.json" --platforms "$CAPS" \
+    --platform linux_kernel --release-cost-us 21 --exec-us "$EX5" \
+    --contract "$XCON" -o "$TMP/xdom.plan.json" --quiet
+rm -rf "$TMP/xdom_out"
+expect_rc "跨域方案 → emit 拒绝（rc=6）" 6 \
+    "$PY" "$SYNTH" --plan "$TMP/xdom.plan.json" --dag "$FIX/xdom_loop.dag.json" \
+    --source "$LOOPSRC" --out-dir "$TMP/xdom_out" --target linux-kernel \
+    --contract "$XCON" --exec-us "$EX5" --call "stage_pid=stage_pid(1000)"
+expect_grep "拒绝信息点出两个域与各自成员" "$TMP/out.txt" \
+    "跨域方案" "nuttx" "root"
+if [ -e "$TMP/xdom_out" ]; then bad "拒绝后仍留下产物"; else ok "拒绝即停，未留产物"; fi
+# 单域方案必须不受影响（否则这个门会挡住正常链路）
+expect_rc "单域方案仍可生成（门不误伤）" 0 \
+    "$PY" "$SYNTH" --plan "$TMP/plan.json" --dag "$FIX/chain_window.dag.json" \
+    --source "$SRC" --out-dir "$TMP/linux_ok" --target linux-kernel \
+    --contract "$CONTRACT" --exec-us '{"s1":0.6,"s2":0.67,"s3":0.28,"s4":0.5}'
+
 echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" = 0 ] || exit 1

@@ -184,11 +184,15 @@ PR9-C 双后端内核化闭环（LLVM→Plan→Linux .ko / NuttX）        ◐ �
                                                              （IR + 共享周期体 + 双宿主；
                                                               三道生成门；26 项后端自测）
                                                              ⬜ 目标侧构建/加载/比对未做
-PR10  跨域 IPC 最小运行时（IVSHMEM 发布-订阅协议）            ◐ 运行时 + 实测完成
-                                                             （SPSC 环 + session + MODE 控制面；
-                                                              通路 0.65/1.24 µs，周期采样下 ≈1.005 周期；
-                                                              门铃受 NuttX 无 PCI 枚举限制，未做。
-                                                              见 docs/PR10_跨域IPC最小运行时.md）
+PR10  跨域 IPC 最小运行时（IVSHMEM 发布-订阅协议）            ◐ A+B 完成
+                                                             A：SPSC 环 + session + MODE 控制面；
+                                                                通路 0.65/1.24 µs，周期采样 ≈1.005 周期
+                                                             B：跨域边进 ECoS（域纯度硬约束 + 代价按拍计
+                                                                + 验证器独立复核 + emit 拒绝跨域合成）；
+                                                                顺带改判"环只能整体成组"为错
+                                                             ⬜ C：按域拆成两份产物分别 emit（ecos_build
+                                                                --split-by-domain）
+                                                             门铃受 NuttX 无 PCI 枚举限制，未做。
 PR11  跨域联合优化（部署 × 融合联合求解，CP-SAT / 精确枚举做基准）⬜ 未开始
 ```
 

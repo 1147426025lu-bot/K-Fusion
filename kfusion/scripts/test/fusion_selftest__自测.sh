@@ -222,7 +222,10 @@ expect_grep "复检指出不确定" "$(cat "$TMP/out.txt")" "不确定：WAW 冲
 echo "=== 16. PR7：相位感知端到端（融合被相位钉住挡住时如实报大延迟）==="
 OUT="$("$PY" "$PLAN" "$FIX/loop_phasepin.dag.json" --platforms "$CAPS" --platform linux_kernel \
       --release-cost-us 21 --exec-us "$TMP/exec.json" 2>&1)"
-expect_grep "不是 1 组（环 SCC + 钉住 → 只能全拆）" "$OUT" "方案：5 组"
+# 挡住全融合的是**相位钉住**（plant 读外部输入，不能被前拉 800 µs），
+# 不是"环是 SCC 所以只能全拆"——后者是同一个假阳性造成的旧结论（见 PR10 §8.4）。
+expect_grep "相位钉住挡住全融合（plant 独立成组头）" "$OUT" "方案：2 组"
+expect_grep "挡住的原因写的是相位，不是不可分性" "$OUT" "相位：stage_plant"
 expect_grep "端到端 ≈821（不是旧模型 107 唤醒税求和）" "$OUT" "R̂ ≈ 821"
 expect_grep "显式拆出相位跨度" "$OUT" "相位跨度 800"
 
@@ -235,7 +238,10 @@ OUT="$("$PY" "$PLAN" "$FIX/loop_fb_limit.dag.json" --platforms "$CAPS" --platfor
       --release-cost-us 21 --exec-us "$TMP/exec.json" 2>&1)"
 rc=$?
 if [ "$rc" = 0 ]; then ok "给出可行方案（rc=0）"; else bad "被拒，rc=$rc"; fi
-expect_grep "反馈死区保持 200µs（未被拉到 998）" "$OUT" "间隔 200 µs → 200 µs（×1.00）"
+# 死区上限 500 µs 是**硬约束**，不是优化目标：融合把闭合边从 200 拉到 400 µs，
+# 只要不越上限就合法。旧代码因为不可分性假阳性只能给出 5 组（死区 200），
+# 现在 2 组（死区 400、唤醒税更少）同样合法且 R̂ 更小。
+expect_grep "死区被拉到 400µs，仍在 500 上限内" "$OUT" "间隔 200 µs → 400 µs（×2.00）"
 
 echo "=== 18. PR8+边界选择：非环链中间段相位钉住 → 自动选 2 组正确边界 ==="
 OUT="$("$PY" "$PLAN" "$FIX/chain_pin.dag.json" --platforms "$CAPS" --platform nuttx \
@@ -341,6 +347,62 @@ expect_rc "--period-us 与契约冲突 → rc=2" 2 \
     --source "$HERE/../../examples/ecos/chain_window__四段窗口示例.c" \
     --out-dir "$TMP/ecos_period" --target nuttx --period-us 500
 expect_grep "指认两边数值" "$(cat "$TMP/out.txt")" "500" "1000" "两套节拍"
+
+echo
+echo "=== 27. PR10-B：跨域不可融合（硬约束，不给开关）==="
+XDAG="$FIX/xdom_loop.dag.json"
+XCON="$HERE/../../contracts/examples/xdom_loop.contract.json"
+EX5='{"stage_sample":0.60,"stage_fir":0.67,"stage_pid":0.28,"stage_clamp":0.28,"stage_plant":0.50}'
+expect_rc "跨域夹具规划成功（期限放宽到 2.5 拍）" 0 \
+    "$PY" "$PLAN" "$XDAG" --platforms "$CAPS" --platform linux_kernel \
+    --release-cost-us 21 --exec-us "$EX5" --contract "$XCON" \
+    -o "$TMP/xdom.plan.json"
+# 切割点必须落在域边界上：nuttx 三段 / root 两段
+expect_grep "按域切成 2 组" "$(cat "$TMP/out.txt")" "方案：2 组"
+expect_grep "拒绝理由说的是跨域，不是别的" "$(cat "$TMP/out.txt")" \
+    "跨域：段内成员分属" "同一次释放"
+
+echo
+echo "=== 28. PR10-B：跨域代价必须按拍计（不是 µs）==="
+expect_grep "端到端额外 1 拍" "$(cat "$TMP/out.txt")" \
+    "跨域" "端到端多 1 拍" "含跨域"
+# 死区被拉长到 2 拍：1 拍来自 z⁻¹，1 拍来自跨域
+expect_grep "反馈闭合边死区 = 2 拍" "$(cat "$TMP/out.txt")" "1400"
+# 期限仍按 1 拍 → 必须判不可行（段内 821 µs 看着没问题，加一拍就超）
+expect_rc "期限只给 1 拍 → 跨域方案不可行" 3 \
+    "$PY" "$PLAN" "$XDAG" --platforms "$CAPS" --platform linux_kernel \
+    --release-cost-us 21 --exec-us "$EX5"
+expect_grep "理由点明是跨域期限，不是域能力" "$(cat "$TMP/out.txt")" \
+    "跨域期限" "整拍"
+
+echo
+echo "=== 29. PR10-B：验证器独立复核跨域（不信规划器）==="
+expect_rc "混域方案（全融合）必须被拒" 3 \
+    "$PY" "$PLAN" "$XDAG" --platforms "$CAPS" --platform linux_kernel \
+    --contract "$XCON" --verify "$FIX/xdom_mixed.plan.json"
+expect_grep "错误码是 DOMAIN_MIXED 且理由说跨域" "$(cat "$TMP/out.txt")" \
+    "DOMAIN_MIXED" "跨域融合不存在"
+expect_rc "合法方案复检通过" 0 \
+    "$PY" "$PLAN" "$XDAG" --platforms "$CAPS" --platform linux_kernel \
+    --contract "$XCON" --verify "$TMP/xdom.plan.json"
+expect_grep "复检报告列出跨域边与额外拍数" "$(cat "$TMP/out.txt")" \
+    "跨域" "至少多 1 拍"
+
+
+echo
+echo "=== 30. PR10-B：周期性环可以部分融合（同拍序保住 + 闭合边两端不同组）==="
+# 旧结论"环是 SCC 只能整体成组"来自不可分性用了全边闭包（含 z⁻¹）的假阳性。
+# 正确语义：摘掉延迟边后环是一条链，部分融合合法——只要同拍边顺序不变、
+# 且死区上限不被突破。这里同时验规划器与验证器给出同一个结论。
+for D in loop_fb_limit loop_phasepin; do
+    expect_rc "$D：规划成功（rc=0）" 0 \
+        "$PY" "$PLAN" "$FIX/$D.dag.json" --platforms "$CAPS" --platform linux_kernel \
+        --release-cost-us 21 --exec-us "$TMP/exec.json" \
+        -o "$TMP/$D.plan.json" --quiet
+    expect_rc "$D：验证器复核同一份方案也通过（两边一致）" 0 \
+        "$PY" "$PLAN" "$FIX/$D.dag.json" --platforms "$CAPS" --platform linux_kernel \
+        --verify "$TMP/$D.plan.json" --quiet
+done
 
 echo
 echo "通过 $PASS / 失败 $FAIL"
