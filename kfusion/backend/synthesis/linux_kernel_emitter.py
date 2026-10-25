@@ -67,6 +67,7 @@ _LINUX_C = """/* %(name)s —— 由 ECoS 融合方案生成的 ring-0 宿主；
 #include <linux/sched.h>
 #include <linux/sched/rt.h>
 #include <linux/string.h>
+#include <linux/smp.h>
 #include <uapi/linux/sched/types.h>	/* struct sched_attr（uapi；内部 sched/types.h 里没有） */
 %(probe_includes)s
 
@@ -84,6 +85,13 @@ MODULE_PARM_DESC(period_us, "控制周期（µs），默认取方案里的周期
 static unsigned int rt_priority = %(rtprio)d;
 module_param(rt_priority, uint, 0444);
 MODULE_PARM_DESC(rt_priority, "内核线程 SCHED_FIFO 优先级（默认 99，与用户态口径一致）");
+
+/* 绑核：-1 = 不绑（默认）。>=0 时把每组的内核线程和它的 hrtimer 都放到该核上。
+ * 为什么要绑：不绑时线程可能迁移，唤醒走跨核 IPI，抖动里混进了"跑到哪去了"
+ * 这个与融合无关的变量。用户态 BM2 基线是绑核跑的，对比必须同口径。 */
+static int cpu = -1;
+module_param(cpu, int, 0444);
+MODULE_PARM_DESC(cpu, "绑定的 CPU 编号（-1 = 不绑）");
 
 static void ecos_set_fifo(struct task_struct *t, unsigned int prio)
 {
@@ -153,9 +161,23 @@ static void ecos_run_body(int id)
 %(digest_update)s
 }
 
-static int ecos_runner(void *data)
+struct ecos_start_arg {
+	int idx;
+	ktime_t at;
+};
+
+/* 在目标核上启动定时器：HRTIMER_MODE_ABS_PINNED 钉的是**调用它的那个 CPU**，
+ * 所以必须让这段代码真正跑在该核上。hrtimer_start 在 IPI（中断）上下文里
+ * 是安全的，不需要睡眠。 */
+static void ecos_start_on_cpu(void *info)
 {
-	struct ecos_group *g = data;
+	struct ecos_start_arg *a = info;
+
+	hrtimer_start(&ecos_groups[a->idx].timer, a->at, HRTIMER_MODE_ABS_PINNED);
+}
+
+static int ecos_runner(void *data)
+{	struct ecos_group *g = data;
 
 	while (!kthread_should_stop()) {
 		wait_event_interruptible(g->wait, g->pending || kthread_should_stop());
@@ -176,6 +198,11 @@ static int __init ecos_init(void)
 {
 	int i;
 	s64 t0;
+
+	if (cpu >= 0 && !cpu_online(cpu)) {
+		pr_err("ecos: cpu %%d 不在线（看 /sys/devices/system/cpu/online）\\n", cpu);
+		return -EINVAL;
+	}
 
 	/* 第一遍：建线程。**不在这里定相位**——kthread_create/设优先级每次要花
 	 * 几十~几百 µs；若每组各取一次 ktime_get() 当锚点，相位就被逐组污染。
@@ -201,17 +228,31 @@ static int __init ecos_init(void)
 		 * 与用户态 BM2 的 FIFO 99 对齐），失败再退回 sched_set_fifo。
 		 */
 		ecos_set_fifo(g->task, rt_priority);
+		if (cpu >= 0)
+			kthread_bind(g->task, cpu);
 		wake_up_process(g->task);
 	}
 
-	/* 第二遍：所有组共用一个锚点，组间相位差才等于方案里的相位差 */
+	/* 第二遍：所有组共用一个锚点，组间相位差才等于方案里的相位差。
+	 * 绑核时把每个定时器都在目标核上启动，否则 ABS_PINNED 会钉在 insmod
+	 * 所在的那个核上，线程与定时器分居两核，唤醒要走跨核 IPI。 */
 	t0 = ktime_get();
-	for (i = 0; i < ECOS_GROUPS; i++)
-		hrtimer_start(&ecos_groups[i].timer, t0 + ecos_phase_ns[i],
-			      HRTIMER_MODE_ABS_PINNED);
+	for (i = 0; i < ECOS_GROUPS; i++) {
+		if (cpu >= 0) {
+			struct ecos_start_arg a;
 
-	pr_info("ecos: %%d 组已启动，周期 %%u µs，FIFO 优先级 %%u（证据级别 %(evidence)s）\\n",
-		ECOS_GROUPS, period_us, rt_priority);
+			a.idx = i;
+			a.at = t0 + ecos_phase_ns[i];
+			smp_call_function_single(cpu, ecos_start_on_cpu, &a, 1);
+		} else {
+			hrtimer_start(&ecos_groups[i].timer,
+				      t0 + ecos_phase_ns[i],
+				      HRTIMER_MODE_ABS_PINNED);
+		}
+	}
+
+	pr_info("ecos: %%d 组已启动，周期 %%u µs，FIFO 优先级 %%u，cpu %%d（证据级别 %(evidence)s）\\n",
+		ECOS_GROUPS, period_us, rt_priority, cpu);
 	return 0;
 }
 
@@ -360,9 +401,57 @@ MODULE_PARM_DESC(dz_avg_ns, "闭合边间隔均值（ns）");
 module_param(dz_max_ns, long, 0444);
 MODULE_PARM_DESC(dz_max_ns, "闭合边间隔最大值（ns）");
 module_param(dz_count, ulong, 0444);
-MODULE_PARM_DESC(dz_count, "已采样拍数");"""
+MODULE_PARM_DESC(dz_count, "已采样拍数");
+
+/* 直方图：1 µs 桶 × 16384（覆盖 16.384 ms）。读的时候现算分位数，
+ * 只读不改统计，所以可以反复读。 */
+#define ECOS_DZ_BUCKETS 16384
+static unsigned int dz_hist[ECOS_DZ_BUCKETS];
+
+static int ecos_dz_hist_show(char *buf, const struct kernel_param *kp)
+{
+	/* 目标分位（千分比）：50%, 99%, 99.9% */
+	static const unsigned int pct[3] = { 500, 990, 999 };
+	unsigned long cum = 0;
+	long found[3] = { -1, -1, -1 };
+	int n = 0, i, k;
+
+	if (!dz_count)
+		return scnprintf(buf, PAGE_SIZE,
+				 "count=0（还没有样本，等几拍再读）\\n");
+
+	for (i = 0; i < ECOS_DZ_BUCKETS; i++) {
+		cum += dz_hist[i];
+		for (k = 0; k < 3; k++)
+			if (found[k] < 0 &&
+			    cum * 1000ULL >= (unsigned long long)dz_count * pct[k])
+				found[k] = i;
+	}
+
+	n += scnprintf(buf + n, PAGE_SIZE - n,
+		       "count=%lu bucket=1000ns min=%ldus p50=%ldus p99=%ldus "
+		       "p99.9=%ldus avg=%ldus max=%ldus lag_avg=%ldus\\n",
+		       dz_count, dz_min_ns / 1000, found[0], found[1], found[2],
+		       dz_avg_ns / 1000, dz_max_ns / 1000, dz_lag_avg_ns / 1000);
+
+	n += scnprintf(buf + n, PAGE_SIZE - n, "hist:");
+	for (i = 0; i < ECOS_DZ_BUCKETS && n < (int)PAGE_SIZE - 40; i++)
+		if (dz_hist[i])
+			n += scnprintf(buf + n, PAGE_SIZE - n, " %d:%u",
+				       i, dz_hist[i]);
+	n += scnprintf(buf + n, PAGE_SIZE - n, "\\n");
+	return n;
+}
+
+static const struct kernel_param_ops ecos_dz_hist_ops = {
+	.get = ecos_dz_hist_show,
+};
+
+module_param_cb(dz_hist, &ecos_dz_hist_ops, NULL, 0444);
+MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
         probe_before = """		if (g->id == ECOS_FIRST_GROUP) {
 			s64 t_now = ktime_get();
+			unsigned int b;
 
 			dz_t_first = t_now;
 			if (dz_have) {
@@ -376,6 +465,9 @@ MODULE_PARM_DESC(dz_count, "已采样拍数");"""
 						dz_min_ns = d;
 					if (d > dz_max_ns)
 						dz_max_ns = d;
+					b = (unsigned int)div_s64(d, 1000);
+					if (b < ECOS_DZ_BUCKETS)
+						dz_hist[b]++;
 				}
 			}
 		}"""

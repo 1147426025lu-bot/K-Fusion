@@ -161,7 +161,7 @@ expect_grep "Kbuild 挂上 compat 头搜索路径" "$TMP/linux/Kbuild" "-I\$(src
 # 观察点：没有它就证明不了"算得对"
 "$PY" "$SYNTH" --plan "$TMP/plan.json" --dag "$FIX/chain_window.dag.json" \
     --source "$SRC" --out-dir "$TMP/linux_obs" --target linux-kernel \
-    --contract "$CONTRACT" --digest-var cw_out >/dev/null 2>&1
+    --contract "$CONTRACT" --digest-var cw_out --probe >/dev/null 2>&1
 expect_grep "观察变量发布为只读 sysfs 参数" "$TMP/linux_obs/ecos_fused_linux.c" \
     "module_param_named(cw_out" "ecos_obs_0 = cw_out" "module_param(periods"
 
@@ -179,6 +179,12 @@ expect_grep "相位共用一个锚点" "$TMP/linux_obs/ecos_fused_linux.c" \
     "t0 = ktime_get()" "t0 + ecos_phase_ns[i]"
 expect_absent "不再逐组各取锚点" "$TMP/linux_obs/ecos_fused_linux.c" \
     "ktime_get() + ecos_phase_ns[i]"
+# 绑核 + 分位数：不绑核时跨核唤醒会污染尾部；分位数比均值更能说明问题
+expect_grep "支持绑核（线程 bind + 定时器在目标核启动）" \
+    "$TMP/linux_obs/ecos_fused_linux.c" \
+    "module_param(cpu" "kthread_bind(g->task, cpu)" "smp_call_function_single"
+expect_grep "死区直方图与分位数" "$TMP/linux_obs/ecos_fused_linux.c" \
+    "dz_hist" "p99.9" "ecos_dz_hist_ops"
 
 echo
 echo "通过 $PASS / 失败 $FAIL"
