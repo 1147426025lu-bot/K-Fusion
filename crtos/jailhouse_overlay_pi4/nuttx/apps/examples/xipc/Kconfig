@@ -1,0 +1,14 @@
+config EXAMPLES_XIPC
+	bool "xipc: ECoS cross-domain IPC ring (Jailhouse IVSHMEM)"
+	default n
+	---help---
+		Minimal cross-domain publish/subscribe runtime between the root cell
+		Linux and a NuttX inmate, carried over the Jailhouse IVSHMEM
+		rw_section.
+
+		Layout and ring operations live in ecos_xipc.h, shared byte-for-byte
+		with the root side (kfusion/runtime/xshm/ecos_xipc.h). The deploy
+		script copies it here; do not edit the copy.
+
+		Requires the cell config to map the IVSHMEM rw_section
+		(see crtos/jailhouse_overlay_pi4/configs/arm64/rpi4-nuttx.c).

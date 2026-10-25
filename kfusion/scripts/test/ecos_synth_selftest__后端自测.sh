@@ -197,6 +197,47 @@ expect_grep "支持绑核（线程 bind + 定时器在目标核启动）" \
 expect_grep "死区直方图与分位数" "$TMP/linux_obs/ecos_fused_linux.c" \
     "dz_hist" "p99.9" "ecos_dz_hist_ops"
 
+# ---------------------------------------------------------------------------
+echo
+echo "=== 10. 跨域 IPC 共享布局（PR10）==="
+# 两端的字段偏移必须逐字节一致。C 侧的 XIPC_ASSERT_EQ 只在有编译器时生效，
+# 本机没有，所以自测里用纯 Python 算术再独立校一遍（前置闸门）。
+LAYOUT="$HERE/../ecos/xipc_layout_check.py"
+XHDR="$HERE/../../runtime/xshm/ecos_xipc.h"
+
+expect_rc "布局校验通过（head=0x40 tail=0x80 slot=0x100）" 0 \
+    "$PY" "$LAYOUT"
+
+# 负向：把 tail 前面的填充少写一个字，tail 就会挪到 0x7C，两端立刻错位
+BADHDR="$TMP/ecos_xipc_broken.h"
+sed 's/volatile uint32_t pad1\[15\]/volatile uint32_t pad1[14]/' "$XHDR" > "$BADHDR"
+expect_rc "布局漂移必须被拒（负向）" 1 \
+    "$PY" "$LAYOUT" --header "$BADHDR"
+
+# 静态断言存在（有编译器的那一侧会真正编译它）
+expect_grep "头文件带编译期布局断言" "$XHDR" \
+    "__builtin_offsetof(struct xipc_ring, head)" "sizeof(struct xipc_ring) <= 4096"
+
+# session：IVSHMEM 内存不随 cell 重建清零，没有它后启动的一侧会拿旧 magic 当就绪
+expect_grep "环带 session（防残留 magic 误判）" "$XHDR" \
+    "volatile uint32_t session;" "xipc_wait_session" "r->session = 0;"
+
+# 跨域计数器只能传低 32 位，两端必须用回绕差
+expect_grep "32 位回绕差（不是直接截断比较）" \
+    "$HERE/../../runtime/xshm/root_side.c" "s.b - sent_lo"
+expect_grep "inmate 侧也用回绕差" \
+    "$HERE/../../../crtos/jailhouse_overlay_pi4/nuttx/apps/examples/xipc/xipc_main.c" \
+    "XIPC_KIND_MODE" "XIPC_KIND_STOP"
+
+# 串口只有单向时，开机入口必须让 xipc 自启动；否则实验无法由 root 侧驱动
+XBUILD="$HERE/../ecos/xipc_build__构建跨域IPC两端.sh"
+expect_grep "构建脚本会把开机入口换成 xipc" "$XBUILD" \
+    "CONFIG_INIT_ENTRYPOINT" "xipc_main"
+expect_grep "构建脚本强制刷 mtime（cp -a 保留旧时间戳会导致不重编）" "$XBUILD" \
+    "-name '*.o' -delete" "touch \"\$B/apps/examples/xipc\""
+expect_grep "镜像校验用本版专有标记，不用第一版就有的串" "$XBUILD" \
+    "xipc: session 0x"
+
 echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" = 0 ] || exit 1

@@ -1,0 +1,3 @@
+ifneq ($(CONFIG_EXAMPLES_XIPC),)
+CONFIGURED_APPS += $(APPDIR)/examples/xipc
+endif
