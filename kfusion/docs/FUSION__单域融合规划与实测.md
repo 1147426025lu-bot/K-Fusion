@@ -977,6 +977,67 @@ lag = t(末组结束) − t(本拍首组开始)          ← 诊断：末组是�
 
 ---
 
+## 5.18 跨宿主对读：NuttX inmate 侧同样的 A/B（2026-10-25 下午）
+
+§5.17 的 800 µs 是在 **root cell 的 Linux 内核模块**上量到的。如果它只是宿主特性，
+结论就不能写进论文。这一节在 **NuttX inmate** 里跑同一份方案、同一套探针定义。
+
+### 怎么做（复用已有链路，不另起一套）
+
+板上已有 NuttX 构建树与 cell 部署脚本（`build_nuttx_inmate.sh` / `deploy_nuttx_cell.sh`），
+app 由 `CONFIG_INIT_ENTRYPOINT="fiveloop_main"` 直接拉起。所以只需：
+
+1. `emit --target nuttx --probe --nuttx-main fiveloop_main` 生成宿主 + 周期体；
+2. 用它替换 `apps/benchmarks/fiveloop` 的源码（`CSRCS = ecos_nuttx_main.c ecos_fused_body.c stage_impl.c`）；
+3. `make -C nuttx -j3` → `deploy_nuttx_cell.sh`（destroy/create/load/start）；
+4. **串口抓输出**：inmate 的 printf 只走物理 mini-UART（GPIO14/15 → COM11，115200 8N1），
+   `jailhouse console` 看不到。用 `System.IO.Ports.SerialPort` 读 25–30 s 即可。
+
+探针在 NuttX 侧**刻意用与 Linux 完全相同的定义**（`dz = 本拍首组开始 − 上拍末组结束`），
+输出 `# dz: n= min= p50= p99= p99.9= max= avg= lag_avg=`（1 µs 桶直方图，打印时现算分位数）。
+
+### 四个宿主 × 部署的组合（单位 µs）
+
+| 部署 | 宿主 | p50 | p99 | p99.9 | max | `lag_avg` | 样本 |
+|---|---|---|---|---|---|---|---|
+| **A 全融合**（1 组） | Linux root cell（hrtimer） | 999 | 1002 | 1010 | 1013 | 0 | 3005 |
+| **A 全融合**（1 组） | NuttX inmate（绝对时刻睡眠） | **999** | 999 | 999 | 1070 | ~1 | 17999 |
+| **B 不融合**（5 组） | Linux root cell | 199 | 200 | 203 | 214 | 800 | 3005 |
+| **B 不融合**（5 组） | NuttX inmate | **200** | 200 | 200 | 301 | 800 | 15999 |
+
+### 结论
+
+1. **A−B 在两种宿主上都是 ≈800 µs**：Linux 999−199 = 800；NuttX 999−200 = **799**。
+   这说明死区增量**既不是宿主特性、也不来自释放代价 c**（root cell c≈21 µs，NuttX c≈6 µs），
+   它只等于被前拉那一段的相位（plant 的 800 µs）。§5.17 的读法在第二个宿主上复现了。
+2. **A 在两边的 p50 都是 999**——融合后的闭合边几乎就是一个整周期，宿主差异只落在尾部
+   （NuttX max 1070 vs Linux 1013）。
+3. B 在 NuttX 侧的 `lag_avg=800` 与 Linux 绑核后一致，说明"末组是否在名义相位"这件事
+   在两个宿主上都对，不是 Linux 特有的初始化偶然。
+
+### 过程中踩到的构建环境坑（写下来免得再踩）
+
+| 坑 | 现象 | 处理 |
+|---|---|---|
+| `libapps.a` 会保留**历史成员** | 换了 app 源码重建后，镜像里仍是旧 `fiveloop_main`（`strings` 还能搜到旧文案），链接不报错 | `ar d` 删残留成员，或 `make -C apps clean` 全量重建 |
+| 删掉 `libapps.a` 会连带丢 `builtin_list.c` | 链接报 `undefined reference to g_builtins` | 必须 `make -C apps TOPDIR=<nuttx> clean && make` 全量重建（会重新生成 registry） |
+| 直接 `make -C apps` 会走空壳 `import/` | `apps/import/scripts/Make.defs: No such file` | `apps/Make.defs` 里是 `TOPDIR ?= $(APPDIR)/import`，必须显式传 `TOPDIR` |
+| 构建根是软链接时 APPDIR/TOPDIR 比较失配 | 明明 in-tree 却被当成 external app | 用**真实路径**（`/root/kfusion-pi4/build/...`）调用 make |
+| 工具链不在 PATH | `aarch64-none-elf-gcc: command not found` | `export PATH=/opt/arm/.../bin:...`（本条在远端执行，避免本地 `$PATH` 被展开） |
+
+实验完成后已把 `apps/benchmarks/fiveloop` 恢复成原始源码、清掉残留库成员并重新部署，
+**板子的 NuttX cell 回到实验前的状态**，没有把实验代码留在环境里。
+
+### 边界
+
+- 每个配置**只跑了一次**；NuttX 侧样本更多（16000–18000 拍），但没有做重复运行的方差分析。
+- NuttX 侧未绑核，但 cell 独占 CPU1，等价于"绑定单核"；Linux 侧是显式绑 CPU3。
+- 只做了 1 kHz；`dz` 含两次取时间的开销（NuttX 侧是 `clock_gettime`，比 `ktime_get` 贵），
+  所以两侧的 max 不可直接比，p50 可比。
+- NuttX 侧的对比只覆盖闭合边，没有做组内阶段级打点。
+
+---
+
 ## 9. 下一步
 
 - ~~**跨周期依赖**~~：**已做并已实测**（§5.6）：闭环省 82.42 µs/周期、摘要逐位相同。

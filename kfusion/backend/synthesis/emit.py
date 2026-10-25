@@ -62,7 +62,10 @@ def main():
                          "没有观察点就只能证明『能加载』，证明不了『算得对』")
     ap.add_argument("--probe", action="store_true",
                     help="加死区探针：量环闭合边（上拍末组结束 → 本拍首组开始），"
-                         "输出 dz_min/avg/max_ns 与采样数")
+                         "输出 dz_min/avg/max_ns 与采样数（Linux）/ # dz 行（NuttX）")
+    ap.add_argument("--nuttx-main", default="main",
+                    help="NuttX 后端的入口函数名（默认 main；接进既有 app 骨架时用 "
+                         "fiveloop_main 之类）")
     ap.add_argument("--allow-unverified", action="store_true",
                     help="允许用未验证方案生成（产物标记为对照用，不得进论文）")
     a = ap.parse_args()
@@ -151,7 +154,9 @@ def main():
     if a.target in ("nuttx", "both"):
         d = a.out_dir if a.target == "nuttx" else os.path.join(a.out_dir, "nuttx")
         os.makedirs(d, exist_ok=True)
-        for fn, text in nuttx_em.emit(ir, name).items():
+        for fn, text in nuttx_em.emit(ir, name,
+                                      main_name=a.nuttx_main,
+                                      probe=getattr(ir, "probe", False)).items():
             written.append(_write(d, fn, text))
 
     print("=== ECoS 合成：%s（target=%s）===" % (name, a.target))

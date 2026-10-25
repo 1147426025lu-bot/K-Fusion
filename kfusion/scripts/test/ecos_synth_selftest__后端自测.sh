@@ -120,6 +120,17 @@ expect_grep "按组相位释放（2 组）" "$TMP/nuttx/ecos_nuttx_main.c" \
     "ecos_phase_us" "ecos_run_body(i)"
 expect_grep "NuttX 构建骨架" "$TMP/nuttx/Makefile" "PROGNAME" "MAINSRC"
 
+echo "=== 6b. NuttX 探针与入口名（A/B 上板用）==="
+"$PY" "$SYNTH" --plan "$TMP/plan.json" --dag "$FIX/chain_window.dag.json" \
+    --source "$SRC" --out-dir "$TMP/nuttx_probe" --target nuttx \
+    --contract "$CONTRACT" --probe --nuttx-main fiveloop_main >/dev/null 2>&1
+expect_grep "入口名可替换（接进既有 app 骨架）" "$TMP/nuttx_probe/ecos_nuttx_main.c" \
+    "int fiveloop_main("
+expect_grep "NuttX 侧也有 dz 探针（同一量法）" "$TMP/nuttx_probe/ecos_nuttx_main.c" \
+    "ecos_dz_report" "# dz:" "dz_lag_sum_us"
+expect_grep "NuttX 仍用绝对时刻睡眠" "$TMP/nuttx_probe/ecos_nuttx_main.c" \
+    "clock_nanosleep" "TIMER_ABSTIME"
+
 echo "=== 7. 含 sleep 的阶段：linux 拒、nuttx 放行 ==="
 expect_rc "linux-kernel 拒绝 io_read（rc=3）" 3 \
     bash "$ECOS" --dag "$FIX/synth_sleep.dag.json" --contract "$SLEEP_CONTRACT" \
