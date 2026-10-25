@@ -52,6 +52,7 @@ insmod "$KO" "period_us=$PERIOD" || die "加载失败（Unknown symbol 多半是
 SYS="/sys/module/$MOD/parameters"
 log "③ 观察点"
 if [ -d "$SYS" ]; then
+    # 速率：先不冻结，隔 2 s 看 periods 的增量
     A="$(cat "$SYS/periods" 2>/dev/null || echo '?')"
     sleep 2
     B="$(cat "$SYS/periods" 2>/dev/null || echo '?')"
@@ -60,11 +61,27 @@ if [ -d "$SYS" ]; then
     else
         log "   ⚠ 没有 periods 参数（生成时可能没带观察点）"
     fi
-    for p in "$SYS"/*; do
-        n="$(basename "$p")"
-        [ "$n" = "periods" ] && continue
-        log "   $n = $(cat "$p" 2>/dev/null)"
-    done
+
+    # 快照：sysfs 分几次 cat 之间会跨周期，先冻结再读，保证同一拍
+    if [ -w "$SYS/frozen" ]; then
+        echo 1 >"$SYS/frozen"
+        sleep 0.1
+        SNAP="$(cat "$SYS/periods")"
+        log "   冻结快照 @ periods=$SNAP（同拍）"
+        for p in "$SYS"/*; do
+            n="$(basename "$p")"
+            case "$n" in periods|frozen|period_us|rt_priority) continue ;; esac
+            log "     $n = $(cat "$p" 2>/dev/null)"
+        done
+        echo 0 >"$SYS/frozen"
+    else
+        log "   ⚠ 没有 frozen 参数（老产物）：下面各值是分次读的，可能不同拍"
+        for p in "$SYS"/*; do
+            n="$(basename "$p")"
+            case "$n" in periods|period_us|rt_priority) continue ;; esac
+            log "     $n = $(cat "$p" 2>/dev/null)"
+        done
+    fi
 else
     log "   ⚠ 没有 sysfs 参数目录：模块可能没带观察点，只能证明能加载"
 fi

@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "task": {
+    "name": "five_stage_loop",
+    "period_us": 1000,
+    "deadline_us": 1000
+  },
+  "timing_constraints": {
+    "feedback_delay_max_us": 1000
+  },
+  "evidence": {
+    "exec": "empirical"
+  },
+  "note": "闭环五阶段：feedback_delay_max_us = 1000 = period，即『死区不得超过一整拍』。全融合后闭合边间隔 ≈ 998 µs ≤ 1000，允许全融合（1 组）——这正是 §5.6 上板测过的那套口径。若要强制跨组，把上限设到 < period（见 loop_fb_limit 夹具）。"
+}

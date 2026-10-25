@@ -788,6 +788,83 @@ bash kfusion/scripts/ecos/deploy_and_load.sh <模块目录> /root/linux-5.15.86 
 
 ---
 
+## 5.15 闭环五阶段（z⁻¹）上板：功能逐位一致（2026-10-25）
+
+§5.14 只证明了"能加载、能算对一个无环链"。这一节把环闭上，证明**跨周期反馈**的融合体
+在真核上算出来的东西与参考模型**逐位相同**。
+
+### 口径
+
+| 项 | 值 |
+|---|---|
+| 方案 | `five_stage_loop.dag.json` + `five_stage_loop.contract.json`（`feedback_delay_max_us=1000=period`，允许全融合） |
+| 结果 | **1 组 / 5 阶段**（`stage_sample+fir+pid+clamp+plant` 同一周期体）—— 与 §5.6 同一口径 |
+| 阶段带参 | `stage_pid(int32_t)` → 生成时给 `--call stage_pid=stage_pid(1000)` |
+| 观察点 | `--digest-var g_out --digest-var g_plant` |
+| 内核线程 | SCHED_FIFO **99**（`sched_setattr_nocheck`；见下） |
+
+### 一个必须先解决的方法论问题：快照不同拍
+
+`periods` 与 `g_out`/`g_plant` 是三个 sysfs 文件，分三次 `cat` 之间在 10 ms 周期下**必然**
+跨周期。实测就撞到了：`periods=151` 却读到 `152` 拍的值（1356/1450）。
+
+解法不是"多读几次挑一个像的"（那是拿期望值凑样本），而是给宿主加**冻结开关**：
+
+```
+echo 1 > /sys/module/five_stage_loop/parameters/frozen   # 暂停：不执行、不计数
+cat periods; cat g_out; cat g_plant                       # 现在这组值严格同拍
+echo 0 > .../frozen                                       # 恢复
+```
+
+冻结期间 `periods` 完全不动（实测 0.2 s 内不变），解冻后继续累加。
+
+### 实测（两次独立快照，各自唯一匹配）
+
+| 快照 | `periods` | `g_out` | `g_plant` | 参考模型 `sim(n)` |
+|---|---|---|---|---|
+| 第一次 | 1007 | 630 | 717 | 630 / 717 ✓（且 n∈[1000,1014] 中**唯一**匹配） |
+| 第二次 | 2020 | 1033 | 1111 | 1033 / 1111 ✓ |
+
+参考模型是 `kfusion/scripts/ecos/ref_model_five_stage.py`——用与 C **同一套整数语义**
+（int32 回绕、`>>` 算术移位、seed 线性同余、PI 限幅、一阶对象）逐拍复算：
+
+```bash
+python3 kfusion/scripts/ecos/ref_model_five_stage.py --compare 2020 1033 1111
+# n=2020 参考 g_out=1033 g_plant=1111 ｜ 板上 1033/1111 → 一致 ✓
+```
+
+两次快照在不同拍数上各自精确命中，且邻域内唯一——不是"落在合理范围"，是**逐位相等**。
+
+### 顺带补的一条：FIFO 99
+
+§5.14 里为了能加载，退回 `sched_set_fifo()`（优先级 `MAX_RT_PRIO/2`=50）。这轮改用同样导出
+（`EXPORT_SYMBOL_GPL`）的 `sched_setattr_nocheck()` + `struct sched_attr`，把内核线程优先级
+设成模块参数 `rt_priority`（默认 **99**），与用户态 BM2 的 FIFO 99 对齐：
+
+```
+dmesg: ecos: 1 组已启动，周期 1000 µs，FIFO 优先级 99（证据级别 empirical）
+```
+
+若 `sched_setattr_nocheck` 失败会自动退回 `sched_set_fifo()`，不会静默不设优先级。
+（`struct sched_attr` 同样在 `uapi/linux/sched/types.h`。）
+
+### 周期速率（仅作健康检查，不是精度结论）
+
+1 kHz 名义下 2 s 内 `periods` +2010（**+0.5%**）。与 §5.14 的 +0.55% 同量级，
+**仍未归因**；精确周期误差必须用 BM2 探针测。
+
+### 这一节证明了什么、没证明什么
+
+**证明了**：同一份方案生成的 1 组 5 阶段周期体，在 Pi4 上连续跑 2000+ 拍，`g_out`/`g_plant`
+与参考模型逐位相同——即**融合没有改变采样序列与数据流**，与 §5.6 用 FNV 摘要得到的结论一致，
+但这次是端到端在板上跑出来的。
+
+**没证明**：融合把 `plant` 从 800 µs 前拉到 ~0 µs 后，**环闭合边死区从 200 µs 变成约一拍**
+这件事的时序证据。功能等价的夹具给不出死区数字——那需要 BM2 探针在板上量快照间隔。
+所以不能说"已经验证了死区变化"，只能说"功能没变，死区的量化在下一步"。
+
+---
+
 ## 9. 下一步
 
 - ~~**跨周期依赖**~~：**已做并已实测**（§5.6）：闭环省 82.42 µs/周期、摘要逐位相同。

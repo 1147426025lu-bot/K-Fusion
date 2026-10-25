@@ -66,6 +66,8 @@ _LINUX_C = """/* %(name)s —— 由 ECoS 融合方案生成的 ring-0 宿主；
 #include <linux/ktime.h>
 #include <linux/sched.h>
 #include <linux/sched/rt.h>
+#include <linux/string.h>
+#include <uapi/linux/sched/types.h>	/* struct sched_attr（uapi；内部 sched/types.h 里没有） */
 
 #include "ecos_fused_body.h"
 
@@ -74,6 +76,25 @@ _LINUX_C = """/* %(name)s —— 由 ECoS 融合方案生成的 ring-0 宿主；
 static unsigned int period_us = %(period)d;
 module_param(period_us, uint, 0444);
 MODULE_PARM_DESC(period_us, "控制周期（µs），默认取方案里的周期");
+
+/* 实时优先级：默认 99，与用户态 BM2 实验的 FIFO 99 对齐。
+ * 注意 5.15 只导出 sched_setattr_nocheck / sched_set_fifo；
+ * sched_setscheduler_nocheck 在 kallsyms 里有符号但**没有 EXPORT**，链接/加载会失败。 */
+static unsigned int rt_priority = %(rtprio)d;
+module_param(rt_priority, uint, 0444);
+MODULE_PARM_DESC(rt_priority, "内核线程 SCHED_FIFO 优先级（默认 99，与用户态口径一致）");
+
+static void ecos_set_fifo(struct task_struct *t, unsigned int prio)
+{
+	struct sched_attr attr;
+
+	memset(&attr, 0, sizeof(attr));
+	attr.size = sizeof(attr);
+	attr.sched_policy = SCHED_FIFO;
+	attr.sched_priority = prio;
+	if (sched_setattr_nocheck(t, &attr))
+		sched_set_fifo(t);	/* 退回导出接口（优先级 MAX_RT_PRIO/2） */
+}
 
 /* 1 组 1 个定时器 + 1 个线程 + 1 个唤醒点 */
 struct ecos_group {
@@ -100,6 +121,13 @@ static const s64 ecos_phase_ns[ECOS_GROUPS] = {
 static unsigned long periods;      /* 已完成周期数（由组 0 计数） */
 module_param(periods, ulong, 0444);
 MODULE_PARM_DESC(periods, "已完成周期数");
+
+/* 冻结开关：sysfs 上分几次 cat 参数之间会跨周期（10 ms 周期下必然发生），
+ * 读出来的 periods / 观察变量就不属于同一拍。写 1 暂停周期体，取完快照再写 0。
+ * 冻结期间不执行、也不计数——所以快照里的 periods 与各变量严格同拍。 */
+static bool frozen;
+module_param(frozen, bool, 0644);
+MODULE_PARM_DESC(frozen, "写 1 暂停周期体（取一致快照），写 0 恢复");
 
 static enum hrtimer_restart ecos_tick(struct hrtimer *t)
 {
@@ -131,6 +159,9 @@ static int ecos_runner(void *data)
 		if (kthread_should_stop())
 			break;
 		g->pending = false;
+		/* 冻结：不执行、不计数 —— 保证 sysfs 快照同拍 */
+		if (unlikely(frozen))
+			continue;
 		ecos_run_body(g->id);
 	}
 	return 0;
@@ -157,9 +188,10 @@ static int __init ecos_init(void)
 		}
 		/* 注意：sched_setscheduler_nocheck 在 5.15 **没有导出**（insmod 会报
 		 * Unknown symbol），只有 sched_set_fifo / sched_setattr_nocheck 导出。
-		 * 这里用 sched_set_fifo：SCHED_FIFO + 优先级 MAX_RT_PRIO/2。
+		 * 这里优先用 sched_setattr_nocheck 把优先级设成 rt_priority（默认 99，
+		 * 与用户态 BM2 的 FIFO 99 对齐），失败再退回 sched_set_fifo。
 		 */
-		sched_set_fifo(g->task);
+		ecos_set_fifo(g->task, rt_priority);
 		wake_up_process(g->task);
 
 		/* 首次到期 = 当前时刻 + 组相位（相位是周期内的绝对偏移） */
@@ -167,8 +199,8 @@ static int __init ecos_init(void)
 		hrtimer_start(&g->timer, start, HRTIMER_MODE_ABS_PINNED);
 	}
 
-	pr_info("ecos: %%d 组已启动，周期 %%u µs（证据级别 %(evidence)s）\\n",
-		ECOS_GROUPS, period_us);
+	pr_info("ecos: %%d 组已启动，周期 %%u µs，FIFO 优先级 %%u（证据级别 %(evidence)s）\\n",
+		ECOS_GROUPS, period_us, rt_priority);
 	return 0;
 }
 
@@ -215,7 +247,10 @@ _README = """%(name)s —— 构建说明（必须在内核侧构建）
    sudo insmod %(mod)s.ko period_us=%(period)d
    dmesg | tail
    cat /sys/module/%(mod)s/parameters/periods
+   # 取“同拍”快照：先冻结，再读，读完解冻（sysfs 分开读会跨周期）
+   echo 1 | sudo tee /sys/module/%(mod)s/parameters/frozen >/dev/null
 %(digest_hint)s
+   echo 0 | sudo tee /sys/module/%(mod)s/parameters/frozen >/dev/null
    sudo rmmod %(mod)s
 
 注意：
@@ -277,7 +312,7 @@ def emit(ir, module_name, phases_known=True):
 
     host = _LINUX_C % {
         "name": HOST_C, "ngroups": ngroups, "nstages": len(ir.order),
-        "period": int(ir.period_us or 0), "evidence": ir.evidence,
+        "period": int(ir.period_us or 0), "rtprio": 99, "evidence": ir.evidence,
         "layout": layout, "group_init": group_init,
         "phase_ns": phase_ns, "body_cases": body_cases,
         "digest_decls": "\n".join(decls),

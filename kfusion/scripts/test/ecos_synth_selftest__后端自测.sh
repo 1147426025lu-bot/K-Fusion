@@ -165,6 +165,15 @@ expect_grep "Kbuild 挂上 compat 头搜索路径" "$TMP/linux/Kbuild" "-I\$(src
 expect_grep "观察变量发布为只读 sysfs 参数" "$TMP/linux_obs/ecos_fused_linux.c" \
     "module_param_named(cw_out" "ecos_obs_0 = cw_out" "module_param(periods"
 
+# 同拍快照与优先级：sysfs 分次读会跨周期；FIFO 99 要与用户态口径对齐
+expect_grep "支持冻结取同拍快照" "$TMP/linux_obs/ecos_fused_linux.c" \
+    "module_param(frozen" "if (unlikely(frozen))"
+expect_grep "优先级可配且默认 99（sched_setattr_nocheck）" \
+    "$TMP/linux_obs/ecos_fused_linux.c" "rt_priority" "sched_setattr_nocheck"
+# 周期体会用到 int32_t（阶段原型），必须自带 <stdint.h>（内核侧由 compat 顶上）
+expect_grep "周期体头文件引入 stdint" "$TMP/linux/ecos_fused_body.h" \
+    "#include <stdint.h>"
+
 echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" = 0 ] || exit 1
