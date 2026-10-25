@@ -173,6 +173,12 @@ expect_grep "优先级可配且默认 99（sched_setattr_nocheck）" \
 # 周期体会用到 int32_t（阶段原型），必须自带 <stdint.h>（内核侧由 compat 顶上）
 expect_grep "周期体头文件引入 stdint" "$TMP/linux/ecos_fused_body.h" \
     "#include <stdint.h>"
+# 相位锚点必须只取一次：逐组建线程各取一次 ktime_get() 会把相位污染
+# （实测 5 组时 plant 的 800µs 变成 ≈1370µs，死区从 200 量成 626）
+expect_grep "相位共用一个锚点" "$TMP/linux_obs/ecos_fused_linux.c" \
+    "t0 = ktime_get()" "t0 + ecos_phase_ns[i]"
+expect_absent "不再逐组各取锚点" "$TMP/linux_obs/ecos_fused_linux.c" \
+    "ktime_get() + ecos_phase_ns[i]"
 
 echo
 echo "通过 $PASS / 失败 $FAIL"

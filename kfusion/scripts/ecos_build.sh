@@ -41,7 +41,7 @@ CONTRACT_PY="$HERE/ecos/contract_validate.py"
 
 DAG=""; CONTRACT=""; PLATFORMS=""; PLATFORM=""; SOURCE=""; OUT_DIR=""
 EXEC_US=""; C=""; TARGET="userspace-driver"; STEP_US=""; STEP_US_OVERRIDE=""; PERIOD_US=""
-KDIR=""; CALLS=(); DIGEST_VARS=()
+KDIR=""; CALLS=(); DIGEST_VARS=(); PROBE=0
 
 log()  { printf '[ecos] %s\n' "$*"; }
 die()  { printf '[ecos] ❌ %s\n' "$1" >&2; exit "${2:-3}"; }
@@ -64,6 +64,7 @@ while [ $# -gt 0 ]; do
         --kdir)             KDIR="${2:-}"; shift 2 ;;
         --call)             CALLS+=("${2:-}"); shift 2 ;;
         --digest-var)       DIGEST_VARS+=("${2:-}"); shift 2 ;;
+        --probe)            PROBE=1; shift ;;
         --strict)           shift ;;   # 本入口恒为严格，保留以兼容审查给的命令行
         -h|--help)          sed -n '2,30p' "${BASH_SOURCE[0]}"; exit 0 ;;
         *)                  die "未知参数 $1" 2 ;;
@@ -162,6 +163,7 @@ linux-kernel|nuttx)
     [ -n "$EXEC_US" ] && emit_args+=(--exec-us "$EXEC_US")
     for c in "${CALLS[@]:-}"; do [ -n "$c" ] && emit_args+=(--call "$c"); done
     for v in "${DIGEST_VARS[@]:-}"; do [ -n "$v" ] && emit_args+=(--digest-var "$v"); done
+    [ "$PROBE" = "1" ] && emit_args+=(--probe)
     "$PY" "$SYNTH" "${emit_args[@]}" || die "后端合成失败（见上面的拒绝原因）" 3
     RESULT="$OUT_DIR/$TARGET"
 

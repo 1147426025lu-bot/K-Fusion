@@ -68,6 +68,7 @@ _LINUX_C = """/* %(name)s —— 由 ECoS 融合方案生成的 ring-0 宿主；
 #include <linux/sched/rt.h>
 #include <linux/string.h>
 #include <uapi/linux/sched/types.h>	/* struct sched_attr（uapi；内部 sched/types.h 里没有） */
+%(probe_includes)s
 
 #include "ecos_fused_body.h"
 
@@ -129,6 +130,8 @@ static bool frozen;
 module_param(frozen, bool, 0644);
 MODULE_PARM_DESC(frozen, "写 1 暂停周期体（取一致快照），写 0 恢复");
 
+%(probe_decls)s
+
 static enum hrtimer_restart ecos_tick(struct hrtimer *t)
 {
 	struct ecos_group *g = container_of(t, struct ecos_group, timer);
@@ -162,7 +165,9 @@ static int ecos_runner(void *data)
 		/* 冻结：不执行、不计数 —— 保证 sysfs 快照同拍 */
 		if (unlikely(frozen))
 			continue;
+%(probe_before)s
 		ecos_run_body(g->id);
+%(probe_after)s
 	}
 	return 0;
 }
@@ -170,10 +175,14 @@ static int ecos_runner(void *data)
 static int __init ecos_init(void)
 {
 	int i;
+	s64 t0;
 
+	/* 第一遍：建线程。**不在这里定相位**——kthread_create/设优先级每次要花
+	 * 几十~几百 µs；若每组各取一次 ktime_get() 当锚点，相位就被逐组污染。
+	 * 实测（5 组，period=1000）：plant 名义 800 µs 实际跑到 ≈1370 µs，
+	 * 死区量出 626 µs 而不是 200 µs。必须建完线程再统一取一次 t0。 */
 	for (i = 0; i < ECOS_GROUPS; i++) {
 		struct ecos_group *g = &ecos_groups[i];
-		s64 start;
 
 		init_waitqueue_head(&g->wait);
 		g->pending = false;
@@ -193,11 +202,13 @@ static int __init ecos_init(void)
 		 */
 		ecos_set_fifo(g->task, rt_priority);
 		wake_up_process(g->task);
-
-		/* 首次到期 = 当前时刻 + 组相位（相位是周期内的绝对偏移） */
-		start = ktime_get() + ecos_phase_ns[i];
-		hrtimer_start(&g->timer, start, HRTIMER_MODE_ABS_PINNED);
 	}
+
+	/* 第二遍：所有组共用一个锚点，组间相位差才等于方案里的相位差 */
+	t0 = ktime_get();
+	for (i = 0; i < ECOS_GROUPS; i++)
+		hrtimer_start(&ecos_groups[i].timer, t0 + ecos_phase_ns[i],
+			      HRTIMER_MODE_ABS_PINNED);
 
 	pr_info("ecos: %%d 组已启动，周期 %%u µs，FIFO 优先级 %%u（证据级别 %(evidence)s）\\n",
 		ECOS_GROUPS, period_us, rt_priority);
@@ -310,6 +321,76 @@ def emit(ir, module_name, phases_known=True):
         digest_hint = ("   # 编译时没给 --digest-var：没有观察点。\n"
                        "   # 此时只能证明『能加载/能卸载』，**不能**证明算得对。")
 
+    # ---- 死区探针（可选）----
+    # 环闭合边 = 上一拍「末组结束」→ 本拍「首组开始」。
+    # 融合把 plant 从 800 µs 前拉到 ~0 µs，这条边就变成跨一整拍；不融合时约 200 µs。
+    probe_includes = probe_decls = probe_before = probe_after = ""
+    if getattr(ir, "probe", False):
+        phases = [((g.phase_us if g.phase_us is not None else 0.0), i)
+                  for i, g in enumerate(ir.groups)]
+        first_g = min(phases)[1]
+        last_g = max(phases)[1]
+        probe_includes = ("#include <linux/math64.h>\t/* div_s64，探针求均值用 */\n"
+                          "\n#define ECOS_FIRST_GROUP %d\n#define ECOS_LAST_GROUP %d"
+                          % (first_g, last_g))
+        probe_decls = """/* 死区探针：量的是环闭合边 dz = t(本拍首组开始) − t(上拍末组结束)。
+ * 每拍两次 ktime_get()（几十 ns），读数里已含这点开销。
+ * 注意：首组与末组在不同内核线程时，dz_last_ns 的读写是跨线程的
+ * （arm64 对齐 8 字节访问原子），只用于统量级，不做因果归因。 */
+static s64 dz_last_ns;
+static bool dz_have;
+static s64 dz_sum_ns;
+/* 对外暴露的统计量用 long：module_param 只支持 long/ulong 这一档，
+ * s64 在 64 位内核上是 long long，与 long* 不兼容（编译会 -Werror）。
+ * ns 量级（≈1e6）装进 long 绰绰有余。 */
+static long dz_min_ns, dz_max_ns, dz_avg_ns;
+static unsigned long dz_count;
+/* 诊断：末组相对**同拍首组**的滞后（多组时用它判断某个组是否没在名义相位跑）。
+ * 单组时恒为 0。 */
+static s64 dz_t_first;
+static s64 dz_lag_sum;
+static long dz_lag_avg_ns;
+module_param(dz_lag_avg_ns, long, 0444);
+MODULE_PARM_DESC(dz_lag_avg_ns, "末组相对同拍首组的平均滞后（ns）");
+
+module_param(dz_min_ns, long, 0444);
+MODULE_PARM_DESC(dz_min_ns, "闭合边间隔最小值（ns）");
+module_param(dz_avg_ns, long, 0444);
+MODULE_PARM_DESC(dz_avg_ns, "闭合边间隔均值（ns）");
+module_param(dz_max_ns, long, 0444);
+MODULE_PARM_DESC(dz_max_ns, "闭合边间隔最大值（ns）");
+module_param(dz_count, ulong, 0444);
+MODULE_PARM_DESC(dz_count, "已采样拍数");"""
+        probe_before = """		if (g->id == ECOS_FIRST_GROUP) {
+			s64 t_now = ktime_get();
+
+			dz_t_first = t_now;
+			if (dz_have) {
+				s64 d = t_now - dz_last_ns;
+
+				if (d > 0) {
+					dz_count++;
+					dz_sum_ns += d;
+					dz_avg_ns = div_s64(dz_sum_ns, dz_count);
+					if (dz_count == 1 || d < dz_min_ns)
+						dz_min_ns = d;
+					if (d > dz_max_ns)
+						dz_max_ns = d;
+				}
+			}
+		}"""
+        probe_after = """		if (g->id == ECOS_LAST_GROUP) {
+			s64 t_end = ktime_get();
+			s64 lag = t_end - dz_t_first;
+
+			dz_last_ns = t_end;
+			dz_have = true;
+			if (ECOS_LAST_GROUP != ECOS_FIRST_GROUP && lag > 0) {
+				dz_lag_sum += lag;
+				dz_lag_avg_ns = div_s64(dz_lag_sum, dz_count + 1);
+			}
+		}"""
+
     host = _LINUX_C % {
         "name": HOST_C, "ngroups": ngroups, "nstages": len(ir.order),
         "period": int(ir.period_us or 0), "rtprio": 99, "evidence": ir.evidence,
@@ -318,6 +399,10 @@ def emit(ir, module_name, phases_known=True):
         "digest_decls": "\n".join(decls),
         "digest_update": ("\n".join(updates) if updates
                           else "\t/* 无观察变量 */"),
+        "probe_includes": probe_includes,
+        "probe_decls": probe_decls,
+        "probe_before": probe_before,
+        "probe_after": probe_after,
     }
     return {
         HOST_C: host,

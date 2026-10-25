@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "task": {
+    "name": "five_stage_loop_unfused",
+    "period_us": 1000,
+    "deadline_us": 1000
+  },
+  "timing_constraints": {
+    "feedback_delay_max_us": 500
+  },
+  "evidence": {
+    "exec": "empirical"
+  },
+  "note": "与 five_stage_loop.contract.json 的唯一差别：反馈死区上限 500 < period，于是每条反馈闭合边都必须跨组 → 规划器只能给 5 组（不融合）。用于死区 A/B：全融合 vs 不融合。"
+}

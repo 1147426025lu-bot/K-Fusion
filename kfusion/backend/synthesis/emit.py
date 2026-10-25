@@ -60,6 +60,9 @@ def main():
     ap.add_argument("--digest-var", action="append", default=[],
                     help="要发布成只读 sysfs 参数的 int32_t 全局量（可重复）。"
                          "没有观察点就只能证明『能加载』，证明不了『算得对』")
+    ap.add_argument("--probe", action="store_true",
+                    help="加死区探针：量环闭合边（上拍末组结束 → 本拍首组开始），"
+                         "输出 dz_min/avg/max_ns 与采样数")
     ap.add_argument("--allow-unverified", action="store_true",
                     help="允许用未验证方案生成（产物标记为对照用，不得进论文）")
     a = ap.parse_args()
@@ -105,7 +108,7 @@ def main():
 
     ir = fusion_ir.FusionIR.from_plan(plan, dag, contract=contract, exec_us=exec_us,
                                       calls=calls, source_name=name,
-                                      digest_vars=a.digest_var)
+                                      digest_vars=a.digest_var, probe=a.probe)
 
     # ---- 门 2：时间前提 ----
     tv = ir.timing_violations()

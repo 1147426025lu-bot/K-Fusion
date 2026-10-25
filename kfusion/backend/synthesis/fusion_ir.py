@@ -89,11 +89,13 @@ class FusionIR(object):
         # 观察变量（板上正确性判据）：宿主把它们发布成只读 sysfs 参数，
         # 加载后用 cat 读，与用户态参考实现比对。
         self.digest_vars = []
+        # 死区探针（可选）：量环闭合边 = 上拍末组结束 → 本拍首组开始
+        self.probe = False
 
     # ------------------------------------------------------------------
     @classmethod
     def from_plan(cls, plan, dag, contract=None, exec_us=None, calls=None,
-                  source_name="fused", digest_vars=None):
+                  source_name="fused", digest_vars=None, probe=False):
         calls = calls or {}
         exec_us = exec_us or {}
         nodes = {n["name"]: n for n in (dag.get("nodes") or [])}
@@ -159,6 +161,7 @@ class FusionIR(object):
         ir.plan_version = plan.get("version")
         ir.verified = bool((plan.get("verification") or {}).get("ok"))
         ir.digest_vars = [v for v in (digest_vars or []) if v]
+        ir.probe = bool(probe)
         return ir
 
     # ------------------------------------------------------------------
