@@ -878,3 +878,34 @@ xdom ch1 prod=50943104 cons=50943104 age=0 n=2001  stale=0 max=1
 - 本次**没开** `--digest-var`，没同时记录 `g_plant/g_act` 的值，所以**不能**用年龄直接
   断言回路收敛或发散。要接上 PR10-D 的"发散"结论，下一跑应加值摘要，做"年龄 vs 值漂移"
   的对照——这是紧接着该做的事。
+
+## 13.10 第二跑：同屏"年龄 + 值" —— 回路有界，age 0–1（不夸大成因果）
+
+在 §13.9 基础上加 `--digest-var g_plant --digest-var g_act` 重生成两端（NuttX 串口同时打
+值摘要与逐拍证据），同一装置再跑一次。
+
+**值轨迹**（NuttX 串口，每 1000 拍一条，节选）：
+
+```
+ecos: periods=1000  g_plant=0    g_act=14606   ← 尚未 insmod，root 没发 g_plant
+ecos: periods=3000  g_plant=0    g_act=14384
+ecos: periods=4000  g_plant=1066 g_act=1253    ← g_plant 到位，g_act 落下
+ecos: periods=7000  g_plant=821  g_act=1030
+ecos: periods=11000 g_plant=1327 g_act=1713
+ecos: periods=23000 g_plant=954  g_act=-121
+ecos: periods=40000 g_plant=902  g_act=1127
+...
+```
+
+**逐拍证据**：`xdom ch1 prod=... cons=... age=0`（绝大多数）/`max=1`，`stale=0`。
+root 侧末值 `periods=83925`、`missed=0`、`g_plant=821`、`g_act=1770`。
+
+结果与边界：
+
+- **这一跑回路是"有界"的**：g_plant ∈ 约 [490, 1400]、g_act ∈ 约 [−120, 1770]（含一个负值），
+  8 万+ 拍**没有发散到 PR10-D 的 ±90000**。age 0–1、stale=0、missed=0。
+- ⚠ **"有界"≠"调节好"**：g_act 在 ~1800 的幅度内振荡，说明是"不发散"，不是"紧跟踪设定值"。
+- ⚠ **不能就此断言"新桥取最近一条 ⇒ 回路稳定"**。这一跑与 PR10-D 的差异至少有两个候选
+  变量：① 新桥把订阅从"FIFO 最旧"改成"最近一条"（有效延迟变小）；② 两跑的实际相位/起动
+  时机不同。要归因，必须做**受控 A/B**（同一编译、只切"最旧/最近"和相位之一）。
+- 因此 §13.9/§13.10 证明的是"**逐拍证据链 + 有界运行**"，不是"某机制导致稳定"。
