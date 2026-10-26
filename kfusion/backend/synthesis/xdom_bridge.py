@@ -94,6 +94,18 @@ _C = """/* ecos_xdom.c — 跨域数据桥（由 ECoS 拆分器生成，勿手�
 #define ECOS_XDOM_LAG %(lag)d
 #define ECOS_XDOM_HIST (ECOS_XDOM_LAG + 1)
 
+/* 取数语义（对照臂）。为什么要有它：PR10-D 当年"发散到 ±90000"被怀疑是旧桥的
+ * 取数方式造成的，但那是**推断**。要变成**实测**，就得让同一份代码只切这一个开关。
+ *
+ *   0 = latest：每拍把 in 环**抽干**，每通道留最新一条（PR10-F 修正后的行为，默认）
+ *   1 = oldest：每拍把 in 环抽干，每通道留**最旧**一条（复刻旧桥的 FIFO 选择顺序）
+ *   2 = one   ：每拍**只 pop 一条**，其余留在环里（复刻旧桥的**消费速率**）
+ *
+ * 0 与 1 的差别只是"同一批里挑哪条"，而 2 的差别是"这拍到底消化多少"——
+ * 旧桥 `while(pop){ if(match){...; break;} }` 的 break 之后剩下的消息确实还躺在环里，
+ * 于是生产者稍快/相位漂移时环会**累积积压**，age 单调变大。这两件事必须分开测。 */
+#define ECOS_XDOM_PICK %(pick)d
+
 /* 为什么有两套地址解析
  * -------------------
  * NuttX（inmate）侧：cell 把同一物理地址映射到**相同虚拟地址**，直接强转就行。
@@ -199,19 +211,49 @@ void ecos_xdom_sub(unsigned channel, int32_t *dst)
 void ecos_xdom_sub_tick(unsigned channel, int32_t *dst, uint32_t *out_tick)
 {
 	struct xipc_slot s;
+#if ECOS_XDOM_PICK == 1
+	/* 对照臂 oldest：本批里每通道只收**第一条**（=最旧）。旧桥的选择顺序就是这样
+	 * ——它在环上 while(pop) 找到第一条匹配就 break，同一批有多条时拿到最旧的。 */
+	uint8_t batch_seen[ECOS_XDOM_NCHAN] = { 0 };
+#endif
 
 	if (!xr_ready || dst == 0 || channel >= ECOS_XDOM_NCHAN)
 		return;
+#if ECOS_XDOM_PICK == 2
+	/* 对照臂 one：复刻旧桥的**消费速率**——每拍只消化一条，剩下的留在环里。
+	 * 旧代码 `while (xipc_pop(xr_in, &s)) { if (匹配) { *dst = s.b; break; } }`
+	 * 那个 break 就是"只取一条"；环里若已有多条，余下的不会消失，下一拍取到的
+	 * 是更旧的那条 ⇒ 积压滚起来、age 单调变大。这一步与"挑哪条"是两件事。 */
+	if (!xipc_pop(xr_in, &s))
+		return;                       /* 环空：旧桥此时也不更新 dst */
+	if (s.kind != XIPC_KIND_DATA || s.a != channel)
+		return;                       /* 不是本通道：旧桥会把它耗掉，再继续找 */
+	xdom_cache[channel]       = (int32_t)s.b;
+	xdom_cache_tick[channel]  = s.tick;
+	xdom_cache_valid[channel] = 1;
+#else
 	/* 把 in 环抽干到每通道缓存（最近一条覆盖旧的）。这一抽干对**所有**通道共享
 	 * 一次，所以 sub(X) 不会把 Y 的消息丢掉——它们各进各的桶。返回的是本通道
 	 * 最近一条，不是 FIFO 最旧（修掉了 PR10-C 的 bug）。 */
 	while (xipc_pop(xr_in, &s)) {
 		if (s.kind == XIPC_KIND_DATA && s.a < ECOS_XDOM_NCHAN) {
+#if ECOS_XDOM_PICK == 1
+			if (batch_seen[s.a])
+				continue;   /* 本批已有更旧的一条，更新的直接丢 */
+			batch_seen[s.a] = 1;
+#endif
 			xdom_cache[s.a]      = (int32_t)s.b;
 			xdom_cache_tick[s.a] = s.tick;
 			xdom_cache_valid[s.a] = 1;
 		}
 	}
+#if ECOS_XDOM_PICK == 1
+	/* 旧桥在"本批没有本通道消息"时**不更新** dst（break 都没走到）。
+	 * 复刻这一点，否则会把上一批的缓存值当成本批数据，对照就失真了。 */
+	if (!batch_seen[channel])
+		return;
+#endif
+#endif
 	if (xdom_cache_valid[channel]) {
 		struct ecos_xdom_evid *e = &xdom_evid[channel];
 		unsigned int idx;
@@ -303,12 +345,19 @@ uint32_t ecos_xdom_epoch(void)
 BASE = 0x1faf1000
 
 
-def emit(domain_meta, period_us=1000, max_age=0, lag=0):
+def emit(domain_meta, period_us=1000, max_age=0, lag=0, mode="latest"):
     """domain_meta: 拆分器写的 per-domain meta.json（含 peer_ring 与 pub/sub）。
     period_us: 控制周期（µs），用于把物理计数器换算成周期号。
     max_age:   过期阈值（拍），0 = 不启用过期拒收（只记录证据）。
     lag:       消费者取"LAG 拍前"的值（A/B 注入延迟）；0 = 取最新（默认）。
+    mode:      "latest"（默认，抽干取最新）/"oldest"（抽干取最旧）/
+               "one"（每拍只取一条、其余留在环里：复刻旧桥的消费速率，
+               用来看"积压累积"会不会真的把 age 推上去）→ 生成 ECOS_XDOM_PICK 0/1/2。
     """
+    _m = str(mode or "latest").lower()
+    pick = {"latest": 0, "oldest": 1, "one": 2}.get(_m)
+    if pick is None:
+        pick = 1 if _m.startswith("old") else (2 if _m.startswith("one") else 0)
     ring = domain_meta.get("peer_ring") or {}
     out_off = int(ring.get("out", 0))
     # owner = peer0（out 环在 0x0000）。与 PR10 的分片约定一致：
@@ -372,6 +421,7 @@ def emit(domain_meta, period_us=1000, max_age=0, lag=0):
             "period_us": int(period_us or 0),
             "max_age": int(max_age or 0),
             "lag": int(lag or 0),
+            "pick": pick,
             "owner_note": owner_note,
             # kernel 侧要 pr_info（report_evidence 用），故带 kernel.h
             "kernel_include": ("#define ECOS_XDOM_KERNEL 1\t/* ring-0 宿主 */\n"

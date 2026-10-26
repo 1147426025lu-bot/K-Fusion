@@ -375,6 +375,68 @@ expect_grep "桥记录逐拍证据并打印" "$TMP/xe_root/ecos_xdom.c" \
 expect_absent "桥不再依赖宿主喂的 ecos_xdom_cycle 全局" "$TMP/xe_root/ecos_xdom.c" \
     "uint32_t ecos_xdom_cycle;"
 
+# ---- PR11-A：跨域数据年龄预算 + "取最旧"对照臂 ----
+# 预算必须**同源**：契约 timing_constraints.xdom_max_age_ticks 是声明，
+# 生成的 ECOS_XDOM_MAX_AGE 是运行时强制。两处各说一套就是又一处静默失效
+# （PR10-E 已经栽过：上限写在 control 下，从来没被读到）。
+expect_grep "契约的年龄预算落到生成代码（MAX_AGE=1）" "$TMP/xe_root/ecos_xdom.c" \
+    "#define ECOS_XDOM_MAX_AGE 1"
+expect_grep "默认每拍抽干取最新（PICK=0）" "$TMP/xe_nuttx/ecos_xdom.c" \
+    "#define ECOS_XDOM_PICK 0"
+
+rm -rf "$TMP/xe_old"
+expect_rc "取最旧对照臂可生成" 0 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/nuttx/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xe_old" --target nuttx --contract "$XCON" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/nuttx/meta.json" --xdom-mode oldest
+expect_grep "对照臂 oldest 确实批内取首条（PICK=1）" "$TMP/xe_old/ecos_xdom.c" \
+    "#define ECOS_XDOM_PICK 1" "batch_seen[s.a] = 1;"
+
+# 命令行与契约各说一套 ⇒ 拒（rc=2）。不许悄悄挑一个：声明与强制必须同源。
+rm -rf "$TMP/xe_one"
+expect_rc "每拍只取一条的对照臂可生成" 0 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/nuttx/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xe_one" --target nuttx --contract "$XCON" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/nuttx/meta.json" --xdom-mode one
+# 这一臂的意义：旧桥 break 之后剩下的消息还留在环里 ⇒ 会积压。必须能在生成物里
+# 看到"只 pop 一条"这个结构，否则它和 oldest 臂无法区分。
+expect_grep "one 臂每拍只消化一条（不抽干）" "$TMP/xe_one/ecos_xdom.c" \
+    "#define ECOS_XDOM_PICK 2" "if (!xipc_pop(xr_in, &s))"
+
+expect_rc "预算与契约冲突被拒" 2 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/nuttx/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xe_conf" --target nuttx --contract "$XCON" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/nuttx/meta.json" --xdom-max-age 2
+
+# 契约位置错（写在 control 下）与 0 拍（物理不可满足）都必须被契约校验挡住。
+"$PY" - "$XCON" "$TMP/bad_age.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"].pop("xdom_max_age_ticks", None)
+d.setdefault("control", {})["xdom_max_age_ticks"] = 1
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "预算写在 control 下被契约校验拒" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/bad_age.contract.json"
+"$PY" - "$XCON" "$TMP/zero_age.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"]["xdom_max_age_ticks"] = 0
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "0 拍预算被契约校验拒" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/zero_age.contract.json"
+expect_rc "合法预算的契约校验通过" 0 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" "$XCON"
+
 echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" = 0 ] || exit 1

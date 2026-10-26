@@ -5,7 +5,8 @@
     "deadline_us": 2500
   },
   "timing_constraints": {
-    "feedback_delay_max_us": 1000
+    "feedback_delay_max_us": 1000,
+    "xdom_max_age_ticks": 1
   },
   "_note": [
     "PR10-E 严格负向夹具：**只把反馈上限收紧到 1 拍，期限仍是 2.5 拍**。",
@@ -22,6 +23,10 @@
     "3. 这条拒绝与域能力、期限都无关，只与反馈死区有关。",
     "",
     "对照：同一份 DAG、同一个跨域方案，用 xdom_loop.contract.json（2500 µs）",
-    "必须仍然通过。只收紧反馈上限就翻脸，说明判据是它、而不是别的什么东西。"
+    "必须仍然通过。只收紧反馈上限就翻脸，说明判据是它、而不是别的什么东西。",
+    "",
+    "⚠ PR11-A：xdom_max_age_ticks=1 与 xdom_loop.contract.json 相同，",
+    "刻意保持「两份只差 feedback_delay_max_us」这条不变量——",
+    "否则拒绝就说不清是反馈死区还是年龄预算造成的。"
   ]
 }

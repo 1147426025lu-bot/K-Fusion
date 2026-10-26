@@ -63,6 +63,14 @@ def main():
                          "没有观察点就只能证明『能加载』，证明不了『算得对』")
     ap.add_argument("--xdom-lag", type=int, default=0,
                     help="跨域消费者取『LAG 拍前』的值（受控 A/B 注入延迟）；0=取最新（默认）")
+    ap.add_argument("--xdom-mode", default="latest", choices=["latest", "oldest", "one"],
+                    help="跨域取数语义（A/B 开关，同一代码只切这一项）："
+                         "latest=每拍抽干取最新（默认）；"
+                         "oldest=每拍抽干取最旧（旧桥的选择顺序）；"
+                         "one=每拍只取一条、其余留在环里（旧桥的消费速率，会积压）")
+    ap.add_argument("--xdom-max-age", type=int, default=None,
+                    help="跨域数据年龄预算（拍）：超过即拒收并计 n_stale。"
+                         "不给则取契约 timing_constraints.xdom_max_age_ticks；都没有=0（只记录不拒）")
     ap.add_argument("--probe", action="store_true",
                     help="加死区探针：量环闭合边（上拍末组结束 → 本拍首组开始），"
                          "输出 dz_min/avg/max_ns 与采样数（Linux）/ # dz 行（NuttX）")
@@ -155,6 +163,33 @@ def main():
     name = a.name or ((dag.get("meta") or {}).get("task") or {}).get("name") or "ecos_fused"
     name = "".join(ch if (ch.isalnum() or ch in "_-") else "_" for ch in name)
 
+    # ---- 跨域数据年龄预算：一处声明、两处生效 ----
+    # 契约（timing_constraints.xdom_max_age_ticks）是**声明**，生成的
+    # ECOS_XDOM_MAX_AGE 是**运行时强制**（超限拒收 + n_stale 计数）。
+    # 两者必须同一个数，否则"契约说 age≤1、代码却照收 age=3"就是又一处静默失效
+    # ——PR10-E 已经栽过一次（上限写在 control 下、从来没被读到）。
+    ctr = (contract or {}).get("timing_constraints") or {}
+    c_budget = ctr.get("xdom_max_age_ticks")
+    if c_budget is not None:
+        try:
+            c_budget = int(c_budget)
+        except (TypeError, ValueError):
+            print("❌ 契约 timing_constraints.xdom_max_age_ticks 不是整数：%r"
+                  % (c_budget,), file=sys.stderr)
+            return 2
+    if a.xdom_max_age is None:
+        xdom_max_age = c_budget if c_budget is not None else 0
+        if c_budget is not None:
+            print("  跨域数据年龄预算 %.0f 拍（来自契约 timing_constraints）" % c_budget)
+    else:
+        if c_budget is not None and int(a.xdom_max_age) != c_budget:
+            print("❌ --xdom-max-age=%d 与契约 xdom_max_age_ticks=%d 不一致：\n"
+                  "  契约是声明、生成代码是强制，两者必须同源；"
+                  "改哪一个都行，但不能各说一套" % (a.xdom_max_age, c_budget),
+                  file=sys.stderr)
+            return 2
+        xdom_max_age = int(a.xdom_max_age)
+
     ir = fusion_ir.FusionIR.from_plan(plan, dag, contract=contract, exec_us=exec_us,
                                       calls=calls, source_name=name,
                                       digest_vars=a.digest_var, probe=a.probe,
@@ -213,10 +248,16 @@ def main():
     if xdom:
         # 周期长度要把物理计数器换算成"周期号"，必须把方案周期传给桥。
         for fn, text in xdom_bridge.emit(xdom, period_us=int(ir.period_us or 0),
-                                         lag=int(a.xdom_lag or 0)).items():
+                                         max_age=int(xdom_max_age),
+                                         lag=int(a.xdom_lag or 0),
+                                         mode=a.xdom_mode).items():
             written.append(_write(a.out_dir, fn, text))
         print("=== 跨域数据桥 ===")
         print("  %s" % xdom_bridge.summary(xdom))
+        print("  取数语义 %s%s，年龄预算 %s"
+              % (a.xdom_mode,
+                 ("（注入 %d 拍延迟）" % a.xdom_lag) if a.xdom_lag else "",
+                 ("%d 拍（超限拒收）" % xdom_max_age) if xdom_max_age else "未设（只记录）"))
         n_sub = sum(len(s.xdom_sub) for g in ir.groups for s in g.stages)
         n_pub = sum(len(s.xdom_pub) for g in ir.groups for s in g.stages)
         if n_sub == 0 and n_pub == 0:

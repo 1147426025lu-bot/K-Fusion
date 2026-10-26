@@ -16,7 +16,8 @@
       "timing_constraints": {
         "sample":   {"stage": "stage_sample", "earliest_us": 0,   "latest_us": 30},
         "actuator": {"stage": "stage_plant",  "earliest_us": 650, "latest_us": 850},
-        "feedback_delay_max_us": 400
+        "feedback_delay_max_us": 400,
+        "xdom_max_age_ticks": 1
       },
       "evidence": {"exec": "bounded" | "empirical"}
     }
@@ -133,6 +134,33 @@ def validate(dag, contract):
                     "情形（跨域 +1 拍、多组切开）" % (fb, period))
         except (TypeError, ValueError):
             errs.append("feedback_delay_max_us 不是数字：%r" % (fb,))
+
+    # ---- 跨域数据年龄预算（PR11-A）----
+    # 位置同样的坑：写在 control 下就没人读。这里把它当成一等约束。
+    if isinstance(ctrl_blk, dict) and "xdom_max_age_ticks" in ctrl_blk:
+        errs.append(
+            "契约：xdom_max_age_ticks 写在顶层 control 下（非契约位置）。"
+            "请移到 timing_constraints 下——生成器只读那里，"
+            "放错位置等于这条约束不存在，代码会按『不设预算』生成")
+    age_budget = ctr.get("xdom_max_age_ticks")
+    if age_budget is not None:
+        try:
+            age_budget = float(age_budget)
+            if age_budget != int(age_budget):
+                errs.append("xdom_max_age_ticks 必须是整数拍：%r" % (age_budget,))
+            if age_budget < 1:
+                # 0 拍在物理上不可能：生产者写完那一刻消费者已经晚了一点点，
+                # 允许 0 等于要求"零延迟"，只能靠拒收全部数据来满足。
+                errs.append(
+                    "xdom_max_age_ticks 必须 ≥ 1（0 拍等于要求零延迟，"
+                    "物理上不可满足，只会把所有数据都判成过期）")
+            if age_budget >= 2:
+                warns.append(
+                    "xdom_max_age_ticks=%.0f 允许 age 到 %d 拍；而实测（PR10-F §13.12）"
+                    "该闭环在 age 1–2 已经发散，0–1 才收敛——预算是运行时的兜底，"
+                    "不是控制稳定的证明" % (age_budget, int(age_budget)))
+        except (TypeError, ValueError):
+            errs.append("xdom_max_age_ticks 不是数字：%r" % (age_budget,))
 
     ev = (contract.get("evidence") or {}).get("exec")
     if ev and ev not in ("bounded", "empirical"):
