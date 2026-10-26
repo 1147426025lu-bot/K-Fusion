@@ -17,12 +17,13 @@ PR10-F 版本化（三个标识必须分清，别混）
 --------------------------------------
   · **消息序号** = 环槽 `seq`（每提交一条 +1）。它只回答"这是第几条消息"，
     **不是**任务释放编号：一个周期发两条、或某周期不发，seq 就对不上拍。
-  · **生产周期** = `publish_tick`（消息的 `tick` 字段）。由**共享物理计数器**派生：
-    `tick = xipc_counter() / period_ticks`。两侧用同一个计数器、同一个周期长度
-    ⇒ 同一物理时刻算出的 tick 相同，**与各自启动相位无关**。
-  · **消费周期** = 消费者调 `ecos_xdom_cycle_now()` 得到的同一口径周期号。
-  数据年龄（拍）= `consumer_cycle − publish_tick`，这才是真实的时间差，
-  不含"两边各自从自己 init 起算"的启动偏移。
+  · **发布时刻** = `ts_us`（槽里的 `ts_us` 字段）。由**共享物理计数器**直接换算成 µs：
+    `ts_us = xipc_counter() * 1e6 / CNTFRQ`。两侧读同一个计数器 ⇒ 同一物理时刻算出的
+    值相同，**与各自启动相位无关**，也**与两侧周期无关**。
+    ⚠ v2 存的是"周期索引 = counter / period_ticks"。多速率下两侧周期不同，索引不是
+      同一量纲、相减没意义，所以 v3 换成绝对时间戳（PR11-B）。
+  · **数据年龄** = `now_us − ts_us`（µs，与速率无关）；要"几拍"就除以**本域**周期。
+    这才是真实的时间差，不含"两边各自从自己 init 起算"的启动偏移。
 
 消费侧还会为**每个通道**记录最近一次的 producer/consumer/age 与累计统计，
 供上层打印逐拍证据（`ecos_xdom_evidence` / `ecos_xdom_report_evidence`）。
@@ -47,9 +48,10 @@ _H = """/* ecos_xdom.h — 跨域数据桥（由 ECoS 拆分器生成，勿手�
 /* 逐拍数据版本证据（消费侧记录）：每通道最近一次消费的
  * 生产周期 / 消费周期 / 年龄（拍），以及累计与过期统计。 */
 struct ecos_xdom_evid {
-	uint32_t prod;      /* 这条数据由生产者在第几个（绝对）控制周期产生 */
-	uint32_t cons;      /* 本域消费它时所在的（绝对）周期 */
-	uint32_t age;       /* cons - prod（拍数） */
+	uint32_t prod;      /* 这条数据的发布时刻（µs，共享计数器） */
+	uint32_t cons;      /* 本域消费它的时刻（µs） */
+	uint32_t age_us;    /* cons - prod（µs，与两侧速率无关） */
+	uint32_t age;       /* age_us / ECOS_XDOM_PERIOD_US（本域控制拍数） */
 	uint32_t n;         /* 累计消费次数 */
 	uint32_t n_stale;   /* 年龄超过上限的次数（仅当 ECOS_XDOM_MAX_AGE > 0） */
 	uint32_t max_age;   /* 见过的最大年龄（拍） */
@@ -58,8 +60,11 @@ struct ecos_xdom_evid {
 void ecos_xdom_init(void);
 void ecos_xdom_pub(unsigned channel, int32_t value);
 void ecos_xdom_sub(unsigned channel, int32_t *dst);
+/* out_ts_us 返回"这条数据的发布时刻（µs）"，配合 ecos_xdom_now_us() 可算 age_us。
+ * 名字保留 _tick 是为了不动已有调用点；语义已是时间戳（PR11-B）。 */
 void ecos_xdom_sub_tick(unsigned channel, int32_t *dst, uint32_t *out_tick);
-uint32_t ecos_xdom_cycle_now(void);                 /* 本域当前绝对周期号（共享计数器派生） */
+uint32_t ecos_xdom_now_us(void);                   /* 当前时刻（µs，共享计数器派生） */
+uint32_t ecos_xdom_cycle_now(void);                /* 本域第几拍（按**本域**周期计） */
 int ecos_xdom_evidence(unsigned channel, struct ecos_xdom_evid *out);
 void ecos_xdom_report_evidence(void);               /* 逐通道打印最近一次的 prod/cons/age */
 uint32_t ecos_xdom_epoch(void);                     /* 统一 epoch：本域所见 session */
@@ -123,8 +128,8 @@ static struct xipc_ring *xr_out;
 static struct xipc_ring *xr_in;
 static int xr_ready;
 
-/* 一个控制周期 = 多少物理计数器 tick（init 时按 ECOS_XDOM_PERIOD_US × CNTFRQ 算）。 */
-static uint64_t xdom_period_ticks;
+/* CNTFRQ（init 时缓存一次）。counter → µs 的换算全靠它。 */
+static uint32_t xdom_hz;
 
 /* PR10-F：每通道"最近一条"缓存。
  * 旧实现（PR10-C）的 ecos_xdom_sub 用 while(xipc_pop()) 把 in 环里**所有**消息都
@@ -146,14 +151,23 @@ static uint32_t xdom_hist_tick[ECOS_XDOM_NCHAN][ECOS_XDOM_HIST];
 static uint8_t  xdom_hist_pos[ECOS_XDOM_NCHAN];
 static uint8_t  xdom_hist_n[ECOS_XDOM_NCHAN];
 
-/* 绝对周期号：共享物理计数器 / 一个周期的 tick 数。
- * 两侧用同一个计数器、同一个周期长度 ⇒ 同一物理时刻算出的值相同，
- * **与各自启动相位/init 时刻无关**。这是 age 可信的前提。 */
+/* 当前时刻（µs）：共享物理计数器直接换算。
+ * 两侧用同一个计数器 ⇒ 同一物理时刻算出的值相同，**与各自启动相位、周期长度都无关**。
+ * 这是 age 在多速率下仍然可信的前提。32 位 ≈ 71 分钟回绕。 */
+static uint32_t xdom_now_us(void)
+{
+	if (xdom_hz == 0)
+		return 0;
+	return (uint32_t)(xipc_counter() * 1000000ull / (uint64_t)xdom_hz);
+}
+
+/* 本域"第几拍"（按本域周期计）：只用于"这是第几个控制周期"的日志，
+ * **不**参与跨域 age 计算（两侧周期可能不同）。 */
 static uint32_t xdom_cycle_from_counter(void)
 {
-	if (xdom_period_ticks == 0)
+	if (ECOS_XDOM_PERIOD_US == 0)
 		return 0;
-	return (uint32_t)(xipc_counter() / xdom_period_ticks);
+	return xdom_now_us() / (uint32_t)ECOS_XDOM_PERIOD_US;
 }
 
 static struct xipc_ring *xdom_ring(unsigned int off)
@@ -180,14 +194,8 @@ void ecos_xdom_init(void)
 	xr_out = xdom_ring(ECOS_XDOM_OUT);
 	xr_in  = xdom_ring(ECOS_XDOM_IN);
 
-	/* 周期长度换算要在等环之前算好：pub/sub 的 tick 全靠它。 */
-	{
-		uint32_t hz = xipc_counter_hz();
-
-		if (hz != 0 && ECOS_XDOM_PERIOD_US != 0)
-			xdom_period_ticks = (uint64_t)ECOS_XDOM_PERIOD_US
-					    * (uint64_t)hz / 1000000ull;
-	}
+	/* CNTFRQ 要在等环之前缓存好：counter → µs 的换算全靠它。 */
+	xdom_hz = xipc_counter_hz();
 
 %(init_body)s}
 
@@ -195,10 +203,10 @@ void ecos_xdom_pub(unsigned channel, int32_t value)
 {
 	if (!xr_ready)
 		return;
-	/* publish_tick = 共享物理计数器派生的**绝对周期号**（不是本域 periods、不是环 seq）。
-	 * 对端用 ecos_xdom_cycle_now() 得到同口径的消费周期，相减才是真实年龄。 */
-	(void)xipc_pub_ticked(xr_out, XIPC_KIND_DATA, channel, (uint32_t)value,
-	                      xdom_cycle_from_counter());
+	/* 发**发布时刻（µs）**，不发"第几拍"：多速率下两侧周期不同，期号不可比；
+	 * µs 时间戳与速率无关，对端用 now_us 相减就是真实数据年龄。 */
+	(void)xipc_pub_stamped(xr_out, XIPC_KIND_DATA, channel, (uint32_t)value,
+	                       xdom_now_us());
 }
 
 void ecos_xdom_sub(unsigned channel, int32_t *dst)
@@ -229,7 +237,7 @@ void ecos_xdom_sub_tick(unsigned channel, int32_t *dst, uint32_t *out_tick)
 	if (s.kind != XIPC_KIND_DATA || s.a != channel)
 		return;                       /* 不是本通道：旧桥会把它耗掉，再继续找 */
 	xdom_cache[channel]       = (int32_t)s.b;
-	xdom_cache_tick[channel]  = s.tick;
+	xdom_cache_tick[channel]  = s.ts_us;
 	xdom_cache_valid[channel] = 1;
 #else
 	/* 把 in 环抽干到每通道缓存（最近一条覆盖旧的）。这一抽干对**所有**通道共享
@@ -243,7 +251,7 @@ void ecos_xdom_sub_tick(unsigned channel, int32_t *dst, uint32_t *out_tick)
 			batch_seen[s.a] = 1;
 #endif
 			xdom_cache[s.a]      = (int32_t)s.b;
-			xdom_cache_tick[s.a] = s.tick;
+			xdom_cache_tick[s.a] = s.ts_us;
 			xdom_cache_valid[s.a] = 1;
 		}
 	}
@@ -274,29 +282,37 @@ void ecos_xdom_sub_tick(unsigned channel, int32_t *dst, uint32_t *out_tick)
 			idx = xdom_hist_pos[channel];   /* 满：最旧 = LAG 拍前 */
 
 		v    = xdom_hist_val[channel][idx];
-		tick = xdom_hist_tick[channel][idx];
-		cons = xdom_cycle_from_counter();
-		age  = cons - tick;   /* 无符号回绕差：正常小，过期则大 */
+		tick = xdom_hist_tick[channel][idx];   /* µs */
+		cons = xdom_now_us();
+		age  = cons - tick;   /* µs 差：无符号回绕，正常小、过期则大 */
 
-		/* 记录逐拍证据：这一拍消费到的数据是哪个周期产生的、现在第几拍、差几拍。 */
-		e->prod = tick;
-		e->cons = cons;
-		e->age  = age;
+		/* 记录逐拍证据：这条数据什么时候发的、什么时候用的、差多少 µs / 几拍。 */
+		e->prod   = tick;
+		e->cons   = cons;
+		e->age_us = age;
+		e->age    = (ECOS_XDOM_PERIOD_US != 0)
+			    ? age / (uint32_t)ECOS_XDOM_PERIOD_US : 0;
 		e->n++;
-		if (age > e->max_age)
-			e->max_age = age;
+		/* max_age 记的是**拍**（与 MAX_AGE 同一单位），别把 µs 塞进去 */
+		if (e->age > e->max_age)
+			e->max_age = e->age;
 
 		if (out_tick)
-			*out_tick = tick;
+			*out_tick = tick;   /* 返回发布时刻（µs）；名字沿用 out_tick 兼容旧调用 */
 
 		/* 过期版本强制拒绝：age 超上限就不更新 dst（阶段沿用上一次/默认值），
 		 * 但**仍然计数并保留证据**——拒绝要看得见，不能静默。默认 MAX_AGE=0 不启用。 */
-		if (ECOS_XDOM_MAX_AGE != 0 && age > (uint32_t)ECOS_XDOM_MAX_AGE) {
+		if (ECOS_XDOM_MAX_AGE != 0 && e->age > (uint32_t)ECOS_XDOM_MAX_AGE) {
 			e->n_stale++;
 			return;
 		}
 		*dst = v;
 	}
+}
+
+uint32_t ecos_xdom_now_us(void)
+{
+	return xdom_now_us();
 }
 
 uint32_t ecos_xdom_cycle_now(void)
@@ -323,11 +339,11 @@ void ecos_xdom_report_evidence(void)
 		if (e->n == 0)
 			continue;
 #ifdef ECOS_XDOM_KERNEL
-		pr_info("xdom ch%%u prod=%%u cons=%%u age=%%u n=%%u stale=%%u max=%%u\\n",
-			ch, e->prod, e->cons, e->age, e->n, e->n_stale, e->max_age);
+		pr_info("xdom ch%%u prod=%%u cons=%%u age_us=%%u age=%%u n=%%u stale=%%u max=%%u\\n",
+			ch, e->prod, e->cons, e->age_us, e->age, e->n, e->n_stale, e->max_age);
 #else
-		printf("xdom ch%%u prod=%%u cons=%%u age=%%u n=%%u stale=%%u max=%%u\\n",
-		       ch, e->prod, e->cons, e->age, e->n, e->n_stale, e->max_age);
+		printf("xdom ch%%u prod=%%u cons=%%u age_us=%%u age=%%u n=%%u stale=%%u max=%%u\\n",
+		       ch, e->prod, e->cons, e->age_us, e->age, e->n, e->n_stale, e->max_age);
 #endif
 	}
 }

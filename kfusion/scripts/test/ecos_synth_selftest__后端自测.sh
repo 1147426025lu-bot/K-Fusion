@@ -368,8 +368,13 @@ expect_absent "桥里没有睡眠/线程/入口（剥注释后）" "$TMP/xdom_nc
 
 # PR10-F 修订：周期号必须来自**共享物理计数器**（不是域内 periods、不是环 seq），
 # 否则两侧各从自己 init 起算，age 里混进启动相位偏移；并记录逐拍证据。
-expect_grep "桥的周期号来自共享物理计数器" "$TMP/xe_root/ecos_xdom.c" \
-    "xdom_cycle_from_counter" "xipc_counter() / xdom_period_ticks" "ECOS_XDOM_PERIOD_US"
+# PR11-B：发的是**µs 时间戳**（v2 的"周期索引"在多速率下不可比，已弃用）
+expect_grep "桥发 µs 时间戳（不是周期索引）" "$TMP/xe_root/ecos_xdom.c" \
+    "xdom_now_us" "xipc_counter() * 1000000ull" "xipc_pub_stamped" "s.ts_us"
+expect_absent "桥不再按周期索引发/收" "$TMP/xe_root/ecos_xdom.c" \
+    "xipc_pub_ticked" "xdom_period_ticks"
+expect_grep "证据同时记 µs 与拍（多速率下拍要除以本域周期）" "$TMP/xe_root/ecos_xdom.c" \
+    "e->age_us = age" "age / (uint32_t)ECOS_XDOM_PERIOD_US" "max_age = e->age"
 expect_grep "桥记录逐拍证据并打印" "$TMP/xe_root/ecos_xdom.c" \
     "ecos_xdom_evidence" "ecos_xdom_report_evidence" "e->age"
 expect_absent "桥不再依赖宿主喂的 ecos_xdom_cycle 全局" "$TMP/xe_root/ecos_xdom.c" \
@@ -434,6 +439,34 @@ PYEOF
 expect_rc "0 拍预算被契约校验拒" 3 \
     "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
     "$TMP/zero_age.contract.json"
+# ---- PR11-B：多速率装置开关必须显式承认，且产物留痕 ----
+rm -rf "$TMP/xe_exp"
+expect_rc "装置实验开关缺少承认时被拒" 2 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/root/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xe_exp" --target linux-kernel --contract "$XCON" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/root/meta.json" --experiment-period-us 2000
+rm -rf "$TMP/xe_exp"
+expect_rc "承认后可按多速率装置生成" 0 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/root/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xe_exp" --target linux-kernel --contract "$XCON" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/root/meta.json" \
+    --experiment-period-us 2000 --allow-experiment-deploy
+# 周期必须真的落到宿主与桥，否则"多速率"只是说说
+expect_grep "root 宿主周期变成 2000 µs" "$TMP/xe_exp/ecos_fused_linux.c" \
+    "static unsigned int period_us = 2000;"
+expect_grep "root 桥按本域周期算拍" "$TMP/xe_exp/ecos_xdom.c" \
+    "#define ECOS_XDOM_PERIOD_US 2000"
+# 偏离已验证方案必须留痕：否则几个月后没人知道这组数据不能用
+if [ -f "$TMP/xe_exp/EXPERIMENT.txt" ] && grep -q "不得用于论文主张" "$TMP/xe_exp/EXPERIMENT.txt"; then
+    ok "装置实验产物带 EXPERIMENT.txt 留痕"
+else
+    bad "装置实验产物缺 EXPERIMENT.txt 留痕"
+fi
+
 expect_rc "合法预算的契约校验通过" 0 \
     "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" "$XCON"
 

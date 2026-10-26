@@ -87,6 +87,16 @@ def main():
     ap.add_argument("--xdom", default=None,
                     help="拆分器写的 per-domain meta.json（PR10-C）。给了就在周期体里"
                          "为跨域数据插发布/订阅，并生成 ecos_xdom.{h,c}")
+    ap.add_argument("--experiment-period-us", type=int, default=None,
+                    help="【装置实验】覆盖本域控制周期（µs）。与方案不一致时必须同时给 "
+                         "--allow-experiment-deploy；产物写 EXPERIMENT.txt、不得进论文主张。"
+                         "多速率装置就靠它：一端 1000、另一端 2000")
+    ap.add_argument("--experiment-shift-us", type=int, default=0,
+                    help="【装置实验】把每个组的相位整体平移 N µs（按周期取模）。"
+                         "用于同一速率下只切相位做 A/B——多速率装置里相位才第一次有非平凡作用")
+    ap.add_argument("--allow-experiment-deploy", action="store_true",
+                    help="承认这是装置实验（周期/相位偏离已验证的方案）。"
+                         "与 --allow-unverified 同一套规矩：产物明确标记、不得进论文主张")
     ap.add_argument("--allow-unverified", action="store_true",
                     help="允许用未验证方案生成（产物标记为对照用，不得进论文）")
     a = ap.parse_args()
@@ -212,6 +222,35 @@ def main():
                   file=sys.stderr)
             return 3
 
+    # ---- 装置实验：周期/相位覆盖（必须显式承认，且留痕）----
+    # 为什么单独一个口子而不是直接改契约：契约是**已验证**的那份，改它等于让验证结论失效。
+    # 实验装置要的是"同一份方案、换一个部署"，所以这里只改生成用的节拍，并把偏离写进
+    # EXPERIMENT.txt —— 与 --allow-unverified 同一套规矩（产物不得进论文主张）。
+    exp_notes = []
+    if a.experiment_period_us is not None or a.experiment_shift_us:
+        if not a.allow_experiment_deploy:
+            print("❌ 给了 --experiment-* 但没给 --allow-experiment-deploy：\n"
+                  "  这些开关会让产物偏离已通过验证的方案（周期/相位），"
+                  "必须显式承认是装置实验", file=sys.stderr)
+            return 2
+    if a.experiment_period_us is not None:
+        want = int(a.experiment_period_us)
+        if want <= 0:
+            print("❌ --experiment-period-us 必须 > 0", file=sys.stderr)
+            return 2
+        exp_notes.append("周期：方案 %.0f µs → 装置 %d µs" % (ir.period_us or 0, want))
+        ir.period_us = want
+    if a.experiment_shift_us:
+        if ir.period_us:
+            for g in ir.groups:
+                g.phase_us = (float(g.phase_us or 0) + float(a.experiment_shift_us)) % float(ir.period_us)
+        exp_notes.append("相位整体平移 %+d µs（按周期 %.0f µs 取模）"
+                         % (a.experiment_shift_us, ir.period_us or 0))
+    if exp_notes:
+        print("⚠ 装置实验（偏离已验证方案）：", file=sys.stderr)
+        for n in exp_notes:
+            print("    %s" % n, file=sys.stderr)
+
     # ---- 阶段函数必须真实存在 ----
     try:
         protos = stage_manifest.prototypes_for(ir, a.source)
@@ -242,6 +281,14 @@ def main():
                           body_emit.emit_body_c(ir, protos)))
     written.append(_write(a.out_dir, "fusion_ir.json",
                           json.dumps(ir.to_json(), ensure_ascii=False, indent=2) + "\n"))
+    if exp_notes:
+        written.append(_write(a.out_dir, "EXPERIMENT.txt",
+                              "装备实验产物 —— 不得用于论文主张\n"
+                              "================================\n"
+                              + "\n".join("- " + n for n in exp_notes)
+                              + "\n\n原因：这些偏离没有经过 plan_verify，"
+                                "\n合法性的唯一凭据是 ecos/plan_verify.py，"
+                                "\n而不是\"它跑起来了\"。\n"))
 
     # ---- 跨域数据桥（PR10-C）----
     # 只在给了 --xdom 时生成；单域产物一个字节都不变。
