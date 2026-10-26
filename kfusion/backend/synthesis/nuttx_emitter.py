@@ -114,7 +114,7 @@ int %(main_name)s(int argc, char *argv[])
 	base = (uint64_t)now.tv_sec * 1000000u + (uint64_t)now.tv_nsec / 1000u;
 
 	for (;;) {
-%(t_first_decl)s
+%(xdom_anchor)s%(t_first_decl)s
 		base += (uint64_t)ECOS_PERIOD_US;
 		for (i = 0; i < ECOS_GROUPS; i++) {
 			ecos_sleep_until(base + ecos_phase_us[i]);
@@ -344,6 +344,13 @@ def emit(ir, module_name, main_name=None, probe=False, xdom=False,
                           "\tecos_xdom_init();\n" if xdom else ""),
             "xdom_include": ('#include "ecos_xdom.h"\t/* 跨域数据桥 */\n'
                              if xdom else ""),
+            # 周期锚点：首拍真正跑起来的时刻（base 本身就是 µs）。
+            # 不用 init 时刻——init 之后还要等环、建定时器，差好几百 µs。
+            "xdom_anchor": ('\t\tif (periods == 0)\n'
+                            '\t\t\tprintf("xdom anchor base_us=%llu now_us=%u period_us=%d\\n",\n'
+                            '\t\t\t       (unsigned long long)base, ecos_xdom_now_us(),\n'
+                            '\t\t\t       (int)ECOS_PERIOD_US);\n'
+                            if xdom else ""),
         },
         MAKEFILE: _MAKEFILE % {"mod": module_name, "upper": upper,
                                "prog": prog, "main_name": main_name,

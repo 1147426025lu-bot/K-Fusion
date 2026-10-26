@@ -50,7 +50,9 @@ _H = """/* ecos_xdom.h — 跨域数据桥（由 ECoS 拆分器生成，勿手�
 struct ecos_xdom_evid {
 	uint32_t prod;      /* 这条数据的发布时刻（µs，共享计数器） */
 	uint32_t cons;      /* 本域消费它的时刻（µs） */
-	uint32_t age_us;    /* cons - prod（µs，与两侧速率无关） */
+	uint32_t age_us;    /* cons - prod（µs，与两侧速率无关）——最近一次的 */
+	uint32_t min_ag_us; /* 见过的**最小**年龄（µs） */
+	uint32_t max_ag_us; /* 见过的**最大**年龄（µs） */
 	uint32_t age;       /* age_us / ECOS_XDOM_PERIOD_US（本域控制拍数） */
 	uint32_t n;         /* 累计消费次数 */
 	uint32_t n_stale;   /* 年龄超过上限的次数（仅当 ECOS_XDOM_MAX_AGE > 0） */
@@ -131,6 +133,12 @@ static int xr_ready;
 /* CNTFRQ（init 时缓存一次）。counter → µs 的换算全靠它。 */
 static uint32_t xdom_hz;
 
+/* 本域的参考时刻（µs，init 那一刻）。
+ * 为什么必须有它：跨域年龄不只看两个周期，还看**两个域的网格相对偏移 ρ**。
+ * 每次开机、每次 insmod，两边的起点都不同，ρ 不可控；不把它打印出来，
+ * 就无法把"年龄变了"归因到相位改动——多速率下尤其会被奇偶混叠骗（见 §15 撤回）。 */
+static uint32_t xdom_t0_us;
+
 /* PR10-F：每通道"最近一条"缓存。
  * 旧实现（PR10-C）的 ecos_xdom_sub 用 while(xipc_pop()) 把 in 环里**所有**消息都
  * pop 消费掉，于是 sub(通道X) 会把通道Y 的消息也吞掉——另一个通道的 sub 后来读到
@@ -196,8 +204,19 @@ void ecos_xdom_init(void)
 
 	/* CNTFRQ 要在等环之前缓存好：counter → µs 的换算全靠它。 */
 	xdom_hz = xipc_counter_hz();
+	xdom_t0_us = xdom_now_us();   /* 本域参考时刻：用于事后算两域的相对偏移 ρ */
 
-%(init_body)s}
+%(init_body)s
+	/* 本域参考时刻打一行：两域的相对偏移 ρ 靠它事后算（谁先谁后、差多少 µs）。
+	 * root 侧没有人周期性调 ecos_xdom_report_evidence，所以必须在 init 就打。 */
+#ifdef ECOS_XDOM_KERNEL
+	pr_info("xdom init t0_us=%%u period_us=%%d owner=%%d\\n",
+		xdom_t0_us, (int)ECOS_XDOM_PERIOD_US, ECOS_XDOM_OWNER);
+#else
+	printf("xdom init t0_us=%%u period_us=%%d owner=%%d\\n",
+	       xdom_t0_us, (int)ECOS_XDOM_PERIOD_US, ECOS_XDOM_OWNER);
+#endif
+}
 
 void ecos_xdom_pub(unsigned channel, int32_t value)
 {
@@ -293,7 +312,13 @@ void ecos_xdom_sub_tick(unsigned channel, int32_t *dst, uint32_t *out_tick)
 		e->age    = (ECOS_XDOM_PERIOD_US != 0)
 			    ? age / (uint32_t)ECOS_XDOM_PERIOD_US : 0;
 		e->n++;
-		/* max_age 记的是**拍**（与 MAX_AGE 同一单位），别把 µs 塞进去 */
+		/* min/max 都按 **µs** 记：多速率下 age 会在几个值之间交替，
+		 * 只打"最近一次"会撞上奇偶混叠（踩过，见 §15 撤回）。
+		 * 下面 max_age 记的是**拍**（与 MAX_AGE 同一单位），别混。 */
+		if (e->n == 1 || age < e->min_ag_us)
+			e->min_ag_us = age;
+		if (age > e->max_ag_us)
+			e->max_ag_us = age;
 		if (e->age > e->max_age)
 			e->max_age = e->age;
 
@@ -339,13 +364,27 @@ void ecos_xdom_report_evidence(void)
 		if (e->n == 0)
 			continue;
 #ifdef ECOS_XDOM_KERNEL
-		pr_info("xdom ch%%u prod=%%u cons=%%u age_us=%%u age=%%u n=%%u stale=%%u max=%%u\\n",
-			ch, e->prod, e->cons, e->age_us, e->age, e->n, e->n_stale, e->max_age);
+		pr_info("xdom ch%%u prod=%%u cons=%%u age_us=%%u min_us=%%u max_us=%%u age=%%u n=%%u stale=%%u max=%%u\\n",
+			ch, e->prod, e->cons, e->age_us, e->min_ag_us, e->max_ag_us,
+			e->age, e->n, e->n_stale, e->max_age);
 #else
-		printf("xdom ch%%u prod=%%u cons=%%u age_us=%%u age=%%u n=%%u stale=%%u max=%%u\\n",
-		       ch, e->prod, e->cons, e->age_us, e->age, e->n, e->n_stale, e->max_age);
+		printf("xdom ch%%u prod=%%u cons=%%u age_us=%%u min_us=%%u max_us=%%u age=%%u n=%%u stale=%%u max=%%u\\n",
+		       ch, e->prod, e->cons, e->age_us, e->min_ag_us, e->max_ag_us,
+		       e->age, e->n, e->n_stale, e->max_age);
 #endif
+		/* 窗口重置：min/max 只描述**这一个**上报窗口。
+		 * 为什么要重置：整跑累计的 min/max 会被启动瞬态（第一条数据 age≈1 µs）
+		 * 和 ρ 的缓慢漂移一起撑满，看不出"多速率下年龄成对出现"这个结构。 */
+		e->min_ag_us = e->age_us;
+		e->max_ag_us = e->age_us;
 	}
+#ifdef ECOS_XDOM_KERNEL
+	pr_info("xdom ref t0_us=%%u now_us=%%u period_us=%%d\\n",
+		xdom_t0_us, xdom_now_us(), (int)ECOS_XDOM_PERIOD_US);
+#else
+	printf("xdom ref t0_us=%%u now_us=%%u period_us=%%d\\n",
+	       xdom_t0_us, xdom_now_us(), (int)ECOS_XDOM_PERIOD_US);
+#endif
 }
 
 /* 统一 epoch：两侧都读同一个物理计数器生成 session（见 ecos_xipc.h），

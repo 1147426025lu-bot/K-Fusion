@@ -344,6 +344,10 @@ expect_grep "nuttx Makefile 把桥编进去" "$TMP/xe_nuttx/Makefile" "ecos_xdom
 # PR10-F 修订：跨域宿主的周期上报里应真的调用证据打印（否则证据只存不显）。
 expect_grep "nuttx 宿主周期上报打印逐拍证据" "$TMP/xe_nuttx/ecos_nuttx_main.c" \
     "ecos_xdom_report_evidence()"
+# 周期锚点：跨域年龄只能靠"首拍真正跑起来的时刻"算，不能用 init 时刻
+# （init 到首拍隔着建线程/起 hrtimer，差几百 µs；PR10-F 已栽过一次"各自 init 起算"）。
+expect_grep "nuttx 宿主打首拍周期锚点" "$TMP/xe_nuttx/ecos_nuttx_main.c" \
+    "xdom anchor base_us=" "ecos_xdom_now_us()"
 
 expect_rc "root 端生成（带桥）" 0 \
     "$PY" "$SYNTH" --plan "$TMP/xsplit/root/plan.json" \
@@ -352,6 +356,8 @@ expect_rc "root 端生成（带桥）" 0 \
     --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
     --xdom "$TMP/xsplit/root/meta.json"
 expect_grep "root Kbuild 把桥链进去" "$TMP/xe_root/Kbuild" "ecos_xdom.o"
+expect_grep "root 宿主打首拍周期锚点" "$TMP/xe_root/ecos_fused_linux.c" \
+    "xdom anchor now_us="
 expect_grep "root 侧方向相反（收 g_act 发 g_plant）" \
     "$TMP/xe_root/ecos_fused_body.c" \
     "ecos_xdom_sub(0, &g_act);" "ecos_xdom_pub(1, g_plant);"

@@ -500,5 +500,76 @@ else
 fi
 
 echo
+echo "=== 33. PR11-C：多执行域事件时间线（跨域年龄到底由什么决定）==="
+# 单核串行时间线只能给出"跨域加一拍"，而实测（§14/§15）说明那不对。
+# 这里用事件网格模型验四件事：集合只由 ρ mod P_c 决定、生产者更快时 age 恒 0、
+# 旧桥"每拍只取一条"会积压、以及"2ms 生产 + 1ms 消费 + 1 拍预算"没有安全相位。
+"$PY" - "$HERE/../ecos" <<'PYEOF' >"$TMP/timeline.txt" 2>&1
+import sys, os
+sys.path.insert(0, sys.argv[1])          # ecos 目录由脚本传进来，不靠环境变量
+import xdom_timeline as T
+
+ok = True
+def chk(name, cond, extra=""):
+    global ok
+    print(("  PASS " if cond else "  FAIL ") + name + (("  " + extra) if extra else ""))
+    ok = ok and cond
+
+def band(Pp, Pc, rho, pick="latest", drift=0.0, n=600):
+    return T.age_band(T.Domain("p", Pp, drift_ppm=drift),
+                      T.Domain("c", Pc, phase_us=rho, drift_ppm=drift),
+                      n_cons=n, pick=pick)
+
+# 1) 1:1 同速率：每拍都有新数据，年龄恒 0
+b = band(1000, 1000, 0)
+chk("1:1 同速率 age 恒 0", b["values"] == [0.0] and b["reused"] == 0, str(b["values"]))
+
+# 2) 生产 2x 慢：年龄只在 {a, a+P_c} 两值交替
+b = band(2000, 1000, 254)
+chk("2x 慢生产 → 两个值 {254,1254}", b["values"] == [254.0, 1254.0], str(b["values"]))
+chk("2x 慢生产 → 半数拍复用旧值", abs(b["reused"] - b["n"] / 2.0) <= 2, "%d/%d" % (b["reused"], b["n"]))
+
+# 3) 集合只由 ρ mod P_c 决定 ⇒ ρ 与 ρ+P_c 给同一集合（这正是"打印只看一个奇偶"的陷阱）
+b2 = band(2000, 1000, 1254)
+chk("ρ 与 ρ+P_c 的年龄集合相同（奇偶混叠）", b2["values"] == b["values"],
+    "%s vs %s" % (b2["values"], b["values"]))
+b3 = band(2000, 1000, 600)
+chk("但不同 ρ mod P_c 换集合 {600,1600}", b3["values"] == [600.0, 1600.0], str(b3["values"]))
+
+# 4) 生产者**更快**：抽干取最新 ⇒ age 恒 0，只浪费数据（drain 把积压吃掉）
+b = band(500, 1000, 0)
+chk("生产者更快 → drain-latest 的 age 恒 0（丢数据不增龄）",
+    b["max_us"] == 0 and b["drops"] == 0, str(b["values"]))
+
+# 5) 旧桥的"每拍只取一条"：生产者更快时必然积压（这就是它和取最新的本质差别）
+b = band(500, 1000, 0, pick="one")
+chk("生产者更快 + 每拍只取一条 → 积压或丢包",
+    (b["backlog"] > 0 or b["drops"] > 0), "backlog=%d drops=%d" % (b["backlog"], b["drops"]))
+
+# 6) 相位安全窗：2ms 生产 + 1ms 消费 + 1 拍预算 ⇒ 没有可用相位
+w = T.safe_phase_window(2000, 1000, 1000, steps=360, n_cons=400)
+chk("2ms/1ms + 1 拍预算 → 安全相位窗总宽 0", w["safe_width"] == 0.0,
+    "%.0f/%.0f µs" % (w["safe_width"], w["lcm"]))
+w15 = T.safe_phase_window(2000, 1000, 1000, drift_ppm=15, steps=360, n_cons=400)
+chk("加 15 ppm 漂移 → 连孤立点都没有", w15["safe"] == [], str(w15["safe"]))
+w2 = T.safe_phase_window(2000, 1000, 2000, steps=360, n_cons=400)
+chk("预算放宽到 2 拍 → 几乎全宽可用", w2["safe_width"] >= 0.99 * w2["lcm"],
+    "%.0f/%.0f µs" % (w2["safe_width"], w2["lcm"]))
+
+# 7) 1:1 + 1 拍预算：任何相位都安全（这解释了"1:1 下相位看起来没用"）
+w = T.safe_phase_window(1000, 1000, 1000, steps=360, n_cons=400)
+chk("1:1 + 1 拍预算 → 全相位安全", w["safe_width"] >= 0.99 * w["lcm"],
+    "%.0f/%.0f µs" % (w["safe_width"], w["lcm"]))
+
+sys.exit(0 if ok else 1)
+PYEOF
+if [ $? -eq 0 ]; then
+    ok "PR11-C 事件时间线模型：7 组断言全部成立"
+else
+    bad "PR11-C 事件时间线模型：有断言未通过"
+    sed -n '1,24p' "$TMP/timeline.txt" | sed 's/^/      /'
+fi
+
+echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" = 0 ] || exit 1

@@ -214,7 +214,7 @@ static int ecos_runner(void *data)
 		/* 冻结：不执行、不计数 —— 保证 sysfs 快照同拍 */
 		if (unlikely(frozen))
 			continue;
-%(probe_before)s
+%(xdom_anchor)s%(probe_before)s
 		ecos_run_body(g->id);
 %(probe_after)s
 	}
@@ -526,6 +526,13 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
                       "\tecos_xdom_init();\n" if xdom else ""),
         "xdom_include": ('#include "ecos_xdom.h"\t/* 跨域数据桥 */\n'
                          if xdom else ""),
+        # 周期锚点：**首拍真正跑起来的时刻**（µs）。不是 init 时刻——
+        # init 到首拍之间还隔着建线程、起 hrtimer，差几百 µs 到几毫秒。
+        # 两域的相对偏移 ρ 只能用它算（PR10-F 已经栽过"各自 init 起算"一次）。
+        "xdom_anchor": ('\t\tif (unlikely(periods == 0 && g->id == 0))\n'
+                        '\t\t\tpr_info("xdom anchor now_us=%u period_us=%u\\n",\n'
+                        '\t\t\t\tecos_xdom_now_us(), period_us);\n'
+                        if xdom else ""),
     }
     return {
         HOST_C: host,
