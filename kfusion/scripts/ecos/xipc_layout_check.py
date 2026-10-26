@@ -18,12 +18,12 @@ HDR = "kfusion/runtime/xshm/ecos_xipc.h"
 
 # 必须与 ecos_xipc.h 以及两端代码里的假设一致
 EXPECT = {
-    "slot_bytes": 16,
+    "slot_bytes": 20,
     "head": 0x40,
     "tail": 0x80,
     "drops": 0xC0,
     "slot": 0x100,
-    "ring_max": 4096,
+    "ring_max": 12288,          # PR10-F：约束放宽到 peer 片 XIPC_PEER_STRIDE（0x3000）
     "rings": {"XIPC_RING_R2I": 0x0000, "XIPC_RING_I2R": 0x3000,
               "XIPC_STATS_OFF": 0x6000},
     "map_size": 0x9000,
@@ -140,7 +140,8 @@ def main():
         print("❌ 结构体里没有字段 slot")
         fails.append("slot")
 
-    check("sizeof(struct xipc_ring) <= 4096", size <= EXPECT["ring_max"], True)
+    check("sizeof(struct xipc_ring) <= peer 片(%d)" % EXPECT["ring_max"],
+          size <= EXPECT["ring_max"], True)
 
     # 两端必须 include 同一份头
     for src in ("kfusion/runtime/xshm/root_side.c",

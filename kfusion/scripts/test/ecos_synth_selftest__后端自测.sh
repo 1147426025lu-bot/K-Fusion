@@ -241,7 +241,7 @@ expect_rc "布局漂移必须被拒（负向）" 1 \
 
 # 静态断言存在（有编译器的那一侧会真正编译它）
 expect_grep "头文件带编译期布局断言" "$XHDR" \
-    "__builtin_offsetof(struct xipc_ring, head)" "sizeof(struct xipc_ring) <= 4096"
+    "__builtin_offsetof(struct xipc_ring, head)" "sizeof(struct xipc_ring) <= XIPC_PEER_STRIDE"
 
 # session：IVSHMEM 内存不随 cell 重建清零，没有它后启动的一侧会拿旧 magic 当就绪
 expect_grep "环带 session（防残留 magic 误判）" "$XHDR" \
