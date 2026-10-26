@@ -66,6 +66,7 @@ _LINUX_C = """/* %(name)s —— 由 ECoS 融合方案生成的 ring-0 宿主；
 #include <linux/ktime.h>
 #include <linux/sched.h>
 #include <linux/sched/rt.h>
+#include <linux/atomic.h>	/* 释放计数：hrtimer 回调与内核线程共享，必须原子 */
 #include <linux/string.h>
 #include <linux/smp.h>
 #include <uapi/linux/sched/types.h>	/* struct sched_attr（uapi；内部 sched/types.h 里没有） */
@@ -106,13 +107,18 @@ static void ecos_set_fifo(struct task_struct *t, unsigned int prio)
 		sched_set_fifo(t);	/* 退回导出接口（优先级 MAX_RT_PRIO/2） */
 }
 
-/* 1 组 1 个定时器 + 1 个线程 + 1 个唤醒点 */
+/* 1 组 1 个定时器 + 1 个线程 + 1 个唤醒点。
+ *
+ * ⚠ 释放计数必须是**原子**的：hrtimer 回调（硬中断上下文）与内核线程并发读写。
+ * 旧实现用普通 `bool pending`，两处裸访问既非原子、又把"多次释放"塌成"一次"
+ * ——线程落后时丢拍且完全不可见。换成 atomic_t 后：每次定时器 atomic_inc，
+ * 线程用 atomic_xchg 一次取走全部，n-1 即积压拍数（记进 missed）。 */
 struct ecos_group {
 	int id;
 	struct hrtimer timer;
 	struct task_struct *task;
 	wait_queue_head_t wait;
-	bool pending;
+	atomic_t releases;	/* 自上次运行以来定时器释放了几次（原子） */
 };
 
 static struct ecos_group ecos_groups[ECOS_GROUPS] = {
@@ -132,6 +138,13 @@ static unsigned long periods;      /* 已完成周期数（由组 0 计数） */
 module_param(periods, ulong, 0444);
 MODULE_PARM_DESC(periods, "已完成周期数");
 
+/* 积压拍数：线程来不及跑时，定时器已释放但它还没跑的拍数（Σ(n-1)）。
+ * 严格周期配对实验里这个数必须为 0；非 0 说明"周期体超时/线程被抢占到兑现不了
+ * 周期"，此时再谈死区与延迟都没有意义——先把落后消掉。 */
+static unsigned long missed;
+module_param(missed, ulong, 0444);
+MODULE_PARM_DESC(missed, "积压拍数（线程落后于定时器释放的次数，正常应为 0）");
+
 /* 冻结开关：sysfs 上分几次 cat 参数之间会跨周期（10 ms 周期下必然发生），
  * 读出来的 periods / 观察变量就不属于同一拍。写 1 暂停周期体，取完快照再写 0。
  * 冻结期间不执行、也不计数——所以快照里的 periods 与各变量严格同拍。 */
@@ -145,8 +158,9 @@ static enum hrtimer_restart ecos_tick(struct hrtimer *t)
 {
 	struct ecos_group *g = container_of(t, struct ecos_group, timer);
 
-	/* 定时器里只置位 + 唤醒；业务逻辑留给线程，避免在硬中断上下文跑控制律 */
-	g->pending = true;
+	/* 定时器里只计数 + 唤醒；业务逻辑留给线程，避免在硬中断上下文跑控制律。
+	 * atomic_inc 保证"落后时的多次释放"一次不丢——这正是严格配对实验要看的。 */
+	atomic_inc(&g->releases);
 	wake_up_interruptible(&g->wait);
 	hrtimer_forward_now(&g->timer, ktime_set(0, (s64)period_us * 1000));
 	return HRTIMER_RESTART;
@@ -181,10 +195,22 @@ static int ecos_runner(void *data)
 {	struct ecos_group *g = data;
 
 	while (!kthread_should_stop()) {
-		wait_event_interruptible(g->wait, g->pending || kthread_should_stop());
+		wait_event_interruptible(g->wait,
+					 atomic_read(&g->releases) != 0 || kthread_should_stop());
 		if (kthread_should_stop())
 			break;
-		g->pending = false;
+		{
+			/* 原子取走并清零释放计数：n = 自上次运行以来定时器释放了几次。
+			 * n == 0：伪唤醒，回去睡。n > 1：线程落后，n-1 记进 missed（积压拍数），
+			 * 但**只跑一次**周期体——固定周期控制律不该用"追赶"抹掉迟到的事实，
+			 * 把落后暴露出来才是严格配对实验要的。 */
+			int n = atomic_xchg(&g->releases, 0);
+
+			if (n == 0)
+				continue;
+			if (n > 1)
+				missed += (unsigned long)(n - 1);
+		}
 		/* 冻结：不执行、不计数 —— 保证 sysfs 快照同拍 */
 		if (unlikely(frozen))
 			continue;
@@ -214,7 +240,7 @@ static int __init ecos_init(void)
 		struct ecos_group *g = &ecos_groups[i];
 
 		init_waitqueue_head(&g->wait);
-		g->pending = false;
+		atomic_set(&g->releases, 0);
 
 		hrtimer_init(&g->timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS_PINNED);
 		g->timer.function = ecos_tick;

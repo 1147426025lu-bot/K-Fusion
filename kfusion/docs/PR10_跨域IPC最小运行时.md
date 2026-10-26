@@ -807,15 +807,30 @@ while (xipc_pop(xr_in, &s)) {
   镜像混跑会因槽布局不一致而数据错乱。上板前要把 `ecos_xipc.h` 同步到 NuttX 侧并整编。
 - 同 §12.6：版本化只证明"携带并核对了时间标识"，**不等于**控制稳定。
 
-## 13.7 板上验证计划（待 Pi，不在本机做）
+## 13.7 板上验证（已做：Pi4 / 5.15.86 / jailhouse v0.12）
 
-1. 把 `kfusion/runtime/xshm/ecos_xipc.h` 通过 tar 同步脚本覆盖到 NuttX 侧
-   `crtos/jailhouse_overlay_pi4/nuttx/apps/examples/xipc/` 与桥的生成输入。
-2. 板端当前 NuttX 仍自动启动 `fiveloop_main`；先跑 `/root/xipc_boot/xipc_restore.sh`
-   恢复成 NSH，再编译 `xipc_main`（管理环回）与含跨域桥的控制回路。
-3. 重编 `root_side.c`（`gcc -O2 …` 无需改），跑 phase 1–4 确认 v2 协议下 RTT / 单程 /
-   可见延迟与 v1 同量级（协议变了布局但语义不变，数值不应漂移）。
-4. 生成一份含跨域的融合方案，确认 `ecos_xdom_cycle = periods;` 两宿主都生成、桥的
-   `sub_tick` 在板上返回的 `tick` 与对端发布周期对得上（跨域延迟拍数 ≈ 2）。
-5. **前置项（PR10-F 之后、PR11-A 之前）**：Linux emitter 的 `pending` 裸 `bool`
-   仍被 hrtimer 回调与内核线程共享，严格周期配对实验前要换成同步释放序列/计数。
+2026-10-26 实跑（root cell ↔ NuttX inmate）：
+
+1. v2 头同步到 NuttX 侧，`xipc_build.sh` 重建两端：**两边都编过**（root 侧 gcc、
+   NuttX 侧 arm-none-eabi），`nuttx.bin` 376832 B 且含本版标记 `xipc: session 0x`。
+2. `jailhouse enable` + `deploy_nuttx_cell.sh` 载入 `xipc_main`（CPU1）。
+3. `root_side` phase 1–4：inmate 报 **ver=2**、环 **224 槽 × 20 B**；
+   单程[忙等] p50 0.65 µs、RTT[忙等] p50 1.28 µs；
+   **单程[周期1ms] p50 1005.26 µs**（与 PR10-B 的 v1 记账逐位一致 → 扩槽未引入漂移）；
+   drops=0、超时 0、单程>RTT 异常样本 0。
+4. 生成的桥 `ecos_xdom.c`（含缓存 / `sub_tick` / `cycle`）在 Pi 上 `gcc -O2 -Wall -Wextra`
+   干净编过（rc=0）。
+
+**未做（更大的一步）**：完整融合跨域 app（fiveloop 类）重生成并上板跑 `sub_tick`，
+实测跨域延迟拍数——该路径目前仅由 Python 模型 + 桥 C 编译覆盖，运行时未上板。
+
+## 13.8 PR11-A 前置：宿主释放从裸 bool 换成原子计数（已做）
+
+`linux_kernel_emitter.py` 的 `struct ecos_group.pending`（普通 `bool`，被 hrtimer 回调
+与内核线程**并发裸读写**：既非原子、又把"多次释放"塌成一次 ⇒ 线程落后时丢拍且不可见）
+改为 `atomic_t releases`：定时器 `atomic_inc`，线程 `atomic_xchg` 一次取走全部，
+`n-1` 记进新增 `missed` 参数（积压拍数）。
+
+语义：**只跑一次周期体、不"追赶"**——固定周期控制律不该用追赶抹掉迟到的事实，
+把落后暴露成 `missed` 才是严格配对实验要的。正常不落后时 n 恒为 1，行为与旧版一致。
+后端自测加两条结构断言（原子计数在、`pending` 不在），86/0。

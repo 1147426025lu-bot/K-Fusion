@@ -76,6 +76,13 @@ for f in ecos_fused_body.h ecos_fused_body.c ecos_fused_linux.c Kbuild README.bu
     if [ -f "$TMP/linux/$f" ]; then ok "生成 $f"; else bad "缺 $f"; fi
 done
 
+# PR11-A 前置：宿主的释放必须用**原子计数**，不能是 hrtimer 回调与内核线程共享的裸 bool。
+# 裸 bool 既非原子、又把"多次释放"塌成一次 ⇒ 线程落后时丢拍且不可见。
+expect_grep "linux 宿主用原子释放计数（非裸 bool）" "$TMP/linux/ecos_fused_linux.c" \
+    "atomic_inc(&g->releases)" "atomic_xchg(&g->releases, 0)" "static unsigned long missed"
+expect_absent "linux 宿主不再有裸 pending 字段" "$TMP/linux/ecos_fused_linux.c" \
+    "->pending" ".pending"
+
 echo "=== 2. 周期体不得含调度原语（PR9-C 的核心边界）==="
 expect_absent "body.c 无睡眠/入口/stdio/pthread" "$TMP/linux/ecos_fused_body.c" \
     "clock_nanosleep" "int main" "stdio.h" "pthread" "usleep"
