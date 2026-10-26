@@ -341,6 +341,9 @@ expect_grep "订阅插在 sample 之前、发布插在 pid 之后" \
     "$TMP/xe_nuttx/ecos_fused_body.c" \
     "ecos_xdom_sub(1, &g_plant);" "stage_sample();" "ecos_xdom_pub(0, g_act);"
 expect_grep "nuttx Makefile 把桥编进去" "$TMP/xe_nuttx/Makefile" "ecos_xdom.c"
+# PR10-F 修订：跨域宿主的周期上报里应真的调用证据打印（否则证据只存不显）。
+expect_grep "nuttx 宿主周期上报打印逐拍证据" "$TMP/xe_nuttx/ecos_nuttx_main.c" \
+    "ecos_xdom_report_evidence()"
 
 expect_rc "root 端生成（带桥）" 0 \
     "$PY" "$SYNTH" --plan "$TMP/xsplit/root/plan.json" \
@@ -362,6 +365,15 @@ expect_grep "nuttx 侧选环相反" "$TMP/xe_nuttx/ecos_xdom.c" \
 sed 's:/\*.*\*/::g' "$TMP/xe_root/ecos_xdom.c" | grep '^\s*//' -v > "$TMP/xdom_nc.c"
 expect_absent "桥里没有睡眠/线程/入口（剥注释后）" "$TMP/xdom_nc.c" \
     "usleep" "kthread" "int main"
+
+# PR10-F 修订：周期号必须来自**共享物理计数器**（不是域内 periods、不是环 seq），
+# 否则两侧各从自己 init 起算，age 里混进启动相位偏移；并记录逐拍证据。
+expect_grep "桥的周期号来自共享物理计数器" "$TMP/xe_root/ecos_xdom.c" \
+    "xdom_cycle_from_counter" "xipc_counter() / xdom_period_ticks" "ECOS_XDOM_PERIOD_US"
+expect_grep "桥记录逐拍证据并打印" "$TMP/xe_root/ecos_xdom.c" \
+    "ecos_xdom_evidence" "ecos_xdom_report_evidence" "e->age"
+expect_absent "桥不再依赖宿主喂的 ecos_xdom_cycle 全局" "$TMP/xe_root/ecos_xdom.c" \
+    "uint32_t ecos_xdom_cycle;"
 
 echo
 echo "通过 $PASS / 失败 $FAIL"

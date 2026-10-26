@@ -209,7 +209,8 @@ def main():
     # ---- 跨域数据桥（PR10-C）----
     # 只在给了 --xdom 时生成；单域产物一个字节都不变。
     if xdom:
-        for fn, text in xdom_bridge.emit(xdom).items():
+        # 周期长度要把物理计数器换算成"周期号"，必须把方案周期传给桥。
+        for fn, text in xdom_bridge.emit(xdom, period_us=int(ir.period_us or 0)).items():
             written.append(_write(a.out_dir, fn, text))
         print("=== 跨域数据桥 ===")
         print("  %s" % xdom_bridge.summary(xdom))

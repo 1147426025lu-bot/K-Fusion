@@ -115,7 +115,6 @@ int %(main_name)s(int argc, char *argv[])
 
 	for (;;) {
 %(t_first_decl)s
-%(xdom_cycle)s
 		base += (uint64_t)ECOS_PERIOD_US;
 		for (i = 0; i < ECOS_GROUPS; i++) {
 			ecos_sleep_until(base + ecos_phase_us[i]);
@@ -295,16 +294,22 @@ def emit(ir, module_name, main_name=None, probe=False, xdom=False,
     # 跨域观测：把 --digest-var 指定的全局量周期性打到串口。
     # 没有它，这一侧发生了什么完全看不见——而跨域实验的核心恰恰是"两边看到的值
     # 是否一致（差一拍）"。root 侧有 sysfs，inmate 侧只有 mini-UART。
-    xdom_report = ""
+    # 跨域逐拍证据：每 ECOS_XDOM_REPORT_EVERY 拍把各通道的 prod/cons/age 打到串口。
+    # 串口是 inmate 唯一的窗口（root 侧有 sysfs），年龄证据不从这走就看不见。
+    _xr = []
+    if xdom:
+        _xr.append("\t\tif (periods % ECOS_XDOM_REPORT_EVERY == 0)\n"
+                   "\t\t\tecos_xdom_report_evidence();")
     dvs = getattr(ir, "digest_vars", None) or []
     if dvs:
         calls = ['printf("ecos: periods=%lu", (unsigned long)periods);']
         for v in dvs:
             calls.append('printf(" %s=%%ld", (long)%s);' % (v, v))
         calls.append('printf("\\n");')
-        xdom_report = ("\t\tif (periods % ECOS_XDOM_REPORT_EVERY == 0) {\n"
-                       + "\n".join("\t\t\t" + c for c in calls)
-                       + "\n\t\t}")
+        _xr.append("\t\tif (periods % ECOS_XDOM_REPORT_EVERY == 0) {\n"
+                   + "\n".join("\t\t\t" + c for c in calls)
+                   + "\n\t\t}")
+    xdom_report = "\n".join(_xr)
 
     body_cases = "\n".join(
         "\tcase %d:\n\t\t%s();\n\t\tbreak;" % (i, g.body)
@@ -339,8 +344,6 @@ def emit(ir, module_name, main_name=None, probe=False, xdom=False,
                           "\tecos_xdom_init();\n" if xdom else ""),
             "xdom_include": ('#include "ecos_xdom.h"\t/* 跨域数据桥 */\n'
                              if xdom else ""),
-            "xdom_cycle": ("\tecos_xdom_cycle = periods;\t/* PR10-F：每周期把控制周期索引喂给桥 */\n"
-                           if xdom else ""),
         },
         MAKEFILE: _MAKEFILE % {"mod": module_name, "upper": upper,
                                "prog": prog, "main_name": main_name,

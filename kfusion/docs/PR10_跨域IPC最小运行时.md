@@ -729,21 +729,24 @@ F_g = S_g + Σ C_i
 `kfusion/backend/synthesis/xdom_bridge.py`（生成的桥）、两个宿主发射器
 （`linux_kernel_emitter.py` / `nuttx_emitter.py`）。
 
-## 13.1 三个版本标识各映射到哪
+## 13.1 三个标识必须分清（不是"三个字段"）
 
-PR10-F 要的 `release_id` / `session_id` / `publish_tick` 不强求新发明三个字段，
-而是把现有的和新增的明确对上号：
+审查指出：把环槽 `seq` 叫 `release_id` 不严谨——一个周期发两条、或某周期不发，
+`seq` 就和"第几拍"对不上。修正后的口径：
 
-| 标识 | 落点 | 说明 |
+| 概念 | 落点 | 说明 |
 |------|------|------|
-| `release_id` | 环槽 `seq` | 生产者每发一条 `seq = head+1`，单调递增、随 session 复位。跨域读它即可知"这是第几条"。 |
-| `session_id` | 环头 `session` | owner 每轮用 `xipc_counter()`（两侧共享物理计数器，见 §4 时间基准）生成，作为 epoch。 |
-| `publish_tick` | 环槽新增 `tick` | **新增**。生产者发布时的控制周期索引，由宿主每周期写入 `ecos_xdom_cycle`。 |
+| **消息序号** | 环槽 `seq` | 每提交一条 +1，随 session 复位。只回答"第几条消息"，**不是**释放编号。 |
+| **会话/轮次** | 环头 `session` | owner 用 `xipc_counter()` 生成。相同 session 只说明"同一轮实验"，**不代表两域第 N 拍在物理时间上对齐**。 |
+| **生产周期** | 环槽 `tick` | `publish_tick = xipc_counter() / period_ticks`，由**共享物理计数器**派生，与启动相位无关。 |
+| **消费周期** | 运行时 `ecos_xdom_cycle_now()` | 同口径：同一物理时刻两侧算出同一个周期号。 |
+| **数据年龄** | `age = consumer_cycle − publish_tick` | 真实时间差（拍），不含"各自 init 起算"的偏移。 |
 
-为什么 `publish_tick` 必须新增字段、不能靠 `seq` 凑：跨域按拍追踪要的是"这条值属于
-生产者第几个控制周期"，而 `seq` 是环内发布序号（会随环复位、且按发布次数而非周期数
-增长）。只有显式戳周期索引，消费者用 `自己周期 − publish_tick` 才算得出跨域延迟拍数
-（含 z⁻¹ 一拍 + 跨域一拍，与 PR10-D/PR10-E 的结论呼应）。
+> ⚠ **修订（回应审查问题 1/2）**：PR10-F 初稿曾用宿主 `ecos_xdom_cycle = periods`
+> 当 `publish_tick`。但 `periods` 从各自域 init 起算 ⇒ 两侧周期零点不同，`age` 会
+> 掺进启动相位偏移，不能当真实数据年龄。现改为**共享物理计数器派生**
+> （`xipc_counter() / (period_us × CNTFRQ / 1e6)`）：两侧同一物理时刻算出的周期号相同，
+> `age` 才是真实时间差。`ecos_xdom_cycle` 全局已删除，宿主不再喂周期号。
 
 ## 13.2 扩槽：16 → 20 字节，协议版本 1 → 2
 
@@ -781,28 +784,36 @@ while (xipc_pop(xr_in, &s)) {
 > 纯 Python 复刻并断言（§32 融进融合自测）；该模型也**复现了旧桥的两个 bug**，
 > 证明修复不是空谈。板上编译验证见 §13.7。
 
-## 13.4 跨域按拍追踪
+## 13.4 跨域按拍追踪 + 逐拍证据
 
-宿主每周期把控制周期索引写进全局 `ecos_xdom_cycle`，`ecos_xdom_pub` 把它作为
-`publish_tick` 戳进消息。对端在周期 C 调 `ecos_xdom_sub_tick` 拿到值 v 与发布周期 P，
-则跨域延迟拍数 = `C − P`。这个值天然包含 PR10-D/PR10-E 论证的"z⁻¹ 一拍 + 跨域一拍"，
-于是"发散 / 收敛"不再只能靠看曲线，而能用每拍的延迟拍数直接判定。
+- **生产**：`ecos_xdom_pub` 在发布时算 `publish_tick = xipc_counter() / period_ticks`
+  （`period_ticks = period_us × CNTFRQ / 1e6`，init 时算好），戳进消息 `tick`。
+- **消费**：`ecos_xdom_sub_tick` 取回值 v 与 `publish_tick`；同时用
+  `ecos_xdom_cycle_now()`（同口径）算 `consumer_cycle`，得
+  `age = consumer_cycle − publish_tick`。
+- **证据记录**：每通道记 `struct ecos_xdom_evid{prod, cons, age, n, n_stale, max_age}`，
+  每次 sub 更新；`ecos_xdom_evidence()` 读、`ecos_xdom_report_evidence()` 逐通道打印。
+  NuttX 宿主在周期上报里调用它，把逐拍 `prod/cons/age` 打到串口（root 侧有 sysfs）。
+- **过期拒收（可选）**：`ECOS_XDOM_MAX_AGE > 0` 时，`age` 超上限的版本**不更新 dst**
+  （阶段沿用上一次/默认值），并计 `n_stale`——拒绝要看得见，不能静默。默认 0 = 只记录不拒。
 
-宿主侧接线：`linux_kernel_emitter.py` 在每组 `ecos_run_body` 前、`nuttx_emitter.py`
-在组循环前各插一行 `ecos_xdom_cycle = periods;`（**仅当方案含跨域时**才生成，
-无跨域方案不引用这个全局，避免链接期未定义）。
+因为 tick 与 consumer_cycle 都来自**共享物理计数器**，`age` 天然包含 PR10-D/PR10-E
+论证的"z⁻¹ 一拍 + 跨域一拍"，且**不受两域启动相位差污染**。宿主不再写任何周期号，
+`ecos_xdom_cycle` 全局已删除。
 
-## 13.5 epoch 统一（已实现，这里点明）
+## 13.5 epoch（session）与周期对齐是两件事
 
-`session` 由 `xipc_counter()` 生成，而 Jailhouse 不陷获/偏移 `CNTPCT`/`CNTVCT`，两侧
-读同一个物理计数器（§4 已 grep 确认）。所以 owner 写一次 `session`，对端读到的就是与
-生产者**同一个** epoch 令牌——统一 epoch 是既有事实，不是新加的代码。桥新增
-`ecos_xdom_epoch()` 把本域所见 `session` 暴露出来，方便宿主在日志里核对两端 epoch 一致。
+`session` 由 `xipc_counter()` 生成，Jailhouse 不陷获/偏移 `CNTPCT`/`CNTVCT`，两侧读
+同一个物理计数器（§4 已 grep 确认），所以 `session` 是**同一轮实验**的标识——这部分成立。
+但 ⚠ **session 相同 ≠ 两域第 N 拍在物理时间上对齐**：Linux 用 `ktime_get()`、NuttX 用
+`clock_gettime()` 各自取启动基准，周期零点可差一个任意相位。真正保证"拍号可比"的是
+§13.4 的**绝对周期号**（共享计数器派生），不是 session。`ecos_xdom_epoch()` 只用来核对
+"是不是同一轮"，不能拿它当时间对齐依据（这是审查问题 1 的直接修正）。
 
 ## 13.6 这一节**没有**证明什么
 
-- 本机没有 C 编译器，C 改动**尚未在 Pi 上编译**，运行时正确性靠 Python 模型等价复刻 +
-  融合自测 §32 覆盖；**板上编译 / 环回 ping / 真实跨域回路**仍待 §13.7。
+- 桥的 C **已在 Pi 上 `gcc -O2 -Wall -Wextra` 编译通过**；但完整融合模块 / 完整 fused
+  app **尚未上板跑**，`sub_tick` 的运行时逐拍证据仍待 §13.7 的完整闭环实验。
 - 协议版本升到 2，意味着 root cell 与 inmate 必须**同时**用新头重编；旧 v1 镜像与新 v2
   镜像混跑会因槽布局不一致而数据错乱。上板前要把 `ecos_xipc.h` 同步到 NuttX 侧并整编。
 - 同 §12.6：版本化只证明"携带并核对了时间标识"，**不等于**控制稳定。

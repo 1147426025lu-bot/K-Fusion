@@ -1,4 +1,4 @@
-"""xdom_bridge.py —— 生成跨域数据桥（PR10-C）。
+"""xdom_bridge.py —— 生成跨域数据桥（PR10-C / PR10-F）。
 
 拆分成两个域之后，同一个全局量（例如 `g_act`）不再是两边的共享内存：一边写、
 一边读会各自读到自己的副本，跑起来不报错、结果全错。所以要把这些量改成
@@ -12,6 +12,20 @@
   · pub 放在产生它的阶段**之后**：晚发一个周期，可用时刻就晚一个周期。
   · sub 放在消费它的阶段**之前**：跨域本来就是"上一拍的值"，多出来的旧消息
     直接丢弃，不要攒着——攒着只会让读到更旧的数据。
+
+PR10-F 版本化（三个标识必须分清，别混）
+--------------------------------------
+  · **消息序号** = 环槽 `seq`（每提交一条 +1）。它只回答"这是第几条消息"，
+    **不是**任务释放编号：一个周期发两条、或某周期不发，seq 就对不上拍。
+  · **生产周期** = `publish_tick`（消息的 `tick` 字段）。由**共享物理计数器**派生：
+    `tick = xipc_counter() / period_ticks`。两侧用同一个计数器、同一个周期长度
+    ⇒ 同一物理时刻算出的 tick 相同，**与各自启动相位无关**。
+  · **消费周期** = 消费者调 `ecos_xdom_cycle_now()` 得到的同一口径周期号。
+  数据年龄（拍）= `consumer_cycle − publish_tick`，这才是真实的时间差，
+  不含"两边各自从自己 init 起算"的启动偏移。
+
+消费侧还会为**每个通道**记录最近一次的 producer/consumer/age 与累计统计，
+供上层打印逐拍证据（`ecos_xdom_evidence` / `ecos_xdom_report_evidence`）。
 """
 import io
 
@@ -21,22 +35,34 @@ _H = """/* ecos_xdom.h — 跨域数据桥（由 ECoS 拆分器生成，勿手�
  * 本文件只服务**一个域**：它知道自己该往哪个环发、从哪个环收。
  * 方向来自拆分器写的 peer_ring，不是猜的。
  *
- * PR10-F 版本化：ecos_xdom_cycle 由宿主每周期写入（= 控制周期索引），
- * ecos_xdom_pub 把它作为 publish_tick 塞进消息；对端用 ecos_xdom_sub_tick
- * 把这条发布周期索引读出来，就能按"拍"追踪跨域数据属于哪个控制周期。
+ * PR10-F 版本化：publish_tick 由**共享物理计数器**派生（不是本域 periods、不是环 seq），
+ * 所以两侧同一物理时刻的周期号相同；消费侧 age = consumer_cycle - publish_tick
+ * 是真实时间差（拍），不受启动相位影响。
  */
 #ifndef ECOS_XDOM_H
 #define ECOS_XDOM_H
 
 #include <stdint.h>
 
-extern uint32_t ecos_xdom_cycle;   /* 宿主每周期写入：当前控制周期索引（publish_tick 来源） */
+/* 逐拍数据版本证据（消费侧记录）：每通道最近一次消费的
+ * 生产周期 / 消费周期 / 年龄（拍），以及累计与过期统计。 */
+struct ecos_xdom_evid {
+	uint32_t prod;      /* 这条数据由生产者在第几个（绝对）控制周期产生 */
+	uint32_t cons;      /* 本域消费它时所在的（绝对）周期 */
+	uint32_t age;       /* cons - prod（拍数） */
+	uint32_t n;         /* 累计消费次数 */
+	uint32_t n_stale;   /* 年龄超过上限的次数（仅当 ECOS_XDOM_MAX_AGE > 0） */
+	uint32_t max_age;   /* 见过的最大年龄（拍） */
+};
 
 void ecos_xdom_init(void);
 void ecos_xdom_pub(unsigned channel, int32_t value);
 void ecos_xdom_sub(unsigned channel, int32_t *dst);
 void ecos_xdom_sub_tick(unsigned channel, int32_t *dst, uint32_t *out_tick);
-uint32_t ecos_xdom_epoch(void);    /* 统一 epoch：本域所见 session */
+uint32_t ecos_xdom_cycle_now(void);                 /* 本域当前绝对周期号（共享计数器派生） */
+int ecos_xdom_evidence(unsigned channel, struct ecos_xdom_evid *out);
+void ecos_xdom_report_evidence(void);               /* 逐通道打印最近一次的 prod/cons/age */
+uint32_t ecos_xdom_epoch(void);                     /* 统一 epoch：本域所见 session */
 
 #endif /* ECOS_XDOM_H */
 """
@@ -55,12 +81,14 @@ _C = """/* ecos_xdom.c — 跨域数据桥（由 ECoS 拆分器生成，勿手�
  */
 %(kernel_include)s#include "ecos_xdom.h"
 #include "ecos_xipc.h"
-%(wait_include)s
+%(stdio_include)s%(wait_include)s
 #define ECOS_XDOM_BASE  0x%(base)08xu
 #define ECOS_XDOM_OUT   0x%(out)04xu
 #define ECOS_XDOM_IN    0x%(in)04xu
 #define ECOS_XDOM_OWNER %(owner)d
 #define ECOS_XDOM_NCHAN %(nchan)d
+#define ECOS_XDOM_PERIOD_US %(period_us)d
+#define ECOS_XDOM_MAX_AGE %(max_age)d   /* 0 = 不判过期；>0 = 超过即拒绝该版本 */
 
 /* 为什么有两套地址解析
  * -------------------
@@ -79,6 +107,9 @@ static struct xipc_ring *xr_out;
 static struct xipc_ring *xr_in;
 static int xr_ready;
 
+/* 一个控制周期 = 多少物理计数器 tick（init 时按 ECOS_XDOM_PERIOD_US × CNTFRQ 算）。 */
+static uint64_t xdom_period_ticks;
+
 /* PR10-F：每通道"最近一条"缓存。
  * 旧实现（PR10-C）的 ecos_xdom_sub 用 while(xipc_pop()) 把 in 环里**所有**消息都
  * pop 消费掉，于是 sub(通道X) 会把通道Y 的消息也吞掉——另一个通道的 sub 后来读到
@@ -89,9 +120,18 @@ static int32_t  xdom_cache[ECOS_XDOM_NCHAN];
 static uint32_t xdom_cache_tick[ECOS_XDOM_NCHAN];
 static uint8_t  xdom_cache_valid[ECOS_XDOM_NCHAN];
 
-/* 宿主每周期写入的当前控制周期索引；ecos_xdom_pub 把它塞进消息的 tick 字段，
- * 对端就能按"拍"追踪这条数据属于哪个控制周期（PR10-F 的 per-cycle trace）。 */
-uint32_t ecos_xdom_cycle;
+/* 逐拍证据：每通道最近一次消费的 prod/cons/age + 累计统计。 */
+static struct ecos_xdom_evid xdom_evid[ECOS_XDOM_NCHAN];
+
+/* 绝对周期号：共享物理计数器 / 一个周期的 tick 数。
+ * 两侧用同一个计数器、同一个周期长度 ⇒ 同一物理时刻算出的值相同，
+ * **与各自启动相位/init 时刻无关**。这是 age 可信的前提。 */
+static uint32_t xdom_cycle_from_counter(void)
+{
+	if (xdom_period_ticks == 0)
+		return 0;
+	return (uint32_t)(xipc_counter() / xdom_period_ticks);
+}
 
 static struct xipc_ring *xdom_ring(unsigned int off)
 {
@@ -117,16 +157,25 @@ void ecos_xdom_init(void)
 	xr_out = xdom_ring(ECOS_XDOM_OUT);
 	xr_in  = xdom_ring(ECOS_XDOM_IN);
 
+	/* 周期长度换算要在等环之前算好：pub/sub 的 tick 全靠它。 */
+	{
+		uint32_t hz = xipc_counter_hz();
+
+		if (hz != 0 && ECOS_XDOM_PERIOD_US != 0)
+			xdom_period_ticks = (uint64_t)ECOS_XDOM_PERIOD_US
+					    * (uint64_t)hz / 1000000ull;
+	}
+
 %(init_body)s}
 
 void ecos_xdom_pub(unsigned channel, int32_t value)
 {
 	if (!xr_ready)
 		return;
-	/* tick = 本域当前控制周期索引（publish_tick）。对端用 sub_tick 读出后，
-	 * 用"自己的周期索引 − 这条的 tick"即可得跨域延迟拍数（含 z⁻¹ 与跨域各一拍）。 */
+	/* publish_tick = 共享物理计数器派生的**绝对周期号**（不是本域 periods、不是环 seq）。
+	 * 对端用 ecos_xdom_cycle_now() 得到同口径的消费周期，相减才是真实年龄。 */
 	(void)xipc_pub_ticked(xr_out, XIPC_KIND_DATA, channel, (uint32_t)value,
-	                      ecos_xdom_cycle);
+	                      xdom_cycle_from_counter());
 }
 
 void ecos_xdom_sub(unsigned channel, int32_t *dst)
@@ -153,14 +202,69 @@ void ecos_xdom_sub_tick(unsigned channel, int32_t *dst, uint32_t *out_tick)
 		}
 	}
 	if (xdom_cache_valid[channel]) {
-		*dst = xdom_cache[channel];
+		struct ecos_xdom_evid *e = &xdom_evid[channel];
+		uint32_t tick = xdom_cache_tick[channel];
+		uint32_t cons = xdom_cycle_from_counter();
+		uint32_t age  = cons - tick;   /* 无符号回绕差：正常小，过期则大 */
+
+		/* 记录逐拍证据：这一拍消费到的数据是哪个周期产生的、现在第几拍、差几拍。 */
+		e->prod = tick;
+		e->cons = cons;
+		e->age  = age;
+		e->n++;
+		if (age > e->max_age)
+			e->max_age = age;
+
 		if (out_tick)
-			*out_tick = xdom_cache_tick[channel];
+			*out_tick = tick;
+
+		/* 过期版本强制拒绝：age 超上限就不更新 dst（阶段沿用上一次/默认值），
+		 * 但**仍然计数并保留证据**——拒绝要看得见，不能静默。默认 MAX_AGE=0 不启用。 */
+		if (ECOS_XDOM_MAX_AGE != 0 && age > (uint32_t)ECOS_XDOM_MAX_AGE) {
+			e->n_stale++;
+			return;
+		}
+		*dst = xdom_cache[channel];
+	}
+}
+
+uint32_t ecos_xdom_cycle_now(void)
+{
+	return xdom_cycle_from_counter();
+}
+
+int ecos_xdom_evidence(unsigned channel, struct ecos_xdom_evid *out)
+{
+	if (out == 0 || channel >= ECOS_XDOM_NCHAN)
+		return 0;
+	*out = xdom_evid[channel];
+	return 1;
+}
+
+/* 逐通道打印最近一次消费的 prod/cons/age/n/stale/max。宿主周期性调用即可。 */
+void ecos_xdom_report_evidence(void)
+{
+	unsigned int ch;
+
+	for (ch = 0; ch < ECOS_XDOM_NCHAN; ch++) {
+		struct ecos_xdom_evid *e = &xdom_evid[ch];
+
+		if (e->n == 0)
+			continue;
+#ifdef ECOS_XDOM_KERNEL
+		pr_info("xdom ch%%u prod=%%u cons=%%u age=%%u n=%%u stale=%%u max=%%u\\n",
+			ch, e->prod, e->cons, e->age, e->n, e->n_stale, e->max_age);
+#else
+		printf("xdom ch%%u prod=%%u cons=%%u age=%%u n=%%u stale=%%u max=%%u\\n",
+		       ch, e->prod, e->cons, e->age, e->n, e->n_stale, e->max_age);
+#endif
 	}
 }
 
 /* 统一 epoch：两侧都读同一个物理计数器生成 session（见 ecos_xipc.h），
- * 所以 in 环的 session 就是本域所见、且与对端一致的 epoch 标识。 */
+ * 所以 in 环的 session 就是本域所见、且与对端一致的 epoch 标识。
+ * 注意：epoch 相同只说明"同一轮实验"，**不**代表两边第 N 拍在物理时间上对齐
+ * ——对齐由上面的绝对周期号（共享计数器派生）保证，与 session 无关。 */
 uint32_t ecos_xdom_epoch(void)
 {
 	return xr_in ? xr_in->session : 0;
@@ -170,8 +274,11 @@ uint32_t ecos_xdom_epoch(void)
 BASE = 0x1faf1000
 
 
-def emit(domain_meta):
-    """domain_meta: 拆分器写的 per-domain meta.json（含 peer_ring 与 pub/sub）。"""
+def emit(domain_meta, period_us=1000, max_age=0):
+    """domain_meta: 拆分器写的 per-domain meta.json（含 peer_ring 与 pub/sub）。
+    period_us: 控制周期（µs），用于把物理计数器换算成周期号。
+    max_age:   过期阈值（拍），0 = 不启用过期拒收（只记录证据）。
+    """
     ring = domain_meta.get("peer_ring") or {}
     out_off = int(ring.get("out", 0))
     # owner = peer0（out 环在 0x0000）。与 PR10 的分片约定一致：
@@ -220,10 +327,11 @@ def emit(domain_meta):
              [s.get("channel") for s in (domain_meta.get("subscribe") or [])]
     nchan = (max(c for c in _chans if isinstance(c, int)) + 1) if _chans else 1
 
+    kernel = 1 if domain_meta.get("kernel") else 0
     return {
         "ecos_xdom.h": _H,
         "ecos_xdom.c": _C % {
-            "kernel": 1 if domain_meta.get("kernel") else 0,
+            "kernel": kernel,
             "init_body": init_body,
             "domain": domain_meta.get("domain", "?"),
             "base": BASE,
@@ -231,10 +339,16 @@ def emit(domain_meta):
             "in": int(ring.get("in", 0)),
             "owner": owner,
             "nchan": nchan,
+            "period_us": int(period_us or 0),
+            "max_age": int(max_age or 0),
             "owner_note": owner_note,
+            # kernel 侧要 pr_info（report_evidence 用），故带 kernel.h
             "kernel_include": ("#define ECOS_XDOM_KERNEL 1\t/* ring-0 宿主 */\n"
                                "#include <linux/io.h>\t/* ioremap */\n"
-                               if domain_meta.get("kernel") else ""),
+                               "#include <linux/kernel.h>\t/* pr_info */\n"
+                               if kernel else ""),
+            # 非 kernel 侧用 printf（report_evidence 用）
+            "stdio_include": ("" if kernel else "#include <stdio.h>\t/* printf：证据打印 */\n"),
             "wait_include": ("" if owner else
                              "#include <unistd.h>\t/* usleep：等 owner 建环 */\n"),
         },
