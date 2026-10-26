@@ -405,5 +405,87 @@ for D in loop_fb_limit loop_phasepin; do
 done
 
 echo
+echo
+echo "=== 31. PR10-E：反馈死区统一判据（规划器与验证器必须同一结论）==="
+# 背景：跨域边自带一整拍 ⇒ 反馈闭环的死区从 1 拍变 2 拍。PR10-D 在板上量到
+# 单域稳定收敛的回路跨域后发散（±90000），而工具链一路绿灯。两处漏判：
+#   · 验证器只在"反馈边并入同一组"时判死区，跨组（跨域）直接跳过；
+#   · 契约把 feedback_delay_max_us 写在顶层 control 下（非契约位置），
+#     消费者只读 timing_constraints ⇒ 上限从未被读到，且没有任何提示。
+XSTRICT="$HERE/../../contracts/examples/xdom_loop_strict.contract.json"
+
+# 1) 宽契约（2500 µs）下这个跨域方案仍合法，且把死区与来源如实报出来
+expect_rc "宽契约（上限 2500）：跨域方案仍合法" 0 \
+    "$PY" "$PLAN" "$XDAG" --platforms "$CAPS" --platform linux_kernel \
+    --release-cost-us 21 --exec-us "$EX5" --contract "$XCON" \
+    -o "$TMP/xdom_loose.plan.json"
+expect_grep "死区按 2 拍算，并指出跨域 +1 拍" "$(cat "$TMP/out.txt")" \
+    "1400" "跨域 +1 拍" "上限 2500"
+
+# 2) 只把反馈上限收紧到 1000 µs（期限仍是 2500）⇒ 必须拒绝
+expect_rc "严契约（上限 1000）：跨域方案被拒" 3 \
+    "$PY" "$PLAN" "$XDAG" --platforms "$CAPS" --platform linux_kernel \
+    --release-cost-us 21 --exec-us "$EX5" --contract "$XSTRICT" \
+    -o "$TMP/xdom_strict.plan.json"
+expect_grep "拒绝码是 FEEDBACK_DEADZONE" "$(cat "$TMP/out.txt")" \
+    "FEEDBACK_DEADZONE"
+expect_grep "拒绝理由把 2 拍拆开说清（z⁻¹ 1 拍 ＋ 跨域 1 拍）" \
+    "$(cat "$TMP/out.txt")" "z⁻¹ 1 拍" "跨域 1 拍" "超过上限 1000"
+# 放宽**期限**不能绕过**反馈**约束：上面这条契约期限仍是 2500 µs，
+# 拒绝理由里不该出现期限——它是被反馈死区挡住的，与期限、域能力无关。
+if printf '%s' "$(cat "$TMP/out.txt")" | grep -qF "期限"; then
+    bad "拒绝理由是反馈死区，不该扯到期限"
+else
+    ok "拒绝理由是反馈死区，与期限无关（两把不同的尺子）"
+fi
+
+# 3) 同一份方案，只换契约 → 验证器给出与规划器一致的结论。
+#    这条是本次修复的核心：以前规划器算 1400、验证器压根不看，两边不一致。
+expect_rc "验证器复检（宽契约）：通过（与规划器一致）" 0 \
+    "$PY" "$PLAN" "$XDAG" --platforms "$CAPS" --platform linux_kernel \
+    --release-cost-us 21 --exec-us "$EX5" --contract "$XCON" \
+    --verify "$TMP/xdom_loose.plan.json"
+expect_rc "验证器复检（严契约）：拒绝（与规划器一致）" 3 \
+    "$PY" "$PLAN" "$XDAG" --platforms "$CAPS" --platform linux_kernel \
+    --release-cost-us 21 --exec-us "$EX5" --contract "$XSTRICT" \
+    --verify "$TMP/xdom_loose.plan.json"
+expect_grep "验证器用的也是同一个诊断码" "$(cat "$TMP/out.txt")" \
+    "FEEDBACK_DEADZONE"
+
+# 4) 契约字段放错位置 → 必须报错，不能静默忽略
+cat >"$TMP/contract_misplaced.json" <<'JSON'
+{"version": 2,
+ "task": {"period_us": 1000, "deadline_us": 2500},
+ "control": {"feedback_delay_max_us": 2500}}
+JSON
+expect_rc "feedback_delay_max_us 写在 control 下 → 契约校验报错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$XDAG" "$TMP/contract_misplaced.json"
+expect_grep "说清是位置错、放错等于约束不存在" "$(cat "$TMP/out.txt")" \
+    "非契约位置" "timing_constraints" "不存在"
+
+# 5) 声称 bounded（硬实时上界）却拿不出 wcet → 拒绝这种证明声明
+cat >"$TMP/contract_unproven.json" <<'JSON'
+{"version": 2,
+ "task": {"period_us": 1000, "deadline_us": 2500},
+ "timing_constraints": {"feedback_delay_max_us": 2500},
+ "evidence": {"exec": "bounded"}}
+JSON
+expect_rc "标 bounded 但无 wcet → 契约校验报错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$XDAG" "$TMP/contract_unproven.json"
+expect_grep "指出死区满足上限 ≠ 证明了控制稳定" "$(cat "$TMP/out.txt")" \
+    "wcet_us" "≠ 证明了控制稳定"
+
+# 6) 跨域方案但契约完全没给反馈上限 → fail-closed
+cat >"$TMP/contract_nofb.json" <<'JSON'
+{"version": 2, "task": {"period_us": 1000, "deadline_us": 2500}}
+JSON
+expect_rc "跨域但无反馈上限 → 验证器拒绝（fail-closed）" 3 \
+    "$PY" "$PLAN" "$XDAG" --platforms "$CAPS" --platform linux_kernel \
+    --release-cost-us 21 --exec-us "$EX5" --contract "$TMP/contract_nofb.json" \
+    --verify "$TMP/xdom_loose.plan.json"
+expect_grep "拒绝码是 FEEDBACK_CONTRACT_MISSING" "$(cat "$TMP/out.txt")" \
+    "FEEDBACK_CONTRACT_MISSING"
+
+echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" = 0 ] || exit 1

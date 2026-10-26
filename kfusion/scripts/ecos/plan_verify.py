@@ -65,6 +65,7 @@ class PlanVerifier(object):
                  budget_us=None, contract=None):
         dag = dag or {}
         self.dag = dag
+        self.contract = contract or {}
         self.plat = platform or {}
         self.exec_us = exec_us or {}
         self.budget = budget_us
@@ -295,24 +296,30 @@ class PlanVerifier(object):
             for v in self.tm.legacy_drift(members, self.legacy_output):
                 add(v["code"], "组 %s：%s" % (gid, v["msg"]))
 
-        # 4b) 反馈闭合边：融进同一组 ⇒ 死区≈一整拍
-        gid_of = {}
-        for gi, g in enumerate(groups):
-            for m in (g.get("members") or []):
-                gid_of[m] = g.get("id") or ("g%d" % gi)
-        for (a, b), meta in self.closing_meta.items():
-            if a in gid_of and b in gid_of and gid_of[a] == gid_of[b]:
-                period = float(self.tm.period or 0.0)
-                cap = self.tm.feedback_max
-                if cap is not None and period > float(cap):
-                    add("FEEDBACK_FUSED",
-                        "控制：反馈边 %s→%s 若并入同组，死区≈一整拍（%.0f µs）"
-                        "超过上限 %.0f µs，必须跨组" % (a, b, period, float(cap)))
-                else:
-                    warns.append(
-                        "控制：反馈边 %s→%s 并入同组，死区≈一整拍（%.0f µs）%s"
-                        % (a, b, period,
-                           "（未给上限，仅提示）" if cap is None else ""))
+        # 4b) 反馈闭合边：算**总死区**并对照契约上限。
+        #     以前这里只判"反馈边并入同一组（融合）"这一种情形；反馈边跨组
+        #     （含跨域）时直接跳过 ⇒ "死区因跨域翻倍"在验证器里是静默的。
+        #     实测后果（PR10-D）：xdom_loop 单域稳定收敛，跨域后反馈延迟
+        #     从 1 拍变 2 拍、回路发散到 ±60000，而工具链一路绿灯。
+        #     现在死区计算与判据都走 temporal_model 里**同一份**实现，
+        #     规划器与验证器不可能再给出两个不同的定义。
+        fb_errs, fb_warns = self.tm.feedback_violations(
+            groups, dom=self.dom, sched=sched)
+        for code, msg in fb_errs:
+            add(code, msg)
+        warns.extend(fb_warns)
+        for note in (getattr(self.tm, "notes", None) or []):
+            warns.append("契约：%s" % note)
+
+        # 4b-2) 证据级别与主张是否相称
+        #     契约声称 bounded（有可信上界）却拿不出 wcet ⇒ 这是**未证明的证明**，
+        #     拒绝这种声明；只有经验成本时只能出实验性方案。
+        if self.tm.evidence == "bounded" and not (self.contract.get("wcet_us")):
+            add("FEEDBACK_MODEL_UNPROVEN",
+                "证据：契约声称 evidence.exec=bounded（硬实时上界），"
+                "但没有 wcet_us 或任何有界执行时间凭据。"
+                "反馈死区满足上限 ≠ 证明了控制稳定；没有可信成本就只能按 "
+                "empirical 出实验性方案")
 
         # 4c) 期限（含组间积压）
         d = self.tm.deadline_violation(groups)

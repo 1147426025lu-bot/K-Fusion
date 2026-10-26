@@ -105,6 +105,18 @@ def validate(dag, contract):
                 warns.append("%s/%s 窗口只有 %.1f µs，抖动可能直接吃掉它"
                              % (kind, stage, hi - lo))
 
+    # ---- 反馈死区上限 ----
+    # 位置必须对。PR10-E 之前这里是**静默失效**的：唯一一份跨域夹具把
+    # feedback_delay_max_us 写在顶层 control 下，而消费者只读
+    # timing_constraints ⇒ 上限从未被读到、校验器也不报错，
+    # 于是"跨域把反馈死区拉长一整拍"这件事一路无人过问（板上实测发散）。
+    ctrl_blk = contract.get("control") or {}
+    if isinstance(ctrl_blk, dict) and "feedback_delay_max_us" in ctrl_blk:
+        errs.append(
+            "契约：feedback_delay_max_us 写在顶层 control 下（非契约位置）。"
+            "请移到 timing_constraints 下——消费者只读那里，"
+            "放错位置等于这条约束不存在")
+
     fb = ctr.get("feedback_delay_max_us")
     if fb is not None:
         try:
@@ -112,8 +124,13 @@ def validate(dag, contract):
             if fb <= 0:
                 errs.append("feedback_delay_max_us 必须 > 0")
             if period is not None and fb >= period:
-                warns.append("feedback_delay_max_us %.1f ≥ period %.1f："
-                             "等于没有限制" % (fb, period))
+                # 别写成"等于没有限制"：一拍以内的死区（z⁻¹）确实拦不住，
+                # 但两拍以上的情形（跨域、多组切开）它照样能拦——PR10-D 的
+                # 跨域夹具正是 2 拍 ≈ 1399 µs 被 1000 µs 的上限挡住。
+                warns.append(
+                    "feedback_delay_max_us %.1f ≥ period %.1f：拦不住一拍以内的"
+                    "反馈死区（如融合把闭合边拉到整拍），但仍约束两拍以上的"
+                    "情形（跨域 +1 拍、多组切开）" % (fb, period))
         except (TypeError, ValueError):
             errs.append("feedback_delay_max_us 不是数字：%r" % (fb,))
 
@@ -121,6 +138,14 @@ def validate(dag, contract):
     if ev and ev not in ("bounded", "empirical"):
         warns.append("evidence.exec=%r 未识别（只认 bounded / empirical），"
                      "按 empirical 处理" % (ev,))
+    # 声称"已证明"就得拿得出凭据。bounded 意味着有可信上界（WCET / 静态上界），
+    # 只有实测均值却标 bounded，等于把经验预测冒充硬实时证明——
+    # 这种声明必须拒，而不是仅仅提示。
+    if ev == "bounded" and contract.get("wcet_us") is None:
+        errs.append(
+            "证据：evidence.exec=bounded 但没有 wcet_us（或有界执行时间凭据）。"
+            "反馈死区满足上限 ≠ 证明了控制稳定；"
+            "没有可信成本就只能标 empirical、出实验性方案")
 
     if period is not None and period_dag is not None:
         try:

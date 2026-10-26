@@ -512,6 +512,11 @@ class Planner:
     def apply_feedback_limit(self, us):
         """命令行覆盖反馈闭合边的绝对死区上限，并重算必须跨组的边。"""
         self.max_fb_delay_us = us
+        # 同步到统一时间模型：反馈死区判据只有**一份**实现
+        # （temporal_model.feedback_violations，规划器与验证器共用）。
+        # 不同步的话，命令行覆盖只影响规划器、验证器仍按契约判——
+        # 于是同一份方案两个结论，那正是要消灭的鬼故事。
+        self.tm.feedback_max = us
         self.fb_must_cut = set()
         if us is not None and self.period and us < float(self.period):
             for r in self.recurrences:
@@ -557,20 +562,9 @@ class Planner:
         return out
 
     # -------- 反馈环落在哪（跨周期部分的核心陈述） --------
-    def _exec_offset_in_group(self, members, member):
-        """成员在其所属组内的执行起点（相对组释放时刻，µs）。members 是**名字**列表。
-
-        注意：`solve()` 返回的组是 order 的**下标**列表，调用方必须先换成名字——
-        直接拿下标去查 phase/exec 会静默全取默认值（相位全 0、执行全 0），
-        算出来的死区就永远等于一整拍，看起来"很合理"，实际是没算。
-        """
-        off = self.c
-        for m in members:
-            if m == member:
-                return off
-            off += self.exec_us.get(m, 0.0)
-        return off
-
+    # 注：组内执行偏移原来这里有一份 _exec_offset_in_group。PR10-E 起，
+    # 死区计算（含偏移）统一在 temporal_model.feedback_delays 里，
+    # 这里不再保留第二份实现——两份实现迟早会分叉。
     def recurrence_report(self, groups):
         """每个延迟反馈环在方案里怎么落位、闭合边的间隔变成了多少。
 
@@ -584,6 +578,16 @@ class Planner:
         for gi, g in enumerate(named):
             for m in g:
                 where[m] = gi
+        # 死区计算走 temporal_model 里的**同一份**实现——验证器调的是同一个函数。
+        # 以前这段公式只存在于本文件，验证器另写一套（还漏了跨组情形），
+        # 于是"规划说 1400 µs、验证说没问题"这种鬼故事才可能出现。
+        plan_like = [{"id": "g%d" % gi, "members": g,
+                      "release_phase_us": self.group_phase(g)}
+                     for gi, g in enumerate(named)]
+        sched = self.tm.schedule(plan_like)
+        dead_by_edge = {(f["from"], f["to"]): f for f in
+                        self.tm.feedback_delays(plan_like, dom=self.dom,
+                                                sched=sched)}
         out = []
         for r in self.recurrences:
             gids = {m: where.get(m) for m in r["ring"]}
@@ -592,24 +596,17 @@ class Planner:
                 gp, gc = where.get(c["from"]), where.get(c["to"])
                 if gp is None or gc is None:
                     continue
-                t_prod = self.group_phase(named[gp]) + \
-                    self._exec_offset_in_group(named[gp], c["from"])
-                t_cons = self.group_phase(named[gc]) + \
-                    self._exec_offset_in_group(named[gc], c["to"])
-                period = float(self.period or 0.0)
-                # 跨域闭合边：消费者在**另一个 cell**，只能在再下一个周期边界看到它
-                # ⇒ 间隔多一整拍。这不是估算，PR10 板上量过：1 kHz 下跨域往返
-                # p50 1005.26 µs（≈1.005 拍），而同一共享内存纯通路只要 1.24 µs。
-                xd = 1 if self.dom.is_cross(c["from"], c["to"]) else 0
-                merged = (((1 + xd) * period) + t_cons - t_prod) if period else None
+                f = dead_by_edge.get((c["from"], c["to"])) or {}
+                comp = f.get("components") or {}
+                merged = f.get("dead_us")
                 old = c.get("delay_us_unmerged")
                 closes.append({
                     "from": c["from"], "to": c["to"],
-                    "cross_domain": bool(xd),
-                    "extra_periods": xd,
-                    "producer_offset_us": round(t_prod, 3),
-                    "consumer_offset_us": round(t_cons, 3),
-                    "delay_us_merged": round(merged, 3) if merged is not None else None,
+                    "cross_domain": bool(f.get("cross_domain")),
+                    "extra_periods": comp.get("cross_domain_periods", 0),
+                    "producer_offset_us": comp.get("producer_offset_us"),
+                    "consumer_offset_us": comp.get("consumer_offset_us"),
+                    "delay_us_merged": merged,
                     "delay_us_unmerged": old,
                     "inflation": (round(merged / old, 2)
                                   if merged is not None and old else None),
@@ -873,16 +870,22 @@ def main():
                     % (c["from"], c["to"], c["inflation"],
                        c["delay_us_unmerged"], c["delay_us_merged"],
                        args.max_delay_inflation))
-    # PR8 硬约束（绝对值）：任何反馈闭合边死区超过绝对上限 → 直接拒绝
-    if planner.max_fb_delay_us is not None:
-        for r in recs:
-            for c in r["closing_edges"]:
-                d1 = c.get("delay_us_merged")
-                if d1 is not None and d1 > planner.max_fb_delay_us:
-                    print("!! 反馈闭合边 %s→%s 死区 %.0f µs 超过绝对上限 %.0f µs，"
-                          "方案被拒（PR8 硬约束）" % (c["from"], c["to"], d1,
-                          planner.max_fb_delay_us), file=sys.stderr)
-                    return 3
+    # PR8 / PR10-E 硬约束（绝对值）：反馈闭合边的**总死区**超过上限 → 直接拒绝。
+    # 判据走 temporal_model.feedback_violations——与验证器**同一个函数**，
+    # 所以不可能出现"规划说可行、验证说不可行"。它同时覆盖两种成因：
+    #   · 反馈边并入同组（融合把闭合边拉到一整拍）
+    #   · 反馈边跨组（跨域再叠一整拍）—— 以前这条完全没判
+    fb_errs, fb_warns = planner.tm.feedback_violations(
+        gs, dom=planner.dom, sched=sched)
+    if fb_errs:
+        for code, msg in fb_errs:
+            print("!! [%s] %s" % (code, msg), file=sys.stderr)
+        print("   → 方案被拒。跨域会把反馈死区再拉长一整拍（z⁻¹ 之外的那一拍）；"
+              "要缩短就得把阶段搬到同一域，或者放宽/去掉反馈上限。"
+              "注意：死区在上限内也**不等于**证明了控制稳定——"
+              "编译器只能证明它满足声明的时间契约。", file=sys.stderr)
+        return 3
+    warnings.extend(fb_warns)
     plan = {
         "version": 4,
         "meta": {

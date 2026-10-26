@@ -53,6 +53,7 @@ class TemporalModel(object):
     def __init__(self, dag, contract=None, exec_us=None, release_cost_us=20.0):
         dag = dag or {}
         contract = contract or {}
+        self.dag = dag
         meta_task = ((dag.get("meta") or {}).get("task") or {})
         ctr = contract.get("timing_constraints") or {}
         ctask = contract.get("task") or {}
@@ -75,8 +76,20 @@ class TemporalModel(object):
                                       "actuator")
 
         # ---- 反馈死区上限：契约 > DAG.control ----
+        # ⚠ 字段位置容错（PR10-E）。`control.feedback_delay_max_us` 是**非契约位置**：
+        #   TemporalModel 原来只读 timing_constraints，而这唯一一份跨域夹具恰好把它
+        #   写在顶层 control 下 ⇒ 反馈上限**从未被读到**，且没有任何提示。
+        #   这里做**显式规范化并记录**，绝不静默忽略；严格入口
+        #   （contract_validate）会把这种位置判成错误。
+        self.notes = []
+        legacy_fb = _num((contract.get("control") or {}).get("feedback_delay_max_us"))
+        if legacy_fb is not None and _num(ctr.get("feedback_delay_max_us")) is None:
+            self.notes.append(
+                "契约把 feedback_delay_max_us 写在顶层 control 下（非契约位置），"
+                "已按 %.0f µs 规范化；应移到 timing_constraints 下" % legacy_fb)
         self.feedback_max = _first(
             _num(ctr.get("feedback_delay_max_us")),
+            legacy_fb,
             _num((dag.get("control") or {}).get("max_feedback_delay_us")))
 
         # ---- 证据级别 ----
@@ -251,6 +264,159 @@ class TemporalModel(object):
                             % (r["stage"], r["offset_us"], float(w))),
                 })
         return bad
+
+    # -------- 反馈死区（PR10-E：规划器与验证器的唯一实现）--------
+    def _member_offset(self, members, member):
+        """成员在组内的执行起点（相对组释放时刻，µs）。
+
+        组的第一次释放要付释放代价 c，组内按方案顺序累加各阶段执行时间。
+        口径与规划器完全一致——**这就是同一个函数**，不允许各写一份。
+
+        ⚠ `members` 必须是**名字**列表。规划器的 `solve()` 返回的组是 order 的
+        **下标**列表，调用方必须先换成名字；直接拿下标去查 phase/exec 会静默
+        全取默认值（相位全 0、执行全 0），算出来的死区永远等于一整拍——
+        看起来"很合理"，实际是没算。
+        """
+        off = self.c
+        for m in members:
+            if m == member:
+                return off
+            off += float(self.exec_us.get(m, 0.0))
+        return off
+
+    def feedback_delays(self, groups, dom=None, sched=None):
+        """每条反馈闭合边的**总死区**，带来源分解（规划器/验证器共用）。
+
+        公式（PR10-B 定下，PR10-D 在板上验证过）：
+
+            dead_us = (1 + xd) * period + t_cons - t_prod
+
+        · `1`   ：闭合边自身的 z⁻¹。生产者相位晚于消费者相位，一拍之内不可能
+                  满足，只能等到**下一个周期边界**——延迟由调度强制。
+        · `xd`  ：跨域附加的那一拍（dom.is_cross 为真时取 1）。实测依据 PR10：
+                  1 kHz 下跨域往返 p50 = 1005.26 µs（≈1.005 拍）。
+        · `t_cons - t_prod`：两者在各自组内的偏移之差（含组释放代价与执行时间）。
+
+        ⚠ **两笔不能分开各加一次**。跨域闭合边"既是 z⁻¹ 又是跨域"，但它们
+        描述的是同一个"等到下一个边界"，所以合并成 (1+xd)；重复累加会把 2 拍
+        算成 3 拍（PR10-E 实现时踩过）。
+
+        sched：`schedule(groups)` 的输出。给了就用**实际开始时刻**（含组间积压），
+        没给就用名义相位。死区是"生产者写完到消费者读到"的真实间隔，
+        被积压推后的组只会让它更长，用名义相位会低估。
+        """
+        period = float(self.period or 0.0)
+        rows = list(sched or [])
+        members_of, start_of = {}, {}
+        for gi, g in enumerate(groups or []):
+            gid = g.get("id") or ("g%d" % gi)
+            members = list(g.get("members") or [])
+            members_of[gid] = members
+            nominal = float(g.get("release_phase_us") or 0.0)
+            actual = (float(rows[gi].get("start_us", nominal))
+                      if gi < len(rows) and rows[gi] is not None else nominal)
+            start_of[gid] = actual
+        gid_of = {}
+        for gid, members in members_of.items():
+            for m in members:
+                gid_of[m] = gid
+
+        out = []
+        for r in (self.dag.get("recurrences") or []):
+            for c in (r.get("closing_edges") or []):
+                a, b = c.get("from"), c.get("to")
+                ga, gb = gid_of.get(a), gid_of.get(b)
+                if ga is None or gb is None:
+                    continue
+                t_prod = start_of[ga] + self._member_offset(members_of[ga], a)
+                t_cons = start_of[gb] + self._member_offset(members_of[gb], b)
+                cross = bool(dom is not None and dom.is_cross(a, b))
+                xd = 1 if cross else 0
+                dead = ((1 + xd) * period + t_cons - t_prod) if period else None
+                # 跨域那部分单独拆出来，便于报"哪来的"：一个周期边界 vs 一拍
+                out.append({
+                    "from": a, "to": b,
+                    "from_group": ga, "to_group": gb,
+                    "same_group": ga == gb,
+                    "cross_domain": cross,
+                    "dead_us": round(dead, 3) if dead is not None else None,
+                    "components": {
+                        "z1_periods": 1,
+                        "cross_domain_periods": xd,
+                        "period_us": period,
+                        "producer_offset_us": round(t_prod, 3),
+                        "consumer_offset_us": round(t_cons, 3),
+                        "phase_gap_us": round(t_cons - t_prod, 3),
+                    },
+                    "unmerged_us": c.get("delay_us_unmerged"),
+                    "cap_us": self.feedback_max,
+                })
+        return out
+
+    def feedback_violations(self, groups, dom=None, sched=None):
+        """把 feedback_delays 的结果按契约上限判一遍。
+
+        返回 (errors, warnings)，元素是 (code, msg)。
+
+        三条规则（PR10-E）：
+        1. 死区 > 上限 → 报错。**跨组也算**——以前只看"反馈边并入同一组"，
+           反馈边跨组（跨域）时直接跳过，于是"死区因跨域翻倍"在验证器里是静默的。
+        2. **这条反馈边自己跨域**、但契约没给上限 → 报错。
+           跨域恰恰是把死区多拉一整拍的那一步，没有上限就无法证明这一步
+           保住了时序语义，按 fail-closed 拒。（反馈边不跨域、只是方案别处
+           跨 domain 的不强行要求：那种情形死区仍是一拍，与单域同构。）
+        3. 上限在内 → 提示（保留数值，便于对读）。
+        """
+        errs, warns = [], []
+        delay_list = self.feedback_delays(groups, dom=dom, sched=sched)
+        if not delay_list:
+            return errs, warns
+        cap = self.feedback_max
+        for f in delay_list:
+            tag = "%s→%s" % (f["from"], f["to"])
+            if cap is None:
+                # 只在**这条反馈边自己跨域**时才要求契约给上限：
+                # 跨域正是把死区多加一整拍的那一步，没有上限就无法证明
+                # 这一步保住了时序语义 ⇒ fail-closed。
+                # 反馈边不跨域、只是方案别处跨 domain，则不强行要求
+                # （那种情形死区仍是一拍，与单域同构）。
+                if f["cross_domain"]:
+                    errs.append((
+                        "FEEDBACK_CONTRACT_MISSING",
+                        "控制：反馈边 %s 跨域（%s → %s），但契约没有给 "
+                        "feedback_delay_max_us。跨域会把死区拉长一整拍，"
+                        "没有上限就无法证明这一步保住了时序语义（fail-closed）"
+                        % (tag, f["from_group"], f["to_group"])))
+                # 反馈边不跨域又没有上限：**不额外告警**。
+                # 没给上限就没有可判的约束，而死区数值本来就会出现在
+                # recurrence_report 里（"间隔 200 → 998 µs"）；再补一条
+                # warning 只会让 --fail-on-warning 的单域夹具无端变红。
+                continue
+            if f["dead_us"] is not None and f["dead_us"] > float(cap) + 1e-9:
+                if f["same_group"]:
+                    errs.append((
+                        "FEEDBACK_FUSED",
+                        "控制：反馈边 %s 并入同组，死区≈%.0f µs（一整拍）"
+                        "超过上限 %.0f µs，必须跨组"
+                        % (tag, f["dead_us"], float(cap))))
+                else:
+                    errs.append((
+                        "FEEDBACK_DEADZONE",
+                        "控制：反馈边 %s 跨组（%s → %s），死区 = %d 拍"
+                        "（z⁻¹ %d 拍 ＋ 跨域 %d 拍）＝ %.0f µs，超过上限 %.0f µs；"
+                        "跨域拆分会把这个反馈环的延迟加长，回路可能因此失稳"
+                        % (tag, f["from_group"], f["to_group"],
+                           f["components"]["z1_periods"]
+                           + f["components"]["cross_domain_periods"],
+                           f["components"]["z1_periods"],
+                           f["components"]["cross_domain_periods"],
+                           f["dead_us"], float(cap))))
+            else:
+                warns.append(
+                    "控制：反馈边 %s 死区 %.0f µs%s（上限 %.0f µs）"
+                    % (tag, f["dead_us"] or 0.0,
+                       "，跨域 +1 拍" if f["cross_domain"] else "", float(cap)))
+        return errs, warns
 
     # -------- 期限 --------
     def response_us(self, groups, exec_us=None, phase_known=True):
