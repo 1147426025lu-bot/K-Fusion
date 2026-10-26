@@ -716,3 +716,106 @@ F_g = S_g + Σ C_i
   （`xipc_pop` 是出队）。环通的实验里没暴露，是因为这个夹具两通道各用一条环。
   正确做法是"每拍先统一排空、按通道更新本地缓存；阶段消费时只查缓存"，
   而不是在共享环上直接找。
+
+> ⚠ 上面两条已在 **§13（PR10-F）** 修复：订阅改成按通道分桶缓存、取最近一条；
+> 版本化协议也一并做了（release_id / session_id / publish_tick 三个标识各归其位）。
+> 另外 Linux emitter 的 `pending` 裸 bool 仍未替换——那是 PR10-F 之后、
+> 严格周期配对实验（PR11-A）之前要做的前置，见 §13.7。
+
+# 13. PR10-F：版本化跨域 IPC —— 三个标识各归其位，订阅不再吞通道
+
+§12.8 记了两条待修缺陷，这一节把它们落地，并把"逐拍追踪"需要的版本化字段补齐。
+改动集中在三个文件：`kfusion/runtime/xshm/ecos_xipc.h`（协议与环）、
+`kfusion/backend/synthesis/xdom_bridge.py`（生成的桥）、两个宿主发射器
+（`linux_kernel_emitter.py` / `nuttx_emitter.py`）。
+
+## 13.1 三个版本标识各映射到哪
+
+PR10-F 要的 `release_id` / `session_id` / `publish_tick` 不强求新发明三个字段，
+而是把现有的和新增的明确对上号：
+
+| 标识 | 落点 | 说明 |
+|------|------|------|
+| `release_id` | 环槽 `seq` | 生产者每发一条 `seq = head+1`，单调递增、随 session 复位。跨域读它即可知"这是第几条"。 |
+| `session_id` | 环头 `session` | owner 每轮用 `xipc_counter()`（两侧共享物理计数器，见 §4 时间基准）生成，作为 epoch。 |
+| `publish_tick` | 环槽新增 `tick` | **新增**。生产者发布时的控制周期索引，由宿主每周期写入 `ecos_xdom_cycle`。 |
+
+为什么 `publish_tick` 必须新增字段、不能靠 `seq` 凑：跨域按拍追踪要的是"这条值属于
+生产者第几个控制周期"，而 `seq` 是环内发布序号（会随环复位、且按发布次数而非周期数
+增长）。只有显式戳周期索引，消费者用 `自己周期 − publish_tick` 才算得出跨域延迟拍数
+（含 z⁻¹ 一拍 + 跨域一拍，与 PR10-D/PR10-E 的结论呼应）。
+
+## 13.2 扩槽：16 → 20 字节，协议版本 1 → 2
+
+旧槽只有 `seq/kind/a/b`（16 B），放不下 `tick`。改动：
+
+- `XIPC_VERSION` 1 → 2（HELLO 携带的协议号同步变，两侧必须同时重编——本来就共用同一份头）。
+- 槽加 `volatile uint32_t tick;`，`XIPC_SLOT_BYTES` 16 → 20。
+- 容量约束从"一个环 ≤ 4096"放宽到"≤ peer 片 `XIPC_PEER_STRIDE`（0x3000）"。
+  224 槽 × 20 B + 256 B 头 = 4736 B ≤ 12288，**槽数 224 不变**，控制回路的环容量一点没降。
+- 新增 `xipc_pub_ticked(r, kind, a, b, tick)`；旧 4 参 `xipc_pub` 保留（管理消息 `tick=0`），
+  所以 `root_side.c` 与 `xipc_main.c` 这一版**不用改**。
+
+## 13.3 多通道消费 bug：改成按通道分桶缓存、取最近一条
+
+旧 `ecos_xdom_sub`（PR10-C）是
+
+```c
+while (xipc_pop(xr_in, &s)) {
+    if (s.kind == XIPC_KIND_DATA && s.a == channel) { *dst = s.b; break; }
+}
+```
+
+两个毛病（§12.8 已点名）：
+
+1. 返回的是 **FIFO 最旧**匹配消息，不是注释写的"最近一条"——同通道连发两次只会拿到第一次的。
+2. 为找本通道，可能把**别的通道**排在它前面的消息 `pop` 掉并丢弃（消费即出队）。
+   只要某周期 A 通道消息前恰好排了 B 通道消息，且 `sub(A)` 先于 `sub(B)` 执行，B 就丢失。
+
+新实现：每个域一份**按通道分桶的本地缓存**，一次 `sub` 调用把 in 环**抽干**到各桶
+（最近一条覆盖旧的），再从自己的桶取。这样 `sub(A)` 不会饿死 `sub(B)`，且取到的是
+本通道最新值。新增 `ecos_xdom_sub_tick(channel, &v, &tick)` 顺带把 `publish_tick` 带出，
+供宿主做按拍追踪。
+
+> PC 端无 C 编译器，这份新语义用 `kfusion/scripts/test/xipc_versioned_model.py`
+> 纯 Python 复刻并断言（§32 融进融合自测）；该模型也**复现了旧桥的两个 bug**，
+> 证明修复不是空谈。板上编译验证见 §13.7。
+
+## 13.4 跨域按拍追踪
+
+宿主每周期把控制周期索引写进全局 `ecos_xdom_cycle`，`ecos_xdom_pub` 把它作为
+`publish_tick` 戳进消息。对端在周期 C 调 `ecos_xdom_sub_tick` 拿到值 v 与发布周期 P，
+则跨域延迟拍数 = `C − P`。这个值天然包含 PR10-D/PR10-E 论证的"z⁻¹ 一拍 + 跨域一拍"，
+于是"发散 / 收敛"不再只能靠看曲线，而能用每拍的延迟拍数直接判定。
+
+宿主侧接线：`linux_kernel_emitter.py` 在每组 `ecos_run_body` 前、`nuttx_emitter.py`
+在组循环前各插一行 `ecos_xdom_cycle = periods;`（**仅当方案含跨域时**才生成，
+无跨域方案不引用这个全局，避免链接期未定义）。
+
+## 13.5 epoch 统一（已实现，这里点明）
+
+`session` 由 `xipc_counter()` 生成，而 Jailhouse 不陷获/偏移 `CNTPCT`/`CNTVCT`，两侧
+读同一个物理计数器（§4 已 grep 确认）。所以 owner 写一次 `session`，对端读到的就是与
+生产者**同一个** epoch 令牌——统一 epoch 是既有事实，不是新加的代码。桥新增
+`ecos_xdom_epoch()` 把本域所见 `session` 暴露出来，方便宿主在日志里核对两端 epoch 一致。
+
+## 13.6 这一节**没有**证明什么
+
+- 本机没有 C 编译器，C 改动**尚未在 Pi 上编译**，运行时正确性靠 Python 模型等价复刻 +
+  融合自测 §32 覆盖；**板上编译 / 环回 ping / 真实跨域回路**仍待 §13.7。
+- 协议版本升到 2，意味着 root cell 与 inmate 必须**同时**用新头重编；旧 v1 镜像与新 v2
+  镜像混跑会因槽布局不一致而数据错乱。上板前要把 `ecos_xipc.h` 同步到 NuttX 侧并整编。
+- 同 §12.6：版本化只证明"携带并核对了时间标识"，**不等于**控制稳定。
+
+## 13.7 板上验证计划（待 Pi，不在本机做）
+
+1. 把 `kfusion/runtime/xshm/ecos_xipc.h` 通过 tar 同步脚本覆盖到 NuttX 侧
+   `crtos/jailhouse_overlay_pi4/nuttx/apps/examples/xipc/` 与桥的生成输入。
+2. 板端当前 NuttX 仍自动启动 `fiveloop_main`；先跑 `/root/xipc_boot/xipc_restore.sh`
+   恢复成 NSH，再编译 `xipc_main`（管理环回）与含跨域桥的控制回路。
+3. 重编 `root_side.c`（`gcc -O2 …` 无需改），跑 phase 1–4 确认 v2 协议下 RTT / 单程 /
+   可见延迟与 v1 同量级（协议变了布局但语义不变，数值不应漂移）。
+4. 生成一份含跨域的融合方案，确认 `ecos_xdom_cycle = periods;` 两宿主都生成、桥的
+   `sub_tick` 在板上返回的 `tick` 与对端发布周期对得上（跨域延迟拍数 ≈ 2）。
+5. **前置项（PR10-F 之后、PR11-A 之前）**：Linux emitter 的 `pending` 裸 `bool`
+   仍被 hrtimer 回调与内核线程共享，严格周期配对实验前要换成同步释放序列/计数。

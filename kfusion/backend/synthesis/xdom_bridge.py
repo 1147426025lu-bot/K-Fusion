@@ -20,15 +20,23 @@ _H = """/* ecos_xdom.h — 跨域数据桥（由 ECoS 拆分器生成，勿手�
  *
  * 本文件只服务**一个域**：它知道自己该往哪个环发、从哪个环收。
  * 方向来自拆分器写的 peer_ring，不是猜的。
+ *
+ * PR10-F 版本化：ecos_xdom_cycle 由宿主每周期写入（= 控制周期索引），
+ * ecos_xdom_pub 把它作为 publish_tick 塞进消息；对端用 ecos_xdom_sub_tick
+ * 把这条发布周期索引读出来，就能按"拍"追踪跨域数据属于哪个控制周期。
  */
 #ifndef ECOS_XDOM_H
 #define ECOS_XDOM_H
 
 #include <stdint.h>
 
+extern uint32_t ecos_xdom_cycle;   /* 宿主每周期写入：当前控制周期索引（publish_tick 来源） */
+
 void ecos_xdom_init(void);
 void ecos_xdom_pub(unsigned channel, int32_t value);
 void ecos_xdom_sub(unsigned channel, int32_t *dst);
+void ecos_xdom_sub_tick(unsigned channel, int32_t *dst, uint32_t *out_tick);
+uint32_t ecos_xdom_epoch(void);    /* 统一 epoch：本域所见 session */
 
 #endif /* ECOS_XDOM_H */
 """
@@ -52,6 +60,7 @@ _C = """/* ecos_xdom.c — 跨域数据桥（由 ECoS 拆分器生成，勿手�
 #define ECOS_XDOM_OUT   0x%(out)04xu
 #define ECOS_XDOM_IN    0x%(in)04xu
 #define ECOS_XDOM_OWNER %(owner)d
+#define ECOS_XDOM_NCHAN %(nchan)d
 
 /* 为什么有两套地址解析
  * -------------------
@@ -69,6 +78,20 @@ static void __iomem *xbase;
 static struct xipc_ring *xr_out;
 static struct xipc_ring *xr_in;
 static int xr_ready;
+
+/* PR10-F：每通道"最近一条"缓存。
+ * 旧实现（PR10-C）的 ecos_xdom_sub 用 while(xipc_pop()) 把 in 环里**所有**消息都
+ * pop 消费掉，于是 sub(通道X) 会把通道Y 的消息也吞掉——另一个通道的 sub 后来读到
+ * 的是空的；而且它返回的是 FIFO 里**最旧**的匹配消息，与注释"只认本通道最近一条"
+ * 正好相反。这里改成：一次性把 in 环抽干到按通道分桶的缓存，sub 只从自己的桶取
+ * 最近一条。这样 sub(X) 不会饿死 sub(Y)，且取到的一定是最新的。 */
+static int32_t  xdom_cache[ECOS_XDOM_NCHAN];
+static uint32_t xdom_cache_tick[ECOS_XDOM_NCHAN];
+static uint8_t  xdom_cache_valid[ECOS_XDOM_NCHAN];
+
+/* 宿主每周期写入的当前控制周期索引；ecos_xdom_pub 把它塞进消息的 tick 字段，
+ * 对端就能按"拍"追踪这条数据属于哪个控制周期（PR10-F 的 per-cycle trace）。 */
+uint32_t ecos_xdom_cycle;
 
 static struct xipc_ring *xdom_ring(unsigned int off)
 {
@@ -100,23 +123,47 @@ void ecos_xdom_pub(unsigned channel, int32_t value)
 {
 	if (!xr_ready)
 		return;
-	(void)xipc_pub(xr_out, XIPC_KIND_DATA, channel, (uint32_t)value);
+	/* tick = 本域当前控制周期索引（publish_tick）。对端用 sub_tick 读出后，
+	 * 用"自己的周期索引 − 这条的 tick"即可得跨域延迟拍数（含 z⁻¹ 与跨域各一拍）。 */
+	(void)xipc_pub_ticked(xr_out, XIPC_KIND_DATA, channel, (uint32_t)value,
+	                      ecos_xdom_cycle);
 }
 
 void ecos_xdom_sub(unsigned channel, int32_t *dst)
 {
+	uint32_t tick_dummy;
+
+	ecos_xdom_sub_tick(channel, dst, &tick_dummy);
+}
+
+void ecos_xdom_sub_tick(unsigned channel, int32_t *dst, uint32_t *out_tick)
+{
 	struct xipc_slot s;
 
-	if (!xr_ready || dst == 0)
+	if (!xr_ready || dst == 0 || channel >= ECOS_XDOM_NCHAN)
 		return;
-	/* 只认本通道的**最近一条**。跨域读的本来就是上一拍的值，
-	 * 积压的旧消息继续留着只会让读到更旧的数据。 */
+	/* 把 in 环抽干到每通道缓存（最近一条覆盖旧的）。这一抽干对**所有**通道共享
+	 * 一次，所以 sub(X) 不会把 Y 的消息丢掉——它们各进各的桶。返回的是本通道
+	 * 最近一条，不是 FIFO 最旧（修掉了 PR10-C 的 bug）。 */
 	while (xipc_pop(xr_in, &s)) {
-		if (s.kind == XIPC_KIND_DATA && s.a == channel) {
-			*dst = (int32_t)s.b;
-			break;
+		if (s.kind == XIPC_KIND_DATA && s.a < ECOS_XDOM_NCHAN) {
+			xdom_cache[s.a]      = (int32_t)s.b;
+			xdom_cache_tick[s.a] = s.tick;
+			xdom_cache_valid[s.a] = 1;
 		}
 	}
+	if (xdom_cache_valid[channel]) {
+		*dst = xdom_cache[channel];
+		if (out_tick)
+			*out_tick = xdom_cache_tick[channel];
+	}
+}
+
+/* 统一 epoch：两侧都读同一个物理计数器生成 session（见 ecos_xipc.h），
+ * 所以 in 环的 session 就是本域所见、且与对端一致的 epoch 标识。 */
+uint32_t ecos_xdom_epoch(void)
+{
+	return xr_in ? xr_in->session : 0;
 }
 """
 
@@ -168,6 +215,11 @@ def emit(domain_meta):
 		}
 	}
 """
+    # 通道数：取 pub/sub 里出现的最大通道号 +1（缓存数组按它定长）
+    _chans = [p.get("channel") for p in (domain_meta.get("publish") or [])] + \
+             [s.get("channel") for s in (domain_meta.get("subscribe") or [])]
+    nchan = (max(c for c in _chans if isinstance(c, int)) + 1) if _chans else 1
+
     return {
         "ecos_xdom.h": _H,
         "ecos_xdom.c": _C % {
@@ -178,6 +230,7 @@ def emit(domain_meta):
             "out": out_off,
             "in": int(ring.get("in", 0)),
             "owner": owner,
+            "nchan": nchan,
             "owner_note": owner_note,
             "kernel_include": ("#define ECOS_XDOM_KERNEL 1\t/* ring-0 宿主 */\n"
                                "#include <linux/io.h>\t/* ioremap */\n"

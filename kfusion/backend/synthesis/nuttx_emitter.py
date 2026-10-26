@@ -115,6 +115,7 @@ int %(main_name)s(int argc, char *argv[])
 
 	for (;;) {
 %(t_first_decl)s
+%(xdom_cycle)s
 		base += (uint64_t)ECOS_PERIOD_US;
 		for (i = 0; i < ECOS_GROUPS; i++) {
 			ecos_sleep_until(base + ecos_phase_us[i]);
@@ -338,6 +339,8 @@ def emit(ir, module_name, main_name=None, probe=False, xdom=False,
                           "\tecos_xdom_init();\n" if xdom else ""),
             "xdom_include": ('#include "ecos_xdom.h"\t/* 跨域数据桥 */\n'
                              if xdom else ""),
+            "xdom_cycle": ("\tecos_xdom_cycle = periods;\t/* PR10-F：每周期把控制周期索引喂给桥 */\n"
+                           if xdom else ""),
         },
         MAKEFILE: _MAKEFILE % {"mod": module_name, "upper": upper,
                                "prog": prog, "main_name": main_name,

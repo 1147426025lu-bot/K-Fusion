@@ -189,6 +189,7 @@ static int ecos_runner(void *data)
 		if (unlikely(frozen))
 			continue;
 %(probe_before)s
+%(xdom_cycle)s
 		ecos_run_body(g->id);
 %(probe_after)s
 	}
@@ -500,6 +501,8 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
                       "\tecos_xdom_init();\n" if xdom else ""),
         "xdom_include": ('#include "ecos_xdom.h"\t/* 跨域数据桥 */\n'
                          if xdom else ""),
+        "xdom_cycle": ("\t\tecos_xdom_cycle = periods;\t/* PR10-F：每周期把控制周期索引喂给桥 */\n"
+                       if xdom else ""),
     }
     return {
         HOST_C: host,

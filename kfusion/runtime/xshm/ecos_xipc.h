@@ -40,24 +40,25 @@
 #define XIPC_STATS_OFF   0x6000u       /* peer2 片：双方只读的统计/探针 */
 
 #define XIPC_MAGIC       0x4B465849u   /* "XIFK" 小端字面值，仅用于识别已初始化 */
-#define XIPC_VERSION     1u
-#define XIPC_SLOT_N      224u          /* 224 × 16 B = 3584 B，加上 256 B 头 = 3840 B */
-#define XIPC_SLOT_BYTES  16u
+#define XIPC_VERSION     2u   /* PR10-F：槽加 tick 字段（每消息发布周期索引） */
+#define XIPC_SLOT_N      224u          /* 224 × 20 B = 4480 B，加上 256 B 头 = 4736 B */
+#define XIPC_SLOT_BYTES  20u
 
 /* 消息类型。控制语义放在 kind 里，而不是靠"约定 a 的含义"。 */
-#define XIPC_KIND_HELLO  1u   /* inmate 上线，a = 能力位图 */
+#define XIPC_KIND_HELLO  1u   /* inmate 上线，a = 能力位图，b = cntfrq */
 #define XIPC_KIND_ECHO   2u   /* 回环：b = 收到时的 counter，a = 原 a */
-#define XIPC_KIND_TICK   3u   /* 周期数据（控制量） */
+#define XIPC_KIND_TICK   3u   /* 周期数据（控制量）：a = 本侧 tick 计数（PING 节拍） */
 #define XIPC_KIND_PING   4u   /* root 发的请求，a = 序号，b = 发送 counter 低 32 位 */
 #define XIPC_KIND_STOP   5u   /* 让 inmate 收工 */
 #define XIPC_KIND_MODE   6u   /* 切模式：a = tick_every（0=不推），b = period_us（0=忙等） */
-#define XIPC_KIND_DATA   7u   /* 跨域数据：a = 通道号，b = int32 值（PR10-C） */
+#define XIPC_KIND_DATA   7u   /* 跨域数据：a = 通道号，b = int32 值，tick = 发布周期索引（PR10-F） */
 
 struct xipc_slot {
-    volatile uint32_t seq;    /* 提交标记：= 生产者在环中的序号 + 1 */
+    volatile uint32_t seq;    /* 提交标记：= 生产者在环中的序号 + 1；跨域可作 release_id */
     volatile uint32_t kind;
     volatile uint32_t a;
     volatile uint32_t b;
+    volatile uint32_t tick;   /* PR10-F：发布周期索引（publish_tick）；管理消息填 0 */
 };
 
 struct xipc_ring {
@@ -108,7 +109,7 @@ XIPC_ASSERT_EQ(__builtin_offsetof(struct xipc_ring, head)  == 0x40);
 XIPC_ASSERT_EQ(__builtin_offsetof(struct xipc_ring, tail)  == 0x80);
 XIPC_ASSERT_EQ(__builtin_offsetof(struct xipc_ring, drops) == 0xC0);
 XIPC_ASSERT_EQ(__builtin_offsetof(struct xipc_ring, slot)  == 0x100);
-XIPC_ASSERT_EQ(sizeof(struct xipc_ring) <= 4096);          /* 一个环必须装进 4 KiB */
+XIPC_ASSERT_EQ(sizeof(struct xipc_ring) <= XIPC_PEER_STRIDE); /* 一个环必须装进一个 peer 片（0x3000） */
 
 /* ---------------- 编译器/平台适配 ---------------- */
 
@@ -217,8 +218,10 @@ static inline int xipc_wait_session(const struct xipc_ring *r, uint32_t prev,
     return 1;
 }
 
-/* 生产一条。返回 0 成功，1 环满（已计 drops）。 */
-static inline int xipc_pub(struct xipc_ring *r, uint32_t kind, uint32_t a, uint32_t b)
+/* 生产一条（带发布周期索引）。返回 0 成功，1 环满（已计 drops）。
+ * tick = 发布周期索引（publish_tick，PR10-F）；管理消息传 0。 */
+static inline int xipc_pub_ticked(struct xipc_ring *r, uint32_t kind,
+                                  uint32_t a, uint32_t b, uint32_t tick)
 {
     uint32_t h = r->head;
     uint32_t t = r->tail;
@@ -235,6 +238,7 @@ static inline int xipc_pub(struct xipc_ring *r, uint32_t kind, uint32_t a, uint3
     s->kind = kind;
     s->a    = a;
     s->b    = b;
+    s->tick = tick;
     XIPC_SYNC_WRITE(s, XIPC_SLOT_BYTES);   /* 负载先落地 */
     XIPC_BARRIER();
     s->seq = h + 1;           /* 再提交 */
@@ -243,6 +247,12 @@ static inline int xipc_pub(struct xipc_ring *r, uint32_t kind, uint32_t a, uint3
     r->head = h + 1;
     XIPC_SYNC_WRITE(&r->head, 4);
     return 0;
+}
+
+/* 兼容旧管理协议（root_side.c / xipc_main.c 仍用 4 参，tick 填 0）。 */
+static inline int xipc_pub(struct xipc_ring *r, uint32_t kind, uint32_t a, uint32_t b)
+{
+    return xipc_pub_ticked(r, kind, a, b, 0);
 }
 
 /* 看队头但不消费。返回 1 = 收到一条（*out 已填），0 = 空或该槽尚未提交。 */
@@ -264,6 +274,7 @@ static inline int xipc_peek(struct xipc_ring *r, struct xipc_slot *out)
     out->kind = s->kind;
     out->a    = s->a;
     out->b    = s->b;
+    out->tick = s->tick;
     return 1;
 }
 

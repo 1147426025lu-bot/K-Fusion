@@ -487,5 +487,18 @@ expect_grep "拒绝码是 FEEDBACK_CONTRACT_MISSING" "$(cat "$TMP/out.txt")" \
     "FEEDBACK_CONTRACT_MISSING"
 
 echo
+echo "=== 32. PR10-F：版本化 IPC 参考模型（多通道隔离 / 最近一条 / 按拍追踪）==="
+# 本机无 C 编译器，ecos_xipc.h / ecos_xdom.c 这套运行时只能在 Pi 上编译验证。
+# 这里用一份等价的 Python 模型先验"算法对不对"：新桥必须做到 sub(X) 不吞 sub(Y)、
+# 取最近一条、tick/seq 透传、跨域按拍追踪；并复现旧桥（PR10-C）的多通道消费 bug。
+"$PY" "$HERE/xipc_versioned_model.py" >"$TMP/xipc_model.txt" 2>&1
+if [ $? -eq 0 ]; then
+    ok "PR10-F 参考模型：新桥语义全部成立（且复现旧桥多通道 bug）"
+else
+    bad "PR10-F 参考模型：有断言未通过"
+    sed -n '1,20p' "$TMP/xipc_model.txt" | sed 's/^/      /'
+fi
+
+echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" = 0 ] || exit 1
