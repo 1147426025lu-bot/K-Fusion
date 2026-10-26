@@ -94,6 +94,10 @@ def main():
     ap.add_argument("--experiment-shift-us", type=int, default=0,
                     help="【装置实验】把每个组的相位整体平移 N µs（按周期取模）。"
                          "用于同一速率下只切相位做 A/B——多速率装置里相位才第一次有非平凡作用")
+    ap.add_argument("--allow-infeasible-deployment", action="store_true",
+                    help="承认这个跨域部署在数据年龄预算内**排不出安全相位**（PR11-C 判据），"
+                         "仍然生成。产物写 EXPERIMENT.txt、不得进论文主张。"
+                         "唯一用途是复现已证明不可行的装置（§15/§16 的多速率臂）")
     ap.add_argument("--allow-experiment-deploy", action="store_true",
                     help="承认这是装置实验（周期/相位偏离已验证的方案）。"
                          "与 --allow-unverified 同一套规矩：产物明确标记、不得进论文主张")
@@ -250,6 +254,98 @@ def main():
         print("⚠ 装置实验（偏离已验证方案）：", file=sys.stderr)
         for n in exp_notes:
             print("    %s" % n, file=sys.stderr)
+
+    # ---- 契约声明的各域周期必须真的落到生成代码（PR11-C）----
+    # 否则契约说 root=2000、生成的却是 1000：声明与实现不一致，
+    # 后面的可行性判据就变成了"拿一个不存在的部署去算"。
+    if xdom and a.experiment_period_us is None:
+        _dom = str(xdom.get("domain") or "")
+        _decl = ((contract or {}).get("timing_constraints") or {}).get("domain_period_us") or {}
+        if _dom and _dom in _decl:
+            try:
+                _want = int(float(_decl[_dom]))
+            except (TypeError, ValueError):
+                print("❌ 契约 timing_constraints.domain_period_us[%s] 不是数字：%r"
+                      % (_dom, _decl[_dom]), file=sys.stderr)
+                return 2
+            if int(ir.period_us or 0) != _want:
+                print("  周期取自契约（域 %s）：%d µs（plan 里是 %.0f µs）"
+                      % (_dom, _want, ir.period_us or 0))
+                ir.period_us = _want
+    elif xdom and a.experiment_period_us is not None:
+        _dom = str(xdom.get("domain") or "")
+        _decl = ((contract or {}).get("timing_constraints") or {}).get("domain_period_us") or {}
+        if _dom and _dom in _decl and int(float(_decl[_dom])) != int(a.experiment_period_us):
+            print("❌ --experiment-period-us=%d 与契约 domain_period_us[%s]=%s 冲突"
+                  % (int(a.experiment_period_us), _dom, _decl[_dom]), file=sys.stderr)
+            return 2
+
+    # ---- 跨域部署可行性（PR11-C）：排不下就不生成 ----
+    # 为什么放在装置覆盖之后：--experiment-period-us 会改本域周期，判据必须用**最终**节拍。
+    # 判据本身在 xdom_timeline.check_edge（事件时间线模型），这里只负责"拒绝或放行"。
+    if xdom:
+        try:
+            _tl_dir = os.path.normpath(os.path.join(_HERE, "..", "..", "scripts", "ecos"))
+            if _tl_dir not in sys.path:
+                sys.path.insert(0, _tl_dir)
+            import xdom_timeline as _tl
+            _ctr = (contract or {}).get("timing_constraints") or {}
+            _per = {}
+            for k, v in (_ctr.get("domain_period_us") or {}).items():
+                try:
+                    _per[str(k)] = float(v)
+                except (TypeError, ValueError):
+                    pass
+            _base = float((dag.get("phase") or {}).get("period_us") or 0) or None
+            _drift = float(_ctr.get("xdom_drift_ppm") or 0)
+            _p_self = float(ir.period_us or 0)
+            _bad, _narrow = [], []
+            # 两个方向都要看：我消费谁（我是消费者）+ 谁消费我（我是生产者）。
+            # 只看一个方向会漏：$P_p$ 与 $P_c$ 互换后可行性完全不同
+            # （快生产者 + 慢消费者 ⇒ age 只在 {a,a+P_c} 摆动；慢生产者 + 快消费者则安全）。
+            _pairs = [("from", _s.get("from")) for _s in (xdom.get("subscribe") or [])] \
+                   + [("to", _s.get("to")) for _s in (xdom.get("publish") or [])]
+            for _dir, _peer in _pairs:
+                _peer = str(_peer)
+                _peer_p = _per.get(_peer, _base) or _p_self
+                if _dir == "from":          # 对端生产、本域消费
+                    _pp, _pc = _peer_p, _p_self
+                else:                       # 本域生产、对端消费
+                    _pp, _pc = _p_self, _peer_p
+                if int(xdom_max_age) <= 0:
+                    print("⚠ 未声明跨域数据年龄预算（xdom_max_age_ticks）："
+                          "无法判定这个部署排不排得下安全相位", file=sys.stderr)
+                    continue
+                _r = _tl.check_edge(_pp, _pc, float(xdom_max_age) * _pc,
+                                    drift_ppm=_drift)
+                _who = ("%s(%.0f µs) → 本域(%.0f µs)" % (_peer, _pp, _pc)
+                        if _dir == "from" else
+                        "本域(%.0f µs) → %s(%.0f µs)" % (_pp, _peer, _pc))
+                if not _r["ok"]:
+                    _bad.append("%s，预算 %d 拍，漂移 %.0f ppm ⇒ %s"
+                                % (_who, int(xdom_max_age), _drift, _r["reason"]))
+                elif _r["frac"] < 0.10:
+                    _narrow.append("%s ⇒ %s" % (_who, _r["reason"]))
+            for _n in _narrow:
+                print("⚠ 跨域相位窗很窄：%s（漂移会让它慢慢走掉）" % _n, file=sys.stderr)
+            if _bad:
+                if not a.allow_infeasible_deployment:
+                    for _b in _bad:
+                        print("❌ 跨域部署不可行：%s" % _b, file=sys.stderr)
+                    print("   → 事件时间线在生成期就能判定，不必等板上跑一轮：\n"
+                          "     ① 放宽契约的 xdom_max_age_ticks  ② 让两域同速率  "
+                          "③ 窗宽 0 时调相位没用\n"
+                          "   若只是要复现已知不可行的装置，加 --allow-infeasible-deployment "
+                          "（产物会标 EXPERIMENT.txt）", file=sys.stderr)
+                    return 3
+                for _b in _bad:
+                    print("⚠ 跨域部署不可行（已承认）：%s" % _b, file=sys.stderr)
+                exp_notes.append("跨域部署在年龄预算内不可行（已承认）：" + "；".join(_bad))
+        except ImportError as _e:
+            # 判不了就不生成：跨域部署的可行性没有"默认可行"这一说
+            print("❌ 跨域部署可行性检查无法执行（找不到 xdom_timeline：%s）；"
+                  "拒绝生成" % _e, file=sys.stderr)
+            return 2
 
     # ---- 阶段函数必须真实存在 ----
     try:

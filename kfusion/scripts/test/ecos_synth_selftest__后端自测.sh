@@ -277,6 +277,8 @@ echo "=== 11. PR10-B：跨域方案不许合成成单域产物 ==="
 # "跨域融合不存在"这条硬约束，而且生成物在板上根本跑不起来。
 LOOPSRC="$HERE/../../examples/ecos/five_stage_loop__闭环五阶段示例.c"
 XCON="$HERE/../../contracts/examples/xdom_loop.contract.json"
+XC_MR="$HERE/../../contracts/examples/xdom_loop_multirate.contract.json"
+XC_MR_OK="$HERE/../../contracts/examples/xdom_loop_multirate_ok.contract.json"
 EX5='{"stage_sample":0.60,"stage_fir":0.67,"stage_pid":0.28,"stage_clamp":0.28,"stage_plant":0.50}'
 expect_rc "跨域夹具规划成功（域纯度已由规划器保证）" 0 \
     "$PY" "$PLAN_PY" "$FIX/xdom_loop.dag.json" --platforms "$CAPS" \
@@ -460,7 +462,11 @@ expect_rc "承认后可按多速率装置生成" 0 \
     --out-dir "$TMP/xe_exp" --target linux-kernel --contract "$XCON" \
     --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
     --xdom "$TMP/xsplit/root/meta.json" \
-    --experiment-period-us 2000 --allow-experiment-deploy
+    --experiment-period-us 2000 --allow-experiment-deploy \
+    --allow-infeasible-deployment
+# ⚠ PR11-C 之后：这个 2ms/1ms 装置被部署判据判为**不可行**（安全相位窗为空），
+#   必须显式 --allow-infeasible-deployment 才生成。这不是放宽门禁，是复现
+#   已证明不可行的装置要留痕——EXPERIMENT.txt 里会写清原因。
 # 周期必须真的落到宿主与桥，否则"多速率"只是说说
 expect_grep "root 宿主周期变成 2000 µs" "$TMP/xe_exp/ecos_fused_linux.c" \
     "static unsigned int period_us = 2000;"
@@ -475,6 +481,72 @@ fi
 
 expect_rc "合法预算的契约校验通过" 0 \
     "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" "$XCON"
+
+echo
+echo "=== PR11-C：跨域部署可行性判据（排不下安全相位就拒绝生成）==="
+# 事件时间线模型能给出"安全相位窗"；窗为空/只有孤立点 ⇒ 这个部署在预算内不可实现。
+# 关键：判在**生成期**，不是等板上跑一轮（PR10-F §14 已实证运行时拒收救不回）。
+expect_rc "契约层：多速率 + 预算1 判不可行" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" "$XC_MR"
+expect_rc "契约层：多速率 + 预算2 通过" 0 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" "$XC_MR_OK"
+# 两端都要拒：只看"我消费谁"会漏掉"谁消费我"（P_p 与 P_c 互换后可行性完全不同）
+expect_rc "emit：多速率（消费侧）拒绝" 3 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/nuttx/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xc_mr_c" --target nuttx --contract "$XC_MR" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/nuttx/meta.json"
+expect_rc "emit：多速率（生产侧）拒绝" 3 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/root/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xc_mr_p" --target linux-kernel --contract "$XC_MR" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/root/meta.json"
+rm -rf "$TMP/xc_mr_ok"
+expect_rc "emit：预算放宽到 2 拍即通过" 0 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/root/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xc_mr_ok" --target linux-kernel --contract "$XC_MR_OK" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/root/meta.json"
+# 契约声明的各域周期必须真的落到生成代码，否则判据是"拿一个不存在的部署在算"
+expect_grep "契约声明的域周期落到生成代码（root=2000）" "$TMP/xc_mr_ok/ecos_xdom.c" \
+    "#define ECOS_XDOM_PERIOD_US 2000"
+expect_grep "契约域周期也落到宿主" "$TMP/xc_mr_ok/ecos_fused_linux.c" \
+    "static unsigned int period_us = 2000;"
+# 装置开关同样受判据约束（否则实验口子就成了绕过门禁的暗道）
+expect_rc "实验开关也受部署判据约束" 3 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/root/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xc_mr_exp" --target linux-kernel --contract "$XCON" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/root/meta.json" \
+    --experiment-period-us 2000 --allow-experiment-deploy
+# 承认之后仍能复现（复现已证明不可行的装置是正当需求，但必须留痕）
+rm -rf "$TMP/xc_mr_ack"
+expect_rc "承认不可行后可复现该装置" 0 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/root/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xc_mr_ack" --target linux-kernel --contract "$XCON" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/root/meta.json" \
+    --experiment-period-us 2000 --allow-experiment-deploy --allow-infeasible-deployment
+if [ -f "$TMP/xc_mr_ack/EXPERIMENT.txt" ] && grep -q "不可行" "$TMP/xc_mr_ack/EXPERIMENT.txt"; then
+    ok "承认不可行的产物把原因写进 EXPERIMENT.txt"
+else
+    bad "承认不可行的产物没把原因写进 EXPERIMENT.txt"
+fi
+# 有跨域边却没预算 ⇒ fail-closed（"预算无穷大"等于没有约束）
+"$PY" - "$XCON" "$TMP/nobudget.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"].pop("xdom_max_age_ticks", None)
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "有跨域边但没预算 → fail-closed" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/nobudget.contract.json"
 
 echo
 echo "通过 $PASS / 失败 $FAIL"

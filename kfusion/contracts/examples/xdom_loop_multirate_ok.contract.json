@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "task": {
+    "period_us": 1000,
+    "deadline_us": 2500
+  },
+  "timing_constraints": {
+    "feedback_delay_max_us": 2500,
+    "xdom_max_age_ticks": 2,
+    "xdom_drift_ppm": 15,
+    "domain_period_us": {
+      "root": 2000,
+      "nuttx": 1000
+    }
+  },
+  "_note": [
+    "⚠ PR11-C 正向夹具：与 xdom_loop_multirate.contract.json **只差 xdom_max_age_ticks（1→2）**。",
+    "预算是 2 拍 ⇒ 安全相位窗 ≈100%（2000/2000 µs）⇒ 部署可行、必须通过。",
+    "用途：证明拒绝是预算这一个数造成的，不赖 DAG、域能力或期限。"
+  ]
+}

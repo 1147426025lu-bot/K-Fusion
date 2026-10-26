@@ -26,6 +26,12 @@
 """
 
 import json
+import os
+import sys
+
+_HERE = os.path.dirname(os.path.abspath(__file__))
+if _HERE not in sys.path:
+    sys.path.insert(0, _HERE)
 
 
 def load(p):
@@ -182,6 +188,18 @@ def validate(dag, contract):
                              "以契约为准" % (float(period), float(period_dag)))
         except (TypeError, ValueError):
             pass
+
+    # ---- 跨域部署可行性（PR11-C）----
+    # 结构对了不等于排得下：契约声明了各域周期，就必须存在安全相位窗，
+    # 否则这个部署在"数据年龄 ≤ 预算"下**不可实现**——生成期就该拒，
+    # 而不是生成出来靠运行时拒收兜底（PR10-F §14 已实证拒收救不回）。
+    try:
+        import xdom_timeline as _tl
+        e2, w2 = _tl.check_contract(dag, contract)
+        errs.extend(e2)
+        warns.extend(w2)
+    except Exception as ex:      # 判不了就 fail-closed，绝不静默放行
+        errs.append("跨域部署可行性检查无法执行：%s: %s" % (type(ex).__name__, ex))
 
     return errs, warns
 

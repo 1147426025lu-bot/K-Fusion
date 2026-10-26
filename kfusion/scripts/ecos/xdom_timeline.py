@@ -254,3 +254,147 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
+
+
+# ---------------------------------------------------------------- 编译期判据
+#
+# 到这里为止都是"模型"。下面把它接成**编译期能不能生成**的判据：
+# 契约里声明了各域周期（多速率）就必须存在安全相位窗，否则这个部署在
+# 数据年龄预算内**不可实现**——应当拒绝生成，而不是生成出来再靠运行时拒收兜底
+# （§14 已实证：拒收 = 保持旧值 = 又一种延迟，救不回回路）。
+
+_WIN_CACHE = {}
+
+
+def check_edge(prod_period_us, cons_period_us, budget_us,
+               exec_us=0.0, drift_ppm=0.0, steps=360, n_cons=1200,
+               pick="latest"):
+    """单条跨域边的可行性。返回 dict（含 ok / reason / 窗宽占比）。
+
+    判据（任一成立即判不可行）：
+      · safe 为空集        → 没有任何相位可用
+      · safe_width == 0    → 只有孤立点（测度零），任何抖动都会破坏
+    窗宽占比 < 10% 不算不可行，但要告警：这种部署对漂移几乎没有余量。
+    """
+    key = (round(float(prod_period_us), 3), round(float(cons_period_us), 3),
+           round(float(budget_us), 3), round(float(exec_us), 3),
+           round(float(drift_ppm), 3), int(steps), int(n_cons), pick)
+    if key in _WIN_CACHE:
+        return _WIN_CACHE[key]
+    w = safe_phase_window(prod_period_us, cons_period_us, budget_us,
+                          exec_us=exec_us, drift_ppm=drift_ppm,
+                          steps=steps, n_cons=n_cons, pick=pick)
+    lcm = w["lcm"] or 1.0
+    frac = w["safe_width"] / lcm
+    if not w["safe"]:
+        reason = "无任何安全相位（预算 %.0f µs 内排不出）" % float(budget_us)
+        ok = False
+    elif w["safe_width"] == 0:
+        reason = ("只有孤立相位点（总宽 0/%.0f µs）：测度零，"
+                  "抖动/漂移一进来就破" % lcm)
+        ok = False
+    else:
+        reason = "安全相位窗 %.0f/%.0f µs（%.0f%%）" % (w["safe_width"], lcm, 100 * frac)
+        ok = True
+    res = {"ok": ok, "reason": reason, "frac": frac, "lcm": lcm, "width": w["safe_width"],
+           "ranges": w["safe"], "budget_us": float(budget_us),
+           "drift_ppm": float(drift_ppm)}
+    _WIN_CACHE[key] = res
+    return res
+
+
+def _domain_periods(dag, contract):
+    """契约里的各域周期；没声明的域退回任务周期（= 1:1，向后兼容）。"""
+    ctr = (contract or {}).get("timing_constraints") or {}
+    task = (contract or {}).get("task") or {}
+    base = task.get("period_us") or ctr.get("period_us") \
+        or ((dag.get("phase") or {}).get("period_us"))
+    per = {}
+    d = ctr.get("domain_period_us") or {}
+    if isinstance(d, dict):
+        for k, v in d.items():
+            try:
+                per[str(k)] = float(v)
+            except (TypeError, ValueError):
+                pass
+    return per, (float(base) if base else None)
+
+
+def cross_edges(dag):
+    """跨域边：[(from, to, from_domain, to_domain)]，按 (域A→域B) 去重。"""
+    dom = {n["name"]: n.get("domain") for n in (dag.get("nodes") or [])}
+    seen, out = set(), []
+    for e in (dag.get("edges") or []):
+        a, b = e.get("from"), e.get("to")
+        da, db = dom.get(a), dom.get(b)
+        if not da or not db or da == db:
+            continue
+        k = (da, db)
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append((a, b, da, db))
+    return out
+
+
+def check_contract(dag, contract, exec_us=None):
+    """契约级判据：跨域部署必须存在安全相位窗。返回 (errs, warns)。
+
+    只在 DAG 真有跨域边时生效；单域方案一个字节都不受影响。
+    """
+    errs, warns = [], []
+    edges = cross_edges(dag)
+    if not edges:
+        return errs, warns
+    ctr = (contract or {}).get("timing_constraints") or {}
+    per, base = _domain_periods(dag, contract)
+
+    budget_ticks = ctr.get("xdom_max_age_ticks")
+    if budget_ticks is None:
+        # fail-closed：有跨域边却没声明年龄预算，"预算"就是无穷大，无从判起。
+        errs.append(
+            "契约：有跨域边但没有 timing_constraints.xdom_max_age_ticks —— "
+            "没有预算就无法判断该速率组合是否可部署；"
+            "请显式声明（1 拍=不允许跨一拍的数据，实测该闭环 1–2 拍已发散）")
+        return errs, warns
+    try:
+        budget_ticks = float(budget_ticks)
+    except (TypeError, ValueError):
+        return (["契约：xdom_max_age_ticks 不是数字：%r" % (budget_ticks,)], warns)
+
+    drift = ctr.get("xdom_drift_ppm")
+    if drift is None:
+        drift = 0.0
+        warns.append(
+            "契约没有声明 xdom_drift_ppm，按 0 处理——"
+            "实测两宿主节拍相对漂移 ≈14 ppm（PR11-C §16.3），"
+            "声明 0 会让安全相位窗看起来比实际宽")
+    try:
+        drift = float(drift)
+    except (TypeError, ValueError):
+        errs.append("契约：xdom_drift_ppm 不是数字：%r" % (drift,))
+        drift = 0.0
+
+    for a, b, da, db in edges:
+        Pp = per.get(da, base)
+        Pc = per.get(db, base)
+        if not Pp or not Pc:
+            errs.append("契约：跨域边 %s→%s 的域周期未知（既没 domain_period_us，"
+                        "也没有 period_us）" % (a, b))
+            continue
+        budget_us = budget_ticks * Pc      # 预算按**消费者**的拍折算
+        r = check_edge(Pp, Pc, budget_us, exec_us=exec_us or 0.0, drift_ppm=drift)
+        who = "%s(%s %.0f µs) → %s(%s %.0f µs)" % (a, da, Pp, b, db, Pc)
+        if not r["ok"]:
+            errs.append(
+                "跨域部署不可行：%s，预算 %.0f 拍 = %.0f µs，漂移 %.0f ppm ⇒ %s。\n"
+                "    这不是「跑起来才知道」的事：事件时间线在生成期就能判定。\n"
+                "    出路只有三条：① 放宽 xdom_max_age_ticks ② 让两域同速率 "
+                "③ 改相位没用在窗为空时（窗宽 0 也是不可用）"
+                % (who, budget_ticks, budget_us, drift, r["reason"]))
+        elif r["frac"] < 0.10:
+            warns.append(
+                "跨域部署相位窗很窄：%s，预算 %.0f 拍，漂移 %.0f ppm ⇒ %s；"
+                "漂移会让可用相位慢慢走掉，建议同时做周期性重同步"
+                % (who, budget_ticks, drift, r["reason"]))
+    return errs, warns
