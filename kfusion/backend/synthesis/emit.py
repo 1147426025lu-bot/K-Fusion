@@ -61,6 +61,8 @@ def main():
     ap.add_argument("--digest-var", action="append", default=[],
                     help="要发布成只读 sysfs 参数的 int32_t 全局量（可重复）。"
                          "没有观察点就只能证明『能加载』，证明不了『算得对』")
+    ap.add_argument("--xdom-lag", type=int, default=0,
+                    help="跨域消费者取『LAG 拍前』的值（受控 A/B 注入延迟）；0=取最新（默认）")
     ap.add_argument("--probe", action="store_true",
                     help="加死区探针：量环闭合边（上拍末组结束 → 本拍首组开始），"
                          "输出 dz_min/avg/max_ns 与采样数（Linux）/ # dz 行（NuttX）")
@@ -210,7 +212,8 @@ def main():
     # 只在给了 --xdom 时生成；单域产物一个字节都不变。
     if xdom:
         # 周期长度要把物理计数器换算成"周期号"，必须把方案周期传给桥。
-        for fn, text in xdom_bridge.emit(xdom, period_us=int(ir.period_us or 0)).items():
+        for fn, text in xdom_bridge.emit(xdom, period_us=int(ir.period_us or 0),
+                                         lag=int(a.xdom_lag or 0)).items():
             written.append(_write(a.out_dir, fn, text))
         print("=== 跨域数据桥 ===")
         print("  %s" % xdom_bridge.summary(xdom))

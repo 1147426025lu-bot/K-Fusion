@@ -89,6 +89,10 @@ _C = """/* ecos_xdom.c — 跨域数据桥（由 ECoS 拆分器生成，勿手�
 #define ECOS_XDOM_NCHAN %(nchan)d
 #define ECOS_XDOM_PERIOD_US %(period_us)d
 #define ECOS_XDOM_MAX_AGE %(max_age)d   /* 0 = 不判过期；>0 = 超过即拒绝该版本 */
+/* A/B 注入延迟用：消费者取"LAG 拍前"的值。LAG=0 = 取最新（等价原行为）；
+ * LAG=N = 取 N 拍前的值（人为注入跨域延迟，做受控 A/B：同一代码只切这一项）。 */
+#define ECOS_XDOM_LAG %(lag)d
+#define ECOS_XDOM_HIST (ECOS_XDOM_LAG + 1)
 
 /* 为什么有两套地址解析
  * -------------------
@@ -122,6 +126,13 @@ static uint8_t  xdom_cache_valid[ECOS_XDOM_NCHAN];
 
 /* 逐拍证据：每通道最近一次消费的 prod/cons/age + 累计统计。 */
 static struct ecos_xdom_evid xdom_evid[ECOS_XDOM_NCHAN];
+
+/* A/B 用的每通道移位寄存器：存最近 ECOS_XDOM_HIST 个值，取 LAG 拍前那个。
+ * LAG=0 时 HIST=1，永远返回最新，与原行为等价。 */
+static int32_t  xdom_hist_val[ECOS_XDOM_NCHAN][ECOS_XDOM_HIST];
+static uint32_t xdom_hist_tick[ECOS_XDOM_NCHAN][ECOS_XDOM_HIST];
+static uint8_t  xdom_hist_pos[ECOS_XDOM_NCHAN];
+static uint8_t  xdom_hist_n[ECOS_XDOM_NCHAN];
 
 /* 绝对周期号：共享物理计数器 / 一个周期的 tick 数。
  * 两侧用同一个计数器、同一个周期长度 ⇒ 同一物理时刻算出的值相同，
@@ -203,9 +214,27 @@ void ecos_xdom_sub_tick(unsigned channel, int32_t *dst, uint32_t *out_tick)
 	}
 	if (xdom_cache_valid[channel]) {
 		struct ecos_xdom_evid *e = &xdom_evid[channel];
-		uint32_t tick = xdom_cache_tick[channel];
-		uint32_t cons = xdom_cycle_from_counter();
-		uint32_t age  = cons - tick;   /* 无符号回绕差：正常小，过期则大 */
+		unsigned int idx;
+		int32_t v;
+		uint32_t tick, cons, age;
+
+		/* A/B：把最新值压进每通道移位寄存器，取 LAG 拍前那个（LAG=0 即最新）。 */
+		xdom_hist_val[channel][xdom_hist_pos[channel]]  = xdom_cache[channel];
+		xdom_hist_tick[channel][xdom_hist_pos[channel]] = xdom_cache_tick[channel];
+		xdom_hist_pos[channel] = (uint8_t)((xdom_hist_pos[channel] + 1u) %% ECOS_XDOM_HIST);
+		if (xdom_hist_n[channel] < ECOS_XDOM_HIST)
+			xdom_hist_n[channel]++;
+
+		if (xdom_hist_n[channel] < ECOS_XDOM_HIST)
+			idx = (unsigned int)((xdom_hist_pos[channel] + ECOS_XDOM_HIST - 1u)
+					     %% ECOS_XDOM_HIST);
+		else
+			idx = xdom_hist_pos[channel];   /* 满：最旧 = LAG 拍前 */
+
+		v    = xdom_hist_val[channel][idx];
+		tick = xdom_hist_tick[channel][idx];
+		cons = xdom_cycle_from_counter();
+		age  = cons - tick;   /* 无符号回绕差：正常小，过期则大 */
 
 		/* 记录逐拍证据：这一拍消费到的数据是哪个周期产生的、现在第几拍、差几拍。 */
 		e->prod = tick;
@@ -224,7 +253,7 @@ void ecos_xdom_sub_tick(unsigned channel, int32_t *dst, uint32_t *out_tick)
 			e->n_stale++;
 			return;
 		}
-		*dst = xdom_cache[channel];
+		*dst = v;
 	}
 }
 
@@ -274,10 +303,11 @@ uint32_t ecos_xdom_epoch(void)
 BASE = 0x1faf1000
 
 
-def emit(domain_meta, period_us=1000, max_age=0):
+def emit(domain_meta, period_us=1000, max_age=0, lag=0):
     """domain_meta: 拆分器写的 per-domain meta.json（含 peer_ring 与 pub/sub）。
     period_us: 控制周期（µs），用于把物理计数器换算成周期号。
     max_age:   过期阈值（拍），0 = 不启用过期拒收（只记录证据）。
+    lag:       消费者取"LAG 拍前"的值（A/B 注入延迟）；0 = 取最新（默认）。
     """
     ring = domain_meta.get("peer_ring") or {}
     out_off = int(ring.get("out", 0))
@@ -341,6 +371,7 @@ def emit(domain_meta, period_us=1000, max_age=0):
             "nchan": nchan,
             "period_us": int(period_us or 0),
             "max_age": int(max_age or 0),
+            "lag": int(lag or 0),
             "owner_note": owner_note,
             # kernel 侧要 pr_info（report_evidence 用），故带 kernel.h
             "kernel_include": ("#define ECOS_XDOM_KERNEL 1\t/* ring-0 宿主 */\n"
