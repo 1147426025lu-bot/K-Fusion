@@ -582,5 +582,60 @@ expect_rc "声明抖动后 1:1 预算1 仍通过" 0 \
     "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" "$XCON"
 
 echo
+echo "=== PR11-D：跨域走**严格入口**（--split-by-domain），不再只有手写脚本 ==="
+# 以前跨域只有一条路：手写 xdom_build.sh + 两条手工 emit。于是
+# "论文用的产物"和"严格入口产出的产物"是两条链——严格入口不支持跨域，
+# 绕过它就成了默认做法。这一节把跨域收进严格入口：
+#   一次调用 → 契约门 → 规划 → 独立复检 → 按域拆分 → 两端各自合成 → 溯源清单。
+XC_MRF="$HERE/../../contracts/examples/xdom_loop_multirate_feasible.contract.json"
+LOOPSRC="$HERE/../../examples/ecos/five_stage_loop__闭环五阶段示例.c"
+EX5='{"stage_sample":0.60,"stage_fir":0.67,"stage_pid":0.28,"stage_clamp":0.28,"stage_plant":0.50}'
+XB="$TMP/strict_split"
+rm -rf "$XB"
+expect_rc "严格入口一次产出两端（--split-by-domain）" 0 \
+    bash "$ECOS" --dag "$FIX/xdom_loop.dag.json" --contract "$XC_MRF" \
+    --platforms "$CAPS" --platform linux_kernel --release-cost-us 21 \
+    --exec-us "$EX5" --source "$LOOPSRC" --out-dir "$XB" \
+    --split-by-domain --call "stage_pid=stage_pid(1000)"
+for f in root/ecos_fused_linux.c root/ecos_xdom.c root/ecos_xipc.h root/stage_impl.c \
+         nuttx/ecos_nuttx_main.c nuttx/ecos_xdom.c nuttx/ecos_xipc.h nuttx/stage_impl.c; do
+    if [ -f "$XB/$f" ]; then ok "拆分成对出现：$f"; else bad "拆分缺 $f"; fi
+done
+# 角色与节拍必须落到两端：root=owner/2000 µs，nuttx=非 owner/1000 µs
+expect_grep "root 端：环 owner + 契约周期 2000 µs" "$XB/root/ecos_xdom.c" \
+    "#define ECOS_XDOM_OWNER 1" "#define ECOS_XDOM_PERIOD_US 2000"
+expect_grep "nuttx 端：非 owner + 契约周期 1000 µs" "$XB/nuttx/ecos_xdom.c" \
+    "#define ECOS_XDOM_OWNER 0" "#define ECOS_XDOM_PERIOD_US 1000"
+expect_grep "root 端环头是协议 v3" "$XB/root/ecos_xipc.h" "XIPC_VERSION     3u"
+expect_grep "nuttx 端环头是协议 v3" "$XB/nuttx/ecos_xipc.h" "XIPC_VERSION     3u"
+if cmp -s "$XB/root/ecos_xipc.h" "$XB/nuttx/ecos_xipc.h"; then
+    ok "两端环头文件逐字节相同（ABI 一致）"
+else
+    bad "两端环头文件不同 → 环布局会不一致"
+fi
+if cmp -s "$XB/root/stage_impl.c" "$XB/nuttx/stage_impl.c"; then
+    ok "两端阶段实现逐字节相同（同方案两部署）"
+else
+    bad "两端阶段实现不一致"
+fi
+expect_grep "溯源清单记录 split=1" "$XB/manifest.txt" \
+    "target    split" "split     1"
+expect_grep "产物带构建说明（两端必须同时重编）" "$XB/README.build.txt" \
+    "必须**同时**重编部署" "built=0"
+# 拆分模式与 --target 互斥：静默忽略一个用户以为生效的开关，比报错更糟
+expect_rc "拆分 + --target 互斥（rc=2）" 2 \
+    bash "$ECOS" --dag "$FIX/xdom_loop.dag.json" --contract "$XC_MRF" \
+    --platforms "$CAPS" --platform linux_kernel --release-cost-us 21 \
+    --exec-us "$EX5" --source "$LOOPSRC" --out-dir "$TMP/strict_bad" \
+    --split-by-domain --target nuttx
+# 单域路径不能被这次改动带歪：chain_window 仍是一份产物
+rm -rf "$TMP/strict_single"
+expect_rc "单域严格入口不受影响" 0 \
+    bash "$ECOS" --dag "$FIX/chain_window.dag.json" --contract "$CONTRACT" \
+    --platforms "$CAPS" --platform nuttx --release-cost-us 21 \
+    --exec-us '{"s1":0.6,"s2":0.67,"s3":0.28,"s4":0.5}' \
+    --source "$SRC" --out-dir "$TMP/strict_single" --target nuttx
+
+echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" = 0 ] || exit 1

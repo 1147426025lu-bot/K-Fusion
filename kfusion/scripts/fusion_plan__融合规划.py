@@ -218,7 +218,8 @@ class Planner:
         # ---- 跨域语义（PR10-B）----
         # 跨域边与 z⁻¹ 闭合边同构：只能跨拍满足。所以它既不约束同拍顺序，
         # 又给端到端/死区各加一整拍。语义只在 domain_model 里定义一次。
-        self.dom = domain_model.load(dag, period_us=self.period, topo=self.order)
+        self.dom = domain_model.load(dag, period_us=self.period, topo=self.order,
+                                     domain_period_us=self.tm.domain_periods)
 
         # 同拍可达闭包：**摘掉** z⁻¹ 闭合边与跨域边之后再算。
         # 踩过的坑：不可分性如果用全边闭包，环路会被"绕回来"——clamp 经由
@@ -342,9 +343,14 @@ class Planner:
         if self.budget and tot > self.budget:
             return False, ("期限：段内执行 %.1f µs 超过预算 %.1f µs"
                            % (tot, self.budget))
-        if self.period and tot > float(self.period):
-            return False, ("单拍容量：段内执行 %.1f µs 超过周期 %.1f µs，"
-                           "这组永远跑不完" % (tot, float(self.period)))
+        # 单拍容量按**这一段所在域**的周期卡（PR11-D）。多速率下用全局
+        # period 会误杀 2 ms 域里 1.5 ms 的段——"这组永远跑不完"是假的。
+        seg_dom = self.tm.group_domain(members)
+        seg_period = self.tm.period_of(seg_dom) if seg_dom else self.period
+        if seg_period and tot > float(seg_period):
+            return False, ("单拍容量：段内执行 %.1f µs 超过域 %s 的周期 %.1f µs，"
+                           "这组永远跑不完"
+                           % (tot, seg_dom or "?", float(seg_period)))
 
         # 5) 不确定依赖（PR6，fail-closed）：未解除的不确定性不允许改变相对结构
         for m in members:
@@ -449,14 +455,21 @@ class Planner:
         return groups
 
     def _finish_time(self, named_groups):
-        """给定分组（名字列表），返回最后一组的绝对完成时刻（同 solve 的模型）。"""
-        t = 0.0
+        """给定分组（名字列表），返回**最晚**的绝对完成时刻（同 schedule 的模型）。
+
+        多速率（PR11-D）：按域各走一条线——同域串行、跨域并行。
+        用全局串行会系统性高估跨域方案的完成时刻（2 ms 域的组会把 1 ms 域的
+        组整体推后），从而挑错分组。
+        """
+        fin = {}
         for g in named_groups:
             head = min((self.phase.get(m, 0.0) for m in g), default=0.0)
+            dom = self.tm.group_domain(g) or "default"
+            t = fin.get(dom, 0.0)
             start = head if head > t else t
             seg_exec = sum(self.exec_us.get(m, 0.0) for m in g)
-            t = start + self.c + seg_exec
-        return t
+            fin[dom] = start + self.c + seg_exec
+        return max(fin.values()) if fin else 0.0
 
     def feedback_ok(self, groups_idx):
         if self.max_fb_delay_us is None:
@@ -816,9 +829,12 @@ def main():
     gs = summarize(planner, groups)
     total_exec = sum(g["exec_us"] for g in gs)
     # PR9-D：端到端一律走统一递推（含组间积压），不再各处自己算
+    # PR11-D：多域并行 ⇒ 完成时刻取**最晚的一行**，不是"最后一行"
     sched = planner.tm.schedule(gs)
-    predicted = (round(sched[-1]["finish_us"] - sched[0]["phase_us"], 3)
-                 if sched else (len(gs) * planner.c + total_exec))
+    _comp = max((r["finish_us"] for r in sched), default=0.0)
+    _first_phi = min((r["phase_us"] for r in sched), default=0.0)
+    predicted = (round(_comp - _first_phi, 3) if sched
+                 else (len(gs) * planner.c + total_exec))
     dp_pred = getattr(planner, "end_to_end_us", None)
     phase_span = (gs[-1]["release_phase_us"] - gs[0]["release_phase_us"]) \
         if planner.phase_known else 0.0
@@ -845,14 +861,14 @@ def main():
     if xd.multi and xd.extra_periods:
         extra_us = xd.extra_latency_us
         if planner.tm.deadline is not None:
-            comp = (sched[-1]["finish_us"] if sched else 0.0) + extra_us
+            comp = _comp + extra_us
             if comp > planner.tm.deadline + 1e-9:
                 print("!! 跨域期限：段内完成 %.1f µs ＋ 跨域 %d 拍（%s %.0f µs）"
                       "＝ %.1f µs，超过期限 %.1f µs"
-                      % (sched[-1]["finish_us"] if sched else 0.0,
+                      % (_comp,
                          xd.extra_periods,
                          "×".join(["%d 条跨域边" % xd.extra_periods,
-                                   "%.0f µs/拍" % float(planner.period or 0)]),
+                                   "%.0f µs/拍" % float(xd.hop_period_us or 0)]),
                          extra_us, comp, planner.tm.deadline), file=sys.stderr)
                 print("   跨域边：%s" % ", ".join("%s→%s" % e for e in xd.xdom),
                       file=sys.stderr)
@@ -981,10 +997,12 @@ def main():
                      (gs[-1]["exec_us"] if gs else 0.0)))
         if planner.dom.multi:
             xd = planner.dom
+            # 一拍多少钱：多速率下取各跨域边**消费者周期**的最大值（xdom.hop_period_us），
+            # 1:1 时等于原来的 planner.period，逐字不变。
             print("  跨域：%d 条跨域边 %s ｜ 端到端多 %d 拍 × %.0f µs = %.0f µs "
                   "⇒ **含跨域 %.1f µs**"
                   % (len(xd.xdom), ", ".join("%s→%s" % e for e in xd.xdom),
-                     xd.extra_periods, float(planner.period or 0),
+                     xd.extra_periods, float(xd.hop_period_us or 0),
                      xd.extra_latency_us, predicted + xd.extra_latency_us))
             print("        （跨域边只能跨拍满足；按 µs 计会把代价算小三个数量级，"
                   "见 PR10 实测 1.005 拍）")

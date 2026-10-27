@@ -487,17 +487,22 @@ expect_grep "拒绝码是 FEEDBACK_CONTRACT_MISSING" "$(cat "$TMP/out.txt")" \
     "FEEDBACK_CONTRACT_MISSING"
 
 echo
-echo "=== 32. PR10-F：版本化 IPC 参考模型（多通道隔离 / 最近一条 / 按拍追踪）==="
+echo "=== 32. PR10-F/PR11-B：跨域 IPC 参考模型（v3 µs 时间戳 / 多通道 / 取数三臂）==="
 # 本机无 C 编译器，ecos_xipc.h / ecos_xdom.c 这套运行时只能在 Pi 上编译验证。
 # 这里用一份等价的 Python 模型先验"算法对不对"：新桥必须做到 sub(X) 不吞 sub(Y)、
-# 取最近一条、tick/seq 透传、跨域按拍追踪；并复现旧桥（PR10-C）的多通道消费 bug。
+# 取最近一条、时间戳透传、age_us 与速率无关、拍数向上取整、预算按 µs 判；
+# 并复现旧桥（PR10-C）的多通道消费 bug。
 "$PY" "$HERE/xipc_versioned_model.py" >"$TMP/xipc_model.txt" 2>&1
 if [ $? -eq 0 ]; then
-    ok "PR10-F 参考模型：新桥语义全部成立（且复现旧桥多通道 bug）"
+    ok "参考模型：新桥语义全部成立（v3 时间戳 + 复现旧桥多通道 bug）"
 else
-    bad "PR10-F 参考模型：有断言未通过"
+    bad "参考模型：有断言未通过"
     sed -n '1,20p' "$TMP/xipc_model.txt" | sed 's/^/      /'
 fi
+# 规格与实现必须同口径：模型里必须出现"µs 判据"与"向上取整"这两条，
+# 否则它会退化成"只描述挑哪条消息"的空壳（那正是 PR10-F 时期的状况）。
+expect_grep "参考模型用 µs 判据（不是整数拍）" "$(cat "$TMP/xipc_model.txt")" \
+    "预算 1 拍 = 1000 µs ⇒ 1797 > 1000 拒收" "1797 µs 记为 2 拍"
 
 echo
 echo "=== 33. PR11-C：多执行域事件时间线（跨域年龄到底由什么决定）==="
@@ -568,6 +573,104 @@ if [ $? -eq 0 ]; then
 else
     bad "PR11-C 事件时间线模型：有断言未通过"
     sed -n '1,24p' "$TMP/timeline.txt" | sed 's/^/      /'
+fi
+
+echo
+echo "=== 34. PR11-D：多速率进验证器（各域周期各算各的）==="
+# 之前 TemporalModel 只有**一个** period：多速率部署的组容量、反馈死区、完成时刻
+# 全按单一周期判。后果不是"保守"，是**数值错**：
+#   · 2 ms 域的组被拿 1 ms 卡容量（误杀）
+#   · 死区公式 (1+xd)·P 用了消费者的 P 还是生产者的 P 根本没区分
+# 这一节把三件事钉住：1:1 逐位不变、多速率死区按消费者周期×速率比、期限真的会翻红。
+XC11="$HERE/../../contracts/examples/xdom_loop.contract.json"
+XCMR="$HERE/../../contracts/examples/xdom_loop_multirate.contract.json"
+XCMRF="$HERE/../../contracts/examples/xdom_loop_multirate_feasible.contract.json"
+EX5='{"stage_sample":0.60,"stage_fir":0.67,"stage_pid":0.28,"stage_clamp":0.28,"stage_plant":0.50}'
+
+expect_rc "1:1 跨域环仍通过（多速率改动不碰它）" 0 \
+    "$PY" "$PLAN" "$FIX/xdom_loop.dag.json" --platforms "$CAPS" \
+    --platform linux_kernel --release-cost-us 21 --exec-us "$EX5" \
+    --contract "$XC11" -o "$TMP/mr_11.plan.json" --quiet
+
+# root 2 ms ⇒ 执行器每 2 ms 才动一次，1:1 时代的 2500 µs 期限**不自洽**。
+# 现在这条要被验证器翻红，而且要说清是"跨域期限"，不是含糊的失败。
+"$PY" "$PLAN" "$FIX/xdom_loop.dag.json" --platforms "$CAPS" \
+    --platform linux_kernel --release-cost-us 21 --exec-us "$EX5" \
+    --contract "$XCMR" -o "$TMP/mr_bad.plan.json" >"$TMP/mr_bad.txt" 2>&1
+if [ $? -eq 3 ]; then ok "多速率(2ms/1ms)+2500µs 期限 → 拒绝"; else
+    bad "多速率(2ms/1ms)+2500µs 期限应被拒（rc=$?）"; fi
+expect_grep "拒绝原因指到「跨域期限」而不是笼统失败" "$(cat "$TMP/mr_bad.txt")" \
+    "跨域期限" "2621.8"
+
+# 自洽的部署照样过：期限放宽到 5000 µs（2.5 个控制拍）后三道判据同时满足。
+expect_rc "多速率 + 期限 5000 µs → 通过（不是一刀切）" 0 \
+    "$PY" "$PLAN" "$FIX/xdom_loop.dag.json" --platforms "$CAPS" \
+    --platform linux_kernel --release-cost-us 21 --exec-us "$EX5" \
+    --contract "$XCMRF" -o "$TMP/mr_ok.plan.json" --quiet
+expect_grep "多速率端到端报价用消费者周期（2000 µs/拍）" "$(cat "$TMP/mr_bad.txt")" \
+    "2000 µs/拍"
+
+# 死区数值：1:1 = 400 µs；2 ms 生产 / 1 ms 消费 = (2 拍 + 0 跨域)×1000 − 600 = 1400 µs。
+# 直接问模型，不从文本里猜。
+"$PY" - "$HERE/../ecos" "$FIX/xdom_loop.dag.json" "$XC11" "$XCMR" <<'PYEOF' >"$TMP/mr_dead.txt" 2>&1
+import io, json, sys
+sys.path.insert(0, sys.argv[1])
+import temporal_model as TM
+
+dag = json.load(io.open(sys.argv[2], encoding="utf-8"))
+EX = {"stage_sample": 0.60, "stage_fir": 0.67, "stage_pid": 0.28,
+      "stage_clamp": 0.28, "stage_plant": 0.50}
+GR = [{"id": "g0", "members": ["stage_sample", "stage_fir", "stage_pid"],
+       "release_phase_us": 0},
+      {"id": "g1", "members": ["stage_clamp", "stage_plant"],
+       "release_phase_us": 600}]
+
+ok = True
+def chk(name, cond, extra=""):
+    global ok
+    print(("  PASS " if cond else "  FAIL ") + name + (("  " + extra) if extra else ""))
+    ok = ok and cond
+
+def dead(path):
+    c = json.load(io.open(path, encoding="utf-8"))
+    tm = TM.TemporalModel(dag, contract=c, exec_us=EX, release_cost_us=21)
+    rows = tm.schedule(GR)
+    f = tm.feedback_delays(GR, sched=rows)[0]
+    return tm, f
+
+tm1, f1 = dead(sys.argv[3])
+chk("1:1 死区仍是 400 µs（逐位不变，容差 0.5 µs）", abs(f1["dead_us"] - 400.0) < 0.5,
+    str(f1["dead_us"]))
+chk("1:1 不声明各域周期 ⇒ multirate=False", tm1.multirate is False)
+
+tm2, f2 = dead(sys.argv[4])
+c2 = f2["components"]
+chk("多速率：死区按消费者周期×速率比 = 1400 µs",
+    abs(f2["dead_us"] - 1400.0) < 0.5, str(f2["dead_us"]))
+chk("多速率：速率比 k=2（生产 2000 / 消费 1000）",
+    c2["rate_ratio"] == 2 and c2["producer_period_us"] == 2000.0
+    and c2["consumer_period_us"] == 1000.0,
+    "k=%s Pp=%s Pc=%s" % (c2["rate_ratio"], c2["producer_period_us"],
+                          c2["consumer_period_us"]))
+chk("多速率：period_of 按域取（root=2000 / nuttx=1000）",
+    tm2.period_of("root") == 2000.0 and tm2.period_of("nuttx") == 1000.0)
+
+# 组容量要按**本组所在域**的周期卡：root 组给 1.5 ms 执行时间，
+# 用 1 ms 判会误杀，用 root 的 2 ms 判应通过。
+import copy
+EX2 = dict(EX); EX2["stage_clamp"] = 1500.0
+tm3 = TM.TemporalModel(dag, contract=json.load(io.open(sys.argv[4], encoding="utf-8")),
+                       exec_us=EX2, release_cost_us=21)
+chk("组容量按域周期：2 ms 域里 1.5 ms 的段不再误杀",
+    tm3.period_of(tm3.group_domain(["stage_clamp", "stage_plant"])) == 2000.0)
+
+sys.exit(0 if ok else 1)
+PYEOF
+if [ $? -eq 0 ]; then
+    ok "多速率时间语义：6 组断言全部成立"
+else
+    bad "多速率时间语义：有断言未通过"
+    sed -n '1,12p' "$TMP/mr_dead.txt" | sed 's/^/      /'
 fi
 
 echo

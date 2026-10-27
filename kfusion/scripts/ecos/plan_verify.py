@@ -94,7 +94,8 @@ class PlanVerifier(object):
         # 跨域边与 z⁻¹ 同构：生产者在一个 cell、消费者在另一个 cell，只能在下一个
         # 周期边界看到它，所以它不约束同一拍内的先后（也不该被它否掉合法方案）。
         self.dom = domain_model.load(dag, period_us=self.tm.period,
-                                     topo=self.order)
+                                     topo=self.order,
+                                     domain_period_us=self.tm.domain_periods)
         self.edges = [e for e in (dag.get("edges") or [])
                       if (e.get("from"), e.get("to")) not in self.closing
                       and (e.get("from"), e.get("to")) not in self.dom.xdom_set]
@@ -264,9 +265,14 @@ class PlanVerifier(object):
             if self.budget and tot > self.budget + 1e-9:
                 add("CAPACITY", "期限：组 %s 执行 %.1f µs 超过预算 %.1f µs"
                     % (gid, tot, self.budget))
-            if self.tm.period and tot > float(self.tm.period) + 1e-9:
-                add("CAPACITY_PERIOD", "单拍容量：组 %s 执行 %.1f µs 超过周期 %.1f µs"
-                    % (gid, tot, float(self.tm.period)))
+            # 单拍容量按**该组自己所在域**的周期卡（PR11-D）：2 ms 域的组
+            # 用 1 ms 去卡会误杀（执行时间 1.5 ms 其实合法）。
+            g_period = self.tm.period_of(self.tm.group_domain(members))
+            if g_period and tot > float(g_period) + 1e-9:
+                add("CAPACITY_PERIOD",
+                    "单拍容量：组 %s（域 %s）执行 %.1f µs 超过该域周期 %.1f µs"
+                    % (gid, self.tm.group_domain(members) or "?", tot,
+                       float(g_period)))
             # 3b) 跨域不可融合：融合要求"同一次释放"，两个 cell 各有内核与调度器，
             #     物理上不存在跨域融合。这条要独立判，不能信规划器自己的结论。
             if self.dom.mixed(members):
@@ -330,7 +336,7 @@ class PlanVerifier(object):
         #     独立重算一次——规划器算的 extra_periods 不能自证。
         if self.dom.multi and self.dom.extra_periods:
             extra = self.dom.extra_latency_us
-            comp = (sched[-1]["finish_us"] if sched else 0.0)
+            comp = max((r["finish_us"] for r in sched), default=0.0)
             if self.tm.deadline is not None and \
                     comp + extra > float(self.tm.deadline) + 1e-9:
                 add("XDOM_DEADLINE",
@@ -342,11 +348,12 @@ class PlanVerifier(object):
             warns.append(
                 "跨域：%d 条跨域边，端到端至少多 %d 拍（%.0f µs，按 %.0f µs/拍）"
                 % (len(self.dom.xdom), self.dom.extra_periods, extra,
-                   float(self.tm.period or 0)))
+                   float(self.dom.hop_period_us or 0)))
 
         rep = self._report(errs, warns, plan)
         if sched:
-            rep["stats"]["completion_us"] = sched[-1]["finish_us"]
+            # 多域并行 ⇒ 完成时刻取最晚的一行（不是"最后一行"）
+            rep["stats"]["completion_us"] = max(r["finish_us"] for r in sched)
             rep["stats"]["backlog_us"] = round(
                 sum(r["backlog_us"] for r in sched), 3)
             rep["schedule"] = sched
@@ -383,6 +390,11 @@ class PlanVerifier(object):
                 "cross_domain_edges": len(self.dom.xdom),
                 "cross_domain_periods": self.dom.extra_periods,
                 "cross_domain_extra_us": round(self.dom.extra_latency_us, 3),
+                # 多速率（PR11-D）：声明了各域周期就必须出现在报告里，
+                # 否则"按哪个周期判的"事后无从复核
+                "period_us": self.tm.period,
+                "domain_period_us": dict(self.tm.domain_periods),
+                "multirate": bool(self.tm.multirate),
             },
         }
 

@@ -34,7 +34,7 @@ DEFAULT_DOMAIN = "default"
 
 
 class DomainModel(object):
-    def __init__(self, dag, period_us=None, topo=None):
+    def __init__(self, dag, period_us=None, topo=None, domain_period_us=None):
         dag = dag or {}
         nodes = dag.get("nodes") or []
         self.nodes = [n.get("name") for n in nodes]
@@ -55,6 +55,14 @@ class DomainModel(object):
         self.multi = len(self.domains) > 1
 
         self.period_us = period_us
+        # 各域周期（多速率，PR11-D）。没声明就全退回 period_us ⇒ 与旧版一致。
+        self.domain_period_us = {}
+        for k, v in (domain_period_us or {}).items():
+            try:
+                if float(v) > 0:
+                    self.domain_period_us[str(k)] = float(v)
+            except (TypeError, ValueError):
+                pass
 
         # 闭合边（z⁻¹）：算"跨域跳数"时要先把它们摘掉，否则有环的图没法做最长路
         self.closing = set()
@@ -132,9 +140,29 @@ class DomainModel(object):
 
     @property
     def extra_latency_us(self):
-        if not self.period_us:
+        """端到端多出来的**时间**（µs）。
+
+        一拍是**消费者所在域**的周期：跨域边 a→b 多消耗的是 b 的一拍。
+        1:1 时等价于 `hops × period_us`（逐位不变）；多速率时按"最贵的那个
+        消费者周期"估，是**偏保守**的上界（不知道关键路径具体走哪几条边，
+        取所有跨域边里最大的消费者周期）。
+        """
+        if not self.max_hops:
             return 0.0
-        return float(self.max_hops) * float(self.period_us)
+        return float(self.max_hops) * float(self.hop_period_us or 0.0)
+
+    @property
+    def hop_period_us(self):
+        """跨域一拍的定价（µs）：各跨域边消费者周期的最大值。"""
+        cands = []
+        for a, b in self.xdom:
+            db = self.domain.get(b)
+            p = self.domain_period_us.get(db) if db else None
+            if p:
+                cands.append(float(p))
+        if cands:
+            return max(cands)
+        return float(self.period_us) if self.period_us else 0.0
 
     # ---------------- 环 ----------------
     def cycle_periods(self, cycle_edges):
@@ -157,12 +185,15 @@ class DomainModel(object):
             "max_hops": self.max_hops,
             "extra_periods": self.extra_periods,
             "extra_latency_us": round(self.extra_latency_us, 3),
+            "hop_period_us": round(self.hop_period_us, 3),
+            "domain_period_us": dict(self.domain_period_us),
             "assumption": ("跨域边只能跨拍满足：每条多消耗一整拍。"
                            "实测依据 PR10：1 kHz 下跨域 RTT p50 = 1005.26 µs（≈1.005 拍），"
                            "而同一共享内存的纯通路往返仅 1.24 µs。"),
         }
 
 
-def load(dag, period_us=None, topo=None):
+def load(dag, period_us=None, topo=None, domain_period_us=None):
     """便捷构造。"""
-    return DomainModel(dag, period_us=period_us, topo=topo)
+    return DomainModel(dag, period_us=period_us, topo=topo,
+                       domain_period_us=domain_period_us)
