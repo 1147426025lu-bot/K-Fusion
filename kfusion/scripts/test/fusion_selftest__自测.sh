@@ -765,6 +765,13 @@ if [ $? -eq 3 ]; then ok "有跨域边但没预算 ⇒ fail-closed"; else
     bad "没预算时应 fail-closed"; fi
 expect_grep "拒绝码是 XDOM_BUDGET_MISSING" "$(cat "$TMP/dep_nob.log")" \
     "[XDOM_BUDGET_MISSING]"
+# §24 长跑 A/B 用的夹具：只需把预算改成 2 拍，其余完全一样（别让它腐坏）
+expect_rc "预算 2 拍的长跑夹具仍通过（§24 就是用它跑的）" 0 \
+    "$PY" "$PLAN" "$FIX/xdom_loop.dag.json" --platforms "$CAPS" \
+    --platform linux_kernel --release-cost-us 21 --exec-us "$EX5" \
+    --contract "$HERE/../../contracts/examples/xdom_loop_budget2.contract.json" \
+    -o "$TMP/dep_b2.plan.json" --quiet
+
 # 1:1 不能被这次改动带歪（判据对 1:1 本来就是"窗≈85%，通过"）
 expect_rc "1:1 跨域环仍通过（判据不误杀）" 0 \
     "$PY" "$PLAN" "$FIX/xdom_loop.dag.json" --platforms "$CAPS" \
