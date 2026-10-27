@@ -135,6 +135,19 @@ class Gate1Local(unittest.TestCase):
         with self.assertRaises(SystemExit):
             ast_to_plan.build_dag(bad, 1000, 1000, {}, 10.0)
 
+    def test_reject_when_kc0_false(self):
+        bad = dict(_EXTRACT, k_c0={
+            "ok": False,
+            "rejections": [{"function": "stage_pid", "call": "malloc",
+                            "kind": "mem", "reason": "动态内存"}]})
+        with self.assertRaises(SystemExit):
+            ast_to_plan.build_dag(bad, 1000, 1000, {}, 10.0)
+
+    def test_kc0_ok_proceeds(self):
+        good = dict(_EXTRACT, k_c0={"ok": True, "rejections": []})
+        dag, ex, ph = ast_to_plan.build_dag(good, 1000, 1000, {}, 10.0)
+        self.assertEqual(len(dag["nodes"]), 3)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

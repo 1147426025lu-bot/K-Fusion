@@ -29,6 +29,14 @@ typedef struct {
 	char type[CAP];
 } Item;
 
+/* K-C0 拒绝项：某函数里出现了不被支持的外部调用 */
+typedef struct {
+	char function[CAP];
+	char call[CAP];
+	char kind[32];
+	char reason[200];
+} Rej;
+
 typedef struct {
 	const char *entry_want;
 	char entry[CAP];
@@ -37,6 +45,8 @@ typedef struct {
 	int nstages;
 	Item globals[MAX_ITEMS];
 	int nglobals;
+	Rej rej[MAX_ITEMS];
+	int nrej;
 } Ctx;
 
 static int is_auto_entry(const char *n)
@@ -61,6 +71,89 @@ static int stage_exists(const Ctx *ctx, const char *n)
 	return 0;
 }
 
+/* ---- K-C0：对单个函数里的外部调用分类并记录拒绝理由（fail-closed）---- */
+static int in_list(const char *n, const char *const *list)
+{
+	int i;
+
+	for (i = 0; list[i]; i++)
+		if (strcmp(n, list[i]) == 0)
+			return 1;
+	return 0;
+}
+
+static void classify_ext(const char *n, char *kind, size_t kc,
+			 char *reason, size_t rc)
+{
+	static const char *const blk[] = {
+		"nanosleep", "clock_nanosleep", "usleep", "sleep", "sched_yield",
+		"pthread_join", "pthread_mutex_lock", "pthread_mutex_unlock",
+		"sem_wait", "sem_post", "sem_timedwait", "pause", "waitpid", NULL
+	};
+	static const char *const mem[] = {
+		"malloc", "calloc", "realloc", "free", "alloca", "mmap",
+		"munmap", "brk", "sbrk", NULL
+	};
+	static const char *const io[] = {
+		"printf", "fprintf", "sprintf", "snprintf", "puts", "fputs",
+		"fwrite", "write", "read", "open", "close", "fopen", "fclose",
+		"scanf", "fscanf", "putchar", "getchar", "ioctl", NULL
+	};
+
+	if (in_list(n, blk)) {
+		snprintf(kind, kc, "block");
+		snprintf(reason, rc, "可能阻塞/调度原语（内核周期体禁止睡眠/阻塞）");
+	} else if (in_list(n, mem)) {
+		snprintf(kind, kc, "mem");
+		snprintf(reason, rc, "动态内存（K-C0 要求固定布局状态）");
+	} else if (in_list(n, io)) {
+		snprintf(kind, kc, "io");
+		snprintf(reason, rc, "I/O/打印（增加抖动、非确定性）");
+	} else {
+		snprintf(kind, kc, "unknown");
+		snprintf(reason, rc, "未归档的外部调用（无法证明副作用，fail-closed）");
+	}
+}
+
+static void check_kc0(LLVMValueRef fn, const char *fname, Ctx *ctx)
+{
+	LLVMBasicBlockRef bb;
+
+	for (bb = LLVMGetFirstBasicBlock(fn); bb; bb = LLVMGetNextBasicBlock(bb)) {
+		LLVMValueRef ins;
+
+		for (ins = LLVMGetFirstInstruction(bb); ins;
+		     ins = LLVMGetNextInstruction(ins)) {
+			LLVMValueRef called, cf;
+			const char *cn;
+
+			if (LLVMGetInstructionOpcode(ins) != LLVMCall)
+				continue;
+			called = LLVMGetCalledValue(ins);
+			if (!called)
+				continue;
+			cf = LLVMIsAFunction(called);
+			if (!cf)
+				continue;
+			cn = LLVMGetValueName(cf);
+			if (!cn || is_intrinsic(cn))
+				continue;
+			/* 只判"外部"调用：本模块内定义的函数另有定义（不在本函数里查） */
+			if (LLVMCountBasicBlocks(cf) != 0)
+				continue;
+			if (ctx->nrej >= MAX_ITEMS)
+				continue;
+			snprintf(ctx->rej[ctx->nrej].function, CAP, "%s", fname);
+			snprintf(ctx->rej[ctx->nrej].call, CAP, "%s", cn);
+			classify_ext(cn, ctx->rej[ctx->nrej].kind,
+				     sizeof ctx->rej[ctx->nrej].kind,
+				     ctx->rej[ctx->nrej].reason,
+				     sizeof ctx->rej[ctx->nrej].reason);
+			ctx->nrej++;
+		}
+	}
+}
+
 static void type_str(LLVMTypeRef t, char *dst, size_t cap)
 {
 	char *s = LLVMPrintTypeToString(t);
@@ -78,6 +171,8 @@ static void collect_globals(LLVMModuleRef mod, Ctx *ctx)
 		const char *nm = LLVMGetValueName(g);
 
 		if (!nm || is_intrinsic(nm) || ctx->nglobals >= MAX_ITEMS)
+			continue;
+		if (nm[0] == '.')	/* 编译器内部全局（.str/.L... 字面量），非用户状态 */
 			continue;
 		snprintf(ctx->globals[ctx->nglobals].name, CAP, "%s", nm);
 		/* 取值类型（i32），而不是全局指针类型（ptr） */
@@ -209,6 +304,18 @@ int main(int argc, char **argv)
 		}
 	}
 
+	/* K-C0 检查：对除 main 外的每个本模块函数，检查其外部调用是否可进内核。
+	 * fail-closed：任何未归档外部调用都记一条拒绝理由（不静默放行）。 */
+	for (fn = LLVMGetFirstFunction(mod); fn; fn = LLVMGetNextFunction(fn)) {
+		const char *nm = LLVMGetValueName(fn);
+
+		if (!nm || is_intrinsic(nm) || LLVMCountBasicBlocks(fn) == 0)
+			continue;
+		if (strcmp(nm, "main") == 0)
+			continue;
+		check_kc0(fn, nm, &ctx);
+	}
+
 	printf("{\n");
 	printf("  \"tool\": \"stage_extract\", \"version\": 2,\n");
 	printf("  \"source\": \"");
@@ -239,6 +346,21 @@ int main(int argc, char **argv)
 		printf("\"}");
 	}
 	printf("%s],\n", ctx.nglobals ? "\n  " : "");
+	/* K-C0 结论：ok 当且仅当没有任何拒绝项 */
+	printf("  \"k_c0\": {\n    \"ok\": %s,\n    \"rejections\": [",
+	       ctx.nrej == 0 ? "true" : "false");
+	for (i = 0; i < ctx.nrej; i++) {
+		printf("%s\n      {\"function\": \"", i ? "," : "");
+		json_str(ctx.rej[i].function, stdout);
+		printf("\", \"call\": \"");
+		json_str(ctx.rej[i].call, stdout);
+		printf("\", \"kind\": \"");
+		json_str(ctx.rej[i].kind, stdout);
+		printf("\", \"reason\": \"");
+		json_str(ctx.rej[i].reason, stdout);
+		printf("\"}");
+	}
+	printf("%s]\n  },\n", ctx.nrej ? "\n    " : "");
 	printf("  \"ok\": %s\n", ctx.found ? "true" : "false");
 	printf("}\n");
 

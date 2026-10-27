@@ -68,6 +68,27 @@ void plc_cycle(void){ stage_sample(); stage_pid(); stage_clamp(); }
 4. 全局按 LLVM 模块顺序（接近声明逆序）；顺序不影响下游（下游按名字/依赖建图）。
 5. **不声称功能等价**：本工具只是把源码变成结构事实，不是等价性证明。
 
+## K-C0 拒绝策略（fail-closed，已在 Pi4 验证）
+
+`stage_extract` 对除 `main` 外的每个本模块函数，检查其**外部调用**（无本模块定义的函数），
+分类并给出**拒绝理由**，输出 `k_c0:{ok, rejections[]}`：
+
+| kind | 触发（示例） | reason |
+|------|------|------|
+| block | nanosleep/usleep/pthread_*/sem_*/sched_yield | 可能阻塞/调度原语（内核周期体禁止睡眠） |
+| mem | malloc/calloc/realloc/free/alloca/mmap | 动态内存（K-C0 要求固定布局状态） |
+| io | printf/fprintf/write/read/open/… | I/O/打印（增加抖动、非确定性） |
+| unknown | 其余任何外部调用 | 未归档的外部调用（无法证明副作用，fail-closed） |
+
+`ast_to_plan` 见到 `k_c0.ok=false` 时**直接拒绝并打印理由**，不再生成 plan/源码；
+`auto_kernelize.sh` 因 `set -e` 随之中止——**不支持的东西不会被硬塞进内核模块**。
+
+Pi4 实测：含 `malloc/printf/free` 的阶段 → `k_c0.ok=false`，三条理由齐全，
+整链中止且**不产出 gen/**；纯整数阶段的闭环 → `k_c0.ok=true` 正常生成。
+
+诚实：v1 只查**直接外部调用**（不递归进本模块内的其它 helper；那种 helper 若也被入口调用
+则会作为阶段一并检查）；循环边界、指针别名等 K-C0 细项尚未覆盖（Gate 2/3 补）。
+
 ## 构建（Pi4）
 
 ```sh

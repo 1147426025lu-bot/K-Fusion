@@ -57,6 +57,18 @@ def build_dag(extract, period_us, deadline_us, exec_us, default_exec_us,
     """从提取结果构造 dag dict（调用序 -> 相位/拓扑序）。"""
     if not extract.get("ok") or not extract.get("entry"):
         raise SystemExit("ast_to_plan: 提取结果没有周期入口（ok/entry 不成立），拒绝构造")
+    # K-C0 fail-closed：提取阶段已标出不可内核化的外部调用，这里直接拒绝往下走
+    kc = extract.get("k_c0") or {}
+    if kc and not kc.get("ok", True):
+        rej = kc.get("rejections") or []
+        lines = ["ast_to_plan: K-C0 拒绝——以下构造不支持内核化（fail-closed）："]
+        for r in rej:
+            lines.append("  · %s() 调用 %s()：%s"
+                         % (r.get("function", "?"), r.get("call", "?"),
+                            r.get("reason", "")))
+        lines.append("  → 先改写成受支持子集（固定布局状态/无动态内存/无阻塞/I/O 走声明适配器），"
+                     "或改到用户态域。不要把不支持的东西硬塞进内核模块。")
+        raise SystemExit("\n".join(lines))
     stages = extract.get("stages") or []
     if not stages:
         raise SystemExit("ast_to_plan: 入口 %r 没有可识别的阶段函数（stages 为空）"
