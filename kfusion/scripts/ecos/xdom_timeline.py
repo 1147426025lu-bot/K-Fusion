@@ -162,14 +162,20 @@ def _gcd(a, b):
 
 
 def safe_phase_window(prod_period_us, cons_period_us, budget_us,
-                      exec_us=0.0, drift_ppm=0.0, steps=720, n_cons=2000,
-                      pick="latest"):
+                      exec_us=0.0, drift_ppm=0.0, cons_drift_ppm=None,
+                      steps=720, n_cons=2000, pick="latest"):
     """扫相对偏移 ρ ∈ [0, lcm(P_p,P_c))，问"哪些 ρ 的最坏年龄 <= 预算"。
 
     这是"相位协调"真正的非平凡内容：不是问"某个相位好不好"，而是问
     **在给定漂移下，安全相位窗还有多宽**。窗宽度 ≈ 0 就意味着这个速率组合
     没有可用的相位安排，只能改速率或改预算。
+
+    PR11-E.2：生产者/消费者可分别设漂移（`cons_drift_ppm`，默认 = `drift_ppm`）。
+    相对漂移速率 = (cons_drift − prod_drift)；1:1 下也照样产生相对相位行走
+    （相对相位 = ρ + k·P·(dc−dp)），这正是板上实测 ≈15 ppm 的建模量。
     """
+    if cons_drift_ppm is None:
+        cons_drift_ppm = drift_ppm
     Pp, Pc = float(prod_period_us), float(cons_period_us)
     lcm = Pp * Pc / _gcd(int(Pp), int(Pc)) if Pp and Pc else 0.0
     if lcm <= 0:
@@ -180,7 +186,7 @@ def safe_phase_window(prod_period_us, cons_period_us, budget_us,
         prod = Domain("p", Pp, phase_us=0.0, t0_us=0.0, exec_us=exec_us,
                       drift_ppm=drift_ppm)
         # ρ 就是消费网格相对生产网格的偏移；把它放在消费域相位上最直观
-        cons = Domain("c", Pc, phase_us=rho, t0_us=0.0, drift_ppm=drift_ppm)
+        cons = Domain("c", Pc, phase_us=rho, t0_us=0.0, drift_ppm=cons_drift_ppm)
         b = age_band(prod, cons, n_cons=n_cons, pick=pick)
         safe_flags.append((rho, (b["max_us"] is not None and b["max_us"] <= budget_us)))
 
@@ -399,9 +405,9 @@ _WIN_CACHE = {}
 
 
 def check_edge(prod_period_us, cons_period_us, budget_us,
-               exec_us=0.0, drift_ppm=0.0, jitter_us=0.0, steps=360,
-               n_cons=1200, pick="latest"):
-    """单条跨域边的可行性。返回 dict（含 ok / reason / 窗宽占比）。
+               exec_us=0.0, drift_ppm=0.0, cons_drift_ppm=None, jitter_us=0.0,
+               steps=360, n_cons=1200, pick="latest"):
+    """单条跨域边的可行性。返回 dict（含 ok / reason / 窗宽占比 / ranges / lcm）。
 
     判据（任一成立即判不可行）：
       · safe 为空集        → 没有任何相位可用
@@ -411,11 +417,16 @@ def check_edge(prod_period_us, cons_period_us, budget_us,
     `jitter_us` 是**实测残差的上界**（模型没建模抖动）：判据要的是
     「预算 − 抖动」这段还能不能排出安全相位。板上实测残差最大 78 µs
     （§16.3/§17.4），声明取 100 µs。
+
+    PR11-E.2：`cons_drift_ppm` 让消费者侧可独立设漂移（默认 = `drift_ppm`）。
     """
+    if cons_drift_ppm is None:
+        cons_drift_ppm = drift_ppm
     budget_eff = float(budget_us) - float(jitter_us)
     key = (round(float(prod_period_us), 3), round(float(cons_period_us), 3),
            round(float(budget_us), 3), round(float(exec_us), 3),
-           round(float(drift_ppm), 3), round(float(jitter_us), 3),
+           round(float(drift_ppm), 3), round(float(cons_drift_ppm), 3),
+           round(float(jitter_us), 3),
            int(steps), int(n_cons), pick)
     if key in _WIN_CACHE:
         return _WIN_CACHE[key]
@@ -424,11 +435,13 @@ def check_edge(prod_period_us, cons_period_us, budget_us,
                                       "这份契约本身就不成立" % (budget_us, jitter_us)),
                "frac": 0.0, "lcm": 0.0, "width": 0.0, "ranges": [],
                "budget_us": float(budget_us), "drift_ppm": float(drift_ppm),
+               "cons_drift_ppm": float(cons_drift_ppm),
                "jitter_us": float(jitter_us)}
         _WIN_CACHE[key] = res
         return res
     w = safe_phase_window(prod_period_us, cons_period_us, budget_eff,
                           exec_us=exec_us, drift_ppm=drift_ppm,
+                          cons_drift_ppm=cons_drift_ppm,
                           steps=steps, n_cons=n_cons, pick=pick)
     lcm = w["lcm"] or 1.0
     frac = w["safe_width"] / lcm
@@ -446,6 +459,7 @@ def check_edge(prod_period_us, cons_period_us, budget_us,
     res = {"ok": ok, "reason": reason, "frac": frac, "lcm": lcm, "width": w["safe_width"],
            "ranges": w["safe"], "budget_us": float(budget_us),
            "budget_eff_us": budget_eff, "drift_ppm": float(drift_ppm),
+           "cons_drift_ppm": float(cons_drift_ppm),
            "jitter_us": float(jitter_us)}
     _WIN_CACHE[key] = res
     return res
@@ -468,19 +482,81 @@ def _domain_periods(dag, contract):
     return per, (float(base) if base else None)
 
 
+# ---------------------------------------------------------------- 联合可行性
+#
+# 为什么需要它（PR11-E.1）：check_contract_coded 早期是「每条边各自安全就放行」，
+# 但「每条边各自存在安全相位窗」≠「存在一个共同相对相位 ρ 让所有边同时安全」。
+# 例：边 A 在 ρ∈[100,300] 安全、边 B 在 ρ∈[500,700] 安全，各自都 ok，但无共同 ρ，
+# 整份方案必须拒绝。这里在公共超周期 L = lcm(各边 lcm) 上做周期性区间交集。
+#
+# 仅在「所有边共享同一 (Pp,Pc)（ρ 语义一致）」时由 check_contract_coded 调用；
+# 混合 (Pp,Pc) 组合（含双向边）的 ρ 镜像语义不在第一版范围内，退化为逐边 OR。
+
+def _interval_and(a, b):
+    """两个已按起点排序、互不重叠的区间集求交。区间 (lo,hi) 半开。"""
+    out = []
+    i = j = 0
+    while i < len(a) and j < len(b):
+        lo = max(a[i][0], b[j][0])
+        hi = min(a[i][1], b[j][1])
+        if hi > lo:
+            out.append((lo, hi))
+        if a[i][1] < b[j][1]:
+            i += 1
+        else:
+            j += 1
+    return out
+
+
+def _periodic_intersection(ranges_per_edge, lcms):
+    """每条边的 safe ranges 在其 [0, lcm_e) 上周期重复；求公共超周期 L 上的交集。
+
+    返回 [0,L) 上的交集区间列表；空列表 = 无共同安全相位（联合不可行）。
+    """
+    L = 1.0
+    for le in lcms:
+        if le > 0:
+            L = L * le / float(_gcd(int(round(L)), int(round(le))))
+    if L <= 0:
+        return []
+    feasible = [(0.0, L)]
+    for ranges, le in zip(ranges_per_edge, lcms):
+        if not ranges or le <= 0:
+            continue
+        cover = []
+        max_len = max((e - s for s, e in ranges), default=0.0)
+        k = 0
+        while True:
+            hit = False
+            for s, e in ranges:
+                ss, ee = s + k * le, e + k * le
+                lo, hi = max(ss, 0.0), min(ee, L)
+                if hi > lo:
+                    cover.append((lo, hi))
+                    hit = True
+            if not hit or k * le > L + max_len:
+                break
+            k += 1
+        feasible = _interval_and(feasible, cover)
+        if not feasible:
+            return []
+    return feasible
+
+
 def cross_edges(dag):
-    """跨域边：[(from, to, from_domain, to_domain)]，按 (域A→域B) 去重。"""
+    """跨域边：[(from, to, from_domain, to_domain)]，**保留每一条实际数据依赖**。
+
+    早期版本按 (域A→域B) 去重，会把同一方向的多条跨域边（多通道 / 多消费者）
+    漏掉只查第一条 —— 真实正确性 bug（PR11-E.1）。现在保留全部；重复计算由
+    check_edge 的 _WIN_CACHE 按参数签名去重，不影响结果也不浪费。
+    """
     dom = {n["name"]: n.get("domain") for n in (dag.get("nodes") or [])}
-    seen, out = set(), []
+    out = []
     for e in (dag.get("edges") or []):
         a, b = e.get("from"), e.get("to")
         da, db = dom.get(a), dom.get(b)
         if not da or not db or da == db:
             continue
-        k = (da, db)
-        if k in seen:
-            continue
-        seen.add(k)
         out.append((a, b, da, db))
     return out
 
@@ -534,6 +610,18 @@ def check_contract_coded(dag, contract, exec_us=None):
                      "跨域：xdom_drift_ppm 不是数字：%r" % (drift,)))
         drift = 0.0
 
+    # PR11-E.2：消费者侧相对漂移（默认与生产者相同 ⇒ 退回单漂移语义）。
+    cons_drift = ctr.get("xdom_cons_drift_ppm")
+    if cons_drift is None:
+        cons_drift = drift
+    else:
+        try:
+            cons_drift = float(cons_drift)
+        except (TypeError, ValueError):
+            errs.append(("XDOM_DRIFT_INVALID",
+                         "跨域：xdom_cons_drift_ppm 不是数字：%r" % (cons_drift,)))
+            cons_drift = drift
+
     # 抖动余量：模型是确定性的，实测残差最大 78 µs ⇒ 判据要把这段扣掉。
     jitter = ctr.get("xdom_jitter_us")
     if jitter is None:
@@ -553,6 +641,8 @@ def check_contract_coded(dag, contract, exec_us=None):
                      "跨域：xdom_jitter_us 不是数字：%r" % (jitter,)))
         jitter = 0.0
 
+    # 逐边计算；PR11-E.3：exec_us 可为 dict（按生产者阶段名查）或标量。
+    edge_results = []
     for a, b, da, db in edges:
         Pp = per.get(da, base)
         Pc = per.get(db, base)
@@ -562,24 +652,56 @@ def check_contract_coded(dag, contract, exec_us=None):
                          "也没有 period_us）" % (a, b)))
             continue
         budget_us = budget_ticks * Pc      # 预算按**消费者**的拍折算
-        r = check_edge(Pp, Pc, budget_us, exec_us=exec_us or 0.0, drift_ppm=drift,
-                       jitter_us=jitter)
+        if isinstance(exec_us, dict):
+            ee = float(exec_us.get(a, 0.0))   # a = 生产者节点
+        else:
+            ee = float(exec_us or 0.0)
+        r = check_edge(Pp, Pc, budget_us, exec_us=ee, drift_ppm=drift,
+                       cons_drift_ppm=cons_drift, jitter_us=jitter)
         who = "%s(%s %.0f µs) → %s(%s %.0f µs)" % (a, da, Pp, b, db, Pc)
+        edge_results.append((a, b, da, db, Pp, Pc, budget_us, r, who))
         if not r["ok"]:
             errs.append((
                 "XDOM_INFEASIBLE",
                 "跨域部署不可行：%s，预算 %.0f 拍 = %.0f µs（扣抖动 %.0f µs），"
-                "漂移 %.0f ppm ⇒ %s。\n"
+                "漂移 %.0f/%.0f ppm ⇒ %s。\n"
                 "    这不是「跑起来才知道」的事：事件时间线在生成期就能判定。\n"
                 "    出路只有三条：① 放宽 xdom_max_age_ticks ② 让两域同速率 "
                 "③ 改相位没用在窗为空时（窗宽 0 也是不可用）"
-                % (who, budget_ticks, budget_us, jitter, drift, r["reason"])))
+                % (who, budget_ticks, budget_us, jitter, drift, cons_drift,
+                   r["reason"])))
         elif r["frac"] < 0.10:
             warns.append((
                 "XDOM_NARROW_WINDOW",
-                "跨域部署相位窗很窄：%s，预算 %.0f 拍，漂移 %.0f ppm ⇒ %s；"
+                "跨域部署相位窗很窄：%s，预算 %.0f 拍，漂移 %.0f/%.0f ppm ⇒ %s；"
                 "漂移会让可用相位慢慢走掉，建议同时做周期性重同步"
-                % (who, budget_ticks, drift, r["reason"])))
+                % (who, budget_ticks, drift, cons_drift, r["reason"])))
+
+    # PR11-E.1：联合可行性 —— 各边各自安全 ≠ 整份方案存在共同 ρ。
+    if edge_results and all(r["ok"] for *_x, r, _w in edge_results):
+        if len(edge_results) >= 2:
+            pair0 = (edge_results[0][4], edge_results[0][5])
+            same_pair = all((e[4], e[5]) == pair0 for e in edge_results)
+            if same_pair:
+                joint = _periodic_intersection(
+                    [e[7]["ranges"] for e in edge_results],
+                    [e[7]["lcm"] for e in edge_results])
+                if not joint:
+                    names = ", ".join("%s→%s" % (e[0], e[1]) for e in edge_results)
+                    errs.append((
+                        "XDOM_JOINT_INFEASIBLE",
+                        "跨域部署联合不可行：各边单独都有安全相位窗，但找不到一个共同 "
+                        "相对相位 ρ 让全部 %d 条跨域边同时安全（交集为空）。边：%s。\n"
+                        "    这正是「每条边各自可行 ≠ 整份方案可行」：编译器必须对整份"
+                        "部署做联合判断，而非逐边 OR。"
+                        % (len(edge_results), names)))
+            else:
+                warns.append((
+                    "XDOM_JOINT_UNHANDLED",
+                    "跨域边涉及多种 (生产者周期, 消费者周期) 组合，当前联合可行性只在"
+                    "同一 (Pp,Pc) 下做 ρ 交集；混合组合退化为逐边 OR（可能漏判），"
+                    "建议统一速率或显式声明相位。"))
+
     return errs, warns
 
 

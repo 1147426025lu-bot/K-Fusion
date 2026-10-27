@@ -363,7 +363,8 @@ class PlanVerifier(object):
                 if _tl_dir not in sys.path:
                     sys.path.insert(0, _tl_dir)
                 import xdom_timeline as _tl
-                _e, _w = _tl.check_contract_coded(self.dag, self.contract)
+                _e, _w = _tl.check_contract_coded(self.dag, self.contract,
+                                                 exec_us=self.exec_us)
                 for _c, _m in _e:
                     add(_c, _m)
                 for _c, _m in _w:
