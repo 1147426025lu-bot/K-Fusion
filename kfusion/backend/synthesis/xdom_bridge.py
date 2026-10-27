@@ -71,6 +71,11 @@ int ecos_xdom_evidence(unsigned channel, struct ecos_xdom_evid *out);
 void ecos_xdom_report_evidence(void);               /* 逐通道打印最近一次的 prod/cons/age */
 uint32_t ecos_xdom_epoch(void);                     /* 统一 epoch：本域所见 session */
 
+/* 周期性重同步（相位协调的最小实现）：宿主每拍取一次，非 0 就把它加到自己的
+ * 绝对释放基准上（一次性平移），然后继续按原周期跑。 */
+uint32_t ecos_xdom_resync_take(void);               /* 取走待应用的平移（µs），0=无 */
+uint32_t ecos_xdom_resync_count(void);              /* 累计重同步次数 */
+
 #endif /* ECOS_XDOM_H */
 """
 
@@ -104,6 +109,20 @@ _C = """/* ecos_xdom.c — 跨域数据桥（由 ECoS 拆分器生成，勿手�
  *   · 运行时：age_us <= MAX_AGE × PERIOD_US，超了就拒收
  * 拍数 e->age 只作日志（向上取整，避免"1797 µs 显示成 1 拍"这种误导）。 */
 #define ECOS_XDOM_MAX_AGE_US ((uint32_t)ECOS_XDOM_MAX_AGE * (uint32_t)ECOS_XDOM_PERIOD_US)
+
+/* ---- 周期性重同步（PR11-A 原义的"相位协调"，最小实现）----
+ * 为什么要它：相位漂移实测 ≈15 ppm（§23/§24），每 `P_c/drift ≈ 63 s` 把 ρ 拖过 0 边界；
+ * 那一刻 age 整跳一拍、抖动再把 age 顶出预算 ⇒ 每次约 40 个样本被拒。
+ * 加预算（1→2 拍）能买掉它（§24 实测 stale=0），代价是允许的年龄翻倍。
+ * 这里给另一条路：当 age 掉到 ECOS_XDOM_RESYNC_AT_US 以下（"快到边界"），
+ * 请求宿主把自己的绝对释放基准**后移** ECOS_XDOM_RESYNC_US，把 ρ 拉回安全区。
+ *
+ * ⚠ 代价必须记账：被平移的那**一个**周期会比 ECOS_XDOM_PERIOD_US 长 RESYNC_US µs
+ *   （周期不再严格等长）。这是"用一次超周期换掉一次穿越"的交易，不是免费午餐。
+ * 两个宏都为 0 时整套逻辑被编译掉（默认关闭）。 */
+#define ECOS_XDOM_RESYNC_US %(resync_us)d
+#define ECOS_XDOM_RESYNC_AT_US %(resync_at_us)d
+#define ECOS_XDOM_RESYNC_COOLDOWN_US %(resync_cool_us)d
 /* A/B 注入延迟用：消费者取"LAG 拍前"的值。LAG=0 = 取最新（等价原行为）；
  * LAG=N = 取 N 拍前的值（人为注入跨域延迟，做受控 A/B：同一代码只切这一项）。 */
 #define ECOS_XDOM_LAG %(lag)d
@@ -146,6 +165,11 @@ static uint32_t xdom_hz;
  * 每次开机、每次 insmod，两边的起点都不同，ρ 不可控；不把它打印出来，
  * 就无法把"年龄变了"归因到相位改动——多速率下尤其会被奇偶混叠骗（见 §15 撤回）。 */
 static uint32_t xdom_t0_us;
+
+/* 重同步状态：待应用的平移量、上次请求时刻、累计次数。宿主每拍取一次。 */
+static uint32_t xdom_resync_req;
+static uint32_t xdom_resync_last_us;
+static uint32_t xdom_resync_n;
 
 /* PR10-F：每通道"最近一条"缓存。
  * 旧实现（PR10-C）的 ecos_xdom_sub 用 while(xipc_pop()) 把 in 环里**所有**消息都
@@ -333,6 +357,20 @@ void ecos_xdom_sub_tick(unsigned channel, int32_t *dst, uint32_t *out_tick)
 		if (e->age > e->max_age)
 			e->max_age = e->age;   /* 拍（向上取整） */
 
+#if ECOS_XDOM_RESYNC_US != 0
+		/* 触发：年龄已经很小（"快掉到 0 了"）且距上次足够久。
+		 * 只看"小"、不看"已越界"——等到越界那一拍再补，那一拍已经掉了。 */
+		if (ECOS_XDOM_RESYNC_AT_US != 0 &&
+		    age < (uint32_t)ECOS_XDOM_RESYNC_AT_US &&
+		    (xdom_resync_last_us == 0 ||
+		     (uint32_t)(cons - xdom_resync_last_us) >
+			     (uint32_t)ECOS_XDOM_RESYNC_COOLDOWN_US)) {
+			xdom_resync_req = (uint32_t)ECOS_XDOM_RESYNC_US;
+			xdom_resync_last_us = cons;
+			xdom_resync_n++;
+		}
+#endif
+
 		if (out_tick)
 			*out_tick = tick;   /* 返回发布时刻（µs）；名字沿用 out_tick 兼容旧调用 */
 
@@ -391,11 +429,13 @@ void ecos_xdom_report_evidence(void)
 		e->max_ag_us = e->age_us;
 	}
 #ifdef ECOS_XDOM_KERNEL
-	pr_info("xdom ref t0_us=%%u now_us=%%u period_us=%%d\\n",
-		xdom_t0_us, xdom_now_us(), (int)ECOS_XDOM_PERIOD_US);
+	pr_info("xdom ref t0_us=%%u now_us=%%u period_us=%%d resync=%%u\\n",
+		xdom_t0_us, xdom_now_us(), (int)ECOS_XDOM_PERIOD_US,
+		xdom_resync_n);
 #else
-	printf("xdom ref t0_us=%%u now_us=%%u period_us=%%d\\n",
-	       xdom_t0_us, xdom_now_us(), (int)ECOS_XDOM_PERIOD_US);
+	printf("xdom ref t0_us=%%u now_us=%%u period_us=%%d resync=%%u\\n",
+	       xdom_t0_us, xdom_now_us(), (int)ECOS_XDOM_PERIOD_US,
+	       xdom_resync_n);
 #endif
 }
 
@@ -407,12 +447,28 @@ uint32_t ecos_xdom_epoch(void)
 {
 	return xr_in ? xr_in->session : 0;
 }
+
+/* 宿主每拍问一次：有没有待应用的相位平移？有就取走（只生效一次）。 */
+uint32_t ecos_xdom_resync_take(void)
+{
+	uint32_t d = xdom_resync_req;
+
+	if (d != 0)
+		xdom_resync_req = 0;
+	return d;
+}
+
+uint32_t ecos_xdom_resync_count(void)
+{
+	return xdom_resync_n;
+}
 """
 
 BASE = 0x1faf1000
 
 
-def emit(domain_meta, period_us=1000, max_age=0, lag=0, mode="latest"):
+def emit(domain_meta, period_us=1000, max_age=0, lag=0, mode="latest",
+         resync_us=0, resync_at_us=0, resync_cool_us=60000000):
     """domain_meta: 拆分器写的 per-domain meta.json（含 peer_ring 与 pub/sub）。
     period_us: 控制周期（µs），用于把物理计数器换算成周期号。
     max_age:   过期阈值（拍），0 = 不启用过期拒收（只记录证据）。
@@ -488,6 +544,9 @@ def emit(domain_meta, period_us=1000, max_age=0, lag=0, mode="latest"):
             "period_us": int(period_us or 0),
             "max_age": int(max_age or 0),
             "lag": int(lag or 0),
+            "resync_us": int(resync_us or 0),
+            "resync_at_us": int(resync_at_us or 0),
+            "resync_cool_us": int(resync_cool_us or 0),
             "pick": pick,
             "owner_note": owner_note,
             # kernel 侧要 pr_info（report_evidence 用），故带 kernel.h

@@ -637,5 +637,57 @@ expect_rc "单域严格入口不受影响" 0 \
     --source "$SRC" --out-dir "$TMP/strict_single" --target nuttx
 
 echo
+echo "=== PR11-D §25：周期性重同步（相位协调的最小实现）==="
+# 只为验一件事：这个机制是**默认关闭、开了才生成、且只生成在消费者宿主里**。
+# 不然"实验中开了什么"就说不清，而这一节的结论完全依赖"开/关"这个变量。
+XC_RS="$HERE/../../contracts/examples/xdom_loop_resync.contract.json"
+rm -rf "$TMP/rs_on" "$TMP/rs_off"
+expect_rc "开了重同步的契约可生成" 0 \
+    bash "$ECOS" --dag "$FIX/xdom_loop.dag.json" --contract "$XC_RS" \
+    --platforms "$CAPS" --platform linux_kernel --release-cost-us 21 \
+    --exec-us "$EX5" --source "$LOOPSRC" --out-dir "$TMP/rs_on" \
+    --split-by-domain --call "stage_pid=stage_pid(1000)"
+expect_grep "消费者宿主里应用了一次性平移" "$TMP/rs_on/nuttx/ecos_nuttx_main.c" \
+    "ecos_xdom_resync_take()" "base += (uint64_t)_d" "xdom resync shift_us="
+expect_grep "桥里有触发逻辑与三个宏" "$TMP/rs_on/nuttx/ecos_xdom.c" \
+    "#define ECOS_XDOM_RESYNC_US 500" "#define ECOS_XDOM_RESYNC_AT_US 200" \
+    "ECOS_XDOM_RESYNC_COOLDOWN_US" "xdom_resync_req = (uint32_t)ECOS_XDOM_RESYNC_US"
+# 生产者侧不该有"应用平移"的代码（它只管发数据）
+expect_absent "生产者宿主不应用平移" "$TMP/rs_on/root/ecos_fused_linux.c" \
+    "ecos_xdom_resync_take"
+# 默认（不开）必须一个字节都不多：既有夹具的行为不能被这次改动带歪
+expect_rc "默认契约（不开重同步）仍可生成" 0 \
+    bash "$ECOS" --dag "$FIX/xdom_loop.dag.json" --contract "$XCON" \
+    --platforms "$CAPS" --platform linux_kernel --release-cost-us 21 \
+    --exec-us "$EX5" --source "$LOOPSRC" --out-dir "$TMP/rs_off" \
+    --split-by-domain --call "stage_pid=stage_pid(1000)"
+expect_grep "默认关闭：宏为 0" "$TMP/rs_off/nuttx/ecos_xdom.c" \
+    "#define ECOS_XDOM_RESYNC_US 0"
+expect_absent "默认关闭：宿主里没有平移代码" "$TMP/rs_off/nuttx/ecos_nuttx_main.c" \
+    "ecos_xdom_resync_take"
+
+# 契约层：只开平移却不给触发阈值 ⇒ 永远不触发，判错（配了等于没配）
+"$PY" - "$XC_RS" "$TMP/rs_bad.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"]["xdom_resync_at_us"] = 0
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "开了平移但没触发阈值 ⇒ 判错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_bad.contract.json"
+# 写到 control 下会被静默忽略（emit 只读 timing_constraints）⇒ 必须判错
+"$PY" - "$XC_RS" "$TMP/rs_pos.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+v = d["timing_constraints"].pop("xdom_resync_us")
+d.setdefault("control", {})["xdom_resync_us"] = v
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "重同步字段写在 control 下 ⇒ 判错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_pos.contract.json"
+
+echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" = 0 ] || exit 1

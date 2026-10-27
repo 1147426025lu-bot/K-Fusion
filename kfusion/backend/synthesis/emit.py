@@ -280,6 +280,10 @@ def main():
                   % (int(a.experiment_period_us), _dom, _decl[_dom]), file=sys.stderr)
             return 2
 
+    # 重同步开关：只认契约（命令行不加开关，避免与契约脱钩）。
+    _resync_on = bool(int((((contract or {}).get("timing_constraints") or {})
+                           .get("xdom_resync_us") or 0)))
+
     # ---- 跨域部署可行性（PR11-C）：排不下就不生成 ----
     # 为什么放在装置覆盖之后：--experiment-period-us 会改本域周期，判据必须用**最终**节拍。
     # 判据本身在 xdom_timeline.check_edge（事件时间线模型），这里只负责"拒绝或放行"。
@@ -366,7 +370,8 @@ def main():
                                         main_name=a.nuttx_main,
                                         probe=getattr(ir, "probe", False),
                                         xdom=bool(xdom),
-                                        prog_name=a.nuttx_progname)
+                                        prog_name=a.nuttx_progname,
+                                        xdom_resync=_resync_on)
         except ValueError as e:
             # 入口名与 PROGNAME 不一致 → 生成期就拒，不让它跑到板上才炸
             print("emit: %s" % e, file=sys.stderr)
@@ -392,10 +397,19 @@ def main():
     # 只在给了 --xdom 时生成；单域产物一个字节都不变。
     if xdom:
         # 周期长度要把物理计数器换算成"周期号"，必须把方案周期传给桥。
-        for fn, text in xdom_bridge.emit(xdom, period_us=int(ir.period_us or 0),
-                                         max_age=int(xdom_max_age),
-                                         lag=int(a.xdom_lag or 0),
-                                         mode=a.xdom_mode).items():
+        # 周期性重同步（相位协调的最小实现）：只从契约读，默认关闭。
+        # 触发/平移量都写进契约，是为了让"这次跑的是什么配置"能溯源——
+        # 命令行再加一个开关就会和契约脱钩（PR10-E 的教训）。
+        _ctr = (contract or {}).get("timing_constraints") or {}
+        for fn, text in xdom_bridge.emit(
+                xdom, period_us=int(ir.period_us or 0),
+                max_age=int(xdom_max_age),
+                lag=int(a.xdom_lag or 0),
+                mode=a.xdom_mode,
+                resync_us=int(_ctr.get("xdom_resync_us") or 0),
+                resync_at_us=int(_ctr.get("xdom_resync_at_us") or 0),
+                resync_cool_us=int(_ctr.get("xdom_resync_cooldown_us") or 60000000),
+        ).items():
             written.append(_write(a.out_dir, fn, text))
         print("=== 跨域数据桥 ===")
         print("  %s" % xdom_bridge.summary(xdom))

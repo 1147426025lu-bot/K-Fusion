@@ -182,6 +182,35 @@ def validate(dag, contract):
         except (TypeError, ValueError):
             errs.append("xdom_jitter_us 不是数字：%r" % (jit,))
 
+    # ---- 周期性重同步（PR11-D §25）：三个字段都必须落在 timing_constraints 下 ----
+    # 写在别处会被 emit 静默忽略（它只读 timing_constraints），那等于"配了没生效"——
+    # 与 PR10-E 那个 feedback_delay_max_us 写错位置的坑同型，这里显式判错。
+    if isinstance(ctrl_blk, dict):
+        for _k in ("xdom_resync_us", "xdom_resync_at_us", "xdom_resync_cooldown_us"):
+            if _k in ctrl_blk:
+                errs.append("契约：%s 写在顶层 control 下（非契约位置）；"
+                            "请移到 timing_constraints 下——emit 只读那里" % _k)
+    _rs = ctr.get("xdom_resync_us")
+    _rat = ctr.get("xdom_resync_at_us")
+    _rcool = ctr.get("xdom_resync_cooldown_us")
+    for _name, _v in (("xdom_resync_us", _rs), ("xdom_resync_at_us", _rat),
+                      ("xdom_resync_cooldown_us", _rcool)):
+        if _v is None:
+            continue
+        try:
+            _f = float(_v)
+            if _f < 0:
+                errs.append("%s 不能为负：%r" % (_name, _v))
+        except (TypeError, ValueError):
+            errs.append("%s 不是数字：%r" % (_name, _v))
+    # 开了平移却没有触发阈值 ⇒ 永远不会触发（配了等于没配）
+    try:
+        if _rs and float(_rs) > 0 and not (_rat and float(_rat) > 0):
+            errs.append("xdom_resync_us>0 但 xdom_resync_at_us 为 0："
+                        "没有触发阈值，重同步永远不会发生（配了等于没配）")
+    except (TypeError, ValueError):
+        pass
+
     ev = (contract.get("evidence") or {}).get("exec")
     if ev and ev not in ("bounded", "empirical"):
         warns.append("evidence.exec=%r 未识别（只认 bounded / empirical），"
