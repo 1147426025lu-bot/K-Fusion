@@ -33,6 +33,7 @@ import linux_kernel_emitter as linux_em  # noqa: E402
 import nuttx_emitter as nuttx_em          # noqa: E402
 import stage_manifest                      # noqa: E402
 import xdom_bridge                         # noqa: E402
+import let_emitter as let_em               # noqa: E402
 
 
 def _write(out_dir, name, text):
@@ -52,7 +53,8 @@ def main():
     ap.add_argument("--source", required=True, help="阶段实现所在的 .c")
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--target", default="linux-kernel",
-                    choices=["linux-kernel", "nuttx", "both"])
+                    choices=["linux-kernel", "nuttx", "both", "let"],
+                    help="let = 用户态 LET 部署（作业表 + 入口，由 plc_let__LET.c 调度）")
     ap.add_argument("--name", default=None, help="模块/应用名（默认取 DAG 任务名）")
     ap.add_argument("--contract", default=None)
     ap.add_argument("--exec-us", default=None, help="JSON 或文件：阶段执行时间")
@@ -103,6 +105,12 @@ def main():
                          "与 --allow-unverified 同一套规矩：产物明确标记、不得进论文主张")
     ap.add_argument("--allow-unverified", action="store_true",
                     help="允许用未验证方案生成（产物标记为对照用，不得进论文）")
+    ap.add_argument("--let-loops", type=int, default=0,
+                    help="【LET 部署】LET_RUN_LOOPS 默认值（0=收到 SIGINT 才停）")
+    ap.add_argument("--let-frac", type=float, default=0.8,
+                    help="【LET 部署】LET 窗口占周期比例（默认 0.8，与 plc_let_demo 约定一致）")
+    ap.add_argument("--no-let-skip", action="store_true",
+                    help="【LET 部署】关掉 PLC_LET_SKIP_MISSED（默认开：严格周期，落后不追赶）")
     a = ap.parse_args()
 
     plan = fusion_ir.load(a.plan)
@@ -448,6 +456,17 @@ def main():
         os.makedirs(d, exist_ok=True)
         for fn, text in nuttx_files.items():
             written.append(_write(d, fn, text))
+
+    # ---- LET 用户态部署（PR12-B）：作业表 + 入口，由 plc_let__LET.c 调度 ----
+    # 与 linux/nuttx 平行：同一份 IR 既能生成 ring-0 内核模块，也能生成这里
+    # 的用户态 LET 部署。"验证过的时序"与"真正跑的时序"同源，不会手写作业表
+    # 悄悄偏离方案。周期体（ecos_fused_body.c）是三个后端共用的那一份。
+    if a.target == "let":
+        for fn, text in let_em.emit(
+                ir, name, let_frac=a.let_frac,
+                skip_missed=not a.no_let_skip,
+                loops=a.let_loops).items():
+            written.append(_write(a.out_dir, fn, text))
 
     print("=== ECoS 合成：%s（target=%s）===" % (name, a.target))
     print("  组 %d / 阶段 %d，周期 %.0f µs，证据 %s，验证 %s"
