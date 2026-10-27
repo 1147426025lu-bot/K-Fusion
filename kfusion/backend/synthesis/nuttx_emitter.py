@@ -347,14 +347,18 @@ def emit(ir, module_name, main_name=None, probe=False, xdom=False,
             # 周期锚点：首拍真正跑起来的时刻（base 本身就是 µs）。
             # 不用 init 时刻——init 之后还要等环、建定时器，差好几百 µs。
             # 周期性重同步：把桥请求的一次性平移加到**本域绝对基准**上。
+            # 平移是**有符号**的：>0 后移（本周期变长，年龄变大），
+            # <0 前移（本周期变短，年龄变小）。两个方向都要，因为漂移方向不保证。
             # 只在契约声明了 xdom_resync_us 时生成；否则这一行不存在，产物一字不变。
             "xdom_resync": ('\t\t{\n'
-                            '\t\t\tuint32_t _d = ecos_xdom_resync_take();\n'
-                            '\t\t\tif (_d) {\n'
-                            '\t\t\t\tbase += (uint64_t)_d;\t/* 这一次周期被拉长 _d µs */\n'
-                            '\t\t\t\tprintf("xdom resync shift_us=%u n=%u\\n",\n'
-                            '\t\t\t\t       _d, ecos_xdom_resync_count());\n'
-                            '\t\t\t}\n'
+                            '\t\t\tint32_t _d = ecos_xdom_resync_take();\n'
+                            '\t\t\tif (_d > 0)\n'
+                            '\t\t\t\tbase += (uint64_t)_d;\t/* 本周期被拉长 _d µs */\n'
+                            '\t\t\telse if (_d < 0)\n'
+                            '\t\t\t\tbase -= (uint64_t)(-_d);\t/* 本周期被缩短 */\n'
+                            '\t\t\tif (_d)\n'
+                            '\t\t\t\tprintf("xdom resync shift_us=%ld n=%u\\n",\n'
+                            '\t\t\t\t       (long)_d, ecos_xdom_resync_count());\n'
                             '\t\t}\n'
                             if xdom_resync else ""),
             "xdom_anchor": ('\t\tif (periods == 0)\n'

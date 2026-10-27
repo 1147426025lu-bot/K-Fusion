@@ -72,8 +72,11 @@ void ecos_xdom_report_evidence(void);               /* 逐通道打印最近一�
 uint32_t ecos_xdom_epoch(void);                     /* 统一 epoch：本域所见 session */
 
 /* 周期性重同步（相位协调的最小实现）：宿主每拍取一次，非 0 就把它加到自己的
- * 绝对释放基准上（一次性平移），然后继续按原周期跑。 */
-uint32_t ecos_xdom_resync_take(void);               /* 取走待应用的平移（µs），0=无 */
+ * 绝对释放基准上（一次性平移），然后继续按原周期跑。
+ * 返回**有符号** µs，方向就是"该往哪边搬"：
+ *   > 0 后移（把年龄抬大，守下边界，防 age 掉到 0 后整拍跳变）
+ *   < 0 前移（把年龄压小，守上边界，防 age 涨过预算被拒收） */
+int32_t ecos_xdom_resync_take(void);                /* 取走待应用的平移（µs），0=无 */
 uint32_t ecos_xdom_resync_count(void);              /* 累计重同步次数 */
 
 #endif /* ECOS_XDOM_H */
@@ -114,14 +117,19 @@ _C = """/* ecos_xdom.c — 跨域数据桥（由 ECoS 拆分器生成，勿手�
  * 为什么要它：相位漂移实测 ≈15 ppm（§23/§24），每 `P_c/drift ≈ 63 s` 把 ρ 拖过 0 边界；
  * 那一刻 age 整跳一拍、抖动再把 age 顶出预算 ⇒ 每次约 40 个样本被拒。
  * 加预算（1→2 拍）能买掉它（§24 实测 stale=0），代价是允许的年龄翻倍。
- * 这里给另一条路：当 age 掉到 ECOS_XDOM_RESYNC_AT_US 以下（"快到边界"），
- * 请求宿主把自己的绝对释放基准**后移** ECOS_XDOM_RESYNC_US，把 ρ 拉回安全区。
+ * 这里给另一条路：把 ρ 主动搬回安全区。**两个边界都要守**：
+ *   · age 掉到 ECOS_XDOM_RESYNC_AT_US 以下（快掉到 0）⇒ 后移基准 +RESYNC_US，把 age 抬回来
+ *   · age 超过 ECOS_XDOM_RESYNC_HI_US（快涨过预算）⇒ 前移基准 −RESYNC_US，把 age 压回去
+ * 方向由**门限**决定，不由漂移符号决定。这一点很关键：PR11-D 那版只写了 +500，
+ * 默认"漂移让 age 单调下降"，一旦漂移反向（age 涨）它一次都不会动作（§26）。
  *
- * ⚠ 代价必须记账：被平移的那**一个**周期会比 ECOS_XDOM_PERIOD_US 长 RESYNC_US µs
- *   （周期不再严格等长）。这是"用一次超周期换掉一次穿越"的交易，不是免费午餐。
- * 两个宏都为 0 时整套逻辑被编译掉（默认关闭）。 */
+ * ⚠ 代价必须记账：被平移的那**一个**周期会比 ECOS_XDOM_PERIOD_US 长/短 RESYNC_US
+ *   （周期不再严格等长）。这是"用一次超/欠周期换掉一次穿越"的交易，不是免费午餐。
+ *   ⇒ 契约层强制 RESYNC_US < PERIOD_US（否则前移会跨过一拍，时间倒退）。
+ * 所有宏都为 0 时整套逻辑被编译掉（默认关闭）。 */
 #define ECOS_XDOM_RESYNC_US %(resync_us)d
 #define ECOS_XDOM_RESYNC_AT_US %(resync_at_us)d
+#define ECOS_XDOM_RESYNC_HI_US %(resync_hi_us)d   /* 0 = 只守下边界（旧行为） */
 #define ECOS_XDOM_RESYNC_COOLDOWN_US %(resync_cool_us)d
 /* A/B 注入延迟用：消费者取"LAG 拍前"的值。LAG=0 = 取最新（等价原行为）；
  * LAG=N = 取 N 拍前的值（人为注入跨域延迟，做受控 A/B：同一代码只切这一项）。 */
@@ -166,10 +174,28 @@ static uint32_t xdom_hz;
  * 就无法把"年龄变了"归因到相位改动——多速率下尤其会被奇偶混叠骗（见 §15 撤回）。 */
 static uint32_t xdom_t0_us;
 
-/* 重同步状态：待应用的平移量、上次请求时刻、累计次数。宿主每拍取一次。 */
-static uint32_t xdom_resync_req;
+/* 重同步状态：待应用的平移量（µs，**有符号**）、上次请求时刻、累计次数。
+ * 宿主每拍取一次。 */
+static int32_t  xdom_resync_req;
+#if ECOS_XDOM_RESYNC_US != 0
+/* ⚠ 必须包在 #if 里：主域不在本侧时 RESYNC_US=0，这个变量就没人用，
+ * NuttX 的 -Werror=unused-variable 会直接把编译打断（"配了单边"才暴露的坑）。 */
 static uint32_t xdom_resync_last_us;
+#endif
 static uint32_t xdom_resync_n;
+
+#if ECOS_XDOM_RESYNC_US != 0
+/* 记录一次平移请求（冷却由调用点先判过，这里只管记账）。
+ * d > 0 = 后移基准（年龄变大），d < 0 = 前移基准（年龄变小）。
+ * 为什么把方向放在**符号**里而不是两个标志位：宿主拿到的就是一个
+ * 带方向的增量，少一次判断、也少一个"方向和数值不一致"的错法。 */
+static void xdom_resync_arm(uint32_t cons, int32_t d)
+{
+	xdom_resync_req     = d;
+	xdom_resync_last_us = cons;
+	xdom_resync_n++;
+}
+#endif
 
 /* PR10-F：每通道"最近一条"缓存。
  * 旧实现（PR10-C）的 ecos_xdom_sub 用 while(xipc_pop()) 把 in 环里**所有**消息都
@@ -358,16 +384,24 @@ void ecos_xdom_sub_tick(unsigned channel, int32_t *dst, uint32_t *out_tick)
 			e->max_age = e->age;   /* 拍（向上取整） */
 
 #if ECOS_XDOM_RESYNC_US != 0
-		/* 触发：年龄已经很小（"快掉到 0 了"）且距上次足够久。
-		 * 只看"小"、不看"已越界"——等到越界那一拍再补，那一拍已经掉了。 */
-		if (ECOS_XDOM_RESYNC_AT_US != 0 &&
-		    age < (uint32_t)ECOS_XDOM_RESYNC_AT_US &&
-		    (xdom_resync_last_us == 0 ||
-		     (uint32_t)(cons - xdom_resync_last_us) >
-			     (uint32_t)ECOS_XDOM_RESYNC_COOLDOWN_US)) {
-			xdom_resync_req = (uint32_t)ECOS_XDOM_RESYNC_US;
-			xdom_resync_last_us = cons;
-			xdom_resync_n++;
+		/* 冷却期过没过。首次（last==0）总是允许。
+		 * 冷却存在的理由：平移生效要**等下一拍**，冷却期内重复请求只会把
+		 * 多个平移叠在一起（等于步长乘 N），相位被推过头。 */
+		if (xdom_resync_last_us == 0 ||
+		    (uint32_t)(cons - xdom_resync_last_us) >
+			    (uint32_t)ECOS_XDOM_RESYNC_COOLDOWN_US) {
+			/* 下边界：年龄快掉到 0 了（漂移把 ρ 往下推）⇒ 后移，把 age 抬回来。
+			 * 只看"小"、不看"已越界"——等到越界那一拍再补，那一拍已经掉了。 */
+			if (ECOS_XDOM_RESYNC_AT_US != 0 &&
+			    age < (uint32_t)ECOS_XDOM_RESYNC_AT_US)
+				xdom_resync_arm(cons, (int32_t)ECOS_XDOM_RESYNC_US);
+#if ECOS_XDOM_RESYNC_HI_US != 0
+			/* 上边界：年龄快涨过预算了（漂移**反向**，把 ρ 往上推）⇒ 前移，压回预算内。
+			 * 这一条是 PR11-D 缺的那半：那时只写了 +RESYNC_US，漂移一反
+			 * 就一次都不触发，只能眼睁睁看着 age 撞上 MAX_AGE（§26）。 */
+			else if (age > (uint32_t)ECOS_XDOM_RESYNC_HI_US)
+				xdom_resync_arm(cons, -(int32_t)ECOS_XDOM_RESYNC_US);
+#endif
 		}
 #endif
 
@@ -448,10 +482,10 @@ uint32_t ecos_xdom_epoch(void)
 	return xr_in ? xr_in->session : 0;
 }
 
-/* 宿主每拍问一次：有没有待应用的相位平移？有就取走（只生效一次）。 */
-uint32_t ecos_xdom_resync_take(void)
+/* 宿主每拍问一次：有没有待应用的相位平移？有就取走（只生效一次，带方向）。 */
+int32_t ecos_xdom_resync_take(void)
 {
-	uint32_t d = xdom_resync_req;
+	int32_t d = xdom_resync_req;
 
 	if (d != 0)
 		xdom_resync_req = 0;
@@ -468,7 +502,8 @@ BASE = 0x1faf1000
 
 
 def emit(domain_meta, period_us=1000, max_age=0, lag=0, mode="latest",
-         resync_us=0, resync_at_us=0, resync_cool_us=60000000):
+         resync_us=0, resync_at_us=0, resync_cool_us=60000000,
+         resync_hi_us=0):
     """domain_meta: 拆分器写的 per-domain meta.json（含 peer_ring 与 pub/sub）。
     period_us: 控制周期（µs），用于把物理计数器换算成周期号。
     max_age:   过期阈值（拍），0 = 不启用过期拒收（只记录证据）。
@@ -476,6 +511,8 @@ def emit(domain_meta, period_us=1000, max_age=0, lag=0, mode="latest",
     mode:      "latest"（默认，抽干取最新）/"oldest"（抽干取最旧）/
                "one"（每拍只取一条、其余留在环里：复刻旧桥的消费速率，
                用来看"积压累积"会不会真的把 age 推上去）→ 生成 ECOS_XDOM_PICK 0/1/2。
+    resync_hi_us: 上边界门限（age > 它 ⇒ 前移基准，把年龄压回预算内）。
+               0 = 只守下边界（PR11-D 的旧行为，漂移反向时不动作）。
     """
     _m = str(mode or "latest").lower()
     pick = {"latest": 0, "oldest": 1, "one": 2}.get(_m)
@@ -546,6 +583,7 @@ def emit(domain_meta, period_us=1000, max_age=0, lag=0, mode="latest",
             "lag": int(lag or 0),
             "resync_us": int(resync_us or 0),
             "resync_at_us": int(resync_at_us or 0),
+            "resync_hi_us": int(resync_hi_us or 0),
             "resync_cool_us": int(resync_cool_us or 0),
             "pick": pick,
             "owner_note": owner_note,

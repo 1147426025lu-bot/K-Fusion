@@ -198,6 +198,109 @@ def safe_phase_window(prod_period_us, cons_period_us, budget_us,
             "tested": steps, "budget_us": float(budget_us)}
 
 
+# ---------------------------------------------------------------- 双向重同步
+#
+# 为什么这个也必须进模型：重同步是**运行时**动作，但它改动的是**时间网格**，
+# 所以它能不能挡住穿越、会不会自己振荡，跟 (门限, 步长, 漂移方向) 的关系
+# 完全是确定性的——不该靠上板撞运气去发现。
+#
+# 与 C 实现的同构点（错一处结论就不可信）：
+#   · 平移对**后续所有**拍生效（C: `base += _d` 改的是绝对基准）
+#   · 挂起的平移在**下一拍**才应用（C: take() 在 `base += PERIOD` 之前，sub 在本拍内）
+#   · 冷却按 `cons` µs 判，首次没有"上一次"就允许
+#   · 环空沿用旧值（与 simulate 同一语义，否则年龄被低估）
+
+def simulate_resync(prod, cons, n_cons, budget_us=None, lo_us=0.0, hi_us=0.0,
+                    step_us=0.0, cooldown_us=0.0, pick="latest", cap=224,
+                    jitter_us=0.0):
+    """带双向重同步的逐拍模拟。
+
+    lo_us: 下边界（age < lo ⇒ 后移 +step，把年龄抬大）；0 = 关闭
+    hi_us: 上边界（age > hi ⇒ 前移 −step，把年龄压小）；0 = 关闭
+    方向由**门限**决定，与漂移符号无关——这正是"漂移反向"时仍成立的原因。
+
+    jitter_us: 年龄抖动幅度（±，固定种子）。**不能省**：
+        理想网格下 1:1 的 age 恰好走满 [0, P_c]，永远不越过 P_c 的预算，
+        于是"穿越会不会掉样本"这件事在模型里根本不存在。实测之所以每秒掉几十个，
+        正是抖动（200 µs）把紧贴边界的年龄顶了出去。给定种子 ⇒ 结果可复现。
+
+    返回 dict：ages / stale / shifts_pos / shifts_neg / min_us / max_us /
+               reused / drops / backlog / over（被平移的拍数 = 非等周期数）
+    """
+    queue = []
+    ages = []
+    drops = reused = 0
+    last_ts = None
+    m = 0
+    offset = 0.0            # 消费者绝对基准的累积平移（µs）
+    pending = 0.0           # 上一拍挂起、本拍应用的平移
+    last_resync = None      # 上次触发时刻（µs）；None = 还没触发过
+    n_pos = n_neg = 0
+    stale = 0
+    _seed = 12345           # 固定种子：同一配置跑两次必须同结果（否则没法当判据）
+    for k in range(n_cons):
+        if pending:
+            offset += pending          # C: base += _d（>0）或 base -= -_d（<0）
+            pending = 0.0
+        t = cons.cycle(k) + offset
+        while True:
+            ts = prod.sample_ready(m)
+            if ts > t:
+                break
+            if len(queue) >= cap:
+                drops += 1
+            else:
+                queue.append((ts, m))
+            m += 1
+        if queue:
+            if pick == "latest":
+                ts, _ = queue[-1]
+                queue.clear()
+            elif pick == "oldest":
+                ts, _ = queue[0]
+                queue.clear()
+            elif pick == "one":
+                ts, _ = queue[0]
+                queue.pop(0)
+            else:
+                raise ValueError("pick 只认 latest/oldest/one：%r" % (pick,))
+            if last_ts is not None and ts == last_ts:
+                reused += 1
+            last_ts = ts
+        elif last_ts is None:
+            continue
+        else:
+            reused += 1
+        age = t - last_ts
+        if jitter_us:
+            _seed = (_seed * 1103515245 + 12345) & 0x7fffffff
+            # 单侧：只让年龄**变大**。物理上"消费者早到"并不是 age 变小——
+            # 早到意味着新样本还没就绪，取到的是更旧的那条，age 反而更大。
+            # 所以两侧建模会把 age 压到负数（不可能的值），单侧才与板上的无符号差一致。
+            age += jitter_us * (_seed / 2147483648.0)
+        ages.append(age)
+        if budget_us is not None and age > budget_us:
+            stale += 1
+        # ---- 触发（挂起到下一拍）----
+        if step_us and (last_resync is None or (t - last_resync) > cooldown_us):
+            if lo_us and age < lo_us:
+                pending = +step_us
+                last_resync = t
+                n_pos += 1
+            elif hi_us and age > hi_us:
+                pending = -step_us
+                last_resync = t
+                n_neg += 1
+    return {
+        "ages": ages, "stale": stale, "n": len(ages),
+        "shifts_pos": n_pos, "shifts_neg": n_neg,
+        "min_us": min(ages) if ages else None,
+        "max_us": max(ages) if ages else None,
+        "reused": reused, "drops": drops, "backlog": len(queue),
+        "over": n_pos + n_neg,
+    }
+
+
 # ---------------------------------------------------------------- CLI
 
 def _fmt_band(b):
@@ -223,10 +326,25 @@ def main():
     ap.add_argument("--pick", default="latest", choices=["latest", "oldest", "one"])
     ap.add_argument("--budget-us", type=float, default=None,
                     help="给了就顺手算相位安全窗")
+    # ---- 双向重同步（PR11-D §26/§27）----
+    ap.add_argument("--cons-drift-ppm", type=float, default=None,
+                    help="消费域自己的漂移（不给则与 --drift-ppm 相同）。"
+                         "两者不等才表示 ρ 在走：正 = age 递增，负 = age 递减")
+    ap.add_argument("--resync-step", type=float, default=0.0, help="平移步长 µs（0=不开）")
+    ap.add_argument("--resync-lo", type=float, default=0.0, help="下边界门限 µs")
+    ap.add_argument("--resync-hi", type=float, default=0.0, help="上边界门限 µs")
+    ap.add_argument("--resync-cooldown", type=float, default=0.0, help="冷却 µs")
+    ap.add_argument("--simulate", action="store_true",
+                    help="即使 step=0 也跑逐拍模拟（看拒收/穿越的基线）")
+    ap.add_argument("--jitter-us", type=float, default=0.0,
+                    help="年龄抖动（±µs，固定种子伪随机）。0 = 理想网格。"
+                         "不给抖动，1:1 下 age 恰好走满 [0,P] 而永不越界，"
+                         "与实测（§24 有 141 次拒收）对不上")
     a = ap.parse_args()
 
     prod = Domain("prod", a.prod_period, exec_us=a.exec_us, drift_ppm=a.drift_ppm)
-    cons = Domain("cons", a.cons_period, phase_us=a.rho, drift_ppm=a.drift_ppm)
+    _cdrift = a.drift_ppm if a.cons_drift_ppm is None else a.cons_drift_ppm
+    cons = Domain("cons", a.cons_period, phase_us=a.rho, drift_ppm=_cdrift)
     b = age_band(prod, cons, n_cons=a.n_cons, pick=a.pick,
                  tick_us=a.cons_period)
     print("生产域 %s" % prod)
@@ -235,6 +353,20 @@ def main():
     if b["ticks"]:
         print("  age（按消费域拍折算）= %.2f … %.2f 拍"
               % (b["ticks"][0], b["ticks"][1]))
+
+    if a.simulate or a.resync_step:
+        r = simulate_resync(prod, cons, a.n_cons, budget_us=a.budget_us,
+                            lo_us=a.resync_lo, hi_us=a.resync_hi,
+                            step_us=a.resync_step, cooldown_us=a.resync_cooldown,
+                            pick=a.pick, jitter_us=a.jitter_us)
+        print("  双向重同步 step=%.0f lo=%.0f hi=%.0f 冷却=%.0f → "
+              "后移 %d 次 / 前移 %d 次，受平移的拍 %d"
+              % (a.resync_step, a.resync_lo, a.resync_hi, a.resync_cooldown,
+                 r["shifts_pos"], r["shifts_neg"], r["over"]))
+        print("    age %.0f…%.0f µs（%d 拍）%s"
+              % (r["min_us"] or 0, r["max_us"] or 0, r["n"],
+                 ("，拒收 %d（%.3f%%）" % (r["stale"], 100.0 * r["stale"] / r["n"]))
+                 if a.budget_us is not None else ""))
 
     if a.budget_us is not None:
         w = safe_phase_window(a.prod_period, a.cons_period, a.budget_us,

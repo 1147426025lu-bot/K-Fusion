@@ -649,11 +649,21 @@ expect_rc "开了重同步的契约可生成" 0 \
     --split-by-domain --call "stage_pid=stage_pid(1000)"
 expect_grep "消费者宿主里应用了一次性平移" "$TMP/rs_on/nuttx/ecos_nuttx_main.c" \
     "ecos_xdom_resync_take()" "base += (uint64_t)_d" "xdom resync shift_us="
-expect_grep "桥里有触发逻辑与三个宏" "$TMP/rs_on/nuttx/ecos_xdom.c" \
+expect_grep "桥里有触发逻辑与四个宏" "$TMP/rs_on/nuttx/ecos_xdom.c" \
     "#define ECOS_XDOM_RESYNC_US 500" "#define ECOS_XDOM_RESYNC_AT_US 200" \
-    "ECOS_XDOM_RESYNC_COOLDOWN_US" "xdom_resync_req = (uint32_t)ECOS_XDOM_RESYNC_US"
-# 生产者侧不该有"应用平移"的代码（它只管发数据）
-expect_absent "生产者宿主不应用平移" "$TMP/rs_on/root/ecos_fused_linux.c" \
+    "#define ECOS_XDOM_RESYNC_HI_US 0" \
+    "ECOS_XDOM_RESYNC_COOLDOWN_US" "xdom_resync_arm(cons, (int32_t)ECOS_XDOM_RESYNC_US)"
+# 只守下边界的旧行为：上边界那一支必须被**预处理条件**包住（HI=0 时不参与编译）。
+# ⚠ 只能查"有没有那道 #if"，不能查"源码里有没有那行"——源码里当然有，
+#   它只是不被编进去。第一版就是按文本查，结果把好好的产物判成了旧代码。
+expect_grep "只守下边界时上边界被 #if 关掉" "$TMP/rs_on/nuttx/ecos_xdom.c" \
+    "#if ECOS_XDOM_RESYNC_HI_US != 0" \
+    "else if (age > (uint32_t)ECOS_XDOM_RESYNC_HI_US)"
+# ⚠ 这里原来有一条「生产者宿主不应用平移」；§26.4 之前它被删过一次——当时的理由
+#   "xdom_loop 两侧都订阅，root 也是消费者"是对的，但结论下错了：真正该保证的不是
+#   "谁在消费"，而是**只有一个域动手**（age 是相对相位，只有一个自由度）。
+#   现在由契约 xdom_resync_domain 指定主域，这条断言重新成立且有了正当依据。
+expect_absent "非主域的宿主不应用平移" "$TMP/rs_on/root/ecos_fused_linux.c" \
     "ecos_xdom_resync_take"
 # 默认（不开）必须一个字节都不多：既有夹具的行为不能被这次改动带歪
 expect_rc "默认契约（不开重同步）仍可生成" 0 \
@@ -687,6 +697,177 @@ PYEOF
 expect_rc "重同步字段写在 control 下 ⇒ 判错" 3 \
     "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
     "$TMP/rs_pos.contract.json"
+
+echo
+echo "=== PR11-D §26：双向重同步（漂移反向也要守） ==="
+# 只为验一件事：上边界是**独立**的一支，靠宏开关，且方向是**负**的。
+# §25 那版把方向写死成 +500；漂移一反它就不动作，甚至会把"涨到顶回绕"
+# 误判成"快掉到 0"再往后推（模型：11.1% 拒收，比不开还差一倍）。
+XC_BI="$HERE/../../contracts/examples/xdom_loop_resync_bi.contract.json"
+rm -rf "$TMP/rs_bi"
+expect_rc "双向重同步契约可生成" 0 \
+    bash "$ECOS" --dag "$FIX/xdom_loop.dag.json" --contract "$XC_BI" \
+    --platforms "$CAPS" --platform linux_kernel --release-cost-us 21 \
+    --exec-us "$EX5" --source "$LOOPSRC" --out-dir "$TMP/rs_bi" \
+    --split-by-domain --call "stage_pid=stage_pid(1000)"
+expect_grep "桥里有上边界宏与前移分支" "$TMP/rs_bi/nuttx/ecos_xdom.c" \
+    "#define ECOS_XDOM_RESYNC_HI_US 800" \
+    "xdom_resync_arm(cons, -(int32_t)ECOS_XDOM_RESYNC_US)"
+expect_grep "宿主按符号处理两个方向" "$TMP/rs_bi/nuttx/ecos_nuttx_main.c" \
+    "int32_t _d = ecos_xdom_resync_take()" "base += (uint64_t)_d" \
+    "base -= (uint64_t)(-_d)"
+expect_absent "主域=nuttx：root 侧整条不生成" "$TMP/rs_bi/root/ecos_fused_linux.c" \
+    "xdom_shift"
+expect_grep "主域=nuttx：root 侧桥宏归零" "$TMP/rs_bi/root/ecos_xdom.c" \
+    "#define ECOS_XDOM_RESYNC_US 0"
+# 没有声明主域 ⇒ 判错。这条是 §26.4 用一批拒收换来的：两侧各自按门限搬，
+# 相对相位一次被推过整拍。
+"$PY" - "$XC_BI" "$TMP/rs_nomaster.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"].pop("xdom_resync_domain")
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "没有声明重同步主域 ⇒ 判错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_nomaster.contract.json"
+# 主域写错名字 / 写成没有跨域入边的纯生产者 ⇒ 判错（配了永远不会触发）
+"$PY" - "$XC_BI" "$TMP/rs_badmaster.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"]["xdom_resync_domain"] = "nuttxx"
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "主域名字不存在 ⇒ 判错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_badmaster.contract.json"
+# 消费侧是内核模块时（root 侧 ch0）也必须有：§25 只做了 NuttX 一侧，
+# 而 ch0 的年龄是**上升**的（+15.5 ppm）——方向一反，缺的就是这一侧。
+# 这里用 master=root 的夹具验"换主域"：生成物必须**整条翻过来**。
+XC_BI_ROOT="$HERE/../../contracts/examples/xdom_loop_resync_bi_root.contract.json"
+rm -rf "$TMP/rs_biroot"
+expect_rc "主域切到 root 也能生成" 0 \
+    bash "$ECOS" --dag "$FIX/xdom_loop.dag.json" --contract "$XC_BI_ROOT" \
+    --platforms "$CAPS" --platform linux_kernel --release-cost-us 21 \
+    --exec-us "$EX5" --source "$LOOPSRC" --out-dir "$TMP/rs_biroot" \
+    --split-by-domain --call "stage_pid=stage_pid(1000)"
+expect_grep "主域=root：内核侧宿主应用平移（按拍广播给所有组）" "$TMP/rs_biroot/root/ecos_fused_linux.c" \
+    "ecos_xdom_resync_take()" "xdom_shift_left = ECOS_GROUPS" \
+    "hrtimer_forward_now(&g->timer, ktime_set(0, _next * 1000))" \
+    "xdom resync shift_us="
+expect_grep "主域=root：内核侧桥里有门限宏" "$TMP/rs_biroot/root/ecos_xdom.c" \
+    "#define ECOS_XDOM_RESYNC_US 500" "#define ECOS_XDOM_RESYNC_HI_US 800"
+expect_absent "主域=root：nuttx 侧整条不生成" "$TMP/rs_biroot/nuttx/ecos_nuttx_main.c" \
+    "ecos_xdom_resync_take"
+expect_grep "主域=root：nuttx 侧桥宏归零" "$TMP/rs_biroot/nuttx/ecos_xdom.c" \
+    "#define ECOS_XDOM_RESYNC_US 0"
+# 平移量必须小于一个整拍：否则前移会让本拍早于上一拍（时间倒退）
+"$PY" - "$XC_BI" "$TMP/rs_ge.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"]["xdom_resync_us"] = 1000
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "平移量 ≥ 一个周期 ⇒ 判错（会时间倒退）" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_ge.contract.json"
+# 上边界不早于预算 ⇒ 等越界才动作，那一拍已经被拒了
+"$PY" - "$XC_BI" "$TMP/rs_late.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"]["xdom_resync_hi_us"] = 1000
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "上边界 ≥ 预算 ⇒ 判错（来晚了）" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_late.contract.json"
+# 两个门限交叉 ⇒ 同一拍两边都满足，方向互相抵消
+"$PY" - "$XC_BI" "$TMP/rs_cross.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"]["xdom_resync_hi_us"] = 150
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "门限交叉（at ≥ hi）⇒ 判错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_cross.contract.json"
+# 有上边界却没有年龄预算：没有"越界"这回事，上边界无处安放
+"$PY" - "$XC_BI" "$TMP/rs_nob.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"].pop("xdom_max_age_ticks")
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "上边界但无年龄预算 ⇒ 判错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_nob.contract.json"
+# 参考模型必须能给出"方向"：反向漂移 + 只有下边界 ⇒ 前移 0 次（旧逻辑的病因）
+"$PY" - "$HERE/../ecos/xdom_timeline.py" <<'PYEOF'
+import sys
+sys.path.insert(0, sys.argv[1].rsplit("/", 1)[0])
+import xdom_timeline as tl
+def run(cdrift, lo, hi):
+    p = tl.Domain("p", 1000, exec_us=5)
+    c = tl.Domain("c", 1000, phase_us=700, drift_ppm=cdrift)
+    return tl.simulate_resync(p, c, 120000, budget_us=1000, lo_us=lo, hi_us=hi,
+                              step_us=500, cooldown_us=15000000, jitter_us=100)
+a = run(-15, 200, 0)      # 实测方向 + 只守下边界
+d = run(+15, 200, 0)      # 反向 + 只守下边界（旧逻辑）
+e = run(+15, 200, 800)    # 反向 + 双向
+assert a["shifts_pos"] > 0 and a["shifts_neg"] == 0, a
+assert d["shifts_neg"] == 0, "反向漂移时旧逻辑不该前移"
+assert d["stale"] > a["stale"], "反向漂移 + 只有下边界，拒收必须变多（%r vs %r）" % (d["stale"], a["stale"])
+assert e["shifts_neg"] > 0 and e["stale"] == 0, e
+print("  ✅ 参考模型：反向漂移下只有下边界不动作（拒收 %d→%d），双向前移 %d 次后归零"
+      % (a["stale"], d["stale"], e["shifts_neg"]))
+PYEOF
+_rc=$?; [ "$_rc" = 0 ] && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "  ❌ 参考模型双向判据"; }
+
+echo
+echo "=== PR11-D §27：门限/步长的结构性约束 ==="
+# 两条都是"看起来配了、实际更差"的配置，参考模型能直接把后果算出来：
+#   step ≥ hi−lo   → 一次前移落到下边界以下，两门限互抓（带宽 = hi−lo）
+#   lo+step ≥ 预算 → 后移立刻越界，带宽退化成一整个周期
+"$PY" - "$XC_BI" "$TMP/rs_s700.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"]["xdom_resync_us"] = 700      # hi−lo = 600 ⇒ 700 ≥ 600
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "步长 ≥ hi−lo（两门限互抓）⇒ 判错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_s700.contract.json"
+"$PY" - "$XC_BI" "$TMP/rs_s400.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+tc = d["timing_constraints"]
+tc.update({"xdom_resync_at_us": 400, "xdom_resync_us": 700, "xdom_resync_hi_us": 0})
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "lo+step ≥ 预算（带宽退化）⇒ 判错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_s400.contract.json"
+# 参考模型：稳态带宽 = step（与 lo/hi 的位置无关），这是设计公式而不是巧合
+"$PY" - "$HERE/../ecos/xdom_timeline.py" <<'PYEOF'
+import sys
+sys.path.insert(0, sys.argv[1].rsplit("/", 1)[0])
+import xdom_timeline as tl
+def band(step, lo, hi, cdrift):
+    p = tl.Domain("p", 1000, exec_us=5)
+    c = tl.Domain("c", 1000, phase_us=700, drift_ppm=cdrift)
+    r = tl.simulate_resync(p, c, 120000, budget_us=1000, lo_us=lo, hi_us=hi,
+                           step_us=step, cooldown_us=15000000, jitter_us=0)
+    w = r["ages"][20000:]
+    return max(w) - min(w)
+for step in (300, 500, 700):
+    b = band(step, 200, 0, -15)
+    assert abs(b - step) <= 2, "递减方向带宽应等于 step：step=%d 得 %.0f" % (step, b)
+for step in (300, 500, 700):
+    b = band(step, 200, 800, +15)
+    assert abs(b - step) <= 2, "递增方向带宽应等于 step：step=%d 得 %.0f" % (step, b)
+print("  ✅ 参考模型：两个方向的稳态带宽都等于 step（±2 µs），与门限的绝对位置无关")
+PYEOF
+_rc=$?; [ "$_rc" = 0 ] && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "  ❌ 带宽 = step 的判据"; }
 
 echo
 echo "通过 $PASS / 失败 $FAIL"

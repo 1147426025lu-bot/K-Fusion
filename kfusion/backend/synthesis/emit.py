@@ -281,8 +281,15 @@ def main():
             return 2
 
     # 重同步开关：只认契约（命令行不加开关，避免与契约脱钩）。
-    _resync_on = bool(int((((contract or {}).get("timing_constraints") or {})
-                           .get("xdom_resync_us") or 0)))
+    # ⚠ 还必须**只有一个域**动手：age 是两个域的**相对**相位（只有一个自由度），
+    #   两侧各按自己的门限搬，等于对同一个量下两次控制——实测（§26.4）两侧在同一秒
+    #   一个 +500 一个 −500，相对相位一次被推 1000 µs（整拍），当场制造了一批拒收。
+    #   所以契约必须写明"谁动"，另一侧的桥与宿主完全不生成这套代码。
+    _ctr_rs = (contract or {}).get("timing_constraints") or {}
+    _resync_on = bool(int(_ctr_rs.get("xdom_resync_us") or 0))
+    _rs_master = str(_ctr_rs.get("xdom_resync_domain") or "").strip()
+    _this_dom = str((xdom or {}).get("domain") or "").strip() if xdom else ""
+    _is_rs_master = bool(_resync_on and _this_dom and _this_dom == _rs_master)
 
     # ---- 跨域部署可行性（PR11-C）：排不下就不生成 ----
     # 为什么放在装置覆盖之后：--experiment-period-us 会改本域周期，判据必须用**最终**节拍。
@@ -371,7 +378,7 @@ def main():
                                         probe=getattr(ir, "probe", False),
                                         xdom=bool(xdom),
                                         prog_name=a.nuttx_progname,
-                                        xdom_resync=_resync_on)
+                                        xdom_resync=_is_rs_master)
         except ValueError as e:
             # 入口名与 PROGNAME 不一致 → 生成期就拒，不让它跑到板上才炸
             print("emit: %s" % e, file=sys.stderr)
@@ -406,9 +413,11 @@ def main():
                 max_age=int(xdom_max_age),
                 lag=int(a.xdom_lag or 0),
                 mode=a.xdom_mode,
-                resync_us=int(_ctr.get("xdom_resync_us") or 0),
-                resync_at_us=int(_ctr.get("xdom_resync_at_us") or 0),
-                resync_cool_us=int(_ctr.get("xdom_resync_cooldown_us") or 60000000),
+                resync_us=int(_ctr.get("xdom_resync_us") or 0) if _is_rs_master else 0,
+                resync_at_us=int(_ctr.get("xdom_resync_at_us") or 0) if _is_rs_master else 0,
+                resync_hi_us=int(_ctr.get("xdom_resync_hi_us") or 0) if _is_rs_master else 0,
+                resync_cool_us=(int(_ctr.get("xdom_resync_cooldown_us") or 60000000)
+                                if _is_rs_master else 0),
         ).items():
             written.append(_write(a.out_dir, fn, text))
         print("=== 跨域数据桥 ===")
@@ -430,7 +439,8 @@ def main():
     if a.target in ("linux-kernel", "both"):
         d = a.out_dir if a.target == "linux-kernel" else os.path.join(a.out_dir, "linux")
         os.makedirs(d, exist_ok=True)
-        for fn, text in linux_em.emit(ir, name, xdom=bool(xdom)).items():
+        for fn, text in linux_em.emit(ir, name, xdom=bool(xdom),
+                                      xdom_resync=_is_rs_master).items():
             written.append(_write(d, fn, text))
 
     if nuttx_files is not None:

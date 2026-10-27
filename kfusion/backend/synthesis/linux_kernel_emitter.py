@@ -153,7 +153,7 @@ module_param(frozen, bool, 0644);
 MODULE_PARM_DESC(frozen, "写 1 暂停周期体（取一致快照），写 0 恢复");
 
 %(probe_decls)s
-
+%(xdom_shift_decls)s
 static enum hrtimer_restart ecos_tick(struct hrtimer *t)
 {
 	struct ecos_group *g = container_of(t, struct ecos_group, timer);
@@ -162,8 +162,7 @@ static enum hrtimer_restart ecos_tick(struct hrtimer *t)
 	 * atomic_inc 保证"落后时的多次释放"一次不丢——这正是严格配对实验要看的。 */
 	atomic_inc(&g->releases);
 	wake_up_interruptible(&g->wait);
-	hrtimer_forward_now(&g->timer, ktime_set(0, (s64)period_us * 1000));
-	return HRTIMER_RESTART;
+%(xdom_tick_shift)s	return HRTIMER_RESTART;
 }
 
 static void ecos_run_body(int id)
@@ -353,7 +352,7 @@ def _ident(s):
     return s if not s[:1].isdigit() else "v_" + s
 
 
-def emit(ir, module_name, phases_known=True, xdom=False):
+def emit(ir, module_name, phases_known=True, xdom=False, xdom_resync=False):
     ngroups = len(ir.groups)
     layout = " | ".join(
         "%s@%sµs[%s]" % (g.gid,
@@ -510,6 +509,53 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
 			}
 		}"""
 
+    # ---- 周期性重同步（消费侧是内核模块时）----
+    # 为什么内核侧也必须有一份：§25 只做了 NuttX 宿主，理由是"漂移让 age 单调下降"。
+    # 但那是**一个方向**的结论：实测 root 侧 ch0（nuttx→root）的 age 是**上升**的
+    # （588→603 µs / 60 s，+15 ppm）。方向反了以后，消费者恰好就是 root 这一侧，
+    # 而它当时没有任何应用平移的代码 —— 上边界根本无从守。
+    #
+    # 与 NuttX 侧的差别：那边只有一个 base，直接 += d 就行；这边每组一个 hrtimer、
+    # 各自 forward_now 推进。所以平移必须**广播给本拍所有组**（各用一次），
+    # 否则只动一组会把组间相位差改掉 —— 那等于偷偷改了方案。
+    # 各组定时器都 PINNED 到同一个核，回调串行，因此共享两个普通变量即可。
+    if xdom_resync:
+        xdom_shift_decls = (
+            "\n/* 一次性周期伸缩：待应用位移（µs，带符号）与剩余组数。\n"
+            " * 只在消费侧是内核模块时才生成；关闭时这两行与下面的代码都不存在。 */\n"
+            "static int32_t xdom_shift_us;\n"
+            "static int xdom_shift_left;\n")
+        xdom_tick_shift = (
+            "\t{\n"
+            "\t\t/* 组 0 负责向桥要一次请求，并广播给本拍的全部组 */\n"
+            "\t\tif (g->id == 0) {\n"
+            "\t\t\tint32_t _d = ecos_xdom_resync_take();\n"
+            "\n"
+            "\t\t\tif (_d) {\n"
+            "\t\t\t\txdom_shift_us = _d;\n"
+            "\t\t\t\txdom_shift_left = ECOS_GROUPS;\n"
+            "\t\t\t\tpr_info(\"xdom resync shift_us=%d left=%d n=%u\\n\",\n"
+            "\t\t\t\t\t(int)_d, xdom_shift_left,\n"
+            "\t\t\t\t\tecos_xdom_resync_count());\n"
+            "\t\t\t}\n"
+            "\t\t}\n"
+            "\t\t{\n"
+            "\t\t\ts64 _next = (s64)period_us;\n"
+            "\n"
+            "\t\t\tif (xdom_shift_left > 0) {\n"
+            "\t\t\t\t_next += xdom_shift_us;\n"
+            "\t\t\t\txdom_shift_left--;\n"
+            "\t\t\t}\n"
+            "\t\t\tif (_next < 1)\n"
+            "\t\t\t\t_next = 1;   /* 契约层已禁止 |d| >= period，这里只是兜底 */\n"
+            "\t\t\thrtimer_forward_now(&g->timer, ktime_set(0, _next * 1000));\n"
+            "\t\t}\n"
+            "\t}\n")
+    else:
+        xdom_shift_decls = ""
+        xdom_tick_shift = \
+            "\thrtimer_forward_now(&g->timer, ktime_set(0, (s64)period_us * 1000));\n"
+
     host = _LINUX_C % {
         "name": HOST_C, "ngroups": ngroups, "nstages": len(ir.order),
         "period": int(ir.period_us or 0), "rtprio": 99, "evidence": ir.evidence,
@@ -541,6 +587,8 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
                         '\t\t\tpr_info("xdom anchor now_us=%u period_us=%u\\n",\n'
                         '\t\t\t\tecos_xdom_now_us(), period_us);\n'
                         if xdom else ""),
+        "xdom_shift_decls": xdom_shift_decls,
+        "xdom_tick_shift": xdom_tick_shift,
     }
     return {
         HOST_C: host,
