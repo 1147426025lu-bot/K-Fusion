@@ -75,9 +75,38 @@ bash kfusion/frontend/stage_extract/build_on_pi.sh     # clang-16 + llvm-16-dev
 bash kfusion/frontend/stage_extract/run_on_pi.sh <源.c> [入口名]
 ```
 
-## 与下游的衔接（下一步）
+## 与下游的衔接：ast_to_plan（已实现，本机端到端验证）
 
-`stages[]`+`globals[]`+`entry` 是 `ast_to_plan`（下一步）的输入：按阶段顺序生成组的
-phase/order，按 `globals` 生成状态边界与跨阶段依赖，产出 `plan.json`/`dag.json`/`contract`，
-交给现有 `kfusion/backend/synthesis/emit.py`——从而闭合「一份 C → 自动分析 → 生成用户态/
-内核态源码」的 Gate 1 验收链路。
+`ast_to_plan.py` 把上面的 JSON 变成 **dag/contract/plan**，plan 由现有规划器
+`fusion_plan__融合规划.py` 生成并由**独立验证器** `plan_verify` 签署（`verification.ok`），
+本脚本不伪造凭据：
+
+```sh
+python3 kfusion/frontend/stage_extract/ast_to_plan.py extract.json \
+    --period-us 1000 --exec-us '{"stage_pid":5}' --default-exec-us 10 \
+    --out-dir build/gate1            # 产出 dag.json / contract.json / plan.json
+
+python3 kfusion/backend/synthesis/emit.py \
+    --plan build/gate1/plan.json --dag build/gate1/dag.json \
+    --contract build/gate1/contract.json --source src.c \
+    --out-dir build/gate1/gen --target linux-kernel --name demo
+```
+
+已在本机（Python 3.13，无 clang）端到端验证（`test_ast_to_plan.py` 3/3）：
+提取 JSON → ast_to_plan（`verification.ok=true`，1 组）→ emit.py → 生成
+`ecos_fused_body.c`（阶段按 sample→pid→clamp 顺序）、`ecos_fused_linux.c`、`Kbuild`。
+
+诚实边界（v1，写在 dag.meta 里）：
+- 执行时间未给 `--exec-us` 时按 `--default-exec-us` 占位并标记，**需实测替换**；
+- 数据依赖边未恢复（按调用序建 topo_order），Gate 2（TEIR，IR use-def）再补；
+- 效果按 state_read/state_write 保守假设。
+
+## 已完成的链路与验证状态
+
+| 环节 | 状态 | 证据 |
+|------|------|------|
+| stage_extract（C→入口/阶段/全局） | ✅ Pi4 编译+运行通过 | `results/gate1_stage_extract/PI_VALIDATION.md` |
+| ast_to_plan（JSON→dag/contract/plan，经验证器签署） | ✅ 本机端到端 | `test_ast_to_plan.py` |
+| emit（plan→用户态/内核态源码） | ✅ 本机生成通过 | 同上 |
+| 目标构建（生成的 .ko 在 Pi4 构建） | ⏳ 下一步 | —— |
+| 「新 C 不手写 DAG 即出双域源码」整链 | ⏳ 待把 extract→plan→emit→build 串起来 | —— |
