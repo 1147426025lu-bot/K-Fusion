@@ -1559,3 +1559,72 @@ if age > MAX_AGE × PERIOD_US: 拒收                     # 运行时用声明�
   不知道关键路径具体走哪几条边时这是上界，不是精确值。
 - `xdom_loop_multirate_feasible` 只证明"模型认为它自洽"，**没有上板重跑**；
   板上已验证的是 `_ok`（年龄预算维度）。
+
+# 21. 部署可行性进验证器：判据只此一份，两个消费者各取所需
+
+## 21.1 缺口：判据在"门"上，不在"验证"里
+
+§17 把安全相位窗接进了 `contract_validate`（契约层）与 `emit`（生成层），
+但**没接进 `plan_verify`**。而项目铁律是：
+
+> 整份方案的合法性**只认** `ecos/plan_verify.py`。
+
+于是留下一个真实的漏洞：一份方案可以在 `plan_verify` 里"验证通过"，却在该速率组合下
+根本排不出预算内的数据年龄。那样"通过"是假的——它通过的是**另一套**判据。
+
+## 21.2 做法：判据加诊断码，两处共用同一份
+
+`plan_verify` 的错误是 `{code, msg}`（报告、CI、失败归因都按 code 归属），
+而 `contract_validate` 只需要打印文本。所以：
+
+```
+xdom_timeline.check_contract_coded(dag, contract) -> ([(code,msg)], [(code,msg)])
+xdom_timeline.check_contract(dag, contract)       -> ([msg], [msg])      # 仅降维
+```
+
+`check_contract` 只做 `(code,msg) → msg` 的降维，**不另写一套判据**。
+把同一份逻辑复制两遍，正是 P0-1 那类"算得出的与验得出的分叉"的来源。
+
+诊断码：
+
+| code | 含义 |
+|------|------|
+| `XDOM_INFEASIBLE` | 安全相位窗为空或总宽 0 ⇒ 该速率组合在预算内排不出 |
+| `XDOM_BUDGET_MISSING` | 有跨域边但契约没给 `xdom_max_age_ticks`（fail-closed） |
+| `XDOM_BUDGET_INVALID` / `XDOM_DRIFT_INVALID` / `XDOM_JITTER_INVALID` | 字段不是数字 / 负数 |
+| `XDOM_PERIOD_UNKNOWN` | 跨域边的域周期既没 `domain_period_us` 也没 `period_us` |
+| `XDOM_DRIFT_UNDECLARED` / `XDOM_JITTER_UNDECLARED` | 告警：按 0 处理会让窗偏乐观 |
+| `XDOM_NARROW_WINDOW` | 告警：窗宽 < 10% |
+| `XDOM_CHECK_FAILED` | 判据本身跑不起来（fail-closed，绝不放行） |
+
+## 21.3 三条它现在能拦住的（自测固化）
+
+| 情形 | 结果 |
+|------|------|
+| 自洽多速率（预算 2 拍 / 期限 5000） | 规划 + 独立验证都通过 |
+| 同一份方案，契约只把预算改成 1 拍（期限仍 5000，跨域期限**不**红） | **规划阶段即拒**：`[XDOM_INFEASIBLE]` |
+| 把**已经通过验证**的方案拿更严预算复检 | **复检也拒**：`[XDOM_INFEASIBLE]` |
+| 有跨域边但契约没给预算 | **fail-closed**：`[XDOM_BUDGET_MISSING]` |
+| 1:1 跨域环（窗 ≈85%） | 通过（不误杀） |
+
+第三行是关键：它证明判据在**验证器**里，而不是只挡在生成那条路上。
+
+## 21.4 副作用（要记住）
+
+严格入口现在**拒绝**生成"预算内不可行"的部署——这是对的，但它改变了复现流程：
+
+- 以前可以 `fusion_plan --contract xdom_loop_multirate`（预算 1）规划出方案，
+  再让 `emit --allow-infeasible-deployment` 强行生成，用来复现已证明不可行的装置。
+- 现在规划这一步就 `rc=3`。**复现路径改为**：用 1:1 契约 + `--experiment-period-us`
+  生成，或在 `emit` 层直接给定 plan（`--allow-infeasible-deployment` 仍然有效，
+  它管的是"生成层的最终节拍"，与这里的"契约层判据"不是同一层）。
+
+两层判据都没有删：`emit` 的检查用**最终**节拍（含 `--experiment-*` 覆盖），
+`plan_verify` 的检查用**契约**；两者调用同一个 `check_edge`，不构成第二套语义。
+
+## 21.5 边界
+
+- 仓库里**只有一张**跨域 DAG 夹具（`xdom_loop.dag.json`），所以这次改动的影响面很小；
+  但也意味着"多域但非环形"的图没有被覆盖。
+- 仍只覆盖整数倍速率比（`k = ceil(P_p/P_c)` 对上取整，是保守上界）。
+- 判据判的是"这个部署排不排得出满足声明的 age"，**不是**控制稳定（同 §12.6）。

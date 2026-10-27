@@ -353,8 +353,15 @@ def cross_edges(dag):
     return out
 
 
-def check_contract(dag, contract, exec_us=None):
-    """契约级判据：跨域部署必须存在安全相位窗。返回 (errs, warns)。
+def check_contract_coded(dag, contract, exec_us=None):
+    """契约级判据（带诊断码）：跨域部署必须存在安全相位窗。
+
+    返回 (errs, warns)，元素是 `(code, msg)`。
+
+    为什么要有带码版本：`plan_verify` 的错误必须是 `{code, msg}`（报告、CI、
+    以及"哪些判据红过"的统计都按 code 归属）。而 `contract_validate` 只需要
+    打印文本。同一份判据被两处消费，就让它**只此一份**、两处各自取需要的部分，
+    不要各写一份判据——那正是 P0-1 那类"两边语义分叉"的来源。
 
     只在 DAG 真有跨域边时生效；单域方案一个字节都不受影响。
     """
@@ -368,67 +375,86 @@ def check_contract(dag, contract, exec_us=None):
     budget_ticks = ctr.get("xdom_max_age_ticks")
     if budget_ticks is None:
         # fail-closed：有跨域边却没声明年龄预算，"预算"就是无穷大，无从判起。
-        errs.append(
-            "契约：有跨域边但没有 timing_constraints.xdom_max_age_ticks —— "
+        errs.append((
+            "XDOM_BUDGET_MISSING",
+            "跨域：有跨域边但没有 timing_constraints.xdom_max_age_ticks —— "
             "没有预算就无法判断该速率组合是否可部署；"
-            "请显式声明（1 拍=不允许跨一拍的数据，实测该闭环 1–2 拍已发散）")
+            "请显式声明（1 拍=不允许跨一拍的数据，实测该闭环 1–2 拍已发散）"))
         return errs, warns
     try:
         budget_ticks = float(budget_ticks)
     except (TypeError, ValueError):
-        return (["契约：xdom_max_age_ticks 不是数字：%r" % (budget_ticks,)], warns)
+        return ([("XDOM_BUDGET_INVALID",
+                  "跨域：xdom_max_age_ticks 不是数字：%r" % (budget_ticks,))], warns)
 
     drift = ctr.get("xdom_drift_ppm")
     if drift is None:
         drift = 0.0
-        warns.append(
-            "契约没有声明 xdom_drift_ppm，按 0 处理——"
+        warns.append((
+            "XDOM_DRIFT_UNDECLARED",
+            "跨域：没有声明 xdom_drift_ppm，按 0 处理——"
             "实测两宿主节拍相对漂移 ≈14 ppm（PR11-C §16.3），"
-            "声明 0 会让安全相位窗看起来比实际宽")
+            "声明 0 会让安全相位窗看起来比实际宽"))
     try:
         drift = float(drift)
     except (TypeError, ValueError):
-        errs.append("契约：xdom_drift_ppm 不是数字：%r" % (drift,))
+        errs.append(("XDOM_DRIFT_INVALID",
+                     "跨域：xdom_drift_ppm 不是数字：%r" % (drift,)))
         drift = 0.0
 
     # 抖动余量：模型是确定性的，实测残差最大 78 µs ⇒ 判据要把这段扣掉。
     jitter = ctr.get("xdom_jitter_us")
     if jitter is None:
         jitter = 0.0
-        warns.append(
-            "契约没有声明 xdom_jitter_us，按 0 处理——模型不含抖动，"
-            "实测残差最大 78 µs（§16.3/§17.4）；按 0 算会让安全相位窗偏乐观")
+        warns.append((
+            "XDOM_JITTER_UNDECLARED",
+            "跨域：没有声明 xdom_jitter_us，按 0 处理——模型不含抖动，"
+            "实测残差最大 78 µs（§16.3/§17.4）；按 0 算会让安全相位窗偏乐观"))
     try:
         jitter = float(jitter)
         if jitter < 0:
-            errs.append("xdom_jitter_us 不能为负：%r" % (jitter,))
+            errs.append(("XDOM_JITTER_INVALID",
+                         "跨域：xdom_jitter_us 不能为负：%r" % (jitter,)))
             jitter = 0.0
     except (TypeError, ValueError):
-        errs.append("契约：xdom_jitter_us 不是数字：%r" % (jitter,))
+        errs.append(("XDOM_JITTER_INVALID",
+                     "跨域：xdom_jitter_us 不是数字：%r" % (jitter,)))
         jitter = 0.0
 
     for a, b, da, db in edges:
         Pp = per.get(da, base)
         Pc = per.get(db, base)
         if not Pp or not Pc:
-            errs.append("契约：跨域边 %s→%s 的域周期未知（既没 domain_period_us，"
-                        "也没有 period_us）" % (a, b))
+            errs.append(("XDOM_PERIOD_UNKNOWN",
+                         "跨域：跨域边 %s→%s 的域周期未知（既没 domain_period_us，"
+                         "也没有 period_us）" % (a, b)))
             continue
         budget_us = budget_ticks * Pc      # 预算按**消费者**的拍折算
         r = check_edge(Pp, Pc, budget_us, exec_us=exec_us or 0.0, drift_ppm=drift,
                        jitter_us=jitter)
         who = "%s(%s %.0f µs) → %s(%s %.0f µs)" % (a, da, Pp, b, db, Pc)
         if not r["ok"]:
-            errs.append(
+            errs.append((
+                "XDOM_INFEASIBLE",
                 "跨域部署不可行：%s，预算 %.0f 拍 = %.0f µs（扣抖动 %.0f µs），"
                 "漂移 %.0f ppm ⇒ %s。\n"
                 "    这不是「跑起来才知道」的事：事件时间线在生成期就能判定。\n"
                 "    出路只有三条：① 放宽 xdom_max_age_ticks ② 让两域同速率 "
                 "③ 改相位没用在窗为空时（窗宽 0 也是不可用）"
-                % (who, budget_ticks, budget_us, jitter, drift, r["reason"]))
+                % (who, budget_ticks, budget_us, jitter, drift, r["reason"])))
         elif r["frac"] < 0.10:
-            warns.append(
+            warns.append((
+                "XDOM_NARROW_WINDOW",
                 "跨域部署相位窗很窄：%s，预算 %.0f 拍，漂移 %.0f ppm ⇒ %s；"
                 "漂移会让可用相位慢慢走掉，建议同时做周期性重同步"
-                % (who, budget_ticks, drift, r["reason"]))
+                % (who, budget_ticks, drift, r["reason"])))
     return errs, warns
+
+
+def check_contract(dag, contract, exec_us=None):
+    """同上的**纯文本**版本（供 contract_validate 直接打印）。
+
+    判据只此一份：这里只做 `(code, msg) → msg` 的降维，不另写一套逻辑。
+    """
+    e, w = check_contract_coded(dag, contract, exec_us=exec_us)
+    return ([m for _c, m in e], [m for _c, m in w])

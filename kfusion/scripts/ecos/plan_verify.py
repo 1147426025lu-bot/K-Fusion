@@ -66,6 +66,8 @@ class PlanVerifier(object):
         dag = dag or {}
         self.dag = dag
         self.contract = contract or {}
+        # 跨域部署可行性（PR11-D）：None = 不适用（单域），True/False = 判过
+        self.xdom_feasible = None
         self.plat = platform or {}
         self.exec_us = exec_us or {}
         self.budget = budget_us
@@ -350,6 +352,28 @@ class PlanVerifier(object):
                 % (len(self.dom.xdom), self.dom.extra_periods, extra,
                    float(self.dom.hop_period_us or 0)))
 
+        # 4e) 跨域部署可行性（PR11-D）：与 contract_validate / emit **同一份**判据。
+        #     以前这条只判在"门"上（契约层 + 生成层），不在验证器里；而项目铁律是
+        #     "整方案合法性只认 plan_verify"。于是会出现：一个方案在这里"验证通过"，
+        #     却在该速率组合下根本排不出预算内的年龄——那种通过是假的。
+        #     判据仍然只此一份（xdom_timeline.check_contract_coded），这里只负责归类。
+        if self.dom.multi:
+            try:
+                _tl_dir = os.path.dirname(os.path.abspath(__file__))
+                if _tl_dir not in sys.path:
+                    sys.path.insert(0, _tl_dir)
+                import xdom_timeline as _tl
+                _e, _w = _tl.check_contract_coded(self.dag, self.contract)
+                for _c, _m in _e:
+                    add(_c, _m)
+                for _c, _m in _w:
+                    warns.append("[%s] %s" % (_c, _m))
+                self.xdom_feasible = not _e
+            except Exception as _ex:      # 判不了就 fail-closed，绝不静默放行
+                add("XDOM_CHECK_FAILED",
+                    "跨域部署可行性检查无法执行（%s: %s）；拒绝为这份方案背书"
+                    % (type(_ex).__name__, _ex))
+
         rep = self._report(errs, warns, plan)
         if sched:
             # 多域并行 ⇒ 完成时刻取最晚的一行（不是"最后一行"）
@@ -395,6 +419,7 @@ class PlanVerifier(object):
                 "period_us": self.tm.period,
                 "domain_period_us": dict(self.tm.domain_periods),
                 "multirate": bool(self.tm.multirate),
+                "xdom_deployable": self.xdom_feasible,
             },
         }
 

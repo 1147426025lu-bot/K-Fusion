@@ -674,5 +674,69 @@ else
 fi
 
 echo
+echo "=== 35. PR11-D：部署可行性进了**验证器**（不只是一道门）==="
+# 以前这条只判在契约层（contract_validate）和生成层（emit）。项目铁律是
+# "整方案合法性只认 plan_verify"，于是会出现：一份方案在这里验证通过，
+# 却在该速率组合下根本排不出预算内的年龄——那种通过是假的。
+# 这一节钉住三件事：自洽部署过、不合预算的部署被验证器判、缺预算是 fail-closed。
+XCMRF="$HERE/../../contracts/examples/xdom_loop_multirate_feasible.contract.json"
+
+rm -f "$TMP/dep.plan.json"
+expect_rc "自洽的多速率部署：规划 + 独立验证都过" 0 \
+    "$PY" "$PLAN" "$FIX/xdom_loop.dag.json" --platforms "$CAPS" \
+    --platform linux_kernel --release-cost-us 21 --exec-us "$EX5" \
+    --contract "$XCMRF" -o "$TMP/dep.plan.json" --quiet
+
+# 只把预算从 2 拍改成 1 拍。期限仍是 5000（跨域期限**不**红），
+# 所以这条如果被拒，只能是因为"年龄预算排不出"——判据挂对了地方。
+"$PY" - "$XCMRF" "$TMP/dep_b1.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"]["xdom_max_age_ticks"] = 1
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+"$PY" "$PLAN" "$FIX/xdom_loop.dag.json" --platforms "$CAPS" \
+    --platform linux_kernel --release-cost-us 21 --exec-us "$EX5" \
+    --contract "$TMP/dep_b1.contract.json" -o "$TMP/dep_b1.plan.json" \
+    >"$TMP/dep_b1.log" 2>&1
+if [ $? -eq 3 ]; then ok "预算 1 拍 + 2ms/1ms ⇒ 规划阶段即拒绝"; else
+    bad "预算 1 拍 + 2ms/1ms 应在规划阶段被拒"; fi
+expect_grep "拒绝码是 XDOM_INFEASIBLE（不是含糊失败）" "$(cat "$TMP/dep_b1.log")" \
+    "[XDOM_INFEASIBLE]"
+
+# 关键一条：把**已经通过验证**的方案拿去用更严的契约复检，也必须红。
+# 这证明判据在验证器里（而不是只挡在生成那条路上）。
+"$PY" "$PLAN" "$FIX/xdom_loop.dag.json" --platforms "$CAPS" \
+    --platform linux_kernel --release-cost-us 21 --exec-us "$EX5" \
+    --contract "$TMP/dep_b1.contract.json" --verify "$TMP/dep.plan.json" \
+    >"$TMP/dep_reverify.log" 2>&1
+if [ $? -eq 3 ]; then ok "已通过方案在更严预算下复检被拒（判据在验证器里）"; else
+    bad "复检没拦住更严预算下的部署"; fi
+expect_grep "复检也报 XDOM_INFEASIBLE" "$(cat "$TMP/dep_reverify.log")" \
+    "[XDOM_INFEASIBLE]"
+
+# 有跨域边但契约没给预算 ⇒ fail-closed（"预算无穷大"等于没有约束）
+"$PY" - "$XCMRF" "$TMP/dep_nob.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"].pop("xdom_max_age_ticks", None)
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+"$PY" "$PLAN" "$FIX/xdom_loop.dag.json" --platforms "$CAPS" \
+    --platform linux_kernel --release-cost-us 21 --exec-us "$EX5" \
+    --contract "$TMP/dep_nob.contract.json" -o "$TMP/dep_nob.plan.json" \
+    >"$TMP/dep_nob.log" 2>&1
+if [ $? -eq 3 ]; then ok "有跨域边但没预算 ⇒ fail-closed"; else
+    bad "没预算时应 fail-closed"; fi
+expect_grep "拒绝码是 XDOM_BUDGET_MISSING" "$(cat "$TMP/dep_nob.log")" \
+    "[XDOM_BUDGET_MISSING]"
+# 1:1 不能被这次改动带歪（判据对 1:1 本来就是"窗≈85%，通过"）
+expect_rc "1:1 跨域环仍通过（判据不误杀）" 0 \
+    "$PY" "$PLAN" "$FIX/xdom_loop.dag.json" --platforms "$CAPS" \
+    --platform linux_kernel --release-cost-us 21 --exec-us "$EX5" \
+    --contract "$HERE/../../contracts/examples/xdom_loop.contract.json" \
+    -o "$TMP/dep_11.plan.json" --quiet
+
+echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" = 0 ] || exit 1
