@@ -1,0 +1,23 @@
+ok T1.enabled  重同步伺服 age 进 [200, 800] µs，step=480：回代 120 s / 120000 拍零拒收（5 次平移，间隔 ≈ 20.0 s）；带顶 hi=B−J ⇒ +抖动恰为预算，抖动安全。
+ok T1.feasible
+ok T1.stale0  stale=0 over=5 band=131..878
+ok T1.lo
+ok T1.hi
+ok T1.step  step=480.0
+ok T1.master
+ok T2.enabled_false  回代出现 8769 次拒收：该边结构性必超预算（多速率非整数倍或预算仅 2 拍），重同步救不回；需放宽 xdom_max_age_ticks 到 3。
+ok T2.feasible_false  回代出现 8769 次拒收：该边结构性必超预算（多速率非整数倍或预算仅 2 拍），重同步救不回；需放宽 xdom_max_age_ticks 到 3。
+ok T2.recommend  回代出现 8769 次拒收：该边结构性必超预算（多速率非整数倍或预算仅 2 拍），重同步救不回；需放宽 xdom_max_age_ticks 到 3。
+ok T2b.discrepancy_noted  回代出现 2 次拒收：该边结构性必超预算（多速率非整数倍或预算仅 2 拍），重同步救不回；需放宽 xdom_max_age_ticks 到 3。
+  口径差异：不开重同步时保守模型仅 1 次临界拒收（确定性年龄峰≈预算的边界效应），非结构性不可行；文档称板上 stale=0（运行时按声明预算拒收、不扣抖动）。若板上实测确认 stale=0，该边直接按本预算部署即可；否则升 3 拍。
+ok T2b.infeasible
+ok T3.feasible_false  回代出现 66097 次拒收：该边结构性必超预算（多速率非整数倍或预算仅 1 拍），重同步救不回；需放宽 xdom_max_age_ticks 到 2。
+ok T3.recommend  回代出现 66097 次拒收：该边结构性必超预算（多速率非整数倍或预算仅 1 拍），重同步救不回；需放宽 xdom_max_age_ticks 到 2。
+ok T4.enabled_false  相对漂移 ≈ 0（drift=0 / cons_drift=0 ppm），时间网格静止，相位即可行；重同步无需开启。
+ok T4.feasible
+ok T5.any_enabled
+ok T5.feasible
+ok T5.merged_lo
+ok T5.merged_step
+ok T5.independent_stale0  stale=0 over=5
+PR12-A RESYNC SYNTH TESTS PASSED
