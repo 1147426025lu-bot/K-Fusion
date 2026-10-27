@@ -368,17 +368,21 @@ class TemporalModel(object):
         没给就用名义相位。死区是"生产者写完到消费者读到"的真实间隔，
         被积压推后的组只会让它更长，用名义相位会低估。
 
-        **多速率（PR11-D）**：`period` 取**消费者自己的**域周期 P_c，并把 z⁻¹ 那一拍
-        换成速率比 `k = ceil(P_p / P_c)`：
+        **多速率（PR11-D）**：`period` 取**消费者自己的**域周期 P_c，跨域那一拍取
+        **生产者自己的**周期 P_p：
 
-            dead_us = (k + xd) * P_c + t_cons - t_prod
+            dead_us = P_c + xd * P_p + t_cons - t_prod
 
-        为什么：
-          · 消费者只能在**自己的**周期边界上读取，所以"一拍"是 P_c，不是生产者的。
-          · 生产比消费慢（P_p > P_c）时，消费者有几拍拿到的是**同一个旧值**
-            （板上实测 2 ms/1 ms：age 在 {a, a+1000} 两值间交替，中位约 1.3 ms、
-            最大到 1.87 ms），所以最坏情形要按 k 拍算。
-          · k=1 时退化成 PR10-B 的 (1+xd)·P，1:1 夹具逐位不变。
+        为什么是这两项：
+          · 消费者只能在**自己的**周期边界上读取，所以 z⁻¹ 那一拍是 P_c；
+          · 跨域时这条数据最多已经旧了一个**生产**周期（生产者每 P_p 才更新一次），
+            所以跨域那部分是 P_p，不是"再一个 P_c"。
+          · 1:1（P_p = P_c）时退化成 PR10-B 的 (1+xd)·P，逐位不变。
+
+        ⚠ 以前这里写的是 `(k + xd) * P_c`，`k = ceil(P_p/P_c)`。它只在**整数倍**速率比下
+        正确；非整数比会明显高估（1200/1000：k·P_c = 2000，而实测最大年龄 1200），
+        于是反馈上限被假性突破、方案被误拒。用 `xdom_timeline` 扫 ρ 实测的最大年龄
+        总是 ≤ P_p（见 §22.1），所以 `P_c + xd·P_p` 既是上界、也不虚高。
         """
         period = float(self.period or 0.0)
         rows = list(sched or [])
@@ -412,7 +416,9 @@ class TemporalModel(object):
                 pc = self.period_of_node(b)
                 k = self.rate_ratio(pp, pc)
                 p_use = pc if pc else period
-                dead = ((k + xd) * p_use + t_cons - t_prod) if p_use else None
+                # 精确上界：消费者一拍 + （跨域时）生产者一拍
+                dead = ((p_use + xd * (pp or p_use)) + t_cons - t_prod) \
+                    if p_use else None
                 # 跨域那部分单独拆出来，便于报"哪来的"：一个周期边界 vs 一拍
                 out.append({
                     "from": a, "to": b,
@@ -421,9 +427,11 @@ class TemporalModel(object):
                     "cross_domain": cross,
                     "dead_us": round(dead, 3) if dead is not None else None,
                     "components": {
-                        "z1_periods": k,
+                        # 拍数只是给人读的：z1 用消费者周期折算，跨域项用生产者周期
+                        "z1_periods": 1,
                         "cross_domain_periods": xd,
                         "period_us": p_use,
+                        "cross_period_us": (xd * (pp or p_use)),
                         "producer_period_us": pp,
                         "consumer_period_us": pc,
                         "rate_ratio": k,
@@ -485,39 +493,26 @@ class TemporalModel(object):
                         % (tag, f["dead_us"], float(cap))))
                 else:
                     comp = f["components"]
-                    kk = int(comp.get("rate_ratio") or 1)
                     errs.append((
                         "FEEDBACK_DEADZONE",
-                        "控制：反馈边 %s 跨组（%s → %s），死区 = %d 拍"
-                        "（z⁻¹ %d 拍%s ＋ 跨域 %d 拍）× %.0f µs"
-                        "＝ %.0f µs，超过上限 %.0f µs；"
+                        "控制：反馈边 %s 跨组（%s → %s），死区 = %.0f µs"
+                        "（消费者一拍 %.0f µs ＋ 跨域生产一拍 %.0f µs"
+                        " ＋ 相位差 %.0f µs），超过上限 %.0f µs；"
                         "跨域拆分会把这个反馈环的延迟加长，回路可能因此失稳"
-                        % (tag, f["from_group"], f["to_group"],
-                           kk + comp["cross_domain_periods"], kk,
-                           ("（生产周期 %.0f µs 比消费 %.0f µs 慢，按速率比取整）"
-                            % (comp["producer_period_us"], comp["consumer_period_us"]))
-                           if kk > 1 else "",
-                           comp["cross_domain_periods"], comp["period_us"],
-                           f["dead_us"], float(cap))))
+                        % (tag, f["from_group"], f["to_group"], f["dead_us"],
+                           comp["period_us"], comp["cross_period_us"],
+                           comp["phase_gap_us"], float(cap))))
             else:
                 comp = f["components"]
-                kk = int(comp.get("rate_ratio") or 1)
                 detail = ""
                 if f["cross_domain"]:
-                    detail = "，跨域 +1 拍"
-                if kk > 1:
-                    detail += "，按速率比 %d 拍（生产 %.0f µs / 消费 %.0f µs）" % (
-                        kk, comp["producer_period_us"], comp["consumer_period_us"])
+                    detail = "，跨域 +%.0f µs（生产者一拍）" % comp["cross_period_us"]
+                if (comp.get("rate_ratio") or 1) > 1:
+                    detail += "，生产 %.0f µs / 消费 %.0f µs（多速率）" % (
+                        comp["producer_period_us"], comp["consumer_period_us"])
                 warns.append(
                     "控制：反馈边 %s 死区 %.0f µs%s（上限 %.0f µs）"
                     % (tag, f["dead_us"] or 0.0, detail, float(cap)))
-                if kk > 1:
-                    # 多速率说清楚：这条边的"一拍"已经不再是全局 period。
-                    warns.append(
-                        "控制：反馈边 %s 是**多速率**边（生产 %.0f µs → 消费 %.0f µs），"
-                        "死区按消费者的 %d 拍算 = %.0f µs；同一份方案用单一周期会算错"
-                        % (tag, comp["producer_period_us"], comp["consumer_period_us"],
-                           kk, f["dead_us"] or 0.0))
         return errs, warns
 
     # -------- 期限 --------

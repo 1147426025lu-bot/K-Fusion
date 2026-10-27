@@ -419,8 +419,9 @@ expect_rc "宽契约（上限 2500）：跨域方案仍合法" 0 \
     "$PY" "$PLAN" "$XDAG" --platforms "$CAPS" --platform linux_kernel \
     --release-cost-us 21 --exec-us "$EX5" --contract "$XCON" \
     -o "$TMP/xdom_loose.plan.json"
-expect_grep "死区按 2 拍算，并指出跨域 +1 拍" "$(cat "$TMP/out.txt")" \
-    "1400" "跨域 +1 拍" "上限 2500"
+# 1:1 跨域：消费者一拍 1000 ＋ 跨域生产一拍 1000 ＋ 相位差(−600) = 1400 µs
+expect_grep "死区 1400 µs，并指出跨域那一拍来自**生产者周期**" "$(cat "$TMP/out.txt")" \
+    "1400" "跨域 +1000 µs（生产者一拍）" "上限 2500"
 
 # 2) 只把反馈上限收紧到 1000 µs（期限仍是 2500）⇒ 必须拒绝
 expect_rc "严契约（上限 1000）：跨域方案被拒" 3 \
@@ -429,8 +430,8 @@ expect_rc "严契约（上限 1000）：跨域方案被拒" 3 \
     -o "$TMP/xdom_strict.plan.json"
 expect_grep "拒绝码是 FEEDBACK_DEADZONE" "$(cat "$TMP/out.txt")" \
     "FEEDBACK_DEADZONE"
-expect_grep "拒绝理由把 2 拍拆开说清（z⁻¹ 1 拍 ＋ 跨域 1 拍）" \
-    "$(cat "$TMP/out.txt")" "z⁻¹ 1 拍" "跨域 1 拍" "超过上限 1000"
+expect_grep "拒绝理由把死区拆开说清（消费者一拍 ＋ 跨域生产一拍）" \
+    "$(cat "$TMP/out.txt")" "消费者一拍 1000 µs" "跨域生产一拍 1000 µs" "超过上限 1000"
 # 放宽**期限**不能绕过**反馈**约束：上面这条契约期限仍是 2500 µs，
 # 拒绝理由里不该出现期限——它是被反馈死区挡住的，与期限、域能力无关。
 if printf '%s' "$(cat "$TMP/out.txt")" | grep -qF "期限"; then
@@ -631,27 +632,62 @@ def chk(name, cond, extra=""):
     print(("  PASS " if cond else "  FAIL ") + name + (("  " + extra) if extra else ""))
     ok = ok and cond
 
-def dead(path):
-    c = json.load(io.open(path, encoding="utf-8"))
-    tm = TM.TemporalModel(dag, contract=c, exec_us=EX, release_cost_us=21)
-    rows = tm.schedule(GR)
-    f = tm.feedback_delays(GR, sched=rows)[0]
-    return tm, f
+import copy, domain_model as DM
 
-tm1, f1 = dead(sys.argv[3])
-chk("1:1 死区仍是 400 µs（逐位不变，容差 0.5 µs）", abs(f1["dead_us"] - 400.0) < 0.5,
-    str(f1["dead_us"]))
+def dead(ctr):
+    """按**真实调用路径**算：验证器/规划器都传 dom，跨域那一拍才算得出来。"""
+    tm = TM.TemporalModel(dag, contract=ctr, exec_us=EX, release_cost_us=21)
+    dom = DM.load(dag, period_us=tm.period,
+                  domain_period_us=tm.domain_periods)
+    rows = tm.schedule(GR)
+    return tm, dom, tm.feedback_delays(GR, dom=dom, sched=rows)[0]
+
+C11 = json.load(io.open(sys.argv[3], encoding="utf-8"))
+CMR = json.load(io.open(sys.argv[4], encoding="utf-8"))
+tm1, dom1, f1 = dead(C11)
+# 1:1 跨域：消费者一拍 1000 ＋ 生产者一拍 1000 ＋ 相位差(−600) = 1400 µs。
+# 与 PR10-B 的 (1+xd)·P 逐位一致——这是"改动没动 1:1"的凭据。
+chk("1:1 跨域死区仍是 1400 µs（等价 PR10-B 的 2P − 600）",
+    abs(f1["dead_us"] - 1400.0) < 0.5, str(f1["dead_us"]))
+# 同域（不跨域）必须退化成"一拍"：400 µs = 1000 − 600
+f1_same = TM.TemporalModel(dag, contract=C11, exec_us=EX,
+                           release_cost_us=21).feedback_delays(
+    GR, dom=None, sched=tm1.schedule(GR))[0]
+chk("同域反馈边退化成消费者一拍（400 µs），不带跨域项",
+    abs(f1_same["dead_us"] - 400.0) < 0.5, str(f1_same["dead_us"]))
 chk("1:1 不声明各域周期 ⇒ multirate=False", tm1.multirate is False)
 
-tm2, f2 = dead(sys.argv[4])
+tm2, dom2, f2 = dead(CMR)
 c2 = f2["components"]
-chk("多速率：死区按消费者周期×速率比 = 1400 µs",
-    abs(f2["dead_us"] - 1400.0) < 0.5, str(f2["dead_us"]))
-chk("多速率：速率比 k=2（生产 2000 / 消费 1000）",
-    c2["rate_ratio"] == 2 and c2["producer_period_us"] == 2000.0
-    and c2["consumer_period_us"] == 1000.0,
-    "k=%s Pp=%s Pc=%s" % (c2["rate_ratio"], c2["producer_period_us"],
-                          c2["consumer_period_us"]))
+# 死区 = 消费者一拍 1000 + 跨域生产一拍 2000 + 相位差(−600) = 2400 µs
+chk("多速率：死区 = 消费者一拍 + 跨域生产一拍 = 2400 µs",
+    abs(f2["dead_us"] - 2400.0) < 0.5, str(f2["dead_us"]))
+chk("多速率：跨域项用的是**生产者**周期 2000 µs",
+    abs(c2["cross_period_us"] - 2000.0) < 1e-6
+    and abs(c2["period_us"] - 1000.0) < 1e-6,
+    "cross=%s Pc=%s" % (c2["cross_period_us"], c2["period_us"]))
+chk("多速率：rate_ratio 仍按 ceil 报（2 拍，只作人类可读）",
+    c2["rate_ratio"] == 2, str(c2["rate_ratio"]))
+
+# 非整数倍速率比：ceil 会**高估**死区。1.5:1 的真实最大年龄是 1500（=P_p），
+# 而 ceil 给 2·P_c = 2000 ⇒ 死区 2400 而不是 1900，会假性突破上限、误拒方案。
+C15 = copy.deepcopy(CMR)
+C15["timing_constraints"]["domain_period_us"]["root"] = 1500
+tm3, dom3, f3 = dead(C15)
+chk("非整数比 1.5:1：死区 = 1000 + 1500 − 600 = 1900 µs（不再被 ceil 抬到 2400）",
+    abs(f3["dead_us"] - 1900.0) < 0.5, str(f3["dead_us"]))
+chk("非整数比：确实比 ceil 旧公式（2400）更紧", f3["dead_us"] < 2399.5,
+    str(f3["dead_us"]))
+# 上界性：死区（扣掉相位差）必须 ≥ 模型扫出来的最大年龄
+import xdom_timeline as TL
+worst = 0
+for rho in (0, 250, 500, 750):
+    b = TL.age_band(TL.Domain("p", 1500), TL.Domain("c", 1000, phase_us=rho),
+                    n_cons=400)
+    worst = max(worst, b["max_us"] or 0)
+chk("1.5:1 的死区确实覆盖模型实测的最大年龄",
+    (f3["dead_us"] - c2["phase_gap_us"]) >= worst - 1.0,
+    "dead-gap=%.0f 实测 max=%.0f" % (f3["dead_us"] - c2["phase_gap_us"], worst))
 chk("多速率：period_of 按域取（root=2000 / nuttx=1000）",
     tm2.period_of("root") == 2000.0 and tm2.period_of("nuttx") == 1000.0)
 
@@ -659,10 +695,9 @@ chk("多速率：period_of 按域取（root=2000 / nuttx=1000）",
 # 用 1 ms 判会误杀，用 root 的 2 ms 判应通过。
 import copy
 EX2 = dict(EX); EX2["stage_clamp"] = 1500.0
-tm3 = TM.TemporalModel(dag, contract=json.load(io.open(sys.argv[4], encoding="utf-8")),
-                       exec_us=EX2, release_cost_us=21)
+tm4 = TM.TemporalModel(dag, contract=CMR, exec_us=EX2, release_cost_us=21)
 chk("组容量按域周期：2 ms 域里 1.5 ms 的段不再误杀",
-    tm3.period_of(tm3.group_domain(["stage_clamp", "stage_plant"])) == 2000.0)
+    tm4.period_of(tm4.group_domain(["stage_clamp", "stage_plant"])) == 2000.0)
 
 sys.exit(0 if ok else 1)
 PYEOF
@@ -736,6 +771,83 @@ expect_rc "1:1 跨域环仍通过（判据不误杀）" 0 \
     --platform linux_kernel --release-cost-us 21 --exec-us "$EX5" \
     --contract "$HERE/../../contracts/examples/xdom_loop.contract.json" \
     -o "$TMP/dep_11.plan.json" --quiet
+
+echo
+echo "=== 36. PR11-D：非整数倍速率比（1.5:1 / 1.2:1）==="
+# 之前死区用 (k + xd)·P_c，k=ceil(P_p/P_c)。这只在**整数倍**比下正确：
+# 非整数比时 k 会跳一档，死区被凭空放大，反馈上限被假性突破 ⇒ 方案被误拒。
+# 模型（xdom_timeline 扫 ρ）告诉我们真实上界是 P_p，所以死区取 P_c + xd·P_p。
+"$PY" - "$HERE/../ecos" <<'PYEOF' >"$TMP/mr_int.txt" 2>&1
+import sys
+sys.path.insert(0, sys.argv[1])
+import xdom_timeline as T
+
+ok = True
+def chk(name, cond, extra=""):
+    global ok
+    print(("  PASS " if cond else "  FAIL ") + name + (("  " + extra) if extra else ""))
+    ok = ok and cond
+
+# 1) 上界性：扫 ρ 得到的最大年龄 ≤ P_p（这是把死区写成 P_c + xd·P_p 的依据）
+worst = {}
+for Pp, Pc in ((1500, 1000), (1200, 1000), (2500, 1000), (1000, 1500)):
+    m = 0
+    for rho in range(0, Pp * Pc // T._gcd(Pp, Pc), max(1, Pc // 4)):
+        b = T.age_band(T.Domain("p", Pp), T.Domain("c", Pc, phase_us=rho), n_cons=400)
+        m = max(m, b["max_us"] or 0)
+    worst[(Pp, Pc)] = m
+chk("最大年龄 ≤ P_p（1.5:1 / 1.2:1 / 2.5:1 / 1:1.5 都成立，采样粒度内）",
+    all(worst[k] <= k[0] + 0.5 * k[1] for k in worst),
+    ", ".join("%d/%d→%.0f" % (a, b, v) for (a, b), v in worst.items()))
+
+# 2) 可行性判据对非整数比也是"排得出/排不出"，不是一刀切
+r1 = T.check_edge(1500, 1000, 1000, drift_ppm=15, jitter_us=150)
+r2 = T.check_edge(1500, 1000, 2000, drift_ppm=15, jitter_us=150)
+chk("1.5:1 + 预算 1 拍 ⇒ 不可行（真实最大年龄 1500 > 850）", not r1["ok"], r1["reason"][:40])
+chk("1.5:1 + 预算 2 拍 ⇒ 可行且窗 100%", r2["ok"] and r2["frac"] > 0.99,
+    "%.0f%%" % (100 * r2["frac"]))
+
+# 3) "窗很窄"这一档要走告警而不是拒绝：1.2:1 + 预算 1.2 拍
+r3 = T.check_edge(1200, 1000, 1200, drift_ppm=15, jitter_us=150)
+chk("1.2:1 + 预算 1.2 拍 ⇒ 可行但窗很窄（16%，应告警不应拒）",
+    r3["ok"] and 0.05 < r3["frac"] < 0.30, "%.0f%%" % (100 * r3["frac"]))
+
+# 4) 死区上界必须覆盖实测最大年龄（扣掉相位差）
+for Pp, Pc in ((1500, 1000), (1200, 1000)):
+    dead_bound = Pc + Pp          # 跨域：消费者一拍 + 生产者一拍
+    chk("死区上界 %d+%d=%d 覆盖实测最大年龄 %.0f" % (Pc, Pp, dead_bound, worst[(Pp, Pc)]),
+        dead_bound >= worst[(Pp, Pc)] - 0.5)
+sys.exit(0 if ok else 1)
+PYEOF
+if [ $? -eq 0 ]; then
+    ok "非整数比：上界性 + 可行性判据 7 组断言成立"
+else
+    bad "非整数比：有断言未通过"
+    sed -n '1,10p' "$TMP/mr_int.txt" | sed 's/^/      /'
+fi
+
+# 契约层也要真的动：1.5:1 + 预算 1 拍 ⇒ 拒；预算 2 拍 ⇒ 过
+"$PY" - "$HERE/../../contracts/examples/xdom_loop_multirate_feasible.contract.json" \
+    "$TMP/mr15_b1.contract.json" "$TMP/mr15_b2.contract.json" <<'PYEOF'
+import io, json, sys
+src, b1, b2 = sys.argv[1:4]
+d = json.load(io.open(src, encoding="utf-8"))
+d["timing_constraints"]["domain_period_us"]["root"] = 1500
+import copy
+a = copy.deepcopy(d); a["timing_constraints"]["xdom_max_age_ticks"] = 1
+b = copy.deepcopy(d); b["timing_constraints"]["xdom_max_age_ticks"] = 2
+for obj, p in ((a, b1), (b, b2)):
+    json.dump(obj, io.open(p, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "契约层：1.5:1 + 预算 1 拍 ⇒ 拒（真实最大年龄 1500 > 1000）" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" "$TMP/mr15_b1.contract.json"
+expect_rc "契约层：1.5:1 + 预算 2 拍 ⇒ 过" 0 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" "$TMP/mr15_b2.contract.json"
+# 反馈死区也要跟着非整数比走：1900 µs（= 1000 + 1500 − 600）≤ 上限 2500
+expect_rc "1.5:1 规划 + 验证都过（死区 1900 ≤ 2500）" 0 \
+    "$PY" "$PLAN" "$FIX/xdom_loop.dag.json" --platforms "$CAPS" \
+    --platform linux_kernel --release-cost-us 21 --exec-us "$EX5" \
+    --contract "$TMP/mr15_b2.contract.json" -o "$TMP/mr15.plan.json" --quiet
 
 echo
 echo "通过 $PASS / 失败 $FAIL"
