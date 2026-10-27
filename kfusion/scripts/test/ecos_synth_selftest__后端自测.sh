@@ -381,8 +381,14 @@ expect_grep "桥发 µs 时间戳（不是周期索引）" "$TMP/xe_root/ecos_xd
     "xdom_now_us" "xipc_counter() * 1000000ull" "xipc_pub_stamped" "s.ts_us"
 expect_absent "桥不再按周期索引发/收" "$TMP/xe_root/ecos_xdom.c" \
     "xipc_pub_ticked" "xdom_period_ticks"
-expect_grep "证据同时记 µs 与拍（多速率下拍要除以本域周期）" "$TMP/xe_root/ecos_xdom.c" \
-    "e->age_us = age" "age / (uint32_t)ECOS_XDOM_PERIOD_US" "max_age = e->age"
+# 拍数向上取整（1797 µs 记 2 拍，不是 1 拍），且判据用 µs 而不是整数拍
+expect_grep "证据同时记 µs 与拍（拍数向上取整）" "$TMP/xe_root/ecos_xdom.c" \
+    "e->age_us = age" "(age + (uint32_t)ECOS_XDOM_PERIOD_US - 1u)" "max_age = e->age"
+# 预算判据必须与编译期同口径（µs）：否则 1797 µs 在预算 1 拍时会被"整数除法"放行
+expect_grep "运行时预算判据用 µs（与编译期同口径）" "$TMP/xe_root/ecos_xdom.c" \
+    "#define ECOS_XDOM_MAX_AGE_US" "age > ECOS_XDOM_MAX_AGE_US"
+expect_absent "不再用整数拍比较做拒收" "$TMP/xe_root/ecos_xdom.c" \
+    "e->age > (uint32_t)ECOS_XDOM_MAX_AGE"
 expect_grep "桥记录逐拍证据并打印" "$TMP/xe_root/ecos_xdom.c" \
     "ecos_xdom_evidence" "ecos_xdom_report_evidence" "e->age"
 expect_absent "桥不再依赖宿主喂的 ecos_xdom_cycle 全局" "$TMP/xe_root/ecos_xdom.c" \

@@ -95,7 +95,15 @@ _C = """/* ecos_xdom.c — 跨域数据桥（由 ECoS 拆分器生成，勿手�
 #define ECOS_XDOM_OWNER %(owner)d
 #define ECOS_XDOM_NCHAN %(nchan)d
 #define ECOS_XDOM_PERIOD_US %(period_us)d
-#define ECOS_XDOM_MAX_AGE %(max_age)d   /* 0 = 不判过期；>0 = 超过即拒绝该版本 */
+#define ECOS_XDOM_MAX_AGE %(max_age)d   /* 0 = 不判过期；>0 = 超过即拒绝该版本（单位：拍） */
+/* 判据用 **µs**，不用"拍数的整数除法"。
+ * 踩过的坑：原来写 `age_us / PERIOD_US > MAX_AGE`（向下取整），于是 1797 µs 被算成
+ * "1 拍"、在预算 1 拍时**放行**——而编译期的安全相位窗判据用的是 `age_us <= 预算×P`
+ * （严格 µs），同一份契约两边得出相反结论。现在两边同口径：
+ *   · 编译期：max age_us <= xdom_max_age_ticks × P_c
+ *   · 运行时：age_us <= MAX_AGE × PERIOD_US，超了就拒收
+ * 拍数 e->age 只作日志（向上取整，避免"1797 µs 显示成 1 拍"这种误导）。 */
+#define ECOS_XDOM_MAX_AGE_US ((uint32_t)ECOS_XDOM_MAX_AGE * (uint32_t)ECOS_XDOM_PERIOD_US)
 /* A/B 注入延迟用：消费者取"LAG 拍前"的值。LAG=0 = 取最新（等价原行为）；
  * LAG=N = 取 N 拍前的值（人为注入跨域延迟，做受控 A/B：同一代码只切这一项）。 */
 #define ECOS_XDOM_LAG %(lag)d
@@ -309,8 +317,11 @@ void ecos_xdom_sub_tick(unsigned channel, int32_t *dst, uint32_t *out_tick)
 		e->prod   = tick;
 		e->cons   = cons;
 		e->age_us = age;
+		/* 拍数向上取整：1797 µs / 1000 = 1.797 ⇒ 记 2 拍（"快两拍了"），
+		 * 这样日志里的拍数不会把"接近 2 拍"说成"1 拍"。判据本身用 µs（见下）。 */
 		e->age    = (ECOS_XDOM_PERIOD_US != 0)
-			    ? age / (uint32_t)ECOS_XDOM_PERIOD_US : 0;
+			    ? (age + (uint32_t)ECOS_XDOM_PERIOD_US - 1u)
+			      / (uint32_t)ECOS_XDOM_PERIOD_US : 0;
 		e->n++;
 		/* min/max 都按 **µs** 记：多速率下 age 会在几个值之间交替，
 		 * 只打"最近一次"会撞上奇偶混叠（踩过，见 §15 撤回）。
@@ -320,14 +331,15 @@ void ecos_xdom_sub_tick(unsigned channel, int32_t *dst, uint32_t *out_tick)
 		if (age > e->max_ag_us)
 			e->max_ag_us = age;
 		if (e->age > e->max_age)
-			e->max_age = e->age;
+			e->max_age = e->age;   /* 拍（向上取整） */
 
 		if (out_tick)
 			*out_tick = tick;   /* 返回发布时刻（µs）；名字沿用 out_tick 兼容旧调用 */
 
 		/* 过期版本强制拒绝：age 超上限就不更新 dst（阶段沿用上一次/默认值），
-		 * 但**仍然计数并保留证据**——拒绝要看得见，不能静默。默认 MAX_AGE=0 不启用。 */
-		if (ECOS_XDOM_MAX_AGE != 0 && e->age > (uint32_t)ECOS_XDOM_MAX_AGE) {
+		 * 但**仍然计数并保留证据**——拒绝要看得见，不能静默。默认 MAX_AGE=0 不启用。
+		 * 比较的是 **µs**（与编译期判据同口径），不是整数拍——见上面的注释。 */
+		if (ECOS_XDOM_MAX_AGE != 0 && age > ECOS_XDOM_MAX_AGE_US) {
 			e->n_stale++;
 			return;
 		}
