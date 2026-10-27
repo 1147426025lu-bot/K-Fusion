@@ -360,6 +360,10 @@ expect_rc "root 端生成（带桥）" 0 \
 expect_grep "root Kbuild 把桥链进去" "$TMP/xe_root/Kbuild" "ecos_xdom.o"
 expect_grep "root 宿主打首拍周期锚点" "$TMP/xe_root/ecos_fused_linux.c" \
     "xdom anchor now_us="
+# root 侧以前**没有任何** ch0 证据（只有 nuttx 会调 report_evidence），
+# 于是"谁消费我"这个方向的年龄在板上看不到（§18.4 的边界）。
+expect_grep "root 宿主按秒打跨域证据" "$TMP/xe_root/ecos_fused_linux.c" \
+    "ecos_xdom_report_evidence()" "periods % 1000UL == 0UL"
 expect_grep "root 侧方向相反（收 g_act 发 g_plant）" \
     "$TMP/xe_root/ecos_fused_body.c" \
     "ecos_xdom_sub(0, &g_act);" "ecos_xdom_pub(1, g_plant);"
@@ -553,6 +557,29 @@ PYEOF
 expect_rc "有跨域边但没预算 → fail-closed" 3 \
     "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
     "$TMP/nobudget.contract.json"
+# 抖动余量：模型不含抖动，判据要用「预算 − 抖动」再算窗；抖动比预算还大 ⇒ 契约不成立
+"$PY" - "$XCON" "$TMP/jitter_too_big.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"]["xdom_jitter_us"] = 1200   # > 1000 µs 预算
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "抖动大于预算 → 契约本身不成立" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/jitter_too_big.contract.json"
+"$PY" - "$XCON" "$TMP/jitter_ctrl.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"].pop("xdom_jitter_us", None)
+d.setdefault("control", {})["xdom_jitter_us"] = 100
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "抖动写在 control 下被拒" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/jitter_ctrl.contract.json"
+# 声明抖动后 1:1 + 预算 1 仍要通过（900 µs 有效预算下窗 ≈90%）
+expect_rc "声明抖动后 1:1 预算1 仍通过" 0 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" "$XCON"
 
 echo
 echo "通过 $PASS / 失败 $FAIL"

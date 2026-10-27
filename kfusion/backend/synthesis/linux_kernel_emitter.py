@@ -173,7 +173,7 @@ static void ecos_run_body(int id)
 	}
 	if (id == 0)
 		periods++;
-%(digest_update)s
+%(digest_update)s%(xdom_report)s
 }
 
 struct ecos_start_arg {
@@ -526,6 +526,14 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
                       "\tecos_xdom_init();\n" if xdom else ""),
         "xdom_include": ('#include "ecos_xdom.h"\t/* 跨域数据桥 */\n'
                          if xdom else ""),
+        # root 侧的证据：以前一个都没有（只有 nuttx 侧会调 report_evidence），
+        # 于是"谁消费我"这个方向的年龄在串口上根本看不到（§18.4 的边界）。
+        # 这里按秒打一次，走 pr_info → dmesg。
+        # 注意：这是**代入值**，不是模板本体，所以取模写单个 %（写 %% 会原样漏进 C）；
+        # 前面要补一个换行——digest_update 结尾没有换行，否则会粘在同一行上。
+        "xdom_report": ('\n\tif (id == 0 && periods % 1000UL == 0UL)\n'
+                        '\t\tecos_xdom_report_evidence();'
+                        if xdom else ""),
         # 周期锚点：**首拍真正跑起来的时刻**（µs）。不是 init 时刻——
         # init 到首拍之间还隔着建线程、起 hrtimer，差几百 µs 到几毫秒。
         # 两域的相对偏移 ρ 只能用它算（PR10-F 已经栽过"各自 init 起算"一次）。

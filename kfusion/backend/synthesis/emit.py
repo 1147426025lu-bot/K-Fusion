@@ -298,6 +298,7 @@ def main():
                     pass
             _base = float((dag.get("phase") or {}).get("period_us") or 0) or None
             _drift = float(_ctr.get("xdom_drift_ppm") or 0)
+            _jitter = float(_ctr.get("xdom_jitter_us") or 0)
             _p_self = float(ir.period_us or 0)
             _bad, _narrow = [], []
             # 两个方向都要看：我消费谁（我是消费者）+ 谁消费我（我是生产者）。
@@ -317,13 +318,14 @@ def main():
                           "无法判定这个部署排不排得下安全相位", file=sys.stderr)
                     continue
                 _r = _tl.check_edge(_pp, _pc, float(xdom_max_age) * _pc,
-                                    drift_ppm=_drift)
+                                    drift_ppm=_drift, jitter_us=_jitter)
                 _who = ("%s(%.0f µs) → 本域(%.0f µs)" % (_peer, _pp, _pc)
                         if _dir == "from" else
                         "本域(%.0f µs) → %s(%.0f µs)" % (_pp, _peer, _pc))
                 if not _r["ok"]:
-                    _bad.append("%s，预算 %d 拍，漂移 %.0f ppm ⇒ %s"
-                                % (_who, int(xdom_max_age), _drift, _r["reason"]))
+                    _bad.append("%s，预算 %d 拍，抖动 %.0f µs，漂移 %.0f ppm ⇒ %s"
+                                % (_who, int(xdom_max_age), _jitter, _drift,
+                                   _r["reason"]))
                 elif _r["frac"] < 0.10:
                     _narrow.append("%s ⇒ %s" % (_who, _r["reason"]))
             for _n in _narrow:

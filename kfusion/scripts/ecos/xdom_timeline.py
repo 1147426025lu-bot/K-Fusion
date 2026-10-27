@@ -267,27 +267,42 @@ _WIN_CACHE = {}
 
 
 def check_edge(prod_period_us, cons_period_us, budget_us,
-               exec_us=0.0, drift_ppm=0.0, steps=360, n_cons=1200,
-               pick="latest"):
+               exec_us=0.0, drift_ppm=0.0, jitter_us=0.0, steps=360,
+               n_cons=1200, pick="latest"):
     """单条跨域边的可行性。返回 dict（含 ok / reason / 窗宽占比）。
 
     判据（任一成立即判不可行）：
       · safe 为空集        → 没有任何相位可用
       · safe_width == 0    → 只有孤立点（测度零），任何抖动都会破坏
-    窗宽占比 < 10% 不算不可行，但要告警：这种部署对漂移几乎没有余量。
+      · 预算 ≤ 抖动余量    → 预算比不确定性还小，判不了
+
+    `jitter_us` 是**实测残差的上界**（模型没建模抖动）：判据要的是
+    「预算 − 抖动」这段还能不能排出安全相位。板上实测残差最大 78 µs
+    （§16.3/§17.4），声明取 100 µs。
     """
+    budget_eff = float(budget_us) - float(jitter_us)
     key = (round(float(prod_period_us), 3), round(float(cons_period_us), 3),
            round(float(budget_us), 3), round(float(exec_us), 3),
-           round(float(drift_ppm), 3), int(steps), int(n_cons), pick)
+           round(float(drift_ppm), 3), round(float(jitter_us), 3),
+           int(steps), int(n_cons), pick)
     if key in _WIN_CACHE:
         return _WIN_CACHE[key]
-    w = safe_phase_window(prod_period_us, cons_period_us, budget_us,
+    if budget_eff <= 0:
+        res = {"ok": False, "reason": ("预算 %.0f µs 不比抖动余量 %.0f µs 大："
+                                      "这份契约本身就不成立" % (budget_us, jitter_us)),
+               "frac": 0.0, "lcm": 0.0, "width": 0.0, "ranges": [],
+               "budget_us": float(budget_us), "drift_ppm": float(drift_ppm),
+               "jitter_us": float(jitter_us)}
+        _WIN_CACHE[key] = res
+        return res
+    w = safe_phase_window(prod_period_us, cons_period_us, budget_eff,
                           exec_us=exec_us, drift_ppm=drift_ppm,
                           steps=steps, n_cons=n_cons, pick=pick)
     lcm = w["lcm"] or 1.0
     frac = w["safe_width"] / lcm
     if not w["safe"]:
-        reason = "无任何安全相位（预算 %.0f µs 内排不出）" % float(budget_us)
+        reason = "无任何安全相位（预算 %.0f µs − 抖动 %.0f µs = %.0f µs 内排不出）" \
+                 % (float(budget_us), float(jitter_us), budget_eff)
         ok = False
     elif w["safe_width"] == 0:
         reason = ("只有孤立相位点（总宽 0/%.0f µs）：测度零，"
@@ -298,7 +313,8 @@ def check_edge(prod_period_us, cons_period_us, budget_us,
         ok = True
     res = {"ok": ok, "reason": reason, "frac": frac, "lcm": lcm, "width": w["safe_width"],
            "ranges": w["safe"], "budget_us": float(budget_us),
-           "drift_ppm": float(drift_ppm)}
+           "budget_eff_us": budget_eff, "drift_ppm": float(drift_ppm),
+           "jitter_us": float(jitter_us)}
     _WIN_CACHE[key] = res
     return res
 
@@ -375,6 +391,22 @@ def check_contract(dag, contract, exec_us=None):
         errs.append("契约：xdom_drift_ppm 不是数字：%r" % (drift,))
         drift = 0.0
 
+    # 抖动余量：模型是确定性的，实测残差最大 78 µs ⇒ 判据要把这段扣掉。
+    jitter = ctr.get("xdom_jitter_us")
+    if jitter is None:
+        jitter = 0.0
+        warns.append(
+            "契约没有声明 xdom_jitter_us，按 0 处理——模型不含抖动，"
+            "实测残差最大 78 µs（§16.3/§17.4）；按 0 算会让安全相位窗偏乐观")
+    try:
+        jitter = float(jitter)
+        if jitter < 0:
+            errs.append("xdom_jitter_us 不能为负：%r" % (jitter,))
+            jitter = 0.0
+    except (TypeError, ValueError):
+        errs.append("契约：xdom_jitter_us 不是数字：%r" % (jitter,))
+        jitter = 0.0
+
     for a, b, da, db in edges:
         Pp = per.get(da, base)
         Pc = per.get(db, base)
@@ -383,15 +415,17 @@ def check_contract(dag, contract, exec_us=None):
                         "也没有 period_us）" % (a, b))
             continue
         budget_us = budget_ticks * Pc      # 预算按**消费者**的拍折算
-        r = check_edge(Pp, Pc, budget_us, exec_us=exec_us or 0.0, drift_ppm=drift)
+        r = check_edge(Pp, Pc, budget_us, exec_us=exec_us or 0.0, drift_ppm=drift,
+                       jitter_us=jitter)
         who = "%s(%s %.0f µs) → %s(%s %.0f µs)" % (a, da, Pp, b, db, Pc)
         if not r["ok"]:
             errs.append(
-                "跨域部署不可行：%s，预算 %.0f 拍 = %.0f µs，漂移 %.0f ppm ⇒ %s。\n"
+                "跨域部署不可行：%s，预算 %.0f 拍 = %.0f µs（扣抖动 %.0f µs），"
+                "漂移 %.0f ppm ⇒ %s。\n"
                 "    这不是「跑起来才知道」的事：事件时间线在生成期就能判定。\n"
                 "    出路只有三条：① 放宽 xdom_max_age_ticks ② 让两域同速率 "
                 "③ 改相位没用在窗为空时（窗宽 0 也是不可用）"
-                % (who, budget_ticks, budget_us, drift, r["reason"]))
+                % (who, budget_ticks, budget_us, jitter, drift, r["reason"]))
         elif r["frac"] < 0.10:
             warns.append(
                 "跨域部署相位窗很窄：%s，预算 %.0f 拍，漂移 %.0f ppm ⇒ %s；"

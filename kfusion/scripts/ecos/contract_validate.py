@@ -168,6 +168,20 @@ def validate(dag, contract):
         except (TypeError, ValueError):
             errs.append("xdom_max_age_ticks 不是数字：%r" % (age_budget,))
 
+    # ---- 抖动余量（PR11-C）：模型不含抖动，判据要扣掉实测残差上界 ----
+    if isinstance(ctrl_blk, dict) and "xdom_jitter_us" in ctrl_blk:
+        errs.append(
+            "契约：xdom_jitter_us 写在顶层 control 下（非契约位置）。"
+            "请移到 timing_constraints 下——判据只读那里")
+    jit = ctr.get("xdom_jitter_us")
+    if jit is not None:
+        try:
+            jit = float(jit)
+            if jit < 0:
+                errs.append("xdom_jitter_us 不能为负：%r" % (jit,))
+        except (TypeError, ValueError):
+            errs.append("xdom_jitter_us 不是数字：%r" % (jit,))
+
     ev = (contract.get("evidence") or {}).get("exec")
     if ev and ev not in ("bounded", "empirical"):
         warns.append("evidence.exec=%r 未识别（只认 bounded / empirical），"
