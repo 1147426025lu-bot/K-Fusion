@@ -491,6 +491,8 @@ def _domain_periods(dag, contract):
 #
 # 仅在「所有边共享同一 (Pp,Pc)（ρ 语义一致）」时由 check_contract_coded 调用；
 # 混合 (Pp,Pc) 组合（含双向边）的 ρ 镜像语义不在第一版范围内，退化为逐边 OR。
+# 每条边先用 xdom_edge_phase_us 基线把安全窗平移到公共坐标，再求交——
+# 这是「同 (Pp,Pc) 的两条边有矛盾相位要求时必须拒绝」能端到端成立的前提。
 
 def _interval_and(a, b):
     """两个已按起点排序、互不重叠的区间集求交。区间 (lo,hi) 半开。"""
@@ -543,6 +545,31 @@ def _periodic_intersection(ranges_per_edge, lcms):
     return feasible
 
 
+def _normalize_ranges(ranges, le):
+    """把（带相位基线偏移、可能越界或跨边界的）区间集规整到 [0, le) 内、半开、互不重叠。
+
+    每条跨域边的安全窗 S_e 本来定义在 [0, lcm_e) 上；加上该边的相位基线 ρ0_e 后，
+    要放回公共超周期的 [0, le) 坐标就得做 (S_e − ρ0_e) 并 mod le。跨上边界的区间
+    拆成两段（(s1, le) 与 (0, e1−le)），下游 _periodic_intersection 才能正确在 L 上
+    铺开求交、把「两条同 (Pp,Pc) 边相位矛盾」真正判成联合不可行。
+    """
+    out = []
+    if not le or le <= 0:
+        return out
+    for s, e in ranges:
+        if e <= s:
+            continue
+        k = int(s // le)
+        s1 = s - k * le
+        e1 = e - k * le
+        if e1 <= le:
+            out.append((s1, e1))
+        else:
+            out.append((s1, le))
+            out.append((0.0, e1 - le))
+    return out
+
+
 def cross_edges(dag):
     """跨域边：[(from, to, from_domain, to_domain)]，**保留每一条实际数据依赖**。
 
@@ -572,12 +599,17 @@ def check_contract_coded(dag, contract, exec_us=None):
     不要各写一份判据——那正是 P0-1 那类"两边语义分叉"的来源。
 
     只在 DAG 真有跨域边时生效；单域方案一个字节都不受影响。
+
+    xdom_edge_phase_us（可选，{"from->to": µs}）给每条跨域边独立相位基线，
+    让同 (Pp,Pc) 的两条边也能有矛盾的相位要求、被联合判据真正拒绝
+    （PR11-E 后续：之前 ρ 是全局变量，同 (Pp,Pc) 边恒共享窗、联合不可行永不触发）。
     """
     errs, warns = [], []
     edges = cross_edges(dag)
     if not edges:
         return errs, warns
     ctr = (contract or {}).get("timing_constraints") or {}
+    edge_phase = ctr.get("xdom_edge_phase_us") or {}
     per, base = _domain_periods(dag, contract)
 
     budget_ticks = ctr.get("xdom_max_age_ticks")
@@ -658,8 +690,21 @@ def check_contract_coded(dag, contract, exec_us=None):
             ee = float(exec_us or 0.0)
         r = check_edge(Pp, Pc, budget_us, exec_us=ee, drift_ppm=drift,
                        cons_drift_ppm=cons_drift, jitter_us=jitter)
+        # PR11-E 后续：每条跨域边可声明独立相位基线 ρ0（xdom_edge_phase_us，
+        # 键 "from->to"，µs），把该边安全窗平移到公共坐标后再做联合求交——
+        # 否则同 (Pp,Pc) 的两条边恒共享同一窗、XDOM_JOINT_INFEASIBLE 永不会触发。
+        rho0 = 0.0
+        if isinstance(edge_phase, dict):
+            _ep = edge_phase.get("%s->%s" % (a, b))
+            if _ep is not None:
+                try:
+                    rho0 = float(_ep)
+                except (TypeError, ValueError):
+                    rho0 = 0.0
+        shifted = _normalize_ranges([(s - rho0, e - rho0)
+                                     for s, e in r["ranges"]], r["lcm"])
         who = "%s(%s %.0f µs) → %s(%s %.0f µs)" % (a, da, Pp, b, db, Pc)
-        edge_results.append((a, b, da, db, Pp, Pc, budget_us, r, who))
+        edge_results.append((a, b, da, db, Pp, Pc, budget_us, r, who, shifted))
         if not r["ok"]:
             errs.append((
                 "XDOM_INFEASIBLE",
@@ -678,13 +723,13 @@ def check_contract_coded(dag, contract, exec_us=None):
                 % (who, budget_ticks, drift, cons_drift, r["reason"])))
 
     # PR11-E.1：联合可行性 —— 各边各自安全 ≠ 整份方案存在共同 ρ。
-    if edge_results and all(r["ok"] for *_x, r, _w in edge_results):
+    if edge_results and all(r["ok"] for *_x, r, _who, _sh in edge_results):
         if len(edge_results) >= 2:
             pair0 = (edge_results[0][4], edge_results[0][5])
             same_pair = all((e[4], e[5]) == pair0 for e in edge_results)
             if same_pair:
                 joint = _periodic_intersection(
-                    [e[7]["ranges"] for e in edge_results],
+                    [e[9] for e in edge_results],
                     [e[7]["lcm"] for e in edge_results])
                 if not joint:
                     names = ", ".join("%s→%s" % (e[0], e[1]) for e in edge_results)

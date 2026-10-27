@@ -7,11 +7,8 @@
   C. exec_us 被 check_edge / check_contract_coded 消费（PR11-E.3 的 dict 路径）
   D. xdom_cons_drift_ppm 接通（PR11-E.2：字段传递 + 多速率下改变可行性）
   E. 向后兼容：只声明单 xdom_drift_ppm（无 cons）不报错
-
-注：XDOM_JOINT_INFEASIBLE 的端到端触发需要「两条同 (Pp,Pc) 边有矛盾的相位要求」，
-而当前 safe_phase_window 把相对相位 ρ 当作全局协调变量、不区分边身份，因此同
-(Pp,Pc) 的两条边安全窗恒相同、交集非空。引擎（_periodic_intersection）由 A 组单
-元测试覆盖；边级相位差异化是 PR11-E 后续（按实际数据依赖保留每条边的相位基线）。
+  F. 向后兼容：两条同 (Pp,Pc) 边、不声明 xdom_edge_phase_us → 不误报 XDOM_JOINT_INFEASIBLE
+  G. 负向（端到端）：两条同 (Pp,Pc) 边、相位基线矛盾（0 / 500µs）→ XDOM_JOINT_INFEASIBLE
 """
 import sys
 
@@ -96,5 +93,31 @@ errs2, _ = tl.check_contract_coded(dag_mr, contract_mr, exec_us=None)
 if any(c == "XDOM_DRIFT_INVALID" for c, m in errs2):
     fail("E: backward-compat single drift raised XDOM_DRIFT_INVALID")
 print("  ok E: backward-compat single drift (no cons_drift) works")
+
+# F. 向后兼容：两条同 (Pp,Pc) 边、不声明 xdom_edge_phase_us → 不误报 XDOM_JOINT_INFEASIBLE
+dag2 = {"nodes": [{"name": "s1", "domain": "nuttx"}, {"name": "s2", "domain": "nuttx"},
+                  {"name": "c1", "domain": "root"}, {"name": "c2", "domain": "root"}],
+        "edges": [{"from": "s1", "to": "c1"}, {"from": "s2", "to": "c2"}]}
+contract2 = {"task": {"period_us": 1000},
+             "timing_constraints": {"domain_period_us": {"nuttx": 2000, "root": 1000},
+                                    "xdom_max_age_ticks": 1.05, "xdom_drift_ppm": 0}}
+errsF, _ = tl.check_contract_coded(dag2, contract2, exec_us=None)
+if any(c == "XDOM_JOINT_INFEASIBLE" for c, _m in errsF):
+    fail("F: no baseline should NOT spuriously raise XDOM_JOINT_INFEASIBLE")
+print("  ok F: two same-(Pp,Pc) edges w/o baseline -> no joint error (backward-compat)")
+
+# G. 负向（端到端）：两条同 (Pp,Pc) 边、相位基线矛盾（一条 0、一条 500µs）-> 联合无解。
+#    该预算下每条边单独都可行（不会是 XDOM_INFEASIBLE），必须判 XDOM_JOINT_INFEASIBLE。
+contract2b = {"task": contract2["task"],
+              "timing_constraints": dict(contract2["timing_constraints"],
+                                        xdom_edge_phase_us={"s1->c1": 0.0,
+                                                            "s2->c2": 500.0})}
+errsG, _ = tl.check_contract_coded(dag2, contract2b, exec_us=None)
+if any(c == "XDOM_INFEASIBLE" for c, _m in errsG):
+    fail("G: edges individually feasible; joint rejection must be XDOM_JOINT_INFEASIBLE")
+if not any(c == "XDOM_JOINT_INFEASIBLE" for c, _m in errsG):
+    fail("G: contradictory per-edge baselines should raise XDOM_JOINT_INFEASIBLE "
+         "(got %r)" % [c for c, _m in errsG])
+print("  ok G: contradictory per-edge baselines -> XDOM_JOINT_INFEASIBLE (end-to-end)")
 
 print("PR11-E LOGIC CHECKS PASSED")
