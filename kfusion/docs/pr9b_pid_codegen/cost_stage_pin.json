@@ -1,0 +1,13 @@
+{
+  "_note": "PR-10A 固定成本输入（不是本轮重测值）。STKP 的选型完全由这份输入决定，所以必须入库，否则 PR-9B 的 mixed 结论不可复现。口径：用户态 5.0 µs/阶段、内核 0.05 µs/阶段、ioctl 往返 0.3 µs —— 这组值下 STKP 选出与 PR-9B 报告相同的部署（L[sample]|L[pid]|L[sink]，domain=mixed，session=g_integ）。改动这组数会改变入选方案，必须同步更新报告。",
+  "linux_userspace": {
+    "stage_sample": {"value": 5.0, "evidence": "pinned" },
+    "stage_pid":    {"value": 5.0, "evidence": "pinned" },
+    "stage_sink":   {"value": 5.0, "evidence": "pinned" }
+  },
+  "linux_kernel": {
+    "stage_sample": {"value": 0.05, "evidence": "pinned" },
+    "stage_pid":    {"value": 0.05, "evidence": "pinned" },
+    "stage_sink":   {"value": 0.05, "evidence": "pinned" }
+  }
+}
