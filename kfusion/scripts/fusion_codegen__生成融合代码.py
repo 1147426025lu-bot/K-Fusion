@@ -120,9 +120,18 @@ def main():
             "  请调小 --step-us 或加大 --period-us；否则 flat 模式的释放会跨到下一拍。"
             % ((n_stage - 1) * args.step_us, args.period_us))
 
-    # 两种模式的"释放 → 阶段列表"表
-    plan_rel = [(g["id"], list(g["members"])) for g in groups]
-    flat_rel = [(s, [s]) for s in stage_names]
+    # 两种模式的"释放 → 阶段列表"表。plan 用组上的 release_phase_us，
+    # 不得用组序号×step（两段合法方案会把 s3 错放到 200µs 而不是 400µs）。
+    def _phase_ns(g, fallback_i):
+        v = g.get("release_phase_us")
+        if v is None:
+            v = fallback_i * args.step_us
+        return int(round(float(v) * 1000.0))
+
+    plan_rel = [(g["id"], list(g["members"]), _phase_ns(g, i))
+                for i, g in enumerate(groups)]
+    flat_rel = [(s, [s], int(round(i * args.step_us * 1000.0)))
+                for i, s in enumerate(stage_names)]
 
     L = []
     A = L.append
@@ -156,6 +165,7 @@ def main():
     A("")
     A("static struct plc_probe_series g_start, g_work, g_span, g_resp;")
     A("static struct plc_probe_series g_exec_stage[MAX_STAGES];")
+    A("static struct plc_probe_series g_instant[MAX_STAGES];")
     A("static long long g_last_misses;")
     A("")
     if args.digest_var:
@@ -198,14 +208,15 @@ def main():
           % (s, c_ident(s), c_ident(s)))
     A("};")
     A("")
-    A("struct release_ent { int n; int idx[MAX_STAGES]; };")
+    A("struct release_ent { int n; long long phase_ns; int idx[MAX_STAGES]; };")
     A("")
 
     def emit_release_table(cname, rels):
         A("static const struct release_ent %s[] = {" % cname)
-        for name, members in rels:
+        for name, members, phase_ns in rels:
             idxs = ", ".join(str(stage_names.index(m)) for m in members)
-            A("\t{ %d, { %s } },   /* %s */" % (len(members), idxs, name))
+            A("\t{ %d, %dLL, { %s } },   /* %s @ %d µs */"
+              % (len(members), phase_ns, idxs, name, int(phase_ns / 1000)))
         A("};")
         A("")
 
@@ -339,10 +350,13 @@ def main():
     A("\tplc_probe_reset(&g_span, \"span\");")
     A("\tplc_probe_reset(&g_resp, \"response\");")
     A("\tfor (i = 0; i < MAX_STAGES; i++) {")
-    A("\t\tif (i < %d)" % n_stage)
+    A("\t\tif (i < %d) {" % n_stage)
     A("\t\t\tplc_probe_reset(&g_exec_stage[i], kStages[i].series);")
-    A("\t\telse")
+    A("\t\t\tplc_probe_reset(&g_instant[i], kStages[i].name);")
+    A("\t\t} else {")
     A("\t\t\tplc_probe_reset(&g_exec_stage[i], \"unused\");")
+    A("\t\t\tplc_probe_reset(&g_instant[i], \"unused\");")
+    A("\t\t}")
     A("\t}")
     A("")
     A("\tif (clock_gettime(CLOCK_MONOTONIC, &next) != 0)")
@@ -357,8 +371,8 @@ def main():
     A("\t\t\tlong long r, s, prev;")
     A("\t\t\tint q;")
     A("")
-    A("\t\t\t/* 第 j 次释放：按固定相位错开，保证每次释放都要真的睡一次 */")
-    A("\t\t\tbump_ns(&due, (long long)j * STEP_NS);")
+    A("\t\t\t/* 第 j 次释放：用方案里的绝对相位，不是组序号×step */")
+    A("\t\t\tbump_ns(&due, rel[j].phase_ns);")
     A("\t\t\tr = (long long)due.tv_sec * 1000000000LL + due.tv_nsec;")
     A("\t\t\tif (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &due, NULL) != 0)")
     A("\t\t\t\treturn 1;")
@@ -373,6 +387,7 @@ def main():
     A("\t\t\t\tkStages[idx].fn();")
     A("\t\t\t\tf = now_ns();")
     A("\t\t\t\tplc_probe_add(&g_exec_stage[idx], f - prev);")
+    A("\t\t\t\tplc_probe_add(&g_instant[idx], f - r_first);")
     A("\t\t\t\twork += f - prev;")
     A("\t\t\t\tprev = f;")
     A("\t\t\t}")
@@ -403,8 +418,15 @@ def main():
     A("\tprintf(\"# exec_overrun: %lld/%ld\\n\", overruns, cycles);")
     if args.digest_var:
         A("\tprintf(\"# digest: %08x\\n\", g_digest);")
-    A("\tfor (i = 0; i < %d; i++)" % n_stage)
+    A("\tfor (i = 0; i < %d; i++) {" % n_stage)
     A("\t\tplc_probe_line(&g_exec_stage[i]);")
+    A('\t\tprintf("# instant_%s_us: min=%.3f avg=%.3f p50=%lu max=%.3f\\n",')
+    A("\t\t       kStages[i].name,")
+    A("\t\t       g_instant[i].min_ns / 1000.0,")
+    A("\t\t       (g_instant[i].n ? (g_instant[i].sum_ns / 1000.0) / g_instant[i].n : 0),")
+    A("\t\t       plc_probe_pctl(&g_instant[i], 500000),")
+    A("\t\t       g_instant[i].max_ns / 1000.0);")
+    A("\t}")
     A("\tplc_probe_hist(&g_start);")
     A("\tplc_probe_hist(&g_resp);")
     A("\tg_last_misses = misses;")
