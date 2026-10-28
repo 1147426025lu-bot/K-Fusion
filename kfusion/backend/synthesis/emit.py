@@ -35,6 +35,16 @@ import stage_manifest                      # noqa: E402
 import xdom_bridge                         # noqa: E402
 import let_emitter as let_em               # noqa: E402
 
+import importlib.util as _ilu
+
+
+def _load_ir_module(path, name):
+    """按路径加载 kfusion/ir 下的独立校验模块（与合成逻辑解耦）。"""
+    spec = _ilu.spec_from_file_location(name, path)
+    mod = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
 
 def _write(out_dir, name, text):
     p = os.path.join(out_dir, name)
@@ -393,10 +403,32 @@ def main():
             return 2
 
     os.makedirs(a.out_dir, exist_ok=True)
+    _body_text = body_emit.emit_body_c(ir, protos)
+
+    # ---- Gate 3：与规划器分离的「验生成物」独立门禁 ----
+    # 不信任上面的合成逻辑，把生成的 C 当黑盒重新解析，核对它确实兑现了
+    # plan 契约（覆盖 / 顺序 / 计时钩子 / 跨域桥）。任何结构性背离都 fail-closed，
+    # 且在**落盘之前**就拦下来——不让一份与契约不符的周期体躺在产物目录里被 build。
+    _vg = _load_ir_module(os.path.normpath(
+        os.path.join(_HERE, "..", "..", "ir", "verify_generated.py")),
+        "verify_generated")
+    _n_sub = sum(len(s.xdom_sub) for g in ir.groups for s in g.stages)
+    _n_pub = sum(len(s.xdom_pub) for g in ir.groups for s in g.stages)
+    _vrep = _vg.verify(_body_text, plan=plan,
+                       expected_xdom_subs=_n_sub, expected_xdom_pubs=_n_pub)
+    if not _vrep["ok"]:
+        print("❌ 验生成物失败（Gate 3 独立门禁）：", file=sys.stderr)
+        for _er in _vrep["errors"]:
+            print("    · " + _er, file=sys.stderr)
+        print("   → 生成的代码与方案契约不符，整个产物集都不落盘", file=sys.stderr)
+        return 3
+    if _vrep["warnings"]:
+        for _w in _vrep["warnings"]:
+            print("  ⚠ " + _w, file=sys.stderr)
+
     written = []
     written.append(_write(a.out_dir, "ecos_fused_body.h", body_emit.emit_body_h(ir)))
-    written.append(_write(a.out_dir, "ecos_fused_body.c",
-                          body_emit.emit_body_c(ir, protos)))
+    written.append(_write(a.out_dir, "ecos_fused_body.c", _body_text))
     written.append(_write(a.out_dir, "fusion_ir.json",
                           json.dumps(ir.to_json(), ensure_ascii=False, indent=2) + "\n"))
     if exp_notes:

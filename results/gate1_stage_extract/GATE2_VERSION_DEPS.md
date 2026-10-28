@@ -1,6 +1,6 @@
 # Gate 2 后期：数据版本依赖建模（跨域 / 多速率）+ 独立复核
 
-日期：2026-10-28　分支：`feat/ecos-temporal-semantics`　提交：`待提交`
+日期：2026-10-28　分支：`feat/ecos-temporal-semantics`　提交：`108e94b`
 
 ## 动机（来自 MEMORY.md 诚实边界）
 
