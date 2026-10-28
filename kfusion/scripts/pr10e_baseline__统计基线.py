@@ -135,10 +135,11 @@ def pct(xs, q):
 
 
 def parse_csv(text):
+    """兼容 4 列（k,start,exec,resp）与 6 列（+cpu_in_work,preempt_in_work）。"""
     rows = []
     for line in text.splitlines():
         parts = line.strip().split(",")
-        if len(parts) != 4:
+        if len(parts) < 4:
             continue
         try:
             rows.append(tuple(int(x) for x in parts))
@@ -168,11 +169,15 @@ def measure(cell, mode, sched, cycles, repeat, out_dir):
                 run(["rmmod", os.path.basename(cell["ko"])[:-3]])
         after = env_snapshot()
         rows = parse_csv(txt)
+        ncol = len(rows[0]) if rows else 4
+        hdr = {4: "k,start_lat_ns,exec_ns,resp_ns",
+               6: ("k,start_lat_ns,exec_ns,resp_ns,"
+                   "cpu_in_work_ns,preempt_in_work_ns")}.get(ncol, "k")
         with io.open(os.path.join(out_dir, "r%02d.csv" % i), "w",
                      encoding="utf-8", newline="\n") as f:
-            f.write("k,start_lat_ns,exec_ns,resp_ns\n")
+            f.write(hdr + "\n")
             for r in rows:
-                f.write("%d,%d,%d,%d\n" % r)
+                f.write(",".join(str(x) for x in r) + "\n")
         if not rows:
             runs.append({"repeat": i, "rc": rc, "n": 0, "env_before": before,
                          "env_after": after})
@@ -180,6 +185,30 @@ def measure(cell, mode, sched, cycles, repeat, out_dir):
         start = [r[1] for r in rows]
         resp = [r[3] for r in rows]
         deadline_ns = 1000 * 1000
+        extra = {}
+        if len(rows[0]) >= 6:
+            cpu = [r[4] for r in rows]
+            pre = [r[5] for r in rows]
+            extra["cpu_in_work"] = {
+                "p50_us": pct(cpu, .5) / 1000.0, "p99_us": pct(cpu, .99) / 1000.0,
+                "max_us": max(cpu) / 1000.0,
+                "avg_us": round(sum(cpu) / float(len(cpu)) / 1000.0, 3)}
+            extra["preempt_in_work"] = {
+                "p50_us": pct(pre, .5) / 1000.0, "p99_us": pct(pre, .99) / 1000.0,
+                "max_us": max(pre) / 1000.0,
+                "avg_us": round(sum(pre) / float(len(pre)) / 1000.0, 3)}
+            # 核心归因：超期那一拍到底是在等 CPU 还是在跑？
+            mr = [r for r in rows if r[3] > deadline_ns]
+            orr = [r for r in rows if r[3] <= deadline_ns]
+            extra["miss_breakdown"] = {
+                "n_miss": len(mr),
+                "miss_resp_p50_us": (pct([r[3] for r in mr], .5) / 1000.0) if mr else None,
+                "miss_preempt_p50_us": (pct([r[5] for r in mr], .5) / 1000.0) if mr else None,
+                "miss_cpu_p50_us": (pct([r[4] for r in mr], .5) / 1000.0) if mr else None,
+                "ok_resp_p50_us": (pct([r[3] for r in orr], .5) / 1000.0) if orr else None,
+                "ok_preempt_p50_us": (pct([r[5] for r in orr], .5) / 1000.0) if orr else None,
+                "ok_cpu_p50_us": (pct([r[4] for r in orr], .5) / 1000.0) if orr else None,
+            }
         runs.append({
             "repeat": i, "rc": rc, "n": len(rows),
             "start_lat": {"p50_us": pct(start, .5) / 1000.0,
@@ -195,6 +224,7 @@ def measure(cell, mode, sched, cycles, repeat, out_dir):
             "miss": sum(1 for r in rows if r[3] > deadline_ns),
             "env_before": before, "env_after": after,
         })
+        runs[-1].update(extra)
     return {"status": "ok", "runs": runs}
 
 
