@@ -1,0 +1,119 @@
+
+# mode: gold  releases_per_period=1  cycles=5000
+
+# probe: r/s/f v1.2
+# period_ns: 400000
+# deadline_ns: 400000
+# samples: 5000
+# release_id: serial 0..4999
+# series_us: start_lat exec response  (1us buckets, cap 1023)
+# stat_start_lat_us: min=67.042 avg=111.287 p50=72 p90=74 p99=155 p99.9=1023 p99.99=1023 max=11553.388 over=30 neg=0 min_signed=67.042 n=5000
+# stat_exec_us: min=1.463 avg=1.804 p50=1 p90=1 p99=1 p99.9=2 p99.99=138 max=138.442 over=0 neg=0 min_signed=1.463 n=5000
+# stat_span_us: min=1.463 avg=1.804 p50=1 p90=1 p99=1 p99.9=2 p99.99=138 max=138.442 over=0 neg=0 min_signed=1.463 n=5000
+# stat_response_us: min=68.838 avg=113.092 p50=74 p90=75 p99=161 p99.9=1023 p99.99=1023 max=11556.203 over=30 neg=0 min_signed=68.838 n=5000
+# deadline_miss: 36/5000 (FAIL)
+# exec_overrun: 0/5000
+# digest: 68445021
+# stat_exec_stage_sample_us: min=0.444 avg=0.584 p50=0 p90=0 p99=0 p99.9=0 p99.99=1 max=1.111 over=0 neg=0 min_signed=0.444 n=5000
+# instant_stage_sample_us: min=67.616 avg=111.871 p50=73 max=11554.388
+# stat_exec_stage_pid_us: min=0.666 avg=0.924 p50=0 p90=0 p99=0 p99.9=1 p99.99=136 max=136.979 over=0 neg=0 min_signed=0.666 n=5000
+# instant_stage_pid_us: min=68.431 avg=112.794 p50=74 max=11555.740
+# stat_exec_stage_sink_us: min=0.259 avg=0.297 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.778 over=0 neg=0 min_signed=0.259 n=5000
+# instant_stage_sink_us: min=68.838 avg=113.092 p50=74 max=11556.203
+# hist_start_lat_us: 67 2
+# hist_start_lat_us: 68 6
+# hist_start_lat_us: 69 37
+# hist_start_lat_us: 70 327
+# hist_start_lat_us: 71 105
+# hist_start_lat_us: 72 2433
+# hist_start_lat_us: 73 1543
+# hist_start_lat_us: 74 413
+# hist_start_lat_us: 75 38
+# hist_start_lat_us: 76 24
+# hist_start_lat_us: 77 5
+# hist_start_lat_us: 78 2
+# hist_start_lat_us: 86 1
+# hist_start_lat_us: 96 1
+# hist_start_lat_us: 99 1
+# hist_start_lat_us: 104 1
+# hist_start_lat_us: 106 1
+# hist_start_lat_us: 107 1
+# hist_start_lat_us: 112 1
+# hist_start_lat_us: 113 1
+# hist_start_lat_us: 116 1
+# hist_start_lat_us: 132 1
+# hist_start_lat_us: 137 2
+# hist_start_lat_us: 142 1
+# hist_start_lat_us: 145 1
+# hist_start_lat_us: 155 1
+# hist_start_lat_us: 159 2
+# hist_start_lat_us: 166 1
+# hist_start_lat_us: 173 1
+# hist_start_lat_us: 175 1
+# hist_start_lat_us: 186 1
+# hist_start_lat_us: 215 1
+# hist_start_lat_us: 222 1
+# hist_start_lat_us: 230 1
+# hist_start_lat_us: 233 1
+# hist_start_lat_us: 246 1
+# hist_start_lat_us: 247 1
+# hist_start_lat_us: 253 1
+# hist_start_lat_us: 318 1
+# hist_start_lat_us: 523 1
+# hist_start_lat_us: 527 1
+# hist_start_lat_us: 534 1
+# hist_start_lat_us: 890 1
+# hist_start_lat_us: 892 1
+# hist_start_lat_us: 895 1
+# hist_start_lat_us: 1023 30
+# hist_start_lat_us: over 30
+# hist_response_us: 68 1
+# hist_response_us: 69 1
+# hist_response_us: 70 9
+# hist_response_us: 71 170
+# hist_response_us: 72 232
+# hist_response_us: 73 73
+# hist_response_us: 74 2732
+# hist_response_us: 75 1574
+# hist_response_us: 76 81
+# hist_response_us: 77 32
+# hist_response_us: 78 21
+# hist_response_us: 79 5
+# hist_response_us: 80 3
+# hist_response_us: 88 1
+# hist_response_us: 97 1
+# hist_response_us: 101 1
+# hist_response_us: 105 1
+# hist_response_us: 108 1
+# hist_response_us: 109 1
+# hist_response_us: 114 1
+# hist_response_us: 115 1
+# hist_response_us: 118 1
+# hist_response_us: 134 1
+# hist_response_us: 138 1
+# hist_response_us: 140 1
+# hist_response_us: 144 1
+# hist_response_us: 147 1
+# hist_response_us: 157 1
+# hist_response_us: 161 2
+# hist_response_us: 168 1
+# hist_response_us: 175 1
+# hist_response_us: 176 1
+# hist_response_us: 177 1
+# hist_response_us: 187 1
+# hist_response_us: 217 1
+# hist_response_us: 224 1
+# hist_response_us: 232 1
+# hist_response_us: 234 1
+# hist_response_us: 247 1
+# hist_response_us: 249 1
+# hist_response_us: 255 1
+# hist_response_us: 320 1
+# hist_response_us: 524 1
+# hist_response_us: 529 1
+# hist_response_us: 536 1
+# hist_response_us: 892 1
+# hist_response_us: 895 1
+# hist_response_us: 897 1
+# hist_response_us: 1023 30
+# hist_response_us: over 30

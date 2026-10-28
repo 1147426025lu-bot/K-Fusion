@@ -1,0 +1,46 @@
+
+# mode: gold  releases_per_period=1  cycles=5000
+
+# probe: r/s/f v1.2
+# period_ns: 400000
+# deadline_ns: 400000
+# samples: 5000
+# release_id: serial 0..4999
+# series_us: start_lat exec response  (1us buckets, cap 1023)
+# stat_start_lat_us: min=68.825 avg=73.066 p50=72 p90=73 p99=74 p99.9=76 p99.99=246 max=246.306 over=0 neg=0 min_signed=68.825 n=5000
+# stat_exec_us: min=1.518 avg=1.729 p50=1 p90=1 p99=1 p99.9=2 p99.99=2 max=2.407 over=0 neg=0 min_signed=1.518 n=5000
+# stat_span_us: min=1.518 avg=1.729 p50=1 p90=1 p99=1 p99.9=2 p99.99=2 max=2.407 over=0 neg=0 min_signed=1.518 n=5000
+# stat_response_us: min=70.380 avg=74.795 p50=74 p90=75 p99=76 p99.9=78 p99.99=248 max=248.492 over=0 neg=0 min_signed=70.380 n=5000
+# deadline_miss: 0/5000 (none)
+# exec_overrun: 0/5000
+# digest: 68445021
+# stat_exec_stage_sample_us: min=0.500 avg=0.579 p50=0 p90=0 p99=0 p99.9=0 p99.99=1 max=1.056 over=0 neg=0 min_signed=0.500 n=5000
+# instant_stage_sample_us: min=69.362 avg=73.645 p50=73 max=247.010
+# stat_exec_stage_pid_us: min=0.703 avg=0.850 p50=0 p90=0 p99=0 p99.9=1 p99.99=1 max=1.408 over=0 neg=0 min_signed=0.703 n=5000
+# instant_stage_pid_us: min=70.102 avg=74.495 p50=74 max=247.992
+# stat_exec_stage_sink_us: min=0.259 avg=0.300 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.555 over=0 neg=0 min_signed=0.259 n=5000
+# instant_stage_sink_us: min=70.380 avg=74.795 p50=74 max=248.492
+# hist_start_lat_us: 68 3
+# hist_start_lat_us: 69 74
+# hist_start_lat_us: 70 280
+# hist_start_lat_us: 71 125
+# hist_start_lat_us: 72 2301
+# hist_start_lat_us: 73 1758
+# hist_start_lat_us: 74 423
+# hist_start_lat_us: 75 23
+# hist_start_lat_us: 76 9
+# hist_start_lat_us: 77 2
+# hist_start_lat_us: 114 1
+# hist_start_lat_us: 246 1
+# hist_response_us: 70 6
+# hist_response_us: 71 236
+# hist_response_us: 72 181
+# hist_response_us: 73 63
+# hist_response_us: 74 2809
+# hist_response_us: 75 1620
+# hist_response_us: 76 59
+# hist_response_us: 77 13
+# hist_response_us: 78 9
+# hist_response_us: 79 2
+# hist_response_us: 116 1
+# hist_response_us: 248 1

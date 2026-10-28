@@ -1,0 +1,894 @@
+{
+  "kind": "pr10b_matrix_v2",
+  "cycles": 5000,
+  "repeat": 5,
+  "periods": [
+    1000,
+    400
+  ],
+  "loads": [
+    0,
+    4
+  ],
+  "cells": [
+    {
+      "scenario": "user_only",
+      "why": "内核域远贵于用户态 → 全用户态",
+      "period_us": 1000,
+      "src_sha256": "697a8871d22db297116164231132d54b5c8235865e0d80d2ca849bae25b87af5",
+      "cost": {
+        "why": "内核域远贵于用户态 → 全用户态",
+        "u": 5.0,
+        "k": 50.0,
+        "ioctl": 30.0
+      },
+      "status": "ok",
+      "chosen": "B",
+      "mode": "gold",
+      "session": null,
+      "dir": "/root/K-Fusion/kfusion/docs/pr10b_matrix/v2/user_only_p1000",
+      "conditions": [
+        {
+          "load": 0,
+          "cycles": 5000,
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 63.0,
+                "p99": 74.0,
+                "max": 91.738,
+                "over": 0
+              },
+              "exec": {
+                "p50": 0.0,
+                "p99": 1.0,
+                "max": 3.445,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 0,
+              "seq_bad": null
+            },
+            {
+              "repeat": 1,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 63.0,
+                "p99": 77.0,
+                "max": 123.995,
+                "over": 0
+              },
+              "exec": {
+                "p50": 0.0,
+                "p99": 2.0,
+                "max": 3.722,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 0,
+              "seq_bad": null
+            },
+            {
+              "repeat": 2,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 63.0,
+                "p99": 79.0,
+                "max": 166.351,
+                "over": 0
+              },
+              "exec": {
+                "p50": 0.0,
+                "p99": 2.0,
+                "max": 6.352,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 0,
+              "seq_bad": null
+            },
+            {
+              "repeat": 3,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 63.0,
+                "p99": 78.0,
+                "max": 168.196,
+                "over": 0
+              },
+              "exec": {
+                "p50": 0.0,
+                "p99": 2.0,
+                "max": 6.333,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 0,
+              "seq_bad": null
+            },
+            {
+              "repeat": 4,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 63.0,
+                "p99": 77.0,
+                "max": 91.738,
+                "over": 0
+              },
+              "exec": {
+                "p50": 0.0,
+                "p99": 2.0,
+                "max": 3.629,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 0,
+              "seq_bad": null
+            }
+          ],
+          "response": {
+            "p50_med": 63.0,
+            "p50_min": 63.0,
+            "p50_max": 63.0,
+            "p99_med": 77.0,
+            "max_med": 123.995,
+            "max_worst": 168.196
+          },
+          "ioctl": null,
+          "miss_total": 0
+        },
+        {
+          "load": 4,
+          "cycles": 5000,
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 75.0,
+                "p99": 84.0,
+                "max": 11325.475,
+                "over": 16
+              },
+              "exec": {
+                "p50": 1.0,
+                "p99": 2.0,
+                "max": 3.092,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 16,
+              "seq_bad": null
+            },
+            {
+              "repeat": 1,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 75.0,
+                "p99": 80.0,
+                "max": 11338.808,
+                "over": 12
+              },
+              "exec": {
+                "p50": 1.0,
+                "p99": 2.0,
+                "max": 3.296,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 12,
+              "seq_bad": null
+            },
+            {
+              "repeat": 2,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 75.0,
+                "p99": 319.0,
+                "max": 14293.339,
+                "over": 35
+              },
+              "exec": {
+                "p50": 1.0,
+                "p99": 2.0,
+                "max": 2.962,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 35,
+              "seq_bad": null
+            },
+            {
+              "repeat": 3,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 75.0,
+                "p99": 78.0,
+                "max": 11307.475,
+                "over": 11
+              },
+              "exec": {
+                "p50": 1.0,
+                "p99": 2.0,
+                "max": 2.63,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 11,
+              "seq_bad": null
+            },
+            {
+              "repeat": 4,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 75.0,
+                "p99": 78.0,
+                "max": 11254.661,
+                "over": 11
+              },
+              "exec": {
+                "p50": 1.0,
+                "p99": 2.0,
+                "max": 2.537,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 11,
+              "seq_bad": null
+            }
+          ],
+          "response": {
+            "p50_med": 75.0,
+            "p50_min": 75.0,
+            "p50_max": 75.0,
+            "p99_med": 80.0,
+            "max_med": 11325.475,
+            "max_worst": 14293.339
+          },
+          "ioctl": null,
+          "miss_total": 85
+        }
+      ]
+    },
+    {
+      "scenario": "partial_kernel",
+      "why": "内核域远便宜 → 中间组进内核（UKU）",
+      "period_us": 1000,
+      "src_sha256": "697a8871d22db297116164231132d54b5c8235865e0d80d2ca849bae25b87af5",
+      "cost": {
+        "why": "内核域远便宜 → 中间组进内核（UKU）",
+        "u": 5.0,
+        "k": 0.05,
+        "ioctl": 0.3
+      },
+      "status": "ok",
+      "chosen": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
+      "mode": "mixed",
+      "session": "g_integ",
+      "dir": "/root/K-Fusion/kfusion/docs/pr10b_matrix/v2/partial_kernel_p1000",
+      "conditions": [
+        {
+          "load": 0,
+          "cycles": 5000,
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 67.0,
+                "p99": 95.0,
+                "max": 409.692,
+                "over": 4
+              },
+              "exec": {
+                "p50": 3.0,
+                "p99": 10.0,
+                "max": 17.722,
+                "over": 0
+              },
+              "ioctl": {
+                "p50": 2.0,
+                "p99": 8.0,
+                "max": 14.611,
+                "over": 0
+              },
+              "miss": 0,
+              "seq_bad": 0
+            },
+            {
+              "repeat": 1,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 67.0,
+                "p99": 142.0,
+                "max": 1628.934,
+                "over": 4
+              },
+              "exec": {
+                "p50": 4.0,
+                "p99": 16.0,
+                "max": 24.907,
+                "over": 0
+              },
+              "ioctl": {
+                "p50": 2.0,
+                "p99": 12.0,
+                "max": 21.13,
+                "over": 0
+              },
+              "miss": 1,
+              "seq_bad": 0
+            },
+            {
+              "repeat": 2,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 67.0,
+                "p99": 82.0,
+                "max": 356.233,
+                "over": 1
+              },
+              "exec": {
+                "p50": 4.0,
+                "p99": 8.0,
+                "max": 12.445,
+                "over": 0
+              },
+              "ioctl": {
+                "p50": 2.0,
+                "p99": 6.0,
+                "max": 9.389,
+                "over": 0
+              },
+              "miss": 0,
+              "seq_bad": 0
+            },
+            {
+              "repeat": 3,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 67.0,
+                "p99": 80.0,
+                "max": 102.031,
+                "over": 0
+              },
+              "exec": {
+                "p50": 4.0,
+                "p99": 6.0,
+                "max": 11.074,
+                "over": 0
+              },
+              "ioctl": {
+                "p50": 2.0,
+                "p99": 5.0,
+                "max": 8.092,
+                "over": 0
+              },
+              "miss": 0,
+              "seq_bad": 0
+            },
+            {
+              "repeat": 4,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 67.0,
+                "p99": 87.0,
+                "max": 152.041,
+                "over": 0
+              },
+              "exec": {
+                "p50": 4.0,
+                "p99": 9.0,
+                "max": 12.833,
+                "over": 0
+              },
+              "ioctl": {
+                "p50": 3.0,
+                "p99": 7.0,
+                "max": 10.463,
+                "over": 0
+              },
+              "miss": 0,
+              "seq_bad": 0
+            }
+          ],
+          "response": {
+            "p50_med": 67.0,
+            "p50_min": 67.0,
+            "p50_max": 67.0,
+            "p99_med": 87.0,
+            "max_med": 356.233,
+            "max_worst": 1628.934
+          },
+          "ioctl": {
+            "p50_med": 2.0,
+            "p50_min": 2.0,
+            "p50_max": 3.0,
+            "p99_med": 7.0,
+            "max_med": 10.463,
+            "max_worst": 21.13
+          },
+          "miss_total": 1
+        },
+        {
+          "load": 4,
+          "cycles": 5000,
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 80.0,
+                "p99": 199.0,
+                "max": 4429.502,
+                "over": 191
+              },
+              "exec": {
+                "p50": 6.0,
+                "p99": 199.0,
+                "max": 2419.055,
+                "over": 54
+              },
+              "ioctl": {
+                "p50": 5.0,
+                "p99": 199.0,
+                "max": 2417.092,
+                "over": 51
+              },
+              "miss": 37,
+              "seq_bad": 0
+            },
+            {
+              "repeat": 1,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 80.0,
+                "p99": 86.0,
+                "max": 7881.555,
+                "over": 19
+              },
+              "exec": {
+                "p50": 6.0,
+                "p99": 8.0,
+                "max": 15.221,
+                "over": 0
+              },
+              "ioctl": {
+                "p50": 4.0,
+                "p99": 6.0,
+                "max": 12.962,
+                "over": 0
+              },
+              "miss": 12,
+              "seq_bad": 0
+            },
+            {
+              "repeat": 2,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 81.0,
+                "p99": 199.0,
+                "max": 8239.388,
+                "over": 166
+              },
+              "exec": {
+                "p50": 6.0,
+                "p99": 10.0,
+                "max": 929.726,
+                "over": 31
+              },
+              "ioctl": {
+                "p50": 4.0,
+                "p99": 8.0,
+                "max": 928.041,
+                "over": 27
+              },
+              "miss": 48,
+              "seq_bad": 0
+            },
+            {
+              "repeat": 3,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 80.0,
+                "p99": 199.0,
+                "max": 16405.845,
+                "over": 143
+              },
+              "exec": {
+                "p50": 6.0,
+                "p99": 9.0,
+                "max": 1028.132,
+                "over": 11
+              },
+              "ioctl": {
+                "p50": 4.0,
+                "p99": 6.0,
+                "max": 1026.225,
+                "over": 11
+              },
+              "miss": 94,
+              "seq_bad": 0
+            },
+            {
+              "repeat": 4,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 81.0,
+                "p99": 199.0,
+                "max": 4611.228,
+                "over": 56
+              },
+              "exec": {
+                "p50": 6.0,
+                "p99": 9.0,
+                "max": 343.624,
+                "over": 2
+              },
+              "ioctl": {
+                "p50": 5.0,
+                "p99": 6.0,
+                "max": 340.902,
+                "over": 2
+              },
+              "miss": 23,
+              "seq_bad": 0
+            }
+          ],
+          "response": {
+            "p50_med": 80.0,
+            "p50_min": 80.0,
+            "p50_max": 81.0,
+            "p99_med": 199.0,
+            "max_med": 7881.555,
+            "max_worst": 16405.845
+          },
+          "ioctl": {
+            "p50_med": 4.0,
+            "p50_min": 4.0,
+            "p50_max": 5.0,
+            "p99_med": 6.0,
+            "max_med": 928.041,
+            "max_worst": 2417.092
+          },
+          "miss_total": 214
+        }
+      ]
+    },
+    {
+      "scenario": "user_only",
+      "why": "内核域远贵于用户态 → 全用户态",
+      "period_us": 400,
+      "src_sha256": "8a655007af41a3a5d4af279b9f52424e0cf3e54a1f86354fdae833136e88f929",
+      "cost": {
+        "why": "内核域远贵于用户态 → 全用户态",
+        "u": 5.0,
+        "k": 50.0,
+        "ioctl": 30.0
+      },
+      "status": "ok",
+      "chosen": "B",
+      "mode": "gold",
+      "session": null,
+      "dir": "/root/K-Fusion/kfusion/docs/pr10b_matrix/v2/user_only_p400",
+      "conditions": [
+        {
+          "load": 0,
+          "cycles": 5000,
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 63.0,
+                "p99": 75.0,
+                "max": 181.821,
+                "over": 0
+              },
+              "exec": {
+                "p50": 0.0,
+                "p99": 2.0,
+                "max": 2.888,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 0,
+              "seq_bad": null
+            },
+            {
+              "repeat": 1,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 63.0,
+                "p99": 67.0,
+                "max": 93.467,
+                "over": 0
+              },
+              "exec": {
+                "p50": 0.0,
+                "p99": 1.0,
+                "max": 2.963,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 0,
+              "seq_bad": null
+            },
+            {
+              "repeat": 2,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 63.0,
+                "p99": 67.0,
+                "max": 94.255,
+                "over": 0
+              },
+              "exec": {
+                "p50": 0.0,
+                "p99": 1.0,
+                "max": 3.148,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 0,
+              "seq_bad": null
+            },
+            {
+              "repeat": 3,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 63.0,
+                "p99": 66.0,
+                "max": 95.382,
+                "over": 0
+              },
+              "exec": {
+                "p50": 0.0,
+                "p99": 1.0,
+                "max": 2.63,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 0,
+              "seq_bad": null
+            },
+            {
+              "repeat": 4,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 63.0,
+                "p99": 79.0,
+                "max": 229.925,
+                "over": 0
+              },
+              "exec": {
+                "p50": 0.0,
+                "p99": 1.0,
+                "max": 2.722,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 0,
+              "seq_bad": null
+            }
+          ],
+          "response": {
+            "p50_med": 63.0,
+            "p50_min": 63.0,
+            "p50_max": 63.0,
+            "p99_med": 67.0,
+            "max_med": 95.382,
+            "max_worst": 229.925
+          },
+          "ioctl": null,
+          "miss_total": 0
+        },
+        {
+          "load": 4,
+          "cycles": 5000,
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 74.0,
+                "p99": 76.0,
+                "max": 248.492,
+                "over": 0
+              },
+              "exec": {
+                "p50": 1.0,
+                "p99": 1.0,
+                "max": 2.407,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 0,
+              "seq_bad": null
+            },
+            {
+              "repeat": 1,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 74.0,
+                "p99": 78.0,
+                "max": 11750.274,
+                "over": 33
+              },
+              "exec": {
+                "p50": 1.0,
+                "p99": 1.0,
+                "max": 3.945,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 39,
+              "seq_bad": null
+            },
+            {
+              "repeat": 2,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 74.0,
+                "p99": 79.0,
+                "max": 11818.161,
+                "over": 31
+              },
+              "exec": {
+                "p50": 1.0,
+                "p99": 2.0,
+                "max": 5.388,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 35,
+              "seq_bad": null
+            },
+            {
+              "repeat": 3,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 74.0,
+                "p99": 161.0,
+                "max": 11556.203,
+                "over": 30
+              },
+              "exec": {
+                "p50": 1.0,
+                "p99": 1.0,
+                "max": 138.442,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 36,
+              "seq_bad": null
+            },
+            {
+              "repeat": 4,
+              "cycles": 5000,
+              "rc": 0,
+              "response": {
+                "p50": 74.0,
+                "p99": 610.0,
+                "max": 5423.089,
+                "over": 38
+              },
+              "exec": {
+                "p50": 1.0,
+                "p99": 1.0,
+                "max": 17.426,
+                "over": 0
+              },
+              "ioctl": null,
+              "miss": 61,
+              "seq_bad": null
+            }
+          ],
+          "response": {
+            "p50_med": 74.0,
+            "p50_min": 74.0,
+            "p50_max": 74.0,
+            "p99_med": 79.0,
+            "max_med": 11556.203,
+            "max_worst": 11818.161
+          },
+          "ioctl": null,
+          "miss_total": 171
+        }
+      ]
+    },
+    {
+      "scenario": "partial_kernel",
+      "why": "内核域远便宜 → 中间组进内核（UKU）",
+      "period_us": 400,
+      "src_sha256": "8a655007af41a3a5d4af279b9f52424e0cf3e54a1f86354fdae833136e88f929",
+      "cost": {
+        "why": "内核域远便宜 → 中间组进内核（UKU）",
+        "u": 5.0,
+        "k": 0.05,
+        "ioctl": 0.3
+      },
+      "status": "pipeline_failed",
+      "log_tail": [
+        "· 组 g0   stage_sample",
+        "· 组 g1   stage_pid",
+        "· 组 g2   stage_sink",
+        "❌ 方案验证失败：1 条违规",
+        "   [DEADLINE] 期限：末组完成 426.0 µs 超过期限 400.0 µs（超出 26.0 µs）［证据级别 empirical：这是经验预测，不是硬实时证明］",
+        "❌ DAG 验证器拒绝入选方案 8"
+      ]
+    }
+  ],
+  "paired_p50": [
+    {
+      "period_us": 1000,
+      "load": 0,
+      "p50_diff_med": 4.0,
+      "p50_diff_min": 4.0,
+      "p50_diff_max": 4.0,
+      "all_positive": true,
+      "n": 5,
+      "miss_user": 0,
+      "miss_partial": 1
+    },
+    {
+      "period_us": 1000,
+      "load": 4,
+      "p50_diff_med": 5.0,
+      "p50_diff_min": 5.0,
+      "p50_diff_max": 6.0,
+      "all_positive": true,
+      "n": 5,
+      "miss_user": 85,
+      "miss_partial": 214
+    },
+    {
+      "period_us": 400,
+      "load": 0,
+      "note": "某侧不可用（未入选/不合法）"
+    },
+    {
+      "period_us": 400,
+      "load": 4,
+      "note": "某侧不可用（未入选/不合法）"
+    }
+  ],
+  "boundary": "实测不是 WCET；重复运行来自同一台机器，独立性弱，只报差值与方向一致率，不报显著性；数据年龄用 ioctl 往返代理"
+}

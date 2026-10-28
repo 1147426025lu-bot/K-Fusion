@@ -1,0 +1,23 @@
+
+# mode: mixed  cycles=5000
+
+# probe: r/s/f v1.2
+# period_ns: 1000000
+# deadline_ns: 1000000
+# samples: 5000
+# release_id: serial 0..4999
+# series_us: start_lat exec response  (1us buckets, cap 199)
+# stat_start_lat_us: min=68.970 avg=95.724 p50=74 p90=74 p99=199 p99.9=199 p99.99=199 max=4418.317 over=186 neg=0 min_signed=68.970 n=5000
+# stat_exec_us: min=5.667 avg=12.120 p50=6 p90=7 p99=199 p99.9=199 p99.99=199 max=2419.055 over=54 neg=0 min_signed=5.667 n=5000
+# stat_response_us: min=76.044 avg=107.845 p50=80 p90=82 p99=199 p99.9=199 p99.99=199 max=4429.502 over=191 neg=0 min_signed=76.044 n=5000
+# stat_kernel_compute_us: min=0.185 avg=0.224 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.667 over=0 neg=0 min_signed=0.185 n=5000
+# stat_ioctl_roundtrip_us: min=4.018 avg=9.733 p50=5 p90=5 p99=199 p99.9=199 p99.99=199 max=2417.092 over=51 neg=0 min_signed=4.018 n=5000
+# stat_exec_stage_stage_sample_us: min=0.129 avg=0.137 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.500 over=0 neg=0 min_signed=0.129 n=5000
+# stat_exec_stage_stage_pid_us: min=0.000 avg=0.000 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.000 over=0 neg=0 min_signed=0.000 n=0
+# stat_exec_stage_stage_sink_us: min=0.129 avg=0.257 p50=0 p90=0 p99=0 p99.9=0 p99.99=199 max=635.305 over=1 neg=0 min_signed=0.129 n=5000
+# deadline_miss: 37/5000
+# uku_seq_mismatch: 0/5000
+# uku_ioctl_error: 0/5000
+# digest: ee19bdbe
+# last_seq: 5000 g_in=1256 g_out=-3762
+# session: g_integ=-10000 readback=1
