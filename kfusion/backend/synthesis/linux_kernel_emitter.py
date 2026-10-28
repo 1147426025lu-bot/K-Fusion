@@ -76,6 +76,7 @@ _LINUX_C = """/* %(name)s —— 由 ECoS 融合方案生成的 ring-0 宿主；
 %(xdom_include)s
 
 #define ECOS_GROUPS %(ngroups)d
+#define ECOS_NSTAGES %(nstages)d
 
 static unsigned int period_us = %(period)d;
 module_param(period_us, uint, 0444);
@@ -153,6 +154,7 @@ module_param(frozen, bool, 0644);
 MODULE_PARM_DESC(frozen, "写 1 暂停周期体（取一致快照），写 0 恢复");
 
 %(probe_decls)s
+%(stage_profile)s
 %(xdom_shift_decls)s
 static enum hrtimer_restart ecos_tick(struct hrtimer *t)
 {
@@ -291,6 +293,7 @@ static void __exit ecos_exit(void)
 		if (ecos_groups[i].task)
 			kthread_stop(ecos_groups[i].task);
 	}
+	ecos_stage_report();
 	pr_info("ecos: 已停止\\n");
 }
 
@@ -300,6 +303,87 @@ module_exit(ecos_exit);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("ECoS fused periodic control (%(ngroups)d groups)");
 """
+
+_STAGE_PROFILE = r'''
+/* ---- 阶段执行时间实测（profiler）----
+ * 每个阶段在 ecos_fused_body.c 里被 ecos_stage_enter/exit 包裹（弱符号钩子）。
+ * 这里提供强定义覆盖弱符号，用 ktime_get() 量出每个阶段的真实执行时间。
+ * 用途：消除 ast_to_plan 里 exec_us 的“占位”诚实边界——在目标板上跑一次，
+ * 读 exec_probe 即可拿到每阶段 max/avg（ns），回填 --exec-us。 */
+#include <linux/math64.h>	/* div_s64 */
+
+static s64 ecos_stage_max_ns[ECOS_NSTAGES];
+static s64 ecos_stage_sum_ns[ECOS_NSTAGES];
+static unsigned long ecos_stage_cnt[ECOS_NSTAGES];
+static s64 ecos_stage_t0[ECOS_NSTAGES];
+static const char *ecos_stage_names[ECOS_NSTAGES] = {
+%(stage_names)s
+};
+
+void ecos_stage_enter(unsigned int idx)
+{
+	if (idx < ECOS_NSTAGES)
+		ecos_stage_t0[idx] = ktime_get();
+}
+
+void ecos_stage_exit(unsigned int idx)
+{
+	if (idx < ECOS_NSTAGES) {
+		s64 d = ktime_get() - ecos_stage_t0[idx];
+
+		if (d > 0) {
+			ecos_stage_cnt[idx]++;
+			ecos_stage_sum_ns[idx] += d;
+			if (ecos_stage_cnt[idx] == 1 || d > ecos_stage_max_ns[idx])
+				ecos_stage_max_ns[idx] = d;
+		}
+	}
+}
+
+static void ecos_stage_report(void)
+{
+	int i;
+
+	pr_info("ecos: 阶段执行时间实测（ns）：");
+	for (i = 0; i < ECOS_NSTAGES; i++) {
+		s64 avg = ecos_stage_cnt[i]
+			? div_s64(ecos_stage_sum_ns[i], ecos_stage_cnt[i]) : 0;
+
+		pr_info("  [%%d] %%s: max=%%lld avg=%%lld n=%%lu", i,
+			ecos_stage_names[i], (long long)ecos_stage_max_ns[i],
+			(long long)avg, ecos_stage_cnt[i]);
+	}
+}
+
+/* 读 exec_probe 即打印每阶段 max/avg（ns），无需卸载模块。 */
+static int ecos_stage_show(char *buf, const struct kernel_param *kp)
+{
+	int n = 0, i;
+	unsigned long long tot = 0;
+
+	for (i = 0; i < ECOS_NSTAGES; i++)
+		tot += (unsigned long long)ecos_stage_cnt[i];
+	n += scnprintf(buf + n, PAGE_SIZE - n, "count=%%llu samples\n", tot);
+	for (i = 0; i < ECOS_NSTAGES; i++) {
+		s64 avg = ecos_stage_cnt[i]
+			? div_s64(ecos_stage_sum_ns[i], ecos_stage_cnt[i]) : 0;
+
+		n += scnprintf(buf + n, PAGE_SIZE - n,
+			       "  [%%d] %%s: max=%%lldns avg=%%lldns n=%%lu\n",
+			       i, ecos_stage_names[i],
+			       (long long)ecos_stage_max_ns[i],
+			       (long long)avg, ecos_stage_cnt[i]);
+	}
+	return n;
+}
+
+static const struct kernel_param_ops ecos_stage_ops = {
+	.get = ecos_stage_show,
+};
+
+module_param_cb(exec_probe, &ecos_stage_ops, NULL, 0444);
+MODULE_PARM_DESC(exec_probe, "每阶段实测 max/avg 执行时间（ns），读即打印");
+'''
 
 _KBUILD = """# 由 ECoS 方案生成；在目标侧（内核树）执行：
 #   make -C <KDIR> M=$PWD modules
@@ -556,6 +640,14 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
         xdom_tick_shift = \
             "\thrtimer_forward_now(&g->timer, ktime_set(0, (s64)period_us * 1000));\n"
 
+    # 阶段名（按 body 遍历顺序跨组累计），与 ecos_fused_body.c 里
+    # ecos_stage_enter(idx) 的索引严格对齐 —— 供 exec_probe 打印时给出名字。
+    stage_names = "\n".join('\t"%s",' % s.name
+                             for g in ir.groups for s in g.stages)
+    # 预渲染 profiler：把 %% 转成单 %、把 %(stage_names)s 注入名字列表；
+    # 结果作为值插入 _LINUX_C，其内部的 %d 不会被模板 % 操作符二次解析。
+    stage_profile = _STAGE_PROFILE % {"stage_names": stage_names}
+
     host = _LINUX_C % {
         "name": HOST_C, "ngroups": ngroups, "nstages": len(ir.order),
         "period": int(ir.period_us or 0), "rtprio": 99, "evidence": ir.evidence,
@@ -589,6 +681,7 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
                         if xdom else ""),
         "xdom_shift_decls": xdom_shift_decls,
         "xdom_tick_shift": xdom_tick_shift,
+        "stage_profile": stage_profile,
     }
     return {
         HOST_C: host,

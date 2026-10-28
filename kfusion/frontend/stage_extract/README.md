@@ -121,8 +121,9 @@ Gate 2 让提取器给出每个阶段的读/写全局（IR 级 use-def），`ast
   等，整链 `verification.ok=true`，`teir.json` 如上；生成的 `.ko` 构建+运行回归
   `periods≈2010/missed=0`。证据 `results/gate1_stage_extract/GATE2_TEIR.md`。
 
-诚实边界（v1）：单域同周期骨架；exec_us 占位需实测；跨域/多速率版本依赖（r_i(k) 与
+诚实边界（v1）：单域同周期骨架；跨域/多速率版本依赖（r_i(k) 与
 r_j(k-1)）属 Gate 2 后期 + Gate 3，TEIR 暂只给单域同周期。
+**执行时间「占位」已由实测机制消除**：见下节「执行时间实测（exec_probe + measure_exec）」。
 
 ## 构建（Pi4）
 
@@ -154,10 +155,33 @@ python3 kfusion/backend/synthesis/emit.py \
 顺序）、`ecos_fused_linux.c`、`Kbuild`，并产出 `teir.json`（TEIR）。
 
 诚实边界（写在 dag.meta 里）：
-- 执行时间未给 `--exec-us` 时按 `--default-exec-us` 占位并标记，**需实测替换**；
+- 执行时间：未给 `--exec-us` 时按 `--default-exec-us` 占位并记 `placeholder_exec`，
+  **但已提供目标板实测机制消除占位**（见下节）；给出后即清空 `placeholder_exec`，不再标记；
 - 数据依赖边已来自 IR use-def（同周期生产者→消费者，`kind:"data"`），不再是调用序近似；
   读但本周期无人写的全局记为 `cross_period_inputs`（外部/前周期状态）；
 - 效果按 state_read/state_write 保守假设。
+
+## 执行时间实测（exec_probe + measure_exec）
+
+占位边界的**消除机制**：共用周期体 `ecos_fused_body.c` 里每个阶段调用被弱符号钩子
+`ecos_stage_enter/exit(idx)` 包裹，Linux 宿主提供强定义用 `ktime_get()` 量每阶段真实
+执行时间（max/avg + 采样数），经 `exec_probe` 模块参数暴露（读即打印）。
+
+```sh
+# 1) 占位生成并加载，读实测
+bash auto_kernelize.sh ctl.c loop1 1000 linux-kernel
+insmod loop1/gen/plc_cycle.ko period_us=1000; sleep 3
+cat /sys/module/plc_cycle/parameters/exec_probe     # max/avg/n
+rmmod plc_cycle
+# 2) 实测 → exec-us JSON（默认取 max=WCET，支持 --scale 裕度 / --avg）
+cat /sys/module/plc_cycle/parameters/exec_probe | python3 measure_exec.py > exec_us.json
+# 3) 用实测值重生（placeholder_exec 清空，phase 用真实值累加）
+bash auto_kernelize.sh ctl.c loop2 1000 linux-kernel exec_us.json
+```
+
+`measure_exec.py` 解析 `exec_probe` 文本，输出 `--exec-us` 用的 JSON；**默认取 max（最坏情况
+WCET）**，因为实时调度不能靠 avg 证明不超时。正式进论文前仍需多工况/长采样并叠裕度。
+证据与完整闭环 `results/gate1_stage_extract/EXEC_MEASURE.md`。
 
 ## 已完成的链路与验证状态
 
@@ -170,3 +194,4 @@ python3 kfusion/backend/synthesis/emit.py \
 | emit（plan→用户态/内核态源码） | ✅ 本机生成通过 | `test_ast_to_plan.py` |
 | 一条命令整链 + 目标构建（生成的 .ko 在 Pi4 构建运行） | ✅ Pi4 端到端 | `results/gate1_stage_extract/END2END.md` |
 | K-C0 拒绝（fail-closed） | ✅ Pi4 实测 | `results/gate1_stage_extract/KC0_REJECT.md` |
+| 执行时间实测（exec_probe → measure_exec → 回填） | ✅ Pi4 闭环验证 | `results/gate1_stage_extract/EXEC_MEASURE.md` |

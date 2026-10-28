@@ -89,7 +89,9 @@ insmod rc=0  periods=2010  missed=0  rmmod rc=0
 
 ## 7. 诚实边界（v1）
 
-- 单域同周期骨架；`exec_us` 仍是占位（需实测替换，不得进论文）
+- 单域同周期骨架；**`exec_us` 占位已由实测机制消除**——见 `EXEC_MEASURE.md`
+  （`exec_probe` + `measure_exec.py`，目标板实测 max/WCET 回填，不再标记占位）；
+  但正式进论文前仍需多工况/长采样并叠安全裕度
 - 跨域 / 多速率版本依赖（r_i(k) 与 r_j(k-1)）属 Gate 2 后期 + Gate 3，TEIR 暂只给单域同周期
 - 指针别名 / 间接访问（多级 GEP、通过指针参数传递全局地址）尚未覆盖——当前只解一层 GEP
 - 循环内/递归 helper 的 use-def 未展开（K-C0 只查直接外部调用）
