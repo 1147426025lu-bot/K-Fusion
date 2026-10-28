@@ -1,0 +1,21 @@
+{
+  "adapter": "uku_ioctl",
+  "kernel_stages": [
+    "stage_pid"
+  ],
+  "copy_in": [
+    "g_in"
+  ],
+  "copy_out": [
+    "g_out"
+  ],
+  "device": "/dev/kfusion_uku",
+  "max": 8,
+  "session": {
+    "kind": "integ_i32",
+    "region": "g_integ"
+  },
+  "session_vars": [
+    "g_integ"
+  ]
+}

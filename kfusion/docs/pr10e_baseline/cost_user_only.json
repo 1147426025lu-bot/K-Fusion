@@ -1,0 +1,31 @@
+{
+  "_note": "PR-10E 阶段A：与 PR-10B 相同的域级量级假设，用于选定部署",
+  "linux_userspace": {
+    "stage_sample": {
+      "value": 5.0,
+      "evidence": "scenario"
+    },
+    "stage_pid": {
+      "value": 5.0,
+      "evidence": "scenario"
+    },
+    "stage_sink": {
+      "value": 5.0,
+      "evidence": "scenario"
+    }
+  },
+  "linux_kernel": {
+    "stage_sample": {
+      "value": 50.0,
+      "evidence": "scenario"
+    },
+    "stage_pid": {
+      "value": 50.0,
+      "evidence": "scenario"
+    },
+    "stage_sink": {
+      "value": 50.0,
+      "evidence": "scenario"
+    }
+  }
+}

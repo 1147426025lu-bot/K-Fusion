@@ -1,0 +1,60 @@
+{
+  "version": 23,
+  "module": "/root/K-Fusion/kfusion/docs/pr10e_baseline/gen_uku/task.ll",
+  "functions": {
+    "loop_main": {
+      "effects": ["state_read", "state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": ["@g_in", "@g_integ", "@g_seq"],
+      "writes": ["@g_in", "@g_integ", "@g_out", "@g_seq"],
+      "recursive": false,
+      "calls": ["stage_pid", "stage_sample"],
+      "unknown_calls": []
+    },
+    "loop_reset": {
+      "effects": ["state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": [],
+      "writes": ["@g_in", "@g_integ", "@g_out", "@g_seq"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "stage_pid": {
+      "effects": ["state_read", "state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": ["@g_in", "@g_integ"],
+      "writes": ["@g_integ", "@g_out"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "stage_sample": {
+      "effects": ["state_read", "state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": ["@g_seq"],
+      "writes": ["@g_in", "@g_seq"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "stage_sink": {
+      "effects": ["pure"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": [],
+      "writes": [],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    }
+  },
+  "callsites": [
+    {"caller": "loop_main", "callee": "stage_sample", "args": []},
+    {"caller": "loop_main", "callee": "stage_pid", "args": []}
+  ],
+  "thread_entries": [
+  ],
+  "interface_bindings": {
+  },
+  "alias_stats": {"aa_available": true, "pairs_checked": 15, "coarse_pairs": 0, "split_pairs": 0}
+}

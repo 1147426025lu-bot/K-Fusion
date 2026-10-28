@@ -1,0 +1,88 @@
+{
+  "version": 2,
+  "meta": {
+    "platform": "mixed",
+    "fusion": false,
+    "generator": "stkp_v1",
+    "model_feasible": true,
+    "deployment_ready": true,
+    "xdom_adapter": "uku_ioctl",
+    "uku_check": {
+      "ok": true,
+      "codes": [],
+      "errors": []
+    },
+    "uku_session": {
+      "kind": "integ_i32",
+      "region": "g_integ"
+    }
+  },
+  "order": [
+    "stage_sample",
+    "stage_pid",
+    "stage_sink"
+  ],
+  "groups": [
+    {
+      "id": "g0",
+      "members": [
+        "stage_sample"
+      ],
+      "domain": "linux_userspace",
+      "release_phase_us": 0.0
+    },
+    {
+      "id": "g1",
+      "members": [
+        "stage_pid"
+      ],
+      "domain": "linux_kernel",
+      "release_phase_us": 200.0
+    },
+    {
+      "id": "g2",
+      "members": [
+        "stage_sink"
+      ],
+      "domain": "linux_userspace",
+      "release_phase_us": 400.0
+    }
+  ],
+  "domains": {
+    "stage_sample": "linux_userspace",
+    "stage_pid": "linux_kernel",
+    "stage_sink": "linux_userspace"
+  },
+  "cost": {
+    "predicted_R_us": 31.05,
+    "grade": "explore_uncertain"
+  },
+  "schedule": {
+    "exec_us": {
+      "stage_sample": 5.0,
+      "stage_pid": 0.05,
+      "stage_sink": 5.0
+    },
+    "release": [
+      {
+        "group": "g0",
+        "domain": "linux_userspace",
+        "L_us": 21.0,
+        "phase_us": 0.0
+      },
+      {
+        "group": "g1",
+        "domain": "linux_kernel",
+        "L_us": 0.0,
+        "phase_us": 200.0
+      },
+      {
+        "group": "g2",
+        "domain": "linux_userspace",
+        "L_us": 0.0,
+        "phase_us": 400.0
+      }
+    ],
+    "complete": true
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "chosen": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
+  "domain": "mixed",
+  "fused": false,
+  "cost_us": 31.05,
+  "why": "STKP Ĉ=ΣC_i,d + ΣL_g + ΣH_q + C_sync = 31.05; groups=3 channels=1; deployment_ready; claim=explore_uncertain",
+  "adapter": "uku_ioctl",
+  "deployable": true
+}

@@ -1,0 +1,1700 @@
+{
+  "kind": "pr10e_baseline",
+  "repeat": 10,
+  "cycles": 5000,
+  "pin_cpu": 3,
+  "scheds": [
+    "cfs",
+    "fifo99"
+  ],
+  "cells": [
+    {
+      "scenario": "user_only",
+      "status": "ok",
+      "mode": "gold",
+      "driver": "kfusion/docs/pr10e_baseline/gen_uku/driver",
+      "ko": "kfusion/docs/pr10e_baseline/gen_uku/kmod_uku/kfusion_uku.ko",
+      "conditions": [
+        {
+          "sched": "cfs",
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 62.511,
+                "p99_us": 76.68,
+                "p999_us": 296.67,
+                "max_us": 1420.837,
+                "avg_us": 64.436
+              },
+              "response": {
+                "p50_us": 63.822,
+                "p99_us": 79.014,
+                "p999_us": 298.54,
+                "max_us": 1423.392,
+                "avg_us": 65.797
+              },
+              "miss": 3,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.46 0.20 0.10 1/196 61539",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.42 0.19 0.10 1/196 61541",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 1,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 62.697,
+                "p99_us": 73.905,
+                "p999_us": 129.507,
+                "max_us": 881.549,
+                "avg_us": 63.649
+              },
+              "response": {
+                "p50_us": 64.092,
+                "p99_us": 76.09,
+                "p999_us": 131.692,
+                "max_us": 883.809,
+                "avg_us": 65.077
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.42 0.19 0.10 1/196 61541",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.39 0.19 0.10 1/196 61543",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 2,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 62.615,
+                "p99_us": 76.034,
+                "p999_us": 356.078,
+                "max_us": 1295.931,
+                "avg_us": 64.44
+              },
+              "response": {
+                "p50_us": 63.939,
+                "p99_us": 78.594,
+                "p999_us": 358.152,
+                "max_us": 1298.209,
+                "avg_us": 65.81
+              },
+              "miss": 2,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.39 0.19 0.10 1/196 61543",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.36 0.19 0.09 1/196 61545",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 3,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 62.548,
+                "p99_us": 69.616,
+                "p999_us": 77.234,
+                "max_us": 317.845,
+                "avg_us": 62.978
+              },
+              "response": {
+                "p50_us": 63.865,
+                "p99_us": 71.483,
+                "p999_us": 79.53,
+                "max_us": 319.827,
+                "avg_us": 64.314
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.36 0.19 0.09 1/196 61545",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.33 0.18 0.09 1/196 61546",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 4,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 62.849,
+                "p99_us": 75.955,
+                "p999_us": 168.966,
+                "max_us": 895.14,
+                "avg_us": 63.939
+              },
+              "response": {
+                "p50_us": 64.26,
+                "p99_us": 78.279,
+                "p999_us": 171.428,
+                "max_us": 897.492,
+                "avg_us": 65.382
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.33 0.18 0.09 1/196 61546",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.30 0.18 0.09 1/196 61548",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 5,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 62.667,
+                "p99_us": 74.381,
+                "p999_us": 117.118,
+                "max_us": 188.167,
+                "avg_us": 63.374
+              },
+              "response": {
+                "p50_us": 63.956,
+                "p99_us": 76.3,
+                "p999_us": 119.692,
+                "max_us": 190.704,
+                "avg_us": 64.701
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.30 0.18 0.09 1/196 61548",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.28 0.18 0.09 1/196 61549",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 6,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 62.834,
+                "p99_us": 74.677,
+                "p999_us": 239.821,
+                "max_us": 999.904,
+                "avg_us": 63.96
+              },
+              "response": {
+                "p50_us": 64.22,
+                "p99_us": 77.052,
+                "p999_us": 242.006,
+                "max_us": 1002.7,
+                "avg_us": 65.377
+              },
+              "miss": 1,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.28 0.18 0.09 1/196 61549",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.26 0.17 0.09 1/196 61551",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 7,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 62.634,
+                "p99_us": 72.54,
+                "p999_us": 199.468,
+                "max_us": 1785.118,
+                "avg_us": 63.869
+              },
+              "response": {
+                "p50_us": 63.94,
+                "p99_us": 74.778,
+                "p999_us": 201.727,
+                "max_us": 1787.155,
+                "avg_us": 65.198
+              },
+              "miss": 1,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.26 0.17 0.09 1/196 61551",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.24 0.17 0.09 1/196 61552",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 8,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 62.611,
+                "p99_us": 76.638,
+                "p999_us": 169.24,
+                "max_us": 1068.942,
+                "avg_us": 64.033
+              },
+              "response": {
+                "p50_us": 63.911,
+                "p99_us": 78.694,
+                "p999_us": 172.165,
+                "max_us": 1071.257,
+                "avg_us": 65.382
+              },
+              "miss": 1,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.24 0.17 0.09 1/196 61552",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.30 0.18 0.10 1/196 61555",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 9,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 62.852,
+                "p99_us": 92.877,
+                "p999_us": 1337.465,
+                "max_us": 1807.985,
+                "avg_us": 67.562
+              },
+              "response": {
+                "p50_us": 64.266,
+                "p99_us": 95.34,
+                "p999_us": 1340.484,
+                "max_us": 1810.67,
+                "avg_us": 69.095
+              },
+              "miss": 6,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.30 0.18 0.10 1/196 61555",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.27 0.18 0.09 1/197 61560",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            }
+          ],
+          "dir": "kfusion/docs/pr10e_baseline/runs_user_only_cfs",
+          "summary": {
+            "start_p50": {
+              "median": 62.6505,
+              "min": 62.511,
+              "max": 62.852,
+              "spread": 0.341
+            },
+            "start_p99": {
+              "median": 75.316,
+              "min": 69.616,
+              "max": 92.877,
+              "spread": 23.261
+            },
+            "resp_p50": {
+              "median": 63.948,
+              "min": 63.822,
+              "max": 64.266,
+              "spread": 0.444
+            },
+            "resp_max": {
+              "median": 1036.9785000000002,
+              "min": 190.704,
+              "max": 1810.67,
+              "spread": 1619.966
+            },
+            "miss_total": 14,
+            "n_ok": 10
+          }
+        },
+        {
+          "sched": "fifo99",
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 11.924,
+                "p99_us": 26.459,
+                "p999_us": 35.845,
+                "max_us": 45.206,
+                "avg_us": 12.704
+              },
+              "response": {
+                "p50_us": 13.261,
+                "p99_us": 28.848,
+                "p999_us": 38.382,
+                "max_us": 48.391,
+                "avg_us": 14.09
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.27 0.18 0.09 1/197 61560",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.25 0.18 0.09 3/197 61564",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 1,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 11.868,
+                "p99_us": 20.27,
+                "p999_us": 30.392,
+                "max_us": 35.507,
+                "avg_us": 12.264
+              },
+              "response": {
+                "p50_us": 13.222,
+                "p99_us": 21.926,
+                "p999_us": 33.522,
+                "max_us": 38.822,
+                "avg_us": 13.641
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.25 0.18 0.09 1/197 61564",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.23 0.17 0.09 1/197 61566",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 2,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 11.855,
+                "p99_us": 25.656,
+                "p999_us": 31.909,
+                "max_us": 33.734,
+                "avg_us": 12.64
+              },
+              "response": {
+                "p50_us": 13.154,
+                "p99_us": 27.929,
+                "p999_us": 34.094,
+                "max_us": 35.919,
+                "avg_us": 13.986
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.23 0.17 0.09 1/197 61566",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.21 0.17 0.09 1/197 61567",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 3,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 11.943,
+                "p99_us": 25.46,
+                "p999_us": 31.029,
+                "max_us": 38.837,
+                "avg_us": 12.681
+              },
+              "response": {
+                "p50_us": 13.259,
+                "p99_us": 27.748,
+                "p999_us": 33.923,
+                "max_us": 41.281,
+                "avg_us": 14.052
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.21 0.17 0.09 1/197 61567",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.19 0.17 0.09 1/197 61569",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 4,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 11.875,
+                "p99_us": 24.373,
+                "p999_us": 30.889,
+                "max_us": 41.772,
+                "avg_us": 12.481
+              },
+              "response": {
+                "p50_us": 13.12,
+                "p99_us": 26.576,
+                "p999_us": 33.668,
+                "max_us": 44.568,
+                "avg_us": 13.762
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.19 0.17 0.09 1/197 61569",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.18 0.16 0.09 3/197 61570",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 5,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 11.68,
+                "p99_us": 24.064,
+                "p999_us": 44.303,
+                "max_us": 85.913,
+                "avg_us": 12.164
+              },
+              "response": {
+                "p50_us": 13.007,
+                "p99_us": 25.857,
+                "p999_us": 46.507,
+                "max_us": 88.154,
+                "avg_us": 13.514
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.18 0.16 0.09 1/197 61570",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.16 0.16 0.09 1/197 61572",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 6,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 11.871,
+                "p99_us": 25.681,
+                "p999_us": 34.089,
+                "max_us": 43.754,
+                "avg_us": 12.543
+              },
+              "response": {
+                "p50_us": 13.168,
+                "p99_us": 27.939,
+                "p999_us": 36.921,
+                "max_us": 46.736,
+                "avg_us": 13.884
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.16 0.16 0.09 1/197 61572",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.15 0.16 0.09 1/197 61573",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 7,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 11.965,
+                "p99_us": 32.731,
+                "p999_us": 38.134,
+                "max_us": 45.407,
+                "avg_us": 13.175
+              },
+              "response": {
+                "p50_us": 13.227,
+                "p99_us": 34.891,
+                "p999_us": 39.967,
+                "max_us": 48.352,
+                "avg_us": 14.49
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.22 0.17 0.09 1/197 61573",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.20 0.17 0.09 1/197 61575",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 8,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 11.882,
+                "p99_us": 25.649,
+                "p999_us": 34.624,
+                "max_us": 37.647,
+                "avg_us": 12.663
+              },
+              "response": {
+                "p50_us": 13.256,
+                "p99_us": 27.835,
+                "p999_us": 37.143,
+                "max_us": 40.258,
+                "avg_us": 14.07
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.20 0.17 0.09 1/197 61575",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.27 0.18 0.10 2/197 61576",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 9,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 11.866,
+                "p99_us": 24.096,
+                "p999_us": 32.06,
+                "max_us": 59.485,
+                "avg_us": 12.376
+              },
+              "response": {
+                "p50_us": 13.203,
+                "p99_us": 26.204,
+                "p999_us": 34.375,
+                "max_us": 61.819,
+                "avg_us": 13.744
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.27 0.18 0.10 2/197 61576",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.24 0.18 0.10 2/197 61579",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            }
+          ],
+          "dir": "kfusion/docs/pr10e_baseline/runs_user_only_fifo99",
+          "summary": {
+            "start_p50": {
+              "median": 11.873000000000001,
+              "min": 11.68,
+              "max": 11.965,
+              "spread": 0.285
+            },
+            "start_p99": {
+              "median": 25.5545,
+              "min": 20.27,
+              "max": 32.731,
+              "spread": 12.461
+            },
+            "resp_p50": {
+              "median": 13.212499999999999,
+              "min": 13.007,
+              "max": 13.261,
+              "spread": 0.254
+            },
+            "resp_max": {
+              "median": 45.652,
+              "min": 35.919,
+              "max": 88.154,
+              "spread": 52.235
+            },
+            "miss_total": 0,
+            "n_ok": 10
+          }
+        }
+      ]
+    },
+    {
+      "scenario": "partial_kernel",
+      "status": "ok",
+      "mode": "mixed",
+      "driver": "kfusion/docs/pr10e_baseline/gen_uku/driver",
+      "ko": "kfusion/docs/pr10e_baseline/gen_uku/kmod_uku/kfusion_uku.ko",
+      "conditions": [
+        {
+          "sched": "cfs",
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 63.032,
+                "p99_us": 75.335,
+                "p999_us": 224.911,
+                "max_us": 698.266,
+                "avg_us": 64.282
+              },
+              "response": {
+                "p50_us": 67.326,
+                "p99_us": 83.194,
+                "p999_us": 235.874,
+                "max_us": 710.729,
+                "avg_us": 68.738
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.24 0.18 0.10 1/197 61579",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.22 0.18 0.10 1/199 61586",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 1,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 63.098,
+                "p99_us": 115.56,
+                "p999_us": 1280.927,
+                "max_us": 2630.904,
+                "avg_us": 68.868
+              },
+              "response": {
+                "p50_us": 67.32,
+                "p99_us": 128.83,
+                "p999_us": 1285.871,
+                "max_us": 2646.237,
+                "avg_us": 73.636
+              },
+              "miss": 9,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.22 0.18 0.10 1/199 61586",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.29 0.19 0.10 1/199 61594",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 2,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 63.003,
+                "p99_us": 74.113,
+                "p999_us": 160.037,
+                "max_us": 1283.985,
+                "avg_us": 64.011
+              },
+              "response": {
+                "p50_us": 67.098,
+                "p99_us": 81.613,
+                "p999_us": 169.852,
+                "max_us": 1296.485,
+                "avg_us": 68.239
+              },
+              "miss": 1,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.29 0.19 0.10 1/199 61594",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.26 0.19 0.10 2/199 61599",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 3,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 62.955,
+                "p99_us": 70.274,
+                "p999_us": 110.981,
+                "max_us": 405.287,
+                "avg_us": 63.477
+              },
+              "response": {
+                "p50_us": 67.227,
+                "p99_us": 77.163,
+                "p999_us": 118.129,
+                "max_us": 415.398,
+                "avg_us": 67.828
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.26 0.19 0.10 1/199 61599",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.24 0.18 0.10 1/199 61605",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 4,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 63.229,
+                "p99_us": 74.7,
+                "p999_us": 122.611,
+                "max_us": 1088.115,
+                "avg_us": 64.278
+              },
+              "response": {
+                "p50_us": 67.529,
+                "p99_us": 82.88,
+                "p999_us": 129.981,
+                "max_us": 1097.744,
+                "avg_us": 68.731
+              },
+              "miss": 1,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.24 0.18 0.10 2/199 61605",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.22 0.18 0.10 1/199 61610",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 5,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 62.912,
+                "p99_us": 76.558,
+                "p999_us": 390.767,
+                "max_us": 2321.823,
+                "avg_us": 64.91
+              },
+              "response": {
+                "p50_us": 67.11,
+                "p99_us": 84.496,
+                "p999_us": 394.766,
+                "max_us": 2330.545,
+                "avg_us": 69.296
+              },
+              "miss": 2,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.22 0.18 0.10 1/199 61610",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.20 0.18 0.10 1/199 61616",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 6,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 63.061,
+                "p99_us": 76.424,
+                "p999_us": 567.248,
+                "max_us": 1762.97,
+                "avg_us": 65.041
+              },
+              "response": {
+                "p50_us": 67.282,
+                "p99_us": 85.318,
+                "p999_us": 577.748,
+                "max_us": 1772.173,
+                "avg_us": 69.437
+              },
+              "miss": 1,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.20 0.18 0.10 1/199 61616",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.19 0.17 0.10 1/199 61621",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 7,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 63.088,
+                "p99_us": 72.389,
+                "p999_us": 350.048,
+                "max_us": 2111.169,
+                "avg_us": 64.87
+              },
+              "response": {
+                "p50_us": 67.362,
+                "p99_us": 78.81,
+                "p999_us": 360.01,
+                "max_us": 2122.706,
+                "avg_us": 69.197
+              },
+              "miss": 3,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.19 0.17 0.10 1/199 61621",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.17 0.17 0.10 1/199 61627",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 8,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 62.978,
+                "p99_us": 75.686,
+                "p999_us": 234.097,
+                "max_us": 1834.487,
+                "avg_us": 64.55
+              },
+              "response": {
+                "p50_us": 67.107,
+                "p99_us": 83.475,
+                "p999_us": 243.671,
+                "max_us": 1844.82,
+                "avg_us": 68.856
+              },
+              "miss": 1,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.17 0.17 0.10 1/199 61627",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.16 0.17 0.09 1/200 61633",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 9,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 63.113,
+                "p99_us": 75.855,
+                "p999_us": 215.444,
+                "max_us": 1699.391,
+                "avg_us": 64.674
+              },
+              "response": {
+                "p50_us": 67.444,
+                "p99_us": 83.484,
+                "p999_us": 224.111,
+                "max_us": 1710.169,
+                "avg_us": 69.162
+              },
+              "miss": 1,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.16 0.17 0.09 1/200 61633",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.15 0.16 0.09 1/199 61639",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            }
+          ],
+          "dir": "kfusion/docs/pr10e_baseline/runs_partial_kernel_cfs",
+          "summary": {
+            "start_p50": {
+              "median": 63.046499999999995,
+              "min": 62.912,
+              "max": 63.229,
+              "spread": 0.317
+            },
+            "start_p99": {
+              "median": 75.51050000000001,
+              "min": 70.274,
+              "max": 115.56,
+              "spread": 45.286
+            },
+            "resp_p50": {
+              "median": 67.30099999999999,
+              "min": 67.098,
+              "max": 67.529,
+              "spread": 0.431
+            },
+            "resp_max": {
+              "median": 1741.171,
+              "min": 415.398,
+              "max": 2646.237,
+              "spread": 2230.839
+            },
+            "miss_total": 19,
+            "n_ok": 10
+          }
+        },
+        {
+          "sched": "fifo99",
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 12.346,
+                "p99_us": 25.83,
+                "p999_us": 32.702,
+                "max_us": 41.323,
+                "avg_us": 13.087
+              },
+              "response": {
+                "p50_us": 16.46,
+                "p99_us": 33.687,
+                "p999_us": 42.85,
+                "max_us": 49.657,
+                "avg_us": 17.408
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.15 0.16 0.09 1/199 61639",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.13 0.16 0.09 1/199 61644",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 1,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 12.178,
+                "p99_us": 26.354,
+                "p999_us": 37.743,
+                "max_us": 52.422,
+                "avg_us": 12.654
+              },
+              "response": {
+                "p50_us": 16.297,
+                "p99_us": 33.835,
+                "p999_us": 46.612,
+                "max_us": 65.644,
+                "avg_us": 16.905
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.13 0.16 0.09 1/199 61644",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.12 0.16 0.09 1/199 61651",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 2,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 12.419,
+                "p99_us": 39.313,
+                "p999_us": 62.394,
+                "max_us": 89.609,
+                "avg_us": 14.207
+              },
+              "response": {
+                "p50_us": 16.794,
+                "p99_us": 49.868,
+                "p999_us": 75.489,
+                "max_us": 115.275,
+                "avg_us": 19.09
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.12 0.16 0.09 1/199 61651",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.11 0.16 0.09 1/199 61659",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 3,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 12.295,
+                "p99_us": 24.936,
+                "p999_us": 34.006,
+                "max_us": 42.194,
+                "avg_us": 12.944
+              },
+              "response": {
+                "p50_us": 16.359,
+                "p99_us": 32.683,
+                "p999_us": 42.154,
+                "max_us": 54.361,
+                "avg_us": 17.174
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.11 0.16 0.09 1/199 61659",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.10 0.15 0.09 1/199 61665",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 4,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 12.359,
+                "p99_us": 24.493,
+                "p999_us": 33.128,
+                "max_us": 39.397,
+                "avg_us": 13.021
+              },
+              "response": {
+                "p50_us": 16.579,
+                "p99_us": 32.073,
+                "p999_us": 43.294,
+                "max_us": 49.267,
+                "avg_us": 17.395
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.10 0.15 0.09 1/199 61665",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.10 0.15 0.09 1/200 61671",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 5,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 12.475,
+                "p99_us": 23.7,
+                "p999_us": 32.496,
+                "max_us": 45.882,
+                "avg_us": 13.068
+              },
+              "response": {
+                "p50_us": 16.886,
+                "p99_us": 30.715,
+                "p999_us": 41.74,
+                "max_us": 57.012,
+                "avg_us": 17.554
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.10 0.15 0.09 1/200 61671",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.09 0.15 0.09 1/200 61677",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 6,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 12.014,
+                "p99_us": 26.416,
+                "p999_us": 36.459,
+                "max_us": 55.169,
+                "avg_us": 12.834
+              },
+              "response": {
+                "p50_us": 16.049,
+                "p99_us": 34.721,
+                "p999_us": 47.181,
+                "max_us": 74.335,
+                "avg_us": 17.084
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.09 0.15 0.09 1/200 61677",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.08 0.14 0.09 1/199 61682",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 7,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 12.317,
+                "p99_us": 27.267,
+                "p999_us": 35.557,
+                "max_us": 53.45,
+                "avg_us": 13.179
+              },
+              "response": {
+                "p50_us": 16.648,
+                "p99_us": 35.485,
+                "p999_us": 44.334,
+                "max_us": 65.654,
+                "avg_us": 17.721
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.08 0.14 0.09 1/199 61682",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.07 0.14 0.09 1/200 61689",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 8,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 12.319,
+                "p99_us": 25.533,
+                "p999_us": 32.002,
+                "max_us": 47.818,
+                "avg_us": 13.123
+              },
+              "response": {
+                "p50_us": 16.693,
+                "p99_us": 33.177,
+                "p999_us": 40.823,
+                "max_us": 55.837,
+                "avg_us": 17.665
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.07 0.14 0.09 1/200 61689",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.07 0.14 0.09 1/200 61695",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 9,
+              "rc": 0,
+              "n": 5000,
+              "start_lat": {
+                "p50_us": 12.261,
+                "p99_us": 24.294,
+                "p999_us": 33.262,
+                "max_us": 40.392,
+                "avg_us": 12.788
+              },
+              "response": {
+                "p50_us": 16.561,
+                "p99_us": 31.687,
+                "p999_us": 41.506,
+                "max_us": 49.373,
+                "avg_us": 17.193
+              },
+              "miss": 0,
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.07 0.14 0.09 1/200 61695",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.06 0.14 0.09 1/199 61700",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            }
+          ],
+          "dir": "kfusion/docs/pr10e_baseline/runs_partial_kernel_fifo99",
+          "summary": {
+            "start_p50": {
+              "median": 12.318000000000001,
+              "min": 12.014,
+              "max": 12.475,
+              "spread": 0.461
+            },
+            "start_p99": {
+              "median": 25.6815,
+              "min": 23.7,
+              "max": 39.313,
+              "spread": 15.613
+            },
+            "resp_p50": {
+              "median": 16.57,
+              "min": 16.049,
+              "max": 16.886,
+              "spread": 0.837
+            },
+            "resp_max": {
+              "median": 56.4245,
+              "min": 49.267,
+              "max": 115.275,
+              "spread": 66.008
+            },
+            "miss_total": 0,
+            "n_ok": 10
+          }
+        }
+      ]
+    }
+  ],
+  "env": {
+    "governor": null,
+    "cur_freq_khz": null,
+    "temp_mc": null,
+    "loadavg": "0.06 0.14 0.09 1/199 61700",
+    "rt_runtime_us": "950000",
+    "nproc": 4,
+    "pin_cpu": 3
+  },
+  "boundary": "阶段A：不改内核、不开 tracing。逐拍原始数据在 runs_*/*.csv。跨轮极差本身是复现对象，不是噪声。"
+}
