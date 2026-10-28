@@ -1,0 +1,186 @@
+{
+  "kind": "chain_window_board",
+  "claim": "empirical s3 instant vs [380,520]; not WCET",
+  "host": "Linux version 5.15.86 (builder@e3665d6e1a6c) (aarch64-linux-gnu-gcc (Debian 10.2.1-6) 10.2.1 20210110, GNU ld (GNU Binutils for Debian) 2.35.2) #1 SMP PREEMPT Wed Oct 14 10:16:11 UTC 2026",
+  "stkp": {
+    "chosen": "STKP:L[s1+s2]|L[s3+s4]",
+    "claim": "empirical_model_not_wcet",
+    "groups": [
+      [
+        "s1",
+        "s2"
+      ],
+      [
+        "s3",
+        "s4"
+      ]
+    ],
+    "domain": "linux_userspace",
+    "pruned": {
+      "domain": 0,
+      "semantic": 0,
+      "temporal": 8,
+      "runtime": 38,
+      "incomparable": 0
+    }
+  },
+  "cells": {
+    "legal_plan": {
+      "digest": "50df863d",
+      "miss": 0,
+      "cycles": 200,
+      "instant": {
+        "s1": {
+          "min_us": 9.702,
+          "avg_us": 24.73,
+          "p50_us": 14,
+          "max_us": 166.62
+        },
+        "s2": {
+          "min_us": 10.055,
+          "avg_us": 25.434,
+          "p50_us": 14,
+          "max_us": 167.565
+        },
+        "s3": {
+          "min_us": 409.693,
+          "avg_us": 421.042,
+          "p50_us": 412,
+          "max_us": 513.986
+        },
+        "s4": {
+          "min_us": 410.008,
+          "avg_us": 421.67,
+          "p50_us": 412,
+          "max_us": 514.912
+        }
+      },
+      "response": {
+        "min_us": 410.008,
+        "p50_us": 412,
+        "max_us": 514.912
+      },
+      "cmd": [
+        "taskset",
+        "-c",
+        "0",
+        "chrt",
+        "-f",
+        "80",
+        "/tmp/pr4c_chain_window/legal",
+        "plan",
+        "200"
+      ],
+      "s3_p50_us": 412,
+      "s3_in_window": true
+    },
+    "legal_flat": {
+      "digest": "50df863d",
+      "miss": 0,
+      "cycles": 200,
+      "instant": {
+        "s1": {
+          "min_us": 22.346,
+          "avg_us": 32.121,
+          "p50_us": 31,
+          "max_us": 113.987
+        },
+        "s2": {
+          "min_us": 220.964,
+          "avg_us": 225.088,
+          "p50_us": 224,
+          "max_us": 279.682
+        },
+        "s3": {
+          "min_us": 420.318,
+          "avg_us": 426.181,
+          "p50_us": 424,
+          "max_us": 541.699
+        },
+        "s4": {
+          "min_us": 620.449,
+          "avg_us": 625.606,
+          "p50_us": 624,
+          "max_us": 740.448
+        }
+      },
+      "response": {
+        "min_us": 620.449,
+        "p50_us": 624,
+        "max_us": 740.448
+      },
+      "cmd": [
+        "taskset",
+        "-c",
+        "0",
+        "chrt",
+        "-f",
+        "80",
+        "/tmp/pr4c_chain_window/legal",
+        "flat",
+        "200"
+      ],
+      "s3_p50_us": 424,
+      "s3_in_window": true
+    },
+    "illegal_fused": {
+      "digest": "129cacd5",
+      "miss": 0,
+      "cycles": 200,
+      "instant": {
+        "s1": {
+          "min_us": 11.812,
+          "avg_us": 43.621,
+          "p50_us": 43,
+          "max_us": 90.057
+        },
+        "s2": {
+          "min_us": 12.294,
+          "avg_us": 44.723,
+          "p50_us": 45,
+          "max_us": 91.187
+        },
+        "s3": {
+          "min_us": 12.683,
+          "avg_us": 45.277,
+          "p50_us": 45,
+          "max_us": 91.65
+        },
+        "s4": {
+          "min_us": 12.942,
+          "avg_us": 45.791,
+          "p50_us": 46,
+          "max_us": 92.095
+        }
+      },
+      "response": {
+        "min_us": 12.942,
+        "p50_us": 46,
+        "max_us": 92.095
+      },
+      "cmd": [
+        "taskset",
+        "-c",
+        "0",
+        "chrt",
+        "-f",
+        "80",
+        "/tmp/pr4c_chain_window/illegal",
+        "plan",
+        "200"
+      ],
+      "s3_p50_us": 45,
+      "s3_in_window": false
+    }
+  },
+  "window_us": {
+    "earliest": 380.0,
+    "latest": 520.0
+  },
+  "pass": {
+    "stkp_split": true,
+    "legal_s3_in_window": true,
+    "illegal_s3_early": true,
+    "digest_legal_plan_flat": true
+  }
+}

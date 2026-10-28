@@ -7,6 +7,9 @@
  */
 #include <stdint.h>
 
+/* kfusion:task name=chain_window entry=loop_main period_us=1000 deadline_us=1000 step_us=200
+ * 相位：s1@0 s2@200 s3@400 s4@600。s3 执行器窗口 [380,520] µs，全融合会前拉。 */
+
 int32_t cw_in = 7;   /* 外部输入（传感器读数） */
 int32_t cw_a;
 int32_t cw_b;
@@ -32,4 +35,21 @@ void s3(void)
 void s4(void)
 {
 	cw_out = cw_c + cw_a;
+}
+
+void loop_reset(void)
+{
+	cw_in = 7;
+	cw_a = 0;
+	cw_b = 0;
+	cw_c = 0;
+	cw_out = 0;
+}
+
+void loop_main(void)
+{
+	s1();
+	s2();
+	s3();
+	s4();
 }
