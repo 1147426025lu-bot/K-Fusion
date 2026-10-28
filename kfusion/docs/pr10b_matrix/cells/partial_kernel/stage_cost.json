@@ -1,0 +1,31 @@
+{
+  "_note": "PR-10B 场景成本（域级量级假设，不是逐阶段实测）。用于让 STKP 在两种经济性下各选一次；换值会改入选方案。",
+  "linux_userspace": {
+    "stage_sample": {
+      "value": 5.0,
+      "evidence": "scenario"
+    },
+    "stage_pid": {
+      "value": 5.0,
+      "evidence": "scenario"
+    },
+    "stage_sink": {
+      "value": 5.0,
+      "evidence": "scenario"
+    }
+  },
+  "linux_kernel": {
+    "stage_sample": {
+      "value": 0.05,
+      "evidence": "scenario"
+    },
+    "stage_pid": {
+      "value": 0.05,
+      "evidence": "scenario"
+    },
+    "stage_sink": {
+      "value": 0.05,
+      "evidence": "scenario"
+    }
+  }
+}

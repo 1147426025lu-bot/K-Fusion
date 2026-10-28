@@ -1,0 +1,51 @@
+
+# mode: gold  releases_per_period=1  cycles=200
+
+# probe: r/s/f v1.2
+# period_ns: 1000000
+# deadline_ns: 1000000
+# samples: 200
+# release_id: serial 0..199
+# series_us: start_lat exec response  (1us buckets, cap 1023)
+# stat_start_lat_us: min=60.584 avg=63.371 p50=62 p90=64 p99=76 p99.9=93 p99.99=93 max=93.772 over=0 neg=0 min_signed=60.584 n=200
+# stat_exec_us: min=0.759 avg=0.918 p50=0 p90=1 p99=2 p99.9=3 p99.99=3 max=3.167 over=0 neg=0 min_signed=0.759 n=200
+# stat_span_us: min=0.759 avg=0.918 p50=0 p90=1 p99=2 p99.9=3 p99.99=3 max=3.167 over=0 neg=0 min_signed=0.759 n=200
+# stat_response_us: min=61.494 avg=64.290 p50=63 p90=65 p99=78 p99.9=96 p99.99=96 max=96.939 over=0 neg=0 min_signed=61.494 n=200
+# deadline_miss: 0/200 (none)
+# exec_overrun: 0/200
+# digest: bfc8a51c
+# stat_exec_stage_sample_us: min=0.222 avg=0.301 p50=0 p90=0 p99=0 p99.9=1 p99.99=1 max=1.148 over=0 neg=0 min_signed=0.222 n=200
+# instant_stage_sample_us: min=60.843 avg=63.672 p50=62 max=94.920
+# stat_exec_stage_pid_us: min=0.277 avg=0.362 p50=0 p90=0 p99=1 p99.9=1 p99.99=1 max=1.314 over=0 neg=0 min_signed=0.277 n=200
+# instant_stage_pid_us: min=61.195 avg=64.034 p50=63 max=96.031
+# stat_exec_stage_sink_us: min=0.222 avg=0.255 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.908 over=0 neg=0 min_signed=0.222 n=200
+# instant_stage_sink_us: min=61.494 avg=64.290 p50=63 max=96.939
+# hist_start_lat_us: 60 10
+# hist_start_lat_us: 61 6
+# hist_start_lat_us: 62 116
+# hist_start_lat_us: 63 23
+# hist_start_lat_us: 64 29
+# hist_start_lat_us: 65 5
+# hist_start_lat_us: 66 2
+# hist_start_lat_us: 67 3
+# hist_start_lat_us: 69 1
+# hist_start_lat_us: 71 1
+# hist_start_lat_us: 74 1
+# hist_start_lat_us: 76 1
+# hist_start_lat_us: 78 1
+# hist_start_lat_us: 93 1
+# hist_response_us: 61 10
+# hist_response_us: 62 11
+# hist_response_us: 63 117
+# hist_response_us: 64 17
+# hist_response_us: 65 31
+# hist_response_us: 66 2
+# hist_response_us: 67 3
+# hist_response_us: 68 2
+# hist_response_us: 69 1
+# hist_response_us: 70 1
+# hist_response_us: 73 1
+# hist_response_us: 76 1
+# hist_response_us: 78 1
+# hist_response_us: 80 1
+# hist_response_us: 96 1

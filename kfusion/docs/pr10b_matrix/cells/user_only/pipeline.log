@@ -1,0 +1,149 @@
+
+──── 1) Clang AST → 阶段骨架（替代手写 stages.json / dag.json） ────
+extracted 3 stages from loop_main:
+  0. stage_sample @0µs  stage_sample()
+  1. stage_pid @200µs  stage_pid()
+  2. stage_sink @400µs  stage_sink()
+wrote /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/stages.json
+
+──── 2) C → LLVM IR（禁内联，保留阶段函数） ────
+
+──── 3) IR → EffectSummary（效果不是人写的） ────
+[EffectSummary] 写出 /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/effect_summary.json（5 个函数）
+
+──── 4) 摘要 + 自动骨架 → 契约 ────
+写出 /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/task.contract.json（3 个阶段）
+  stage_sample             state_read/state_write
+  stage_pid                state_read/state_write
+  stage_sink               pure
+
+──── 5) 契约门禁（linux_userspace 为底线；内核是否可行交给选型） ────
+== task.contract.json  (task=mixed_pid)
+   [linux_userspace] ✅ PASS
+== task.contract.json  (task=mixed_pid)
+   [linux_kernel] ✅ PASS
+  内核域契约可通过（是否部署仍由 A/B/C/D 决定）
+
+──── 6) DAG（数据边来自 IR，相位来自骨架） ────
+== 节点 3（stages 视图） ==
+  stage_pid              state_read,state_write
+  stage_sample           state_read,state_write
+  stage_sink             pure
+== 边 ==
+  stage_sample         -> stage_pid            [data    ] @g_in
+== 拓扑序 ==
+  stage_sample -> stage_pid -> stage_sink
+== 统计 ==
+  边 1（call 0 / spawn 0 / data 1 / anti 0 / conflict 0）· 候选 0
+  区域具体化：唯一绑定 0 · 多绑定 0 · 完全未解析 0 · 调用已解释 0
+
+──── 6b) TEIR（状态版本 + 时间事件 + 允许域） ────
+TEIR 3 nodes (must_preserve=2 may_delete=1)  edges previous-job=0  policy=ok
+wrote /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/task.teir.json
+  pin 2 个阶段
+
+──── 7) 单域融合规划（对照报告；失败不阻断 STKP） ────
+  写出对照 /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/plan.planner.json
+
+──── 7c) A–F 对照基线（失败不阻断 STKP） ────
+A/B/C/D/E/F legal=4/6  chosen=B
+    A LEGAL   fused=False  Cost=63.0  
+  → B LEGAL   fused=True  Cost=21.0  Cost=G·c + E + extra = 21.0; G=1 c=21.0 extra=0.0; 全内核非法；部分内核化 E Cost=113.0 ≥ 用户态，故不迁移
+    C REJECT  fused=False  Cost=-  验证器拒绝: E_DOMAIN; E_DOMAIN
+    D REJECT  fused=True  Cost=-  验证器拒绝: E_DOMAIN; E_DOMAIN
+    E LEGAL   fused=True  Cost=113.0  
+    F LEGAL   fused=False  Cost=113.0  
+wrote /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/candidates.json
+
+──── 7c2) STKP 穷举求解（入选方案才是生成输入） ────
+STKP chosen plan → /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/chosen.plan.json  (B linux_userspace Ĉ=36.0)
+STKP v1 raw=18 enum=18 deployable=5 model=5 chosen=B claim=explore_uncertain
+  prune domain=13 semantic=0 temporal=0 mixed=0 missing=0
+  g0  stage_sample + stage_pid + stage_sink @ linux_userspace
+  vs A–F: baseline=B STKP=B missed_by_af=False
+wrote /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/stkp.json
+  STKP 入选 B  域 linux_userspace
+
+──── 7b) 独立验证器（验证入选方案，不调用规划器） ────
+VERIFY PASS
+
+──── 7b2) DAG 全局验证器（写回 verification，供 emit 门禁） ────
+· 组 g0   stage_sample + stage_pid + stage_sink
+✅ 方案验证通过（1 组 · 同拍边 1 · 跨周期边 0 · 时间证据 empirical）
+  deploy.json chosen=B domain=linux_userspace
+
+──── 7e) 共用时间/版本门禁（STKP 入选方案；采样/提交/数据版本） ────
+contract_gate teir_ok=True window_raw=True deploy_ok=True
+
+──── 8) 生成用户态驱动（#include 原计算体，不复制） ────
+写出 /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/driver.c（plan 1 次释放/周期，flat 3 次/周期，3 阶段）
+
+──── 8b) 入选用户态：不生成内核部署产物 ────
+  skip kmod（chosen=B domain=linux_userspace）
+
+──── 9) 宿主编译并短跑 plan/flat（digest 必须相同） ────
+
+# mode: plan  releases_per_period=1  cycles=1
+
+# probe: r/s/f v1.2
+# period_ns: 1000000
+# deadline_ns: 1000000
+# samples: 1
+# release_id: serial 0..0
+# series_us: start_lat exec response  (1us buckets, cap 1023)
+# stat_start_lat_us: min=82.057 avg=82.057 p50=82 p90=82 p99=82 p99.9=82 p99.99=82 max=82.057 over=0 neg=0 min_signed=82.057 n=1
+# stat_exec_us: min=2.778 avg=2.778 p50=2 p90=2 p99=2 p99.9=2 p99.99=2 max=2.778 over=0 neg=0 min_signed=2.778 n=1
+# stat_span_us: min=2.778 avg=2.778 p50=2 p90=2 p99=2 p99.9=2 p99.99=2 max=2.778 over=0 neg=0 min_signed=2.778 n=1
+# stat_response_us: min=84.835 avg=84.835 p50=84 p90=84 p99=84 p99.9=84 p99.99=84 max=84.835 over=0 neg=0 min_signed=84.835 n=1
+# deadline_miss: 0/1 (none)
+# exec_overrun: 0/1
+# digest: ecf6b3aa
+# stat_exec_stage_sample_us: min=0.889 avg=0.889 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.889 over=0 neg=0 min_signed=0.889 n=1
+# instant_stage_sample_us: min=82.946 avg=82.946 p50=82 max=82.946
+# stat_exec_stage_pid_us: min=1.111 avg=1.111 p50=1 p90=1 p99=1 p99.9=1 p99.99=1 max=1.111 over=0 neg=0 min_signed=1.111 n=1
+# instant_stage_pid_us: min=84.057 avg=84.057 p50=84 max=84.057
+# stat_exec_stage_sink_us: min=0.778 avg=0.778 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.778 over=0 neg=0 min_signed=0.778 n=1
+# instant_stage_sink_us: min=84.835 avg=84.835 p50=84 max=84.835
+# hist_start_lat_us: 82 1
+# hist_response_us: 84 1
+
+# mode: flat  releases_per_period=3  cycles=1
+
+# probe: r/s/f v1.2
+# period_ns: 1000000
+# deadline_ns: 1000000
+# samples: 1
+# release_id: serial 0..0
+# series_us: start_lat exec response  (1us buckets, cap 1023)
+# stat_start_lat_us: min=61.625 avg=113.103 p50=65 p90=212 p99=212 p99.9=212 p99.99=212 max=212.444 over=0 neg=0 min_signed=61.625 n=3
+# stat_exec_us: min=2.056 avg=2.056 p50=2 p90=2 p99=2 p99.9=2 p99.99=2 max=2.056 over=0 neg=0 min_signed=2.056 n=1
+# stat_span_us: min=249.515 avg=249.515 p50=249 p90=249 p99=249 p99.9=249 p99.99=249 max=249.515 over=0 neg=0 min_signed=249.515 n=1
+# stat_response_us: min=461.959 avg=461.959 p50=461 p90=461 p99=461 p99.9=461 p99.99=461 max=461.959 over=0 neg=0 min_signed=461.959 n=1
+# deadline_miss: 0/1 (none)
+# exec_overrun: 0/1
+# digest: ecf6b3aa
+# stat_exec_stage_sample_us: min=1.037 avg=1.037 p50=1 p90=1 p99=1 p99.9=1 p99.99=1 max=1.037 over=0 neg=0 min_signed=1.037 n=1
+# instant_stage_sample_us: min=213.481 avg=213.481 p50=213 max=213.481
+# stat_exec_stage_pid_us: min=0.685 avg=0.685 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.685 over=0 neg=0 min_signed=0.685 n=1
+# instant_stage_pid_us: min=265.925 avg=265.925 p50=265 max=265.925
+# stat_exec_stage_sink_us: min=0.334 avg=0.334 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.334 over=0 neg=0 min_signed=0.334 n=1
+# instant_stage_sink_us: min=461.959 avg=461.959 p50=461 max=461.959
+# hist_start_lat_us: 61 1
+# hist_start_lat_us: 65 1
+# hist_start_lat_us: 212 1
+# hist_response_us: 461 1
+digest match: ecf6b3aa
+
+✅ 从 C 到 A/B/C/D 流水线完成
+   骨架  /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/stages.json
+   DAG   /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/task.dag.json
+   TEIR  /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/task.teir.json
+   入选  /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/chosen.plan.json  (B / linux_userspace)
+   部署  /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/deploy.json
+   方案  /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/plan.json
+   验证  /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/verify.json
+   选型  /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/candidates.json  (A–F 基线)
+   STKP  /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/stkp.json
+   用户态 /root/K-Fusion/kfusion/docs/pr10b_matrix/cells/user_only/gen/driver.c
+   kmod   （未生成：入选用户态）
+   计算体始终是 /root/K-Fusion/kfusion/examples/ecos/mixed_pid_stateful__积分混合.c ，没有第二份手写阶段函数

@@ -1,0 +1,135 @@
+{
+  "kind": "pr10b_matrix",
+  "source": "kfusion/examples/ecos/mixed_pid_stateful__积分混合.c",
+  "cycles": [
+    200,
+    20000
+  ],
+  "cells": [
+    {
+      "scenario": "user_only",
+      "why": "内核域成本远高于用户态：选型应退回全用户态",
+      "cost": {
+        "user_us": 5.0,
+        "kernel_us": 50.0,
+        "ioctl_us": 30.0
+      },
+      "runs": [
+        {
+          "cycles": 200,
+          "rc": 0,
+          "response": {
+            "p50": 63.0,
+            "p99": 78.0,
+            "max": 96.939,
+            "over": 0
+          },
+          "exec": {
+            "p50": 0.0,
+            "p99": 2.0,
+            "max": 3.167,
+            "over": 0
+          },
+          "ioctl_roundtrip": null,
+          "miss": 0,
+          "seq_bad": null,
+          "session": null
+        },
+        {
+          "cycles": 20000,
+          "rc": 0,
+          "response": {
+            "p50": 63.0,
+            "p99": 76.0,
+            "max": 173.451,
+            "over": 0
+          },
+          "exec": {
+            "p50": 0.0,
+            "p99": 2.0,
+            "max": 23.111,
+            "over": 0
+          },
+          "ioctl_roundtrip": null,
+          "miss": 0,
+          "seq_bad": null,
+          "session": null
+        }
+      ],
+      "status": "ok",
+      "chosen": "B",
+      "domain": [
+        "linux_userspace"
+      ],
+      "session": null,
+      "mode": "gold"
+    },
+    {
+      "scenario": "partial_kernel",
+      "why": "内核域成本远低于用户态：选型应把中间组放进内核（UKU）",
+      "cost": {
+        "user_us": 5.0,
+        "kernel_us": 0.05,
+        "ioctl_us": 0.3
+      },
+      "runs": [
+        {
+          "cycles": 200,
+          "rc": 0,
+          "response": {
+            "p50": 67.0,
+            "p99": 85.0,
+            "max": 92.258,
+            "over": 0
+          },
+          "exec": {
+            "p50": 3.0,
+            "p99": 9.0,
+            "max": 9.167,
+            "over": 0
+          },
+          "ioctl_roundtrip": {
+            "p50": 2.0,
+            "p99": 6.0,
+            "max": 7.704,
+            "over": 0
+          },
+          "miss": 0,
+          "seq_bad": 0,
+          "session": -10000
+        },
+        {
+          "cycles": 20000,
+          "rc": 0,
+          "response": {
+            "p50": 67.0,
+            "p99": 83.0,
+            "max": 168.534,
+            "over": 0
+          },
+          "exec": {
+            "p50": 4.0,
+            "p99": 7.0,
+            "max": 13.388,
+            "over": 0
+          },
+          "ioctl_roundtrip": {
+            "p50": 2.0,
+            "p99": 5.0,
+            "max": 10.5,
+            "over": 0
+          },
+          "miss": 0,
+          "seq_bad": 0,
+          "session": -10000
+        }
+      ],
+      "status": "ok",
+      "chosen": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
+      "domain": "uku_ioctl",
+      "session": "g_integ",
+      "mode": "mixed"
+    }
+  ],
+  "boundary": "实测，不是 WCET；数据年龄用 UKU ioctl 往返作代理，不可与 xipc age 并列"
+}
