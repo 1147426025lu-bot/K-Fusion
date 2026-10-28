@@ -69,10 +69,18 @@ def parse(text):
             "p50_us": int(m.group(3)), "max_us": float(m.group(4)),
         }
     m = re.search(
-        r"# stat_uku_handoff_us: min=([0-9.]+) avg=([0-9.]+) p50=(\d+).*max=([0-9.]+)",
+        r"# stat_kernel_compute_us: min=([0-9.]+) avg=([0-9.]+) p50=(\d+).*max=([0-9.]+)",
         text)
     if m:
-        rec["handoff"] = {
+        rec["kernel_compute"] = {
+            "min_us": float(m.group(1)), "avg_us": float(m.group(2)),
+            "p50_us": int(m.group(3)), "max_us": float(m.group(4)),
+        }
+    m = re.search(
+        r"# stat_ioctl_roundtrip_us: min=([0-9.]+) avg=([0-9.]+) p50=(\d+).*max=([0-9.]+)",
+        text)
+    if m:
+        rec["ioctl_roundtrip"] = {
             "min_us": float(m.group(1)), "avg_us": float(m.group(2)),
             "p50_us": int(m.group(3)), "max_us": float(m.group(4)),
         }
@@ -134,6 +142,21 @@ def main():
     subprocess.call(["rmmod", name], stderr=open(os.devnull, "w"))
     sh(["insmod", os.path.join(kdir, kos[0])])
     time.sleep(0.05)
+    print("== 3b) 独占 open（第二次必须 EBUSY）==")
+    excl = subprocess.check_output([
+        PY, "-c",
+        "import errno, os\n"
+        "fd = os.open('/dev/kfusion_uku', os.O_RDWR)\n"
+        "try:\n"
+        "    os.open('/dev/kfusion_uku', os.O_RDWR)\n"
+        "    raise SystemExit('second open succeeded')\n"
+        "except OSError as e:\n"
+        "    if e.errno != errno.EBUSY:\n"
+        "        raise SystemExit('errno=%s want EBUSY' % e.errno)\n"
+        "os.close(fd)\n"
+        "print('exclusive_ok')\n",
+    ]).decode("utf-8", "replace")
+    open(os.path.join(OUT, "logs", "exclusive.log"), "w").write(excl)
     mixed_txt = sh(["taskset", "-c", CPU, "chrt", "-f", str(FIFO),
                     binp, "mixed", str(CYCLES)]).decode("utf-8", "replace")
     open(os.path.join(OUT, "logs", "mixed.log"), "w").write(mixed_txt)
@@ -163,6 +186,7 @@ def main():
             "digest_match": bool(match),
             "seq_ok": bool(seq_ok),
             "same_final": bool(same_out),
+            "exclusive_open": "exclusive_ok" in excl,
         },
     }
     dump(os.path.join(OUT, "report.json"), report)

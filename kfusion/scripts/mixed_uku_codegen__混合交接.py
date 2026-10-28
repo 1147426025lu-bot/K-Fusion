@@ -73,30 +73,17 @@ def region(name):
     return None
 
 
-def io_vars(plan, teir):
-    nodes = {n["name"]: n for n in (teir.get("nodes") or [])}
-    kmem = []
-    for g in plan.get("groups") or []:
-        if g.get("domain") == "linux_kernel":
-            kmem.extend(g.get("members") or [])
-    reads, writes = [], []
-    for m in kmem:
-        n = nodes.get(m) or {}
-        for r in n.get("reads") or []:
-            x = region(r)
-            if x and x not in reads:
-                reads.append(x)
-        for r in n.get("writes") or []:
-            x = region(r)
-            if x and x not in writes:
-                writes.append(x)
-    reads = [x for x in reads if x != "g_seq"][:8]
-    writes = [x for x in writes if x != "g_seq"][:8]
-    if not reads:
-        reads = ["g_in"]
-    if not writes:
-        writes = ["g_out"]
-    return kmem, reads, writes
+def io_vars(plan, teir, calls=None):
+    """只接受 UKUInterfaceCheck 通过的接口；失败则抛错，不得截断。"""
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "ecos"))
+    import uku_interface as uku
+    chk = uku.check(plan, teir, calls=calls)
+    if not chk["ok"]:
+        msgs = "; ".join("%s: %s" % (e.get("code"), e.get("msg"))
+                         for e in chk.get("errors") or [])
+        raise SystemExit("UKU 接口门禁失败: %s" % msgs)
+    iface = chk["interface"]
+    return iface["kernel_stages"], iface["copy_in"], iface["copy_out"], iface
 
 
 def kernel_calls(kmem, calls):
@@ -107,8 +94,6 @@ def kernel_calls(kmem, calls):
 
 
 def emit_mod(kmem, reads, writes, calls, stage_src_name):
-    ins = "\n".join("\tg_%s wait" % i for i in range(len(reads)))
-    # actual assignments:
     aset = []
     for i, v in enumerate(reads):
         aset.append("\t%s = msg.in[%d];" % (v, i))
@@ -122,30 +107,48 @@ def emit_mod(kmem, reads, writes, calls, stage_src_name):
     for m in kmem:
         fn = (calls.get(m) or ("%s()" % m)).split("(")[0].strip()
         ext.append("extern void %s(void);" % fn)
-    return """/* kfusion_uku_mod.c — ioctl 触发的内核计算。无 hrtimer。 */
+    return """/* kfusion_uku_mod.c — ioctl 触发的内核计算。无 hrtimer。
+ * 单客户端独占；序号必须连续；校验失败不跑阶段、不改状态。 */
 #define pr_fmt(fmt) "kfusion_uku: " fmt
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
 #include <linux/uaccess.h>
 #include <linux/ktime.h>
+#include <linux/mutex.h>
+#include <linux/errno.h>
 #include "kfusion_uku.h"
 
 %(externs)s
+
+static DEFINE_MUTEX(uku_mu);
+static bool uku_busy;
+static u32 uku_expect;
 
 static long uku_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 {
 	struct kfusion_uku_msg msg;
 	s64 t0, t1;
+	long rc = 0;
 
 	if (cmd != KFUSION_UKU_IOC)
 		return -ENOTTY;
 	if (copy_from_user(&msg, (void __user *)arg, sizeof(msg)))
 		return -EFAULT;
-	if (msg.magic != KFUSION_UKU_MAGIC)
-		return -EINVAL;
-	if (msg.n_in != %(nin)d || msg.n_out != %(nout)d)
-		return -EINVAL;
+	mutex_lock(&uku_mu);
+	if (!uku_busy) {
+		rc = -ENODEV;
+		goto out;
+	}
+	if (msg.magic != KFUSION_UKU_MAGIC ||
+	    msg.n_in != %(nin)d || msg.n_out != %(nout)d) {
+		rc = -EINVAL;
+		goto out;
+	}
+	if (msg.seq != uku_expect) {
+		rc = -EILSEQ;
+		goto out;
+	}
 	t0 = ktime_get_ns();
 %(aset)s
 %(run)s
@@ -153,20 +156,41 @@ static long uku_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 	t1 = ktime_get_ns();
 	msg.k_start_ns = (int64_t)t0;
 	msg.k_end_ns = (int64_t)t1;
+	uku_expect++;
 	if (copy_to_user((void __user *)arg, &msg, sizeof(msg)))
-		return -EFAULT;
-	return 0;
+		rc = -EFAULT;
+out:
+	mutex_unlock(&uku_mu);
+	return rc;
 }
 
 static int uku_open(struct inode *i, struct file *f)
 {
+	mutex_lock(&uku_mu);
+	if (uku_busy) {
+		mutex_unlock(&uku_mu);
+		return -EBUSY;
+	}
 	loop_reset();
+	uku_busy = true;
+	uku_expect = 1;
+	mutex_unlock(&uku_mu);
+	return 0;
+}
+
+static int uku_release(struct inode *i, struct file *f)
+{
+	mutex_lock(&uku_mu);
+	uku_busy = false;
+	uku_expect = 0;
+	mutex_unlock(&uku_mu);
 	return 0;
 }
 
 static const struct file_operations uku_fops = {
 	.owner = THIS_MODULE,
 	.open = uku_open,
+	.release = uku_release,
 	.unlocked_ioctl = uku_ioctl,
 	.compat_ioctl = uku_ioctl,
 };
@@ -175,7 +199,7 @@ static struct miscdevice uku_dev = {
 	.minor = MISC_DYNAMIC_MINOR,
 	.name = "kfusion_uku",
 	.fops = &uku_fops,
-	.mode = 0666,
+	.mode = 0600,
 };
 
 static int __init uku_init(void)
@@ -250,9 +274,11 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     for i, v in enumerate(reads):
         A("	msg.in[%d] = %s;" % (i, v))
     A("	if (ioctl(uku_fd, KFUSION_UKU_IOC, &msg) != 0)")
-    A("		return -1;")
-    A("	if (msg.seq != seq)")
-    A("		return -2;")
+    A("		return errno ? -errno : -1;")
+    A("	if (msg.seq != seq) {")
+    A("		errno = EILSEQ;")
+    A("		return -EILSEQ;")
+    A("	}")
     for i, v in enumerate(writes):
         A("	%s = msg.out[%d];" % (v, i))
     A("	if (h_ns)")
@@ -271,7 +297,7 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     A("	int mixed = (strcmp(mode, \"mixed\") == 0);")
     A("	long k, miss = 0, bad_seq = 0, bad_ioctl = 0;")
     A("	struct timespec next;")
-    A("	struct plc_probe_series g_resp, g_hand;")
+    A("	struct plc_probe_series g_resp, g_hand, g_rt;")
     A("	loop_reset();")
     A("	g_digest = 2166136261u;")
     A("	if (mixed) {")
@@ -279,7 +305,8 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     A("		if (uku_fd < 0) { perror(\"/dev/kfusion_uku\"); return 2; }")
     A("	}")
     A("	plc_probe_reset(&g_resp, \"response\");")
-    A("	plc_probe_reset(&g_hand, \"uku_handoff\");")
+    A("	plc_probe_reset(&g_hand, \"kernel_compute\");")
+    A("	plc_probe_reset(&g_rt, \"ioctl_roundtrip\");")
     A("	if (clock_gettime(CLOCK_MONOTONIC, &next) != 0) return 1;")
     A("	for (k = 0; k < cycles; k++) {")
     A("		long long r, f, hns = 0;")
@@ -293,10 +320,18 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
         members = g.get("members") or []
         if dom == "linux_kernel":
             A("		if (mixed) {")
+            A("			long long t0 = now_ns();")
             A("			rc = do_kernel_group(g_seq, &hns);")
-            A("			if (rc == -2) bad_seq++;")
-            A("			else if (rc != 0) bad_ioctl++;")
-            A("			else plc_probe_add(&g_hand, hns);")
+            A("			plc_probe_add(&g_rt, now_ns() - t0);")
+            A("			if (rc != 0) {")
+            A("				fprintf(stderr,")
+            A('				        "# uku_abort: cycle=%ld seq=%u rc=%d errno=%d\\n",')
+            A("				        k, g_seq, rc, errno);")
+            A("				if (rc == -EILSEQ) bad_seq++;")
+            A("				else bad_ioctl++;")
+            A("				goto uku_fail;")
+            A("			}")
+            A("			plc_probe_add(&g_hand, hns);")
             A("		} else {")
             A("			run_local_kernel_group();")
             A("		}")
@@ -309,17 +344,25 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
         A("		DIGEST_MIX(%s);" % v)
     A("		if (f - r > DEADLINE_NS) miss++;")
     A("	}")
-    A("	if (uku_fd >= 0) close(uku_fd);")
+    A("	if (uku_fd >= 0) { close(uku_fd); uku_fd = -1; }")
     A("	printf(\"\\n# mode: %s  cycles=%ld\\n\", mode, cycles);")
     A("	plc_probe_head(PERIOD_NS, DEADLINE_NS, (unsigned long long)cycles);")
     A("	plc_probe_line(&g_resp);")
-    A("	if (mixed) plc_probe_line(&g_hand);")
+    A("	if (mixed) {")
+    A("		plc_probe_line(&g_hand);")
+    A("		plc_probe_line(&g_rt);")
+    A("	}")
     A("	printf(\"# deadline_miss: %ld/%ld\\n\", miss, cycles);")
     A("	printf(\"# uku_seq_mismatch: %ld/%ld\\n\", bad_seq, cycles);")
     A("	printf(\"# uku_ioctl_error: %ld/%ld\\n\", bad_ioctl, cycles);")
     A("	printf(\"# digest: %08x\\n\", g_digest);")
     A("	printf(\"# last_seq: %u g_in=%d g_out=%d\\n\", g_seq, g_in, g_out);")
-    A("	return (bad_seq || bad_ioctl) ? 3 : 0;")
+    A("	return 0;")
+    A("uku_fail:")
+    A("	if (uku_fd >= 0) { close(uku_fd); uku_fd = -1; }")
+    A("	printf(\"# uku_fail_closed: cycle=%ld seq_err=%ld ioctl_err=%ld\\n\",")
+    A("	       k, bad_seq, bad_ioctl);")
+    A("	return 3;")
     A("}")
     A("")
     A("int main(int argc, char **argv)")
@@ -364,7 +407,11 @@ def main():
     for spec in a.call:
         k, v = spec.split("=", 1)
         calls[k.strip()] = v.strip()
-    kmem, reads, writes = io_vars(plan, teir)
+    try:
+        kmem, reads, writes, iface = io_vars(plan, teir, calls=calls)
+    except SystemExit as e:
+        print(str(e), file=sys.stderr)
+        return 3
     out = a.out_dir
     os.makedirs(out, exist_ok=True)
     dump(os.path.join(out, "kfusion_uku.h"), HDR)
@@ -385,13 +432,6 @@ def main():
     dump(os.path.join(out, "driver.c"), emit_driver(
         plan, kmem, reads, writes, calls, a.source, a.probe_header,
         a.period_us, a.cycles, a.digest_var or ["g_out", "g_seq"]))
-    iface = {
-        "adapter": "uku_ioctl",
-        "kernel_stages": kmem,
-        "copy_in": reads,
-        "copy_out": writes,
-        "device": "/dev/kfusion_uku",
-    }
     dump(os.path.join(out, "interface.json"),
          json.dumps(iface, indent=2, ensure_ascii=False) + "\n")
     print("UKU 写出 %s  in=%s out=%s stages=%s" % (out, reads, writes, kmem))

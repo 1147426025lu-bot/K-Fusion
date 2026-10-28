@@ -155,6 +155,10 @@ class StkpV1(unittest.TestCase):
             },
             "linux_kernel": {n: 1.0 for n in names},
         }
+        for n in teir["nodes"]:
+            if n["name"] in ("fir", "pid", "clamp"):
+                n["reads"] = ["g_x"]
+                n["writes"] = ["g_y"]
         doc = stkp.solve(teir, self.v, c_user=21, c_kernel=5, extra_kernel=0,
                          handoff_us=1.0, override=override)
         rec = doc["chosen_record"]
@@ -162,9 +166,15 @@ class StkpV1(unittest.TestCase):
         self.assertTrue(rec["deployment_ready"])
         self.assertEqual(rec["plan"]["meta"].get("xdom_adapter"), "uku_ioctl")
         groups = rec["plan"]["groups"]
-        seq = stkp.collapsed_domains(groups)
-        self.assertEqual(seq, ["linux_userspace", "linux_kernel",
-                               "linux_userspace"])
+        self.assertEqual(len(groups), 3)
+        self.assertEqual([g["domain"] for g in groups],
+                         ["linux_userspace", "linux_kernel", "linux_userspace"])
+        cost = rec.get("cost") or {}
+        self.assertEqual(cost.get("handoff_channels"), 1)
+        self.assertAlmostEqual(cost.get("release_us"), 21.0)
+        ioctl = cost.get("ioctl_model") or {}
+        self.assertAlmostEqual(ioctl.get("T_ioctl_us"), 1.0)
+        self.assertAlmostEqual(cost.get("sync_us"), 0.0)
 
     def test_deadline_prunes(self):
         teir = chain_teir(["a", "b"], exec_us=400.0)
@@ -310,6 +320,156 @@ class StkpV1(unittest.TestCase):
         self.assertEqual(big["chosen"], "B")
         sched = (big["chosen_record"].get("plan") or {}).get("schedule") or {}
         self.assertEqual(sched.get("exec_us", {}).get("plant"), 25.0)
+
+    def _uku_plan(self, groups, teir=None):
+        return {
+            "groups": groups,
+            "meta": {"platform": "mixed", "xdom_adapter": "uku_ioctl"},
+        }
+
+    def test_uku_rejects_two_kernel_groups(self):
+        groups = [
+            {"domain": "linux_userspace", "members": ["sample"]},
+            {"domain": "linux_kernel", "members": ["fir"]},
+            {"domain": "linux_kernel", "members": ["pid"]},
+            {"domain": "linux_userspace", "members": ["sink"]},
+        ]
+        self.assertIsNone(stkp.mixed_adapter_kind(groups))
+        teir = chain_teir(["sample", "fir", "pid", "sink"])
+        chk = stkp.uku_mod.check(self._uku_plan(groups), teir)
+        self.assertFalse(chk["ok"])
+        self.assertIn("E_UKU_GROUP_SHAPE", stkp.uku_mod.codes(chk))
+
+    def test_uku_rejects_capacity(self):
+        groups = [
+            {"domain": "linux_userspace", "members": ["sample"]},
+            {"domain": "linux_kernel", "members": ["fir"]},
+            {"domain": "linux_userspace", "members": ["sink"]},
+        ]
+        teir = chain_teir(["sample", "fir", "sink"])
+        teir["nodes"][1]["reads"] = ["g_%d" % i for i in range(9)]
+        teir["nodes"][1]["writes"] = ["g_out"]
+        chk = stkp.uku_mod.check(self._uku_plan(groups), teir)
+        self.assertFalse(chk["ok"])
+        self.assertIn("E_UKU_CAPACITY", stkp.uku_mod.codes(chk))
+
+    def test_uku_rejects_struct_and_pointer(self):
+        groups = [
+            {"domain": "linux_userspace", "members": ["sample"]},
+            {"domain": "linux_kernel", "members": ["fir"]},
+            {"domain": "linux_userspace", "members": ["sink"]},
+        ]
+        teir = chain_teir(["sample", "fir", "sink"])
+        teir["nodes"][1]["reads"] = ["g_st.field"]
+        teir["nodes"][1]["writes"] = ["g_out"]
+        chk = stkp.uku_mod.check(self._uku_plan(groups), teir)
+        self.assertFalse(chk["ok"])
+        self.assertIn("E_UKU_TYPE", stkp.uku_mod.codes(chk))
+        teir["nodes"][1]["reads"] = ["g_ptr"]
+        teir["region_types"] = {"g_ptr": "int32_t *", "g_out": "int32_t"}
+        chk = stkp.uku_mod.check(self._uku_plan(groups), teir)
+        self.assertFalse(chk["ok"])
+        self.assertIn("E_UKU_TYPE", stkp.uku_mod.codes(chk))
+
+    def test_uku_rejects_kernel_args(self):
+        groups = [
+            {"domain": "linux_userspace", "members": ["sample"]},
+            {"domain": "linux_kernel", "members": ["pid"]},
+            {"domain": "linux_userspace", "members": ["sink"]},
+        ]
+        teir = chain_teir(["sample", "pid", "sink"])
+        teir["nodes"][1]["reads"] = ["g_in"]
+        teir["nodes"][1]["writes"] = ["g_out"]
+        chk = stkp.uku_mod.check(self._uku_plan(groups), teir,
+                                 calls={"pid": "pid(1000)"})
+        self.assertFalse(chk["ok"])
+        self.assertIn("E_UKU_ABI", stkp.uku_mod.codes(chk))
+
+    def test_uku_does_not_drop_g_seq(self):
+        groups = [
+            {"domain": "linux_userspace", "members": ["sample"]},
+            {"domain": "linux_kernel", "members": ["add"]},
+            {"domain": "linux_userspace", "members": ["sink"]},
+        ]
+        teir = chain_teir(["sample", "add", "sink"])
+        teir["nodes"][1]["reads"] = ["g_in", "g_seq"]
+        teir["nodes"][1]["writes"] = ["g_out"]
+        chk = stkp.uku_mod.check(self._uku_plan(groups), teir)
+        self.assertTrue(chk["ok"], chk)
+        self.assertIn("g_seq", chk["interface"]["copy_in"])
+
+    def test_uku_rejects_output_window(self):
+        names = ["sample", "add", "sink"]
+        teir = chain_teir(names)
+        teir["nodes"][1]["reads"] = ["g_in"]
+        teir["nodes"][1]["writes"] = ["g_out"]
+        contract = {"timing_constraints": {
+            "actuator": {"stage": "sink", "earliest_us": 400, "latest_us": 600}}}
+        override = {
+            "linux_userspace": {n: 1.0 for n in names},
+            "linux_kernel": {n: 1.0 for n in names},
+        }
+        doc = stkp.solve(teir, self.v, c_user=21, c_kernel=5, extra_kernel=0,
+                         handoff_us=1.0, override=override, contract=contract)
+        self.assertGreater(doc["pruned"]["temporal"], 0)
+        rec = doc["chosen_record"]
+        if rec is not None:
+            self.assertNotEqual(rec.get("domain"), "mixed")
+
+    def test_uku_ignores_hrtimer_tax_and_rejects_negative_cost(self):
+        names = ["sample", "add", "sink"]
+        teir = chain_teir(names, kernelizable={
+            "sample": False, "add": True, "sink": False})
+        teir["nodes"][1]["reads"] = ["g_in"]
+        teir["nodes"][1]["writes"] = ["g_out"]
+        override = {
+            "linux_userspace": {"sample": 1.0, "add": 80.0, "sink": 1.0},
+            "linux_kernel": {n: 1.0 for n in names},
+        }
+        doc = stkp.solve(teir, self.v, c_user=21, c_kernel=5,
+                         extra_kernel=1000.0, handoff_us=1.0, override=override)
+        rec = doc["chosen_record"]
+        self.assertEqual(rec["domain"], "mixed")
+        self.assertAlmostEqual((rec.get("cost") or {}).get("sync_us"), 0.0)
+        self.assertAlmostEqual((rec.get("cost") or {}).get("predicted_R_us"),
+                               21.0 + 1.0 + 1.0 + 1.0 + 1.0)
+        override["linux_kernel"]["add"] = -4.0
+        doc2 = stkp.solve(teir, self.v, c_user=21, c_kernel=5,
+                          extra_kernel=0, handoff_us=1.0, override=override)
+        mixed = [c for c in (doc2.get("candidates") or [])
+                 if c.get("domain") == "mixed"]
+        for r in mixed:
+            self.assertFalse((r.get("cost") or {}).get("comparable"))
+
+    def test_uku_runtime_exclusive_and_fail_closed(self):
+        cg_path = os.path.join(KF, "scripts", "mixed_uku_codegen__混合交接.py")
+        spec_cg = importlib.util.spec_from_file_location("uku_cg", cg_path)
+        cg = importlib.util.module_from_spec(spec_cg)
+        spec_cg.loader.exec_module(cg)
+        groups = [
+            {"domain": "linux_userspace", "members": ["sample"]},
+            {"domain": "linux_kernel", "members": ["add"]},
+            {"domain": "linux_userspace", "members": ["sink"]},
+        ]
+        plan = {"groups": groups}
+        kmod = cg.emit_mod(
+            ["add"], ["g_in"], ["g_out"], {"add": "stage_add()"}, "stage_impl.c")
+        self.assertIn("uku_busy", kmod)
+        self.assertIn("return -EBUSY", kmod)
+        self.assertIn("rc = -EILSEQ", kmod)
+        self.assertIn(".mode = 0600", kmod)
+        self.assertIn(".release = uku_release", kmod)
+        self.assertNotIn("0666", kmod)
+        drv = cg.emit_driver(
+            plan, ["add"], ["g_in"], ["g_out"],
+            {"sample": "stage_sample()", "add": "stage_add()",
+             "sink": "stage_sink()"},
+            "stage_impl.c", "plc_probe.h", 1000, 8, ["g_in", "g_out"])
+        self.assertIn("goto uku_fail", drv)
+        self.assertIn("uku_fail_closed", drv)
+        self.assertIn("ioctl_roundtrip", drv)
+        self.assertIn("kernel_compute", drv)
+        self.assertNotIn("uku_handoff", drv)
 
     def test_pipeline_does_not_die_on_fusion_plan(self):
         sh = os.path.join(KF, "scripts", "ecos_from_c__从C编译.sh")

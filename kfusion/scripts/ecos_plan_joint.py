@@ -28,6 +28,7 @@ KF = os.path.abspath(os.path.join(HERE, ".."))
 DOMAINS = ("linux_userspace", "linux_kernel")
 sys.path.insert(0, os.path.join(HERE, "ecos"))
 import stage_cost as stage_cost_mod  # noqa: E402
+import uku_interface as uku_mod  # noqa: E402
 EV_FINAL = stage_cost_mod.EV_FINAL
 EV_EXPLORE = stage_cost_mod.EV_EXPLORE
 EV_WEAK = stage_cost_mod.EV_WEAK
@@ -120,6 +121,18 @@ def stage_compute_cost(node, domain, override):
     return None, "missing"
 
 
+def _finite_nonneg(x):
+    try:
+        v = float(x)
+    except (TypeError, ValueError):
+        return False
+    return v == v and v >= 0.0
+
+
+def is_uku_ioctl(plan):
+    return (plan.get("meta") or {}).get("xdom_adapter") == "uku_ioctl"
+
+
 def candidate_schedule(plan, teir, override, c_user, c_kernel):
     """同一份分域 exec / 释放代价，供 Ĉ 与 DAG 窗口。"""
     nodes = node_map(teir)
@@ -127,9 +140,14 @@ def candidate_schedule(plan, teir, override, c_user, c_kernel):
     evidence = []
     missing = []
     release = []
+    uku = is_uku_ioctl(plan)
     for g in plan.get("groups") or []:
         d = g.get("domain")
-        L = c_kernel if d == "linux_kernel" else c_user
+        if uku:
+            # ioctl 路径是单用户态线程，没有内核 hrtimer 周期释放。
+            L = 0.0 if d == "linux_kernel" else float(c_user)
+        else:
+            L = c_kernel if d == "linux_kernel" else c_user
         release.append({
             "group": g.get("id"),
             "domain": d,
@@ -140,17 +158,68 @@ def candidate_schedule(plan, teir, override, c_user, c_kernel):
             val, ev = stage_compute_cost(nodes.get(m) or {"name": m}, d,
                                          override)
             evidence.append("%s@%s:%s" % (m, d, ev))
-            if val is None:
+            if val is None or not _finite_nonneg(val):
                 missing.append("%s@%s" % (m, d))
             else:
-                exec_us[m] = val
+                exec_us[m] = float(val)
+    if uku:
+        # 只计一次用户态唤醒；第二段 U 已在同一线程，不再加 L_U。
+        for i, r in enumerate(release):
+            if r["domain"] == "linux_userspace" and i > 0:
+                r["L_us"] = 0.0
     return {
         "exec_us": exec_us,
         "release": release,
         "evidence": evidence,
         "missing": missing,
         "complete": not missing,
+        "model": "uku_ioctl_serial" if uku else "per_group_release",
     }
+
+
+def uku_serial_finish(plan, sched, t_ioctl):
+    """UKU 驱动语义：一次唤醒后 U → ioctl(T_ioctl+C_K) → U，不按相位睡眠。"""
+    exec_us = (sched or {}).get("exec_us") or {}
+    L_by = {r.get("group"): float(r.get("L_us") or 0.0)
+            for r in (sched or {}).get("release") or []}
+    t = 0.0
+    finish = {}
+    for g in plan.get("groups") or []:
+        t += L_by.get(g.get("id"), 0.0)
+        if g.get("domain") == "linux_kernel":
+            t += float(t_ioctl or 0.0)
+        for m in g.get("members") or []:
+            t += float(exec_us.get(m) or 0.0)
+            finish[m] = t
+    return t, finish
+
+
+def uku_window_errors(contract, finish):
+    if not contract:
+        return []
+    ctr = contract.get("timing_constraints") or {}
+    bad = []
+    for key in ("sample", "actuator", "output"):
+        w = ctr.get(key)
+        if not w:
+            continue
+        items = w if isinstance(w, list) else [w]
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            st = it.get("stage")
+            if not st or st not in finish:
+                continue
+            t = finish[st]
+            lo = it.get("earliest_us")
+            hi = it.get("latest_us")
+            if lo is not None and t < float(lo) - 1e-9:
+                bad.append({"code": "E_UKU_WINDOW",
+                            "msg": "%s 完成 %.3f < earliest %s" % (st, t, lo)})
+            if hi is not None and t > float(hi) + 1e-9:
+                bad.append({"code": "E_UKU_WINDOW",
+                            "msg": "%s 完成 %.3f > latest %s" % (st, t, hi)})
+    return bad
 
 
 def batched_handoffs(order, named_groups, domains, teir):
@@ -195,15 +264,17 @@ def collapsed_domains(groups):
 
 
 def mixed_adapter_kind(groups):
-    """PR-5B：只承认一种可部署混合形态。
+    """PR-5B.1：可部署混合仅恰好三组 U|K|U（一个内核组）。
 
-    用户态采样 → 内核纯计算 → 用户态收回。交接走 ioctl 邮箱，不是 IVSHMEM。
-    其它混合（UK、KU、KUK…）仍只记 model_feasible。
+    折叠后的 UKU（例如 U|K|K|U）会把两组内核阶段合成一次 ioctl 再各跑一遍，
+    改变语义。未通过接口门禁前不得 deployment_ready。
     """
-    seq = collapsed_domains(groups)
-    if seq == ["linux_userspace", "linux_kernel", "linux_userspace"]:
-        return "uku_ioctl"
-    return None
+    if len(groups or []) != 3:
+        return None
+    doms = [g.get("domain") for g in groups]
+    if doms != ["linux_userspace", "linux_kernel", "linux_userspace"]:
+        return None
+    return "uku_ioctl"
 
 
 def group_release_phase(members, nodes):
@@ -269,7 +340,7 @@ def af_label(plan):
 
 
 def evaluate_cost(plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
-                  override, deadline_us):
+                  override, deadline_us, contract=None):
     sched = candidate_schedule(plan, teir, override, c_user, c_kernel)
     evidence = list(sched["evidence"])
     missing = list(sched["missing"])
@@ -279,8 +350,20 @@ def evaluate_cost(plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
     named = [g["members"] for g in (plan.get("groups") or [])]
     domains = [g["domain"] for g in (plan.get("groups") or [])]
     channels = batched_handoffs(plan.get("order") or [], named, domains, teir)
-    h_total = len(channels) * handoff_us
-    sync = extra_kernel if has_k else 0.0
+    uku = is_uku_ioctl(plan)
+    if uku:
+        # 一次 ioctl 往返税（copy+syscall），不含 C_K；C_K 已在 compute 里。
+        h_total = float(handoff_us or 0.0)
+        sync = 0.0
+        sched["T_ioctl_us"] = h_total
+    else:
+        h_total = len(channels) * float(handoff_us or 0.0)
+        sync = extra_kernel if has_k else 0.0
+        sched["T_ioctl_us"] = 0.0
+    if not _finite_nonneg(handoff_us if handoff_us is not None else 0.0):
+        missing.append("T_ioctl")
+    if extra_kernel and not uku and not _finite_nonneg(extra_kernel):
+        missing.append("extra_kernel")
     kinds = [item.rsplit(":", 1)[-1] for item in evidence]
     has_missing = bool(missing) or any(k in EV_MISSING for k in kinds)
     has_ph = any(k in EV_WEAK for k in kinds)
@@ -290,12 +373,24 @@ def evaluate_cost(plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
     explore_rankable = comparable and (not has_ph)
     pred = None if not comparable else round(
         (compute or 0.0) + release + h_total + sync, 3)
+    if pred is not None and not _finite_nonneg(pred):
+        comparable = False
+        pred = None
+        missing.append("predicted_R")
+        has_missing = True
     temporal_ok = True
     temporal_why = None
     if comparable and deadline_us is not None and pred is not None:
         if pred > float(deadline_us):
             temporal_ok = False
             temporal_why = "R̂=%.3f > deadline %s" % (pred, deadline_us)
+    if comparable and uku:
+        _end, finish = uku_serial_finish(plan, sched, h_total)
+        werr = uku_window_errors(contract, finish)
+        sched["finish_us"] = finish
+        if werr:
+            temporal_ok = False
+            temporal_why = "; ".join(e["msg"] for e in werr[:4])
     if has_missing:
         grade = "missing"
     elif has_ph:
@@ -313,9 +408,15 @@ def evaluate_cost(plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
         "compute_us": None if not comparable else round(compute, 3),
         "release_us": round(release, 3),
         "handoff_us": round(h_total, 3),
-        "handoff_channels": len(channels),
+        "handoff_channels": 1 if uku else len(channels),
         "channels": channels,
         "sync_us": round(sync, 3),
+        "ioctl_model": ({
+            "L_user_us": round(release, 3),
+            "C_us": None if compute is None else round(compute, 3),
+            "T_ioctl_us": round(h_total, 3),
+            "note": "Ĉ=L_U+ΣC+T_ioctl；T_ioctl≠kernel_compute；非 WCET",
+        } if uku else None),
         "predicted_R_us": pred,
         "total_us": pred,
         "grade": grade,
@@ -336,7 +437,12 @@ def dag_temporal_ok(plan, dag, contract, platforms, c_user, c_kernel, sched):
         return True, []
     plat_name = (plan.get("meta") or {}).get("platform")
     if plat_name == "mixed":
-        return True, []
+        if not is_uku_ioctl(plan):
+            return True, []
+        t_ioctl = (sched or {}).get("T_ioctl_us") or 0.0
+        _end, finish = uku_serial_finish(plan, sched, t_ioctl)
+        werr = uku_window_errors(contract, finish)
+        return (not werr), werr
     if sched is not None and not sched.get("complete"):
         # 缺测不得把 0 喂给 inst(m)；成本路径已标 incomparable
         return True, []
@@ -427,6 +533,17 @@ def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
                 rejected.append({"reason": "domain", "detail": why_dom[:6]})
                 continue
             plan = build_plan(order, named, domains, nodes)
+            if plan["meta"].get("xdom_adapter") == "uku_ioctl":
+                chk = uku_mod.check(plan, teir, contract)
+                plan["meta"]["uku_check"] = {
+                    "ok": chk["ok"],
+                    "codes": uku_mod.codes(chk),
+                    "errors": chk.get("errors") or [],
+                }
+                if not chk["ok"]:
+                    plan["meta"]["deployment_ready"] = False
+                    plan["meta"]["xdom_adapter"] = None
+                    plan["meta"]["uku_reject"] = uku_mod.codes(chk)
             ok, diags = verifier.verify(teir, plan)
             if not ok:
                 prune["semantic"] += 1
@@ -439,7 +556,7 @@ def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
                 continue
             cost, channels = evaluate_cost(
                 plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
-                override, deadline)
+                override, deadline, contract=contract)
             plan["cost"] = {
                 "predicted_R_us": cost["predicted_R_us"],
                 "grade": cost["grade"],
