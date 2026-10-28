@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "functions": {
+    "sensor_prepare": {
+      "effects": ["mmio", "state_write"],
+      "allowed_contexts": ["thread"],
+      "reads": [],
+      "writes": ["@g_sensor_raw"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    }
+  }
+}

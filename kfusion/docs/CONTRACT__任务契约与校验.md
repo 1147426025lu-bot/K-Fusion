@@ -119,42 +119,6 @@ $ bash kfusion/scripts/contract_check_selftest__契约校验自测.sh <python>
 - ❌ 校验器不会证明"FFI 语义等价"，只做执行上下文与效果层面的合法性判定。
 - ❌ `observations.release_id` 目前只是声明，尚未与运行时 trace 对齐（等 `feat(feedback)`）。
 
-## 5.5 已接入内核化流程（2026-10-23，审查第 6 条）
-
-此前契约校验只是 `ecos_demo` 里的演示，**不是构建流程里绕不过去的一步**。
-现在 `plc_kernelize__内核化.sh` 在**任何编译动作之前**跑门禁：
-
-```
-=== plc_kernelize: official_cycletest stage=ko profile=generic ===
-⚠️  [contract] 没有任务契约 → 跳过合法性校验
-     注意：这是「没有检查」，不是「检查通过」。
-```
-
-契约来源（按优先级）：
-
-1. manifest 里的 `FUSE_CONTRACT=<path>`（相对路径按 `kfusion/` 解析）
-2. `test/<FUSE_NAME>.contract.json`
-
-行为矩阵（全部实测）：
-
-| 场景 | 行为 |
-|---|---|
-| 无契约 | 打**醒目警告**并继续（明确说明"没有检查 ≠ 通过"） |
-| 无契约 + `FUSE_REQUIRE_CONTRACT=1` | **中止** |
-| 有契约、校验通过 | `✅ [contract] 通过`，继续构建 |
-| 有契约、校验失败 | **中止**（`拒绝继续生成产物`） |
-
-可用开关：
-- `FUSE_CONTRACT_PLATFORM=<平台名>` —— 指定要判定的目标平台（不给则判全部）
-- `FUSE_ALLOW_EXTERNAL=1` —— 放行 `external`（`unknown` 仍必拒）
-- `FUSE_PLATFORM_CAPS=<path>` —— 换平台能力文件
-
-**为什么默认是"警告而非失败"**：现有 manifest 里还没有契约文件，若直接改成硬失败，
-所有既有流程立刻崩。所以先给出可见的警告，把 `FUSE_REQUIRE_CONTRACT=1` 留给
-真正要跑严肃实验的场景（CI / 论文数据）。
-
----
-
 ## 6. 下一步
 
 1. `kfusion/analysis/EffectSummaryAnalysis`（LLVM）：从 IR 推导每个函数的

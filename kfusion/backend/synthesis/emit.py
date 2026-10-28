@@ -33,6 +33,17 @@ import linux_kernel_emitter as linux_em  # noqa: E402
 import nuttx_emitter as nuttx_em          # noqa: E402
 import stage_manifest                      # noqa: E402
 import xdom_bridge                         # noqa: E402
+import let_emitter as let_em               # noqa: E402
+
+import importlib.util as _ilu
+
+
+def _load_ir_module(path, name):
+    """按路径加载 kfusion/ir 下的独立校验模块（与合成逻辑解耦）。"""
+    spec = _ilu.spec_from_file_location(name, path)
+    mod = _ilu.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def _write(out_dir, name, text):
@@ -52,7 +63,8 @@ def main():
     ap.add_argument("--source", required=True, help="阶段实现所在的 .c")
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--target", default="linux-kernel",
-                    choices=["linux-kernel", "nuttx", "both"])
+                    choices=["linux-kernel", "nuttx", "both", "let"],
+                    help="let = 用户态 LET 部署（作业表 + 入口，由 plc_let__LET.c 调度）")
     ap.add_argument("--name", default=None, help="模块/应用名（默认取 DAG 任务名）")
     ap.add_argument("--contract", default=None)
     ap.add_argument("--exec-us", default=None, help="JSON 或文件：阶段执行时间")
@@ -61,6 +73,16 @@ def main():
     ap.add_argument("--digest-var", action="append", default=[],
                     help="要发布成只读 sysfs 参数的 int32_t 全局量（可重复）。"
                          "没有观察点就只能证明『能加载』，证明不了『算得对』")
+    ap.add_argument("--xdom-lag", type=int, default=0,
+                    help="跨域消费者取『LAG 拍前』的值（受控 A/B 注入延迟）；0=取最新（默认）")
+    ap.add_argument("--xdom-mode", default="latest", choices=["latest", "oldest", "one"],
+                    help="跨域取数语义（A/B 开关，同一代码只切这一项）："
+                         "latest=每拍抽干取最新（默认）；"
+                         "oldest=每拍抽干取最旧（旧桥的选择顺序）；"
+                         "one=每拍只取一条、其余留在环里（旧桥的消费速率，会积压）")
+    ap.add_argument("--xdom-max-age", type=int, default=None,
+                    help="跨域数据年龄预算（拍）：超过即拒收并计 n_stale。"
+                         "不给则取契约 timing_constraints.xdom_max_age_ticks；都没有=0（只记录不拒）")
     ap.add_argument("--probe", action="store_true",
                     help="加死区探针：量环闭合边（上拍末组结束 → 本拍首组开始），"
                          "输出 dz_min/avg/max_ns 与采样数（Linux）/ # dz 行（NuttX）")
@@ -77,8 +99,28 @@ def main():
     ap.add_argument("--xdom", default=None,
                     help="拆分器写的 per-domain meta.json（PR10-C）。给了就在周期体里"
                          "为跨域数据插发布/订阅，并生成 ecos_xdom.{h,c}")
+    ap.add_argument("--experiment-period-us", type=int, default=None,
+                    help="【装置实验】覆盖本域控制周期（µs）。与方案不一致时必须同时给 "
+                         "--allow-experiment-deploy；产物写 EXPERIMENT.txt、不得进论文主张。"
+                         "多速率装置就靠它：一端 1000、另一端 2000")
+    ap.add_argument("--experiment-shift-us", type=int, default=0,
+                    help="【装置实验】把每个组的相位整体平移 N µs（按周期取模）。"
+                         "用于同一速率下只切相位做 A/B——多速率装置里相位才第一次有非平凡作用")
+    ap.add_argument("--allow-infeasible-deployment", action="store_true",
+                    help="承认这个跨域部署在数据年龄预算内**排不出安全相位**（PR11-C 判据），"
+                         "仍然生成。产物写 EXPERIMENT.txt、不得进论文主张。"
+                         "唯一用途是复现已证明不可行的装置（§15/§16 的多速率臂）")
+    ap.add_argument("--allow-experiment-deploy", action="store_true",
+                    help="承认这是装置实验（周期/相位偏离已验证的方案）。"
+                         "与 --allow-unverified 同一套规矩：产物明确标记、不得进论文主张")
     ap.add_argument("--allow-unverified", action="store_true",
                     help="允许用未验证方案生成（产物标记为对照用，不得进论文）")
+    ap.add_argument("--let-loops", type=int, default=0,
+                    help="【LET 部署】LET_RUN_LOOPS 默认值（0=收到 SIGINT 才停）")
+    ap.add_argument("--let-frac", type=float, default=0.8,
+                    help="【LET 部署】LET 窗口占周期比例（默认 0.8，与 plc_let_demo 约定一致）")
+    ap.add_argument("--no-let-skip", action="store_true",
+                    help="【LET 部署】关掉 PLC_LET_SKIP_MISSED（默认开：严格周期，落后不追赶）")
     a = ap.parse_args()
 
     plan = fusion_ir.load(a.plan)
@@ -153,6 +195,33 @@ def main():
     name = a.name or ((dag.get("meta") or {}).get("task") or {}).get("name") or "ecos_fused"
     name = "".join(ch if (ch.isalnum() or ch in "_-") else "_" for ch in name)
 
+    # ---- 跨域数据年龄预算：一处声明、两处生效 ----
+    # 契约（timing_constraints.xdom_max_age_ticks）是**声明**，生成的
+    # ECOS_XDOM_MAX_AGE 是**运行时强制**（超限拒收 + n_stale 计数）。
+    # 两者必须同一个数，否则"契约说 age≤1、代码却照收 age=3"就是又一处静默失效
+    # ——PR10-E 已经栽过一次（上限写在 control 下、从来没被读到）。
+    ctr = (contract or {}).get("timing_constraints") or {}
+    c_budget = ctr.get("xdom_max_age_ticks")
+    if c_budget is not None:
+        try:
+            c_budget = int(c_budget)
+        except (TypeError, ValueError):
+            print("❌ 契约 timing_constraints.xdom_max_age_ticks 不是整数：%r"
+                  % (c_budget,), file=sys.stderr)
+            return 2
+    if a.xdom_max_age is None:
+        xdom_max_age = c_budget if c_budget is not None else 0
+        if c_budget is not None:
+            print("  跨域数据年龄预算 %.0f 拍（来自契约 timing_constraints）" % c_budget)
+    else:
+        if c_budget is not None and int(a.xdom_max_age) != c_budget:
+            print("❌ --xdom-max-age=%d 与契约 xdom_max_age_ticks=%d 不一致：\n"
+                  "  契约是声明、生成代码是强制，两者必须同源；"
+                  "改哪一个都行，但不能各说一套" % (a.xdom_max_age, c_budget),
+                  file=sys.stderr)
+            return 2
+        xdom_max_age = int(a.xdom_max_age)
+
     ir = fusion_ir.FusionIR.from_plan(plan, dag, contract=contract, exec_us=exec_us,
                                       calls=calls, source_name=name,
                                       digest_vars=a.digest_var, probe=a.probe,
@@ -175,6 +244,140 @@ def main():
                   file=sys.stderr)
             return 3
 
+    # ---- 装置实验：周期/相位覆盖（必须显式承认，且留痕）----
+    # 为什么单独一个口子而不是直接改契约：契约是**已验证**的那份，改它等于让验证结论失效。
+    # 实验装置要的是"同一份方案、换一个部署"，所以这里只改生成用的节拍，并把偏离写进
+    # EXPERIMENT.txt —— 与 --allow-unverified 同一套规矩（产物不得进论文主张）。
+    exp_notes = []
+    if a.experiment_period_us is not None or a.experiment_shift_us:
+        if not a.allow_experiment_deploy:
+            print("❌ 给了 --experiment-* 但没给 --allow-experiment-deploy：\n"
+                  "  这些开关会让产物偏离已通过验证的方案（周期/相位），"
+                  "必须显式承认是装置实验", file=sys.stderr)
+            return 2
+    if a.experiment_period_us is not None:
+        want = int(a.experiment_period_us)
+        if want <= 0:
+            print("❌ --experiment-period-us 必须 > 0", file=sys.stderr)
+            return 2
+        exp_notes.append("周期：方案 %.0f µs → 装置 %d µs" % (ir.period_us or 0, want))
+        ir.period_us = want
+    if a.experiment_shift_us:
+        if ir.period_us:
+            for g in ir.groups:
+                g.phase_us = (float(g.phase_us or 0) + float(a.experiment_shift_us)) % float(ir.period_us)
+        exp_notes.append("相位整体平移 %+d µs（按周期 %.0f µs 取模）"
+                         % (a.experiment_shift_us, ir.period_us or 0))
+    if exp_notes:
+        print("⚠ 装置实验（偏离已验证方案）：", file=sys.stderr)
+        for n in exp_notes:
+            print("    %s" % n, file=sys.stderr)
+
+    # ---- 契约声明的各域周期必须真的落到生成代码（PR11-C）----
+    # 否则契约说 root=2000、生成的却是 1000：声明与实现不一致，
+    # 后面的可行性判据就变成了"拿一个不存在的部署去算"。
+    if xdom and a.experiment_period_us is None:
+        _dom = str(xdom.get("domain") or "")
+        _decl = ((contract or {}).get("timing_constraints") or {}).get("domain_period_us") or {}
+        if _dom and _dom in _decl:
+            try:
+                _want = int(float(_decl[_dom]))
+            except (TypeError, ValueError):
+                print("❌ 契约 timing_constraints.domain_period_us[%s] 不是数字：%r"
+                      % (_dom, _decl[_dom]), file=sys.stderr)
+                return 2
+            if int(ir.period_us or 0) != _want:
+                print("  周期取自契约（域 %s）：%d µs（plan 里是 %.0f µs）"
+                      % (_dom, _want, ir.period_us or 0))
+                ir.period_us = _want
+    elif xdom and a.experiment_period_us is not None:
+        _dom = str(xdom.get("domain") or "")
+        _decl = ((contract or {}).get("timing_constraints") or {}).get("domain_period_us") or {}
+        if _dom and _dom in _decl and int(float(_decl[_dom])) != int(a.experiment_period_us):
+            print("❌ --experiment-period-us=%d 与契约 domain_period_us[%s]=%s 冲突"
+                  % (int(a.experiment_period_us), _dom, _decl[_dom]), file=sys.stderr)
+            return 2
+
+    # 重同步开关：只认契约（命令行不加开关，避免与契约脱钩）。
+    # ⚠ 还必须**只有一个域**动手：age 是两个域的**相对**相位（只有一个自由度），
+    #   两侧各按自己的门限搬，等于对同一个量下两次控制——实测（§26.4）两侧在同一秒
+    #   一个 +500 一个 −500，相对相位一次被推 1000 µs（整拍），当场制造了一批拒收。
+    #   所以契约必须写明"谁动"，另一侧的桥与宿主完全不生成这套代码。
+    _ctr_rs = (contract or {}).get("timing_constraints") or {}
+    _resync_on = bool(int(_ctr_rs.get("xdom_resync_us") or 0))
+    _rs_master = str(_ctr_rs.get("xdom_resync_domain") or "").strip()
+    _this_dom = str((xdom or {}).get("domain") or "").strip() if xdom else ""
+    _is_rs_master = bool(_resync_on and _this_dom and _this_dom == _rs_master)
+
+    # ---- 跨域部署可行性（PR11-C）：排不下就不生成 ----
+    # 为什么放在装置覆盖之后：--experiment-period-us 会改本域周期，判据必须用**最终**节拍。
+    # 判据本身在 xdom_timeline.check_edge（事件时间线模型），这里只负责"拒绝或放行"。
+    if xdom:
+        try:
+            _tl_dir = os.path.normpath(os.path.join(_HERE, "..", "..", "scripts", "ecos"))
+            if _tl_dir not in sys.path:
+                sys.path.insert(0, _tl_dir)
+            import xdom_timeline as _tl
+            _ctr = (contract or {}).get("timing_constraints") or {}
+            _per = {}
+            for k, v in (_ctr.get("domain_period_us") or {}).items():
+                try:
+                    _per[str(k)] = float(v)
+                except (TypeError, ValueError):
+                    pass
+            _base = float((dag.get("phase") or {}).get("period_us") or 0) or None
+            _drift = float(_ctr.get("xdom_drift_ppm") or 0)
+            _jitter = float(_ctr.get("xdom_jitter_us") or 0)
+            _p_self = float(ir.period_us or 0)
+            _bad, _narrow = [], []
+            # 两个方向都要看：我消费谁（我是消费者）+ 谁消费我（我是生产者）。
+            # 只看一个方向会漏：$P_p$ 与 $P_c$ 互换后可行性完全不同
+            # （快生产者 + 慢消费者 ⇒ age 只在 {a,a+P_c} 摆动；慢生产者 + 快消费者则安全）。
+            _pairs = [("from", _s.get("from")) for _s in (xdom.get("subscribe") or [])] \
+                   + [("to", _s.get("to")) for _s in (xdom.get("publish") or [])]
+            for _dir, _peer in _pairs:
+                _peer = str(_peer)
+                _peer_p = _per.get(_peer, _base) or _p_self
+                if _dir == "from":          # 对端生产、本域消费
+                    _pp, _pc = _peer_p, _p_self
+                else:                       # 本域生产、对端消费
+                    _pp, _pc = _p_self, _peer_p
+                if int(xdom_max_age) <= 0:
+                    print("⚠ 未声明跨域数据年龄预算（xdom_max_age_ticks）："
+                          "无法判定这个部署排不排得下安全相位", file=sys.stderr)
+                    continue
+                _r = _tl.check_edge(_pp, _pc, float(xdom_max_age) * _pc,
+                                    drift_ppm=_drift, jitter_us=_jitter)
+                _who = ("%s(%.0f µs) → 本域(%.0f µs)" % (_peer, _pp, _pc)
+                        if _dir == "from" else
+                        "本域(%.0f µs) → %s(%.0f µs)" % (_pp, _peer, _pc))
+                if not _r["ok"]:
+                    _bad.append("%s，预算 %d 拍，抖动 %.0f µs，漂移 %.0f ppm ⇒ %s"
+                                % (_who, int(xdom_max_age), _jitter, _drift,
+                                   _r["reason"]))
+                elif _r["frac"] < 0.10:
+                    _narrow.append("%s ⇒ %s" % (_who, _r["reason"]))
+            for _n in _narrow:
+                print("⚠ 跨域相位窗很窄：%s（漂移会让它慢慢走掉）" % _n, file=sys.stderr)
+            if _bad:
+                if not a.allow_infeasible_deployment:
+                    for _b in _bad:
+                        print("❌ 跨域部署不可行：%s" % _b, file=sys.stderr)
+                    print("   → 事件时间线在生成期就能判定，不必等板上跑一轮：\n"
+                          "     ① 放宽契约的 xdom_max_age_ticks  ② 让两域同速率  "
+                          "③ 窗宽 0 时调相位没用\n"
+                          "   若只是要复现已知不可行的装置，加 --allow-infeasible-deployment "
+                          "（产物会标 EXPERIMENT.txt）", file=sys.stderr)
+                    return 3
+                for _b in _bad:
+                    print("⚠ 跨域部署不可行（已承认）：%s" % _b, file=sys.stderr)
+                exp_notes.append("跨域部署在年龄预算内不可行（已承认）：" + "；".join(_bad))
+        except ImportError as _e:
+            # 判不了就不生成：跨域部署的可行性没有"默认可行"这一说
+            print("❌ 跨域部署可行性检查无法执行（找不到 xdom_timeline：%s）；"
+                  "拒绝生成" % _e, file=sys.stderr)
+            return 2
+
     # ---- 阶段函数必须真实存在 ----
     try:
         protos = stage_manifest.prototypes_for(ir, a.source)
@@ -192,27 +395,77 @@ def main():
                                         main_name=a.nuttx_main,
                                         probe=getattr(ir, "probe", False),
                                         xdom=bool(xdom),
-                                        prog_name=a.nuttx_progname)
+                                        prog_name=a.nuttx_progname,
+                                        xdom_resync=_is_rs_master)
         except ValueError as e:
             # 入口名与 PROGNAME 不一致 → 生成期就拒，不让它跑到板上才炸
             print("emit: %s" % e, file=sys.stderr)
             return 2
 
     os.makedirs(a.out_dir, exist_ok=True)
+    _body_text = body_emit.emit_body_c(ir, protos)
+
+    # ---- Gate 3：与规划器分离的「验生成物」独立门禁 ----
+    # 不信任上面的合成逻辑，把生成的 C 当黑盒重新解析，核对它确实兑现了
+    # plan 契约（覆盖 / 顺序 / 计时钩子 / 跨域桥）。任何结构性背离都 fail-closed，
+    # 且在**落盘之前**就拦下来——不让一份与契约不符的周期体躺在产物目录里被 build。
+    _vg = _load_ir_module(os.path.normpath(
+        os.path.join(_HERE, "..", "..", "ir", "verify_generated.py")),
+        "verify_generated")
+    _n_sub = sum(len(s.xdom_sub) for g in ir.groups for s in g.stages)
+    _n_pub = sum(len(s.xdom_pub) for g in ir.groups for s in g.stages)
+    _vrep = _vg.verify(_body_text, plan=plan,
+                       expected_xdom_subs=_n_sub, expected_xdom_pubs=_n_pub)
+    if not _vrep["ok"]:
+        print("❌ 验生成物失败（Gate 3 独立门禁）：", file=sys.stderr)
+        for _er in _vrep["errors"]:
+            print("    · " + _er, file=sys.stderr)
+        print("   → 生成的代码与方案契约不符，整个产物集都不落盘", file=sys.stderr)
+        return 3
+    if _vrep["warnings"]:
+        for _w in _vrep["warnings"]:
+            print("  ⚠ " + _w, file=sys.stderr)
+
     written = []
     written.append(_write(a.out_dir, "ecos_fused_body.h", body_emit.emit_body_h(ir)))
-    written.append(_write(a.out_dir, "ecos_fused_body.c",
-                          body_emit.emit_body_c(ir, protos)))
+    written.append(_write(a.out_dir, "ecos_fused_body.c", _body_text))
     written.append(_write(a.out_dir, "fusion_ir.json",
                           json.dumps(ir.to_json(), ensure_ascii=False, indent=2) + "\n"))
+    if exp_notes:
+        written.append(_write(a.out_dir, "EXPERIMENT.txt",
+                              "装备实验产物 —— 不得用于论文主张\n"
+                              "================================\n"
+                              + "\n".join("- " + n for n in exp_notes)
+                              + "\n\n原因：这些偏离没有经过 plan_verify，"
+                                "\n合法性的唯一凭据是 ecos/plan_verify.py，"
+                                "\n而不是\"它跑起来了\"。\n"))
 
     # ---- 跨域数据桥（PR10-C）----
     # 只在给了 --xdom 时生成；单域产物一个字节都不变。
     if xdom:
-        for fn, text in xdom_bridge.emit(xdom).items():
+        # 周期长度要把物理计数器换算成"周期号"，必须把方案周期传给桥。
+        # 周期性重同步（相位协调的最小实现）：只从契约读，默认关闭。
+        # 触发/平移量都写进契约，是为了让"这次跑的是什么配置"能溯源——
+        # 命令行再加一个开关就会和契约脱钩（PR10-E 的教训）。
+        _ctr = (contract or {}).get("timing_constraints") or {}
+        for fn, text in xdom_bridge.emit(
+                xdom, period_us=int(ir.period_us or 0),
+                max_age=int(xdom_max_age),
+                lag=int(a.xdom_lag or 0),
+                mode=a.xdom_mode,
+                resync_us=int(_ctr.get("xdom_resync_us") or 0) if _is_rs_master else 0,
+                resync_at_us=int(_ctr.get("xdom_resync_at_us") or 0) if _is_rs_master else 0,
+                resync_hi_us=int(_ctr.get("xdom_resync_hi_us") or 0) if _is_rs_master else 0,
+                resync_cool_us=(int(_ctr.get("xdom_resync_cooldown_us") or 60000000)
+                                if _is_rs_master else 0),
+        ).items():
             written.append(_write(a.out_dir, fn, text))
         print("=== 跨域数据桥 ===")
         print("  %s" % xdom_bridge.summary(xdom))
+        print("  取数语义 %s%s，年龄预算 %s"
+              % (a.xdom_mode,
+                 ("（注入 %d 拍延迟）" % a.xdom_lag) if a.xdom_lag else "",
+                 ("%d 拍（超限拒收）" % xdom_max_age) if xdom_max_age else "未设（只记录）"))
         n_sub = sum(len(s.xdom_sub) for g in ir.groups for s in g.stages)
         n_pub = sum(len(s.xdom_pub) for g in ir.groups for s in g.stages)
         if n_sub == 0 and n_pub == 0:
@@ -226,7 +479,8 @@ def main():
     if a.target in ("linux-kernel", "both"):
         d = a.out_dir if a.target == "linux-kernel" else os.path.join(a.out_dir, "linux")
         os.makedirs(d, exist_ok=True)
-        for fn, text in linux_em.emit(ir, name, xdom=bool(xdom)).items():
+        for fn, text in linux_em.emit(ir, name, xdom=bool(xdom),
+                                      xdom_resync=_is_rs_master).items():
             written.append(_write(d, fn, text))
 
     if nuttx_files is not None:
@@ -234,6 +488,17 @@ def main():
         os.makedirs(d, exist_ok=True)
         for fn, text in nuttx_files.items():
             written.append(_write(d, fn, text))
+
+    # ---- LET 用户态部署（PR12-B）：作业表 + 入口，由 plc_let__LET.c 调度 ----
+    # 与 linux/nuttx 平行：同一份 IR 既能生成 ring-0 内核模块，也能生成这里
+    # 的用户态 LET 部署。"验证过的时序"与"真正跑的时序"同源，不会手写作业表
+    # 悄悄偏离方案。周期体（ecos_fused_body.c）是三个后端共用的那一份。
+    if a.target == "let":
+        for fn, text in let_em.emit(
+                ir, name, let_frac=a.let_frac,
+                skip_missed=not a.no_let_skip,
+                loops=a.let_loops).items():
+            written.append(_write(a.out_dir, fn, text))
 
     print("=== ECoS 合成：%s（target=%s）===" % (name, a.target))
     print("  组 %d / 阶段 %d，周期 %.0f µs，证据 %s，验证 %s"

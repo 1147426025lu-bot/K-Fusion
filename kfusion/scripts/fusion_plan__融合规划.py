@@ -218,7 +218,8 @@ class Planner:
         # ---- 跨域语义（PR10-B）----
         # 跨域边与 z⁻¹ 闭合边同构：只能跨拍满足。所以它既不约束同拍顺序，
         # 又给端到端/死区各加一整拍。语义只在 domain_model 里定义一次。
-        self.dom = domain_model.load(dag, period_us=self.period, topo=self.order)
+        self.dom = domain_model.load(dag, period_us=self.period, topo=self.order,
+                                     domain_period_us=self.tm.domain_periods)
 
         # 同拍可达闭包：**摘掉** z⁻¹ 闭合边与跨域边之后再算。
         # 踩过的坑：不可分性如果用全边闭包，环路会被"绕回来"——clamp 经由
@@ -342,9 +343,14 @@ class Planner:
         if self.budget and tot > self.budget:
             return False, ("期限：段内执行 %.1f µs 超过预算 %.1f µs"
                            % (tot, self.budget))
-        if self.period and tot > float(self.period):
-            return False, ("单拍容量：段内执行 %.1f µs 超过周期 %.1f µs，"
-                           "这组永远跑不完" % (tot, float(self.period)))
+        # 单拍容量按**这一段所在域**的周期卡（PR11-D）。多速率下用全局
+        # period 会误杀 2 ms 域里 1.5 ms 的段——"这组永远跑不完"是假的。
+        seg_dom = self.tm.group_domain(members)
+        seg_period = self.tm.period_of(seg_dom) if seg_dom else self.period
+        if seg_period and tot > float(seg_period):
+            return False, ("单拍容量：段内执行 %.1f µs 超过域 %s 的周期 %.1f µs，"
+                           "这组永远跑不完"
+                           % (tot, seg_dom or "?", float(seg_period)))
 
         # 5) 不确定依赖（PR6，fail-closed）：未解除的不确定性不允许改变相对结构
         for m in members:
@@ -449,14 +455,21 @@ class Planner:
         return groups
 
     def _finish_time(self, named_groups):
-        """给定分组（名字列表），返回最后一组的绝对完成时刻（同 solve 的模型）。"""
-        t = 0.0
+        """给定分组（名字列表），返回**最晚**的绝对完成时刻（同 schedule 的模型）。
+
+        多速率（PR11-D）：按域各走一条线——同域串行、跨域并行。
+        用全局串行会系统性高估跨域方案的完成时刻（2 ms 域的组会把 1 ms 域的
+        组整体推后），从而挑错分组。
+        """
+        fin = {}
         for g in named_groups:
             head = min((self.phase.get(m, 0.0) for m in g), default=0.0)
+            dom = self.tm.group_domain(g) or "default"
+            t = fin.get(dom, 0.0)
             start = head if head > t else t
             seg_exec = sum(self.exec_us.get(m, 0.0) for m in g)
-            t = start + self.c + seg_exec
-        return t
+            fin[dom] = start + self.c + seg_exec
+        return max(fin.values()) if fin else 0.0
 
     def feedback_ok(self, groups_idx):
         if self.max_fb_delay_us is None:
@@ -512,6 +525,11 @@ class Planner:
     def apply_feedback_limit(self, us):
         """命令行覆盖反馈闭合边的绝对死区上限，并重算必须跨组的边。"""
         self.max_fb_delay_us = us
+        # 同步到统一时间模型：反馈死区判据只有**一份**实现
+        # （temporal_model.feedback_violations，规划器与验证器共用）。
+        # 不同步的话，命令行覆盖只影响规划器、验证器仍按契约判——
+        # 于是同一份方案两个结论，那正是要消灭的鬼故事。
+        self.tm.feedback_max = us
         self.fb_must_cut = set()
         if us is not None and self.period and us < float(self.period):
             for r in self.recurrences:
@@ -557,20 +575,9 @@ class Planner:
         return out
 
     # -------- 反馈环落在哪（跨周期部分的核心陈述） --------
-    def _exec_offset_in_group(self, members, member):
-        """成员在其所属组内的执行起点（相对组释放时刻，µs）。members 是**名字**列表。
-
-        注意：`solve()` 返回的组是 order 的**下标**列表，调用方必须先换成名字——
-        直接拿下标去查 phase/exec 会静默全取默认值（相位全 0、执行全 0），
-        算出来的死区就永远等于一整拍，看起来"很合理"，实际是没算。
-        """
-        off = self.c
-        for m in members:
-            if m == member:
-                return off
-            off += self.exec_us.get(m, 0.0)
-        return off
-
+    # 注：组内执行偏移原来这里有一份 _exec_offset_in_group。PR10-E 起，
+    # 死区计算（含偏移）统一在 temporal_model.feedback_delays 里，
+    # 这里不再保留第二份实现——两份实现迟早会分叉。
     def recurrence_report(self, groups):
         """每个延迟反馈环在方案里怎么落位、闭合边的间隔变成了多少。
 
@@ -584,6 +591,16 @@ class Planner:
         for gi, g in enumerate(named):
             for m in g:
                 where[m] = gi
+        # 死区计算走 temporal_model 里的**同一份**实现——验证器调的是同一个函数。
+        # 以前这段公式只存在于本文件，验证器另写一套（还漏了跨组情形），
+        # 于是"规划说 1400 µs、验证说没问题"这种鬼故事才可能出现。
+        plan_like = [{"id": "g%d" % gi, "members": g,
+                      "release_phase_us": self.group_phase(g)}
+                     for gi, g in enumerate(named)]
+        sched = self.tm.schedule(plan_like)
+        dead_by_edge = {(f["from"], f["to"]): f for f in
+                        self.tm.feedback_delays(plan_like, dom=self.dom,
+                                                sched=sched)}
         out = []
         for r in self.recurrences:
             gids = {m: where.get(m) for m in r["ring"]}
@@ -592,24 +609,17 @@ class Planner:
                 gp, gc = where.get(c["from"]), where.get(c["to"])
                 if gp is None or gc is None:
                     continue
-                t_prod = self.group_phase(named[gp]) + \
-                    self._exec_offset_in_group(named[gp], c["from"])
-                t_cons = self.group_phase(named[gc]) + \
-                    self._exec_offset_in_group(named[gc], c["to"])
-                period = float(self.period or 0.0)
-                # 跨域闭合边：消费者在**另一个 cell**，只能在再下一个周期边界看到它
-                # ⇒ 间隔多一整拍。这不是估算，PR10 板上量过：1 kHz 下跨域往返
-                # p50 1005.26 µs（≈1.005 拍），而同一共享内存纯通路只要 1.24 µs。
-                xd = 1 if self.dom.is_cross(c["from"], c["to"]) else 0
-                merged = (((1 + xd) * period) + t_cons - t_prod) if period else None
+                f = dead_by_edge.get((c["from"], c["to"])) or {}
+                comp = f.get("components") or {}
+                merged = f.get("dead_us")
                 old = c.get("delay_us_unmerged")
                 closes.append({
                     "from": c["from"], "to": c["to"],
-                    "cross_domain": bool(xd),
-                    "extra_periods": xd,
-                    "producer_offset_us": round(t_prod, 3),
-                    "consumer_offset_us": round(t_cons, 3),
-                    "delay_us_merged": round(merged, 3) if merged is not None else None,
+                    "cross_domain": bool(f.get("cross_domain")),
+                    "extra_periods": comp.get("cross_domain_periods", 0),
+                    "producer_offset_us": comp.get("producer_offset_us"),
+                    "consumer_offset_us": comp.get("consumer_offset_us"),
+                    "delay_us_merged": merged,
                     "delay_us_unmerged": old,
                     "inflation": (round(merged / old, 2)
                                   if merged is not None and old else None),
@@ -819,9 +829,12 @@ def main():
     gs = summarize(planner, groups)
     total_exec = sum(g["exec_us"] for g in gs)
     # PR9-D：端到端一律走统一递推（含组间积压），不再各处自己算
+    # PR11-D：多域并行 ⇒ 完成时刻取**最晚的一行**，不是"最后一行"
     sched = planner.tm.schedule(gs)
-    predicted = (round(sched[-1]["finish_us"] - sched[0]["phase_us"], 3)
-                 if sched else (len(gs) * planner.c + total_exec))
+    _comp = max((r["finish_us"] for r in sched), default=0.0)
+    _first_phi = min((r["phase_us"] for r in sched), default=0.0)
+    predicted = (round(_comp - _first_phi, 3) if sched
+                 else (len(gs) * planner.c + total_exec))
     dp_pred = getattr(planner, "end_to_end_us", None)
     phase_span = (gs[-1]["release_phase_us"] - gs[0]["release_phase_us"]) \
         if planner.phase_known else 0.0
@@ -848,14 +861,14 @@ def main():
     if xd.multi and xd.extra_periods:
         extra_us = xd.extra_latency_us
         if planner.tm.deadline is not None:
-            comp = (sched[-1]["finish_us"] if sched else 0.0) + extra_us
+            comp = _comp + extra_us
             if comp > planner.tm.deadline + 1e-9:
                 print("!! 跨域期限：段内完成 %.1f µs ＋ 跨域 %d 拍（%s %.0f µs）"
                       "＝ %.1f µs，超过期限 %.1f µs"
-                      % (sched[-1]["finish_us"] if sched else 0.0,
+                      % (_comp,
                          xd.extra_periods,
                          "×".join(["%d 条跨域边" % xd.extra_periods,
-                                   "%.0f µs/拍" % float(planner.period or 0)]),
+                                   "%.0f µs/拍" % float(xd.hop_period_us or 0)]),
                          extra_us, comp, planner.tm.deadline), file=sys.stderr)
                 print("   跨域边：%s" % ", ".join("%s→%s" % e for e in xd.xdom),
                       file=sys.stderr)
@@ -873,16 +886,22 @@ def main():
                     % (c["from"], c["to"], c["inflation"],
                        c["delay_us_unmerged"], c["delay_us_merged"],
                        args.max_delay_inflation))
-    # PR8 硬约束（绝对值）：任何反馈闭合边死区超过绝对上限 → 直接拒绝
-    if planner.max_fb_delay_us is not None:
-        for r in recs:
-            for c in r["closing_edges"]:
-                d1 = c.get("delay_us_merged")
-                if d1 is not None and d1 > planner.max_fb_delay_us:
-                    print("!! 反馈闭合边 %s→%s 死区 %.0f µs 超过绝对上限 %.0f µs，"
-                          "方案被拒（PR8 硬约束）" % (c["from"], c["to"], d1,
-                          planner.max_fb_delay_us), file=sys.stderr)
-                    return 3
+    # PR8 / PR10-E 硬约束（绝对值）：反馈闭合边的**总死区**超过上限 → 直接拒绝。
+    # 判据走 temporal_model.feedback_violations——与验证器**同一个函数**，
+    # 所以不可能出现"规划说可行、验证说不可行"。它同时覆盖两种成因：
+    #   · 反馈边并入同组（融合把闭合边拉到一整拍）
+    #   · 反馈边跨组（跨域再叠一整拍）—— 以前这条完全没判
+    fb_errs, fb_warns = planner.tm.feedback_violations(
+        gs, dom=planner.dom, sched=sched)
+    if fb_errs:
+        for code, msg in fb_errs:
+            print("!! [%s] %s" % (code, msg), file=sys.stderr)
+        print("   → 方案被拒。跨域会把反馈死区再拉长一整拍（z⁻¹ 之外的那一拍）；"
+              "要缩短就得把阶段搬到同一域，或者放宽/去掉反馈上限。"
+              "注意：死区在上限内也**不等于**证明了控制稳定——"
+              "编译器只能证明它满足声明的时间契约。", file=sys.stderr)
+        return 3
+    warnings.extend(fb_warns)
     plan = {
         "version": 4,
         "meta": {
@@ -978,10 +997,12 @@ def main():
                      (gs[-1]["exec_us"] if gs else 0.0)))
         if planner.dom.multi:
             xd = planner.dom
+            # 一拍多少钱：多速率下取各跨域边**消费者周期**的最大值（xdom.hop_period_us），
+            # 1:1 时等于原来的 planner.period，逐字不变。
             print("  跨域：%d 条跨域边 %s ｜ 端到端多 %d 拍 × %.0f µs = %.0f µs "
                   "⇒ **含跨域 %.1f µs**"
                   % (len(xd.xdom), ", ".join("%s→%s" % e for e in xd.xdom),
-                     xd.extra_periods, float(planner.period or 0),
+                     xd.extra_periods, float(xd.hop_period_us or 0),
                      xd.extra_latency_us, predicted + xd.extra_latency_us))
             print("        （跨域边只能跨拍满足；按 µs 计会把代价算小三个数量级，"
                   "见 PR10 实测 1.005 拍）")

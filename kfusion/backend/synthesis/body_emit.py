@@ -36,6 +36,15 @@ _C = """/* ecos_fused_body.c —— 由 ECoS 融合方案生成，两个后端�
  */
 #include "ecos_fused_body.h"
 
+/* 阶段执行计时钩子（弱默认空实现）。
+ * Linux 宿主提供真实 ktime_get() 计时覆盖此弱符号；NuttX / LET 后端不提供
+ * 强定义，自动用空实现。用弱符号而非宏，保证三个后端共用同一份周期体
+ * （逐字节相同）——计时开销只在 Linux 侧产生。 */
+extern void ecos_stage_enter(unsigned int idx);
+extern void ecos_stage_exit(unsigned int idx);
+__attribute__((weak)) void ecos_stage_enter(unsigned int idx) { (void)idx; }
+__attribute__((weak)) void ecos_stage_exit(unsigned int idx) { (void)idx; }
+
 %(protos)s%(externs)s
 
 %(bodies)s"""
@@ -84,6 +93,7 @@ def emit_body_c(ir, protos):
         if g and g not in seen:
             seen.add(g)
             externs.append("extern int32_t %s;\t/* 跨域数据：定义在 stage_impl.c */" % g)
+    k = 0  # 全局阶段序号：跨组累计，与 linux 宿主的 stage_names 对齐
     for g in ir.groups:
         lines = []
         lines.append("/* 组 %s：释放相位 %s µs，执行 ≈%.2f µs（%d 阶段） */"
@@ -98,9 +108,14 @@ def emit_body_c(ir, protos):
                 lines.append("\tecos_xdom_sub(%d, &%s);\t/* 跨域输入：通道 %d，"
                              "来自 %s 域 */" % (c["channel"], c["global"],
                                                 c["channel"], c.get("from", "?")))
+            # 包裹真实计时钩子（Linux 侧 ktime_get() 实测，NuttX/LET 侧为空）
+            idx = k
+            k += 1
+            lines.append("\tecos_stage_enter(%d);" % idx)
             lines.append("\t%s;\t/* %s，相位 %s µs */"
                          % (s.call, s.name,
                             ("%.0f" % s.phase_us) if s.phase_us is not None else "?"))
+            lines.append("\tecos_stage_exit(%d);" % idx)
             # 跨域输出：跑完立刻发布（晚发布会把可用时刻推到下一拍）
             for c in getattr(s, "xdom_pub", []) or []:
                 lines.append("\tecos_xdom_pub(%d, %s);\t/* 跨域输出：通道 %d，"

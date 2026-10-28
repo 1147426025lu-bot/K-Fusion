@@ -76,6 +76,13 @@ for f in ecos_fused_body.h ecos_fused_body.c ecos_fused_linux.c Kbuild README.bu
     if [ -f "$TMP/linux/$f" ]; then ok "生成 $f"; else bad "缺 $f"; fi
 done
 
+# PR11-A 前置：宿主的释放必须用**原子计数**，不能是 hrtimer 回调与内核线程共享的裸 bool。
+# 裸 bool 既非原子、又把"多次释放"塌成一次 ⇒ 线程落后时丢拍且不可见。
+expect_grep "linux 宿主用原子释放计数（非裸 bool）" "$TMP/linux/ecos_fused_linux.c" \
+    "atomic_inc(&g->releases)" "atomic_xchg(&g->releases, 0)" "static unsigned long missed"
+expect_absent "linux 宿主不再有裸 pending 字段" "$TMP/linux/ecos_fused_linux.c" \
+    "->pending" ".pending"
+
 echo "=== 2. 周期体不得含调度原语（PR9-C 的核心边界）==="
 expect_absent "body.c 无睡眠/入口/stdio/pthread" "$TMP/linux/ecos_fused_body.c" \
     "clock_nanosleep" "int main" "stdio.h" "pthread" "usleep"
@@ -241,7 +248,7 @@ expect_rc "布局漂移必须被拒（负向）" 1 \
 
 # 静态断言存在（有编译器的那一侧会真正编译它）
 expect_grep "头文件带编译期布局断言" "$XHDR" \
-    "__builtin_offsetof(struct xipc_ring, head)" "sizeof(struct xipc_ring) <= 4096"
+    "__builtin_offsetof(struct xipc_ring, head)" "sizeof(struct xipc_ring) <= XIPC_PEER_STRIDE"
 
 # session：IVSHMEM 内存不随 cell 重建清零，没有它后启动的一侧会拿旧 magic 当就绪
 expect_grep "环带 session（防残留 magic 误判）" "$XHDR" \
@@ -270,6 +277,8 @@ echo "=== 11. PR10-B：跨域方案不许合成成单域产物 ==="
 # "跨域融合不存在"这条硬约束，而且生成物在板上根本跑不起来。
 LOOPSRC="$HERE/../../examples/ecos/five_stage_loop__闭环五阶段示例.c"
 XCON="$HERE/../../contracts/examples/xdom_loop.contract.json"
+XC_MR="$HERE/../../contracts/examples/xdom_loop_multirate.contract.json"
+XC_MR_OK="$HERE/../../contracts/examples/xdom_loop_multirate_ok.contract.json"
 EX5='{"stage_sample":0.60,"stage_fir":0.67,"stage_pid":0.28,"stage_clamp":0.28,"stage_plant":0.50}'
 expect_rc "跨域夹具规划成功（域纯度已由规划器保证）" 0 \
     "$PY" "$PLAN_PY" "$FIX/xdom_loop.dag.json" --platforms "$CAPS" \
@@ -334,6 +343,13 @@ expect_grep "订阅插在 sample 之前、发布插在 pid 之后" \
     "$TMP/xe_nuttx/ecos_fused_body.c" \
     "ecos_xdom_sub(1, &g_plant);" "stage_sample();" "ecos_xdom_pub(0, g_act);"
 expect_grep "nuttx Makefile 把桥编进去" "$TMP/xe_nuttx/Makefile" "ecos_xdom.c"
+# PR10-F 修订：跨域宿主的周期上报里应真的调用证据打印（否则证据只存不显）。
+expect_grep "nuttx 宿主周期上报打印逐拍证据" "$TMP/xe_nuttx/ecos_nuttx_main.c" \
+    "ecos_xdom_report_evidence()"
+# 周期锚点：跨域年龄只能靠"首拍真正跑起来的时刻"算，不能用 init 时刻
+# （init 到首拍隔着建线程/起 hrtimer，差几百 µs；PR10-F 已栽过一次"各自 init 起算"）。
+expect_grep "nuttx 宿主打首拍周期锚点" "$TMP/xe_nuttx/ecos_nuttx_main.c" \
+    "xdom anchor base_us=" "ecos_xdom_now_us()"
 
 expect_rc "root 端生成（带桥）" 0 \
     "$PY" "$SYNTH" --plan "$TMP/xsplit/root/plan.json" \
@@ -342,6 +358,12 @@ expect_rc "root 端生成（带桥）" 0 \
     --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
     --xdom "$TMP/xsplit/root/meta.json"
 expect_grep "root Kbuild 把桥链进去" "$TMP/xe_root/Kbuild" "ecos_xdom.o"
+expect_grep "root 宿主打首拍周期锚点" "$TMP/xe_root/ecos_fused_linux.c" \
+    "xdom anchor now_us="
+# root 侧以前**没有任何** ch0 证据（只有 nuttx 会调 report_evidence），
+# 于是"谁消费我"这个方向的年龄在板上看不到（§18.4 的边界）。
+expect_grep "root 宿主按秒打跨域证据" "$TMP/xe_root/ecos_fused_linux.c" \
+    "ecos_xdom_report_evidence()" "periods % 1000UL == 0UL"
 expect_grep "root 侧方向相反（收 g_act 发 g_plant）" \
     "$TMP/xe_root/ecos_fused_body.c" \
     "ecos_xdom_sub(0, &g_act);" "ecos_xdom_pub(1, g_plant);"
@@ -355,6 +377,497 @@ expect_grep "nuttx 侧选环相反" "$TMP/xe_nuttx/ecos_xdom.c" \
 sed 's:/\*.*\*/::g' "$TMP/xe_root/ecos_xdom.c" | grep '^\s*//' -v > "$TMP/xdom_nc.c"
 expect_absent "桥里没有睡眠/线程/入口（剥注释后）" "$TMP/xdom_nc.c" \
     "usleep" "kthread" "int main"
+
+# PR10-F 修订：周期号必须来自**共享物理计数器**（不是域内 periods、不是环 seq），
+# 否则两侧各从自己 init 起算，age 里混进启动相位偏移；并记录逐拍证据。
+# PR11-B：发的是**µs 时间戳**（v2 的"周期索引"在多速率下不可比，已弃用）
+expect_grep "桥发 µs 时间戳（不是周期索引）" "$TMP/xe_root/ecos_xdom.c" \
+    "xdom_now_us" "xipc_counter() * 1000000ull" "xipc_pub_stamped" "s.ts_us"
+expect_absent "桥不再按周期索引发/收" "$TMP/xe_root/ecos_xdom.c" \
+    "xipc_pub_ticked" "xdom_period_ticks"
+# 拍数向上取整（1797 µs 记 2 拍，不是 1 拍），且判据用 µs 而不是整数拍
+expect_grep "证据同时记 µs 与拍（拍数向上取整）" "$TMP/xe_root/ecos_xdom.c" \
+    "e->age_us = age" "(age + (uint32_t)ECOS_XDOM_PERIOD_US - 1u)" "max_age = e->age"
+# 预算判据必须与编译期同口径（µs）：否则 1797 µs 在预算 1 拍时会被"整数除法"放行
+expect_grep "运行时预算判据用 µs（与编译期同口径）" "$TMP/xe_root/ecos_xdom.c" \
+    "#define ECOS_XDOM_MAX_AGE_US" "age > ECOS_XDOM_MAX_AGE_US"
+expect_absent "不再用整数拍比较做拒收" "$TMP/xe_root/ecos_xdom.c" \
+    "e->age > (uint32_t)ECOS_XDOM_MAX_AGE"
+expect_grep "桥记录逐拍证据并打印" "$TMP/xe_root/ecos_xdom.c" \
+    "ecos_xdom_evidence" "ecos_xdom_report_evidence" "e->age"
+expect_absent "桥不再依赖宿主喂的 ecos_xdom_cycle 全局" "$TMP/xe_root/ecos_xdom.c" \
+    "uint32_t ecos_xdom_cycle;"
+
+# ---- PR11-A：跨域数据年龄预算 + "取最旧"对照臂 ----
+# 预算必须**同源**：契约 timing_constraints.xdom_max_age_ticks 是声明，
+# 生成的 ECOS_XDOM_MAX_AGE 是运行时强制。两处各说一套就是又一处静默失效
+# （PR10-E 已经栽过：上限写在 control 下，从来没被读到）。
+expect_grep "契约的年龄预算落到生成代码（MAX_AGE=1）" "$TMP/xe_root/ecos_xdom.c" \
+    "#define ECOS_XDOM_MAX_AGE 1"
+expect_grep "默认每拍抽干取最新（PICK=0）" "$TMP/xe_nuttx/ecos_xdom.c" \
+    "#define ECOS_XDOM_PICK 0"
+
+rm -rf "$TMP/xe_old"
+expect_rc "取最旧对照臂可生成" 0 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/nuttx/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xe_old" --target nuttx --contract "$XCON" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/nuttx/meta.json" --xdom-mode oldest
+expect_grep "对照臂 oldest 确实批内取首条（PICK=1）" "$TMP/xe_old/ecos_xdom.c" \
+    "#define ECOS_XDOM_PICK 1" "batch_seen[s.a] = 1;"
+
+# 命令行与契约各说一套 ⇒ 拒（rc=2）。不许悄悄挑一个：声明与强制必须同源。
+rm -rf "$TMP/xe_one"
+expect_rc "每拍只取一条的对照臂可生成" 0 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/nuttx/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xe_one" --target nuttx --contract "$XCON" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/nuttx/meta.json" --xdom-mode one
+# 这一臂的意义：旧桥 break 之后剩下的消息还留在环里 ⇒ 会积压。必须能在生成物里
+# 看到"只 pop 一条"这个结构，否则它和 oldest 臂无法区分。
+expect_grep "one 臂每拍只消化一条（不抽干）" "$TMP/xe_one/ecos_xdom.c" \
+    "#define ECOS_XDOM_PICK 2" "if (!xipc_pop(xr_in, &s))"
+
+expect_rc "预算与契约冲突被拒" 2 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/nuttx/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xe_conf" --target nuttx --contract "$XCON" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/nuttx/meta.json" --xdom-max-age 2
+
+# 契约位置错（写在 control 下）与 0 拍（物理不可满足）都必须被契约校验挡住。
+"$PY" - "$XCON" "$TMP/bad_age.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"].pop("xdom_max_age_ticks", None)
+d.setdefault("control", {})["xdom_max_age_ticks"] = 1
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "预算写在 control 下被契约校验拒" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/bad_age.contract.json"
+"$PY" - "$XCON" "$TMP/zero_age.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"]["xdom_max_age_ticks"] = 0
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "0 拍预算被契约校验拒" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/zero_age.contract.json"
+# ---- PR11-B：多速率装置开关必须显式承认，且产物留痕 ----
+rm -rf "$TMP/xe_exp"
+expect_rc "装置实验开关缺少承认时被拒" 2 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/root/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xe_exp" --target linux-kernel --contract "$XCON" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/root/meta.json" --experiment-period-us 2000
+rm -rf "$TMP/xe_exp"
+expect_rc "承认后可按多速率装置生成" 0 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/root/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xe_exp" --target linux-kernel --contract "$XCON" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/root/meta.json" \
+    --experiment-period-us 2000 --allow-experiment-deploy \
+    --allow-infeasible-deployment
+# ⚠ PR11-C 之后：这个 2ms/1ms 装置被部署判据判为**不可行**（安全相位窗为空），
+#   必须显式 --allow-infeasible-deployment 才生成。这不是放宽门禁，是复现
+#   已证明不可行的装置要留痕——EXPERIMENT.txt 里会写清原因。
+# 周期必须真的落到宿主与桥，否则"多速率"只是说说
+expect_grep "root 宿主周期变成 2000 µs" "$TMP/xe_exp/ecos_fused_linux.c" \
+    "static unsigned int period_us = 2000;"
+expect_grep "root 桥按本域周期算拍" "$TMP/xe_exp/ecos_xdom.c" \
+    "#define ECOS_XDOM_PERIOD_US 2000"
+# 偏离已验证方案必须留痕：否则几个月后没人知道这组数据不能用
+if [ -f "$TMP/xe_exp/EXPERIMENT.txt" ] && grep -q "不得用于论文主张" "$TMP/xe_exp/EXPERIMENT.txt"; then
+    ok "装置实验产物带 EXPERIMENT.txt 留痕"
+else
+    bad "装置实验产物缺 EXPERIMENT.txt 留痕"
+fi
+
+expect_rc "合法预算的契约校验通过" 0 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" "$XCON"
+
+echo
+echo "=== PR11-C：跨域部署可行性判据（排不下安全相位就拒绝生成）==="
+# 事件时间线模型能给出"安全相位窗"；窗为空/只有孤立点 ⇒ 这个部署在预算内不可实现。
+# 关键：判在**生成期**，不是等板上跑一轮（PR10-F §14 已实证运行时拒收救不回）。
+expect_rc "契约层：多速率 + 预算1 判不可行" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" "$XC_MR"
+expect_rc "契约层：多速率 + 预算2 通过" 0 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" "$XC_MR_OK"
+# 两端都要拒：只看"我消费谁"会漏掉"谁消费我"（P_p 与 P_c 互换后可行性完全不同）
+expect_rc "emit：多速率（消费侧）拒绝" 3 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/nuttx/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xc_mr_c" --target nuttx --contract "$XC_MR" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/nuttx/meta.json"
+expect_rc "emit：多速率（生产侧）拒绝" 3 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/root/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xc_mr_p" --target linux-kernel --contract "$XC_MR" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/root/meta.json"
+rm -rf "$TMP/xc_mr_ok"
+expect_rc "emit：预算放宽到 2 拍即通过" 0 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/root/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xc_mr_ok" --target linux-kernel --contract "$XC_MR_OK" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/root/meta.json"
+# 契约声明的各域周期必须真的落到生成代码，否则判据是"拿一个不存在的部署在算"
+expect_grep "契约声明的域周期落到生成代码（root=2000）" "$TMP/xc_mr_ok/ecos_xdom.c" \
+    "#define ECOS_XDOM_PERIOD_US 2000"
+expect_grep "契约域周期也落到宿主" "$TMP/xc_mr_ok/ecos_fused_linux.c" \
+    "static unsigned int period_us = 2000;"
+# 装置开关同样受判据约束（否则实验口子就成了绕过门禁的暗道）
+expect_rc "实验开关也受部署判据约束" 3 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/root/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xc_mr_exp" --target linux-kernel --contract "$XCON" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/root/meta.json" \
+    --experiment-period-us 2000 --allow-experiment-deploy
+# 承认之后仍能复现（复现已证明不可行的装置是正当需求，但必须留痕）
+rm -rf "$TMP/xc_mr_ack"
+expect_rc "承认不可行后可复现该装置" 0 \
+    "$PY" "$SYNTH" --plan "$TMP/xsplit/root/plan.json" \
+    --dag "$FIX/xdom_loop.dag.json" --source "$LOOPSRC" \
+    --out-dir "$TMP/xc_mr_ack" --target linux-kernel --contract "$XCON" \
+    --exec-us "$EX5" --call "stage_pid=stage_pid(1000)" \
+    --xdom "$TMP/xsplit/root/meta.json" \
+    --experiment-period-us 2000 --allow-experiment-deploy --allow-infeasible-deployment
+if [ -f "$TMP/xc_mr_ack/EXPERIMENT.txt" ] && grep -q "不可行" "$TMP/xc_mr_ack/EXPERIMENT.txt"; then
+    ok "承认不可行的产物把原因写进 EXPERIMENT.txt"
+else
+    bad "承认不可行的产物没把原因写进 EXPERIMENT.txt"
+fi
+# 有跨域边却没预算 ⇒ fail-closed（"预算无穷大"等于没有约束）
+"$PY" - "$XCON" "$TMP/nobudget.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"].pop("xdom_max_age_ticks", None)
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "有跨域边但没预算 → fail-closed" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/nobudget.contract.json"
+# 抖动余量：模型不含抖动，判据要用「预算 − 抖动」再算窗；抖动比预算还大 ⇒ 契约不成立
+"$PY" - "$XCON" "$TMP/jitter_too_big.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"]["xdom_jitter_us"] = 1200   # > 1000 µs 预算
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "抖动大于预算 → 契约本身不成立" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/jitter_too_big.contract.json"
+"$PY" - "$XCON" "$TMP/jitter_ctrl.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"].pop("xdom_jitter_us", None)
+d.setdefault("control", {})["xdom_jitter_us"] = 100
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "抖动写在 control 下被拒" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/jitter_ctrl.contract.json"
+# 声明抖动后 1:1 + 预算 1 仍要通过（900 µs 有效预算下窗 ≈90%）
+expect_rc "声明抖动后 1:1 预算1 仍通过" 0 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" "$XCON"
+
+echo
+echo "=== PR11-D：跨域走**严格入口**（--split-by-domain），不再只有手写脚本 ==="
+# 以前跨域只有一条路：手写 xdom_build.sh + 两条手工 emit。于是
+# "论文用的产物"和"严格入口产出的产物"是两条链——严格入口不支持跨域，
+# 绕过它就成了默认做法。这一节把跨域收进严格入口：
+#   一次调用 → 契约门 → 规划 → 独立复检 → 按域拆分 → 两端各自合成 → 溯源清单。
+XC_MRF="$HERE/../../contracts/examples/xdom_loop_multirate_feasible.contract.json"
+LOOPSRC="$HERE/../../examples/ecos/five_stage_loop__闭环五阶段示例.c"
+EX5='{"stage_sample":0.60,"stage_fir":0.67,"stage_pid":0.28,"stage_clamp":0.28,"stage_plant":0.50}'
+XB="$TMP/strict_split"
+rm -rf "$XB"
+expect_rc "严格入口一次产出两端（--split-by-domain）" 0 \
+    bash "$ECOS" --dag "$FIX/xdom_loop.dag.json" --contract "$XC_MRF" \
+    --platforms "$CAPS" --platform linux_kernel --release-cost-us 21 \
+    --exec-us "$EX5" --source "$LOOPSRC" --out-dir "$XB" \
+    --split-by-domain --call "stage_pid=stage_pid(1000)"
+for f in root/ecos_fused_linux.c root/ecos_xdom.c root/ecos_xipc.h root/stage_impl.c \
+         nuttx/ecos_nuttx_main.c nuttx/ecos_xdom.c nuttx/ecos_xipc.h nuttx/stage_impl.c; do
+    if [ -f "$XB/$f" ]; then ok "拆分成对出现：$f"; else bad "拆分缺 $f"; fi
+done
+# 角色与节拍必须落到两端：root=owner/2000 µs，nuttx=非 owner/1000 µs
+expect_grep "root 端：环 owner + 契约周期 2000 µs" "$XB/root/ecos_xdom.c" \
+    "#define ECOS_XDOM_OWNER 1" "#define ECOS_XDOM_PERIOD_US 2000"
+expect_grep "nuttx 端：非 owner + 契约周期 1000 µs" "$XB/nuttx/ecos_xdom.c" \
+    "#define ECOS_XDOM_OWNER 0" "#define ECOS_XDOM_PERIOD_US 1000"
+expect_grep "root 端环头是协议 v3" "$XB/root/ecos_xipc.h" "XIPC_VERSION     3u"
+expect_grep "nuttx 端环头是协议 v3" "$XB/nuttx/ecos_xipc.h" "XIPC_VERSION     3u"
+if cmp -s "$XB/root/ecos_xipc.h" "$XB/nuttx/ecos_xipc.h"; then
+    ok "两端环头文件逐字节相同（ABI 一致）"
+else
+    bad "两端环头文件不同 → 环布局会不一致"
+fi
+if cmp -s "$XB/root/stage_impl.c" "$XB/nuttx/stage_impl.c"; then
+    ok "两端阶段实现逐字节相同（同方案两部署）"
+else
+    bad "两端阶段实现不一致"
+fi
+expect_grep "溯源清单记录 split=1" "$XB/manifest.txt" \
+    "target    split" "split     1"
+expect_grep "产物带构建说明（两端必须同时重编）" "$XB/README.build.txt" \
+    "必须**同时**重编部署" "built=0"
+# 拆分模式与 --target 互斥：静默忽略一个用户以为生效的开关，比报错更糟
+expect_rc "拆分 + --target 互斥（rc=2）" 2 \
+    bash "$ECOS" --dag "$FIX/xdom_loop.dag.json" --contract "$XC_MRF" \
+    --platforms "$CAPS" --platform linux_kernel --release-cost-us 21 \
+    --exec-us "$EX5" --source "$LOOPSRC" --out-dir "$TMP/strict_bad" \
+    --split-by-domain --target nuttx
+# 单域路径不能被这次改动带歪：chain_window 仍是一份产物
+rm -rf "$TMP/strict_single"
+expect_rc "单域严格入口不受影响" 0 \
+    bash "$ECOS" --dag "$FIX/chain_window.dag.json" --contract "$CONTRACT" \
+    --platforms "$CAPS" --platform nuttx --release-cost-us 21 \
+    --exec-us '{"s1":0.6,"s2":0.67,"s3":0.28,"s4":0.5}' \
+    --source "$SRC" --out-dir "$TMP/strict_single" --target nuttx
+
+echo
+echo "=== PR11-D §25：周期性重同步（相位协调的最小实现）==="
+# 只为验一件事：这个机制是**默认关闭、开了才生成、且只生成在消费者宿主里**。
+# 不然"实验中开了什么"就说不清，而这一节的结论完全依赖"开/关"这个变量。
+XC_RS="$HERE/../../contracts/examples/xdom_loop_resync.contract.json"
+rm -rf "$TMP/rs_on" "$TMP/rs_off"
+expect_rc "开了重同步的契约可生成" 0 \
+    bash "$ECOS" --dag "$FIX/xdom_loop.dag.json" --contract "$XC_RS" \
+    --platforms "$CAPS" --platform linux_kernel --release-cost-us 21 \
+    --exec-us "$EX5" --source "$LOOPSRC" --out-dir "$TMP/rs_on" \
+    --split-by-domain --call "stage_pid=stage_pid(1000)"
+expect_grep "消费者宿主里应用了一次性平移" "$TMP/rs_on/nuttx/ecos_nuttx_main.c" \
+    "ecos_xdom_resync_take()" "base += (uint64_t)_d" "xdom resync shift_us="
+expect_grep "桥里有触发逻辑与四个宏" "$TMP/rs_on/nuttx/ecos_xdom.c" \
+    "#define ECOS_XDOM_RESYNC_US 500" "#define ECOS_XDOM_RESYNC_AT_US 200" \
+    "#define ECOS_XDOM_RESYNC_HI_US 0" \
+    "ECOS_XDOM_RESYNC_COOLDOWN_US" "xdom_resync_arm(cons, (int32_t)ECOS_XDOM_RESYNC_US)"
+# 只守下边界的旧行为：上边界那一支必须被**预处理条件**包住（HI=0 时不参与编译）。
+# ⚠ 只能查"有没有那道 #if"，不能查"源码里有没有那行"——源码里当然有，
+#   它只是不被编进去。第一版就是按文本查，结果把好好的产物判成了旧代码。
+expect_grep "只守下边界时上边界被 #if 关掉" "$TMP/rs_on/nuttx/ecos_xdom.c" \
+    "#if ECOS_XDOM_RESYNC_HI_US != 0" \
+    "else if (age > (uint32_t)ECOS_XDOM_RESYNC_HI_US)"
+# ⚠ 这里原来有一条「生产者宿主不应用平移」；§26.4 之前它被删过一次——当时的理由
+#   "xdom_loop 两侧都订阅，root 也是消费者"是对的，但结论下错了：真正该保证的不是
+#   "谁在消费"，而是**只有一个域动手**（age 是相对相位，只有一个自由度）。
+#   现在由契约 xdom_resync_domain 指定主域，这条断言重新成立且有了正当依据。
+expect_absent "非主域的宿主不应用平移" "$TMP/rs_on/root/ecos_fused_linux.c" \
+    "ecos_xdom_resync_take"
+# 默认（不开）必须一个字节都不多：既有夹具的行为不能被这次改动带歪
+expect_rc "默认契约（不开重同步）仍可生成" 0 \
+    bash "$ECOS" --dag "$FIX/xdom_loop.dag.json" --contract "$XCON" \
+    --platforms "$CAPS" --platform linux_kernel --release-cost-us 21 \
+    --exec-us "$EX5" --source "$LOOPSRC" --out-dir "$TMP/rs_off" \
+    --split-by-domain --call "stage_pid=stage_pid(1000)"
+expect_grep "默认关闭：宏为 0" "$TMP/rs_off/nuttx/ecos_xdom.c" \
+    "#define ECOS_XDOM_RESYNC_US 0"
+expect_absent "默认关闭：宿主里没有平移代码" "$TMP/rs_off/nuttx/ecos_nuttx_main.c" \
+    "ecos_xdom_resync_take"
+
+# 契约层：只开平移却不给触发阈值 ⇒ 永远不触发，判错（配了等于没配）
+"$PY" - "$XC_RS" "$TMP/rs_bad.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"]["xdom_resync_at_us"] = 0
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "开了平移但没触发阈值 ⇒ 判错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_bad.contract.json"
+# 写到 control 下会被静默忽略（emit 只读 timing_constraints）⇒ 必须判错
+"$PY" - "$XC_RS" "$TMP/rs_pos.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+v = d["timing_constraints"].pop("xdom_resync_us")
+d.setdefault("control", {})["xdom_resync_us"] = v
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "重同步字段写在 control 下 ⇒ 判错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_pos.contract.json"
+
+echo
+echo "=== PR11-D §26：双向重同步（漂移反向也要守） ==="
+# 只为验一件事：上边界是**独立**的一支，靠宏开关，且方向是**负**的。
+# §25 那版把方向写死成 +500；漂移一反它就不动作，甚至会把"涨到顶回绕"
+# 误判成"快掉到 0"再往后推（模型：11.1% 拒收，比不开还差一倍）。
+XC_BI="$HERE/../../contracts/examples/xdom_loop_resync_bi.contract.json"
+rm -rf "$TMP/rs_bi"
+expect_rc "双向重同步契约可生成" 0 \
+    bash "$ECOS" --dag "$FIX/xdom_loop.dag.json" --contract "$XC_BI" \
+    --platforms "$CAPS" --platform linux_kernel --release-cost-us 21 \
+    --exec-us "$EX5" --source "$LOOPSRC" --out-dir "$TMP/rs_bi" \
+    --split-by-domain --call "stage_pid=stage_pid(1000)"
+expect_grep "桥里有上边界宏与前移分支" "$TMP/rs_bi/nuttx/ecos_xdom.c" \
+    "#define ECOS_XDOM_RESYNC_HI_US 800" \
+    "xdom_resync_arm(cons, -(int32_t)ECOS_XDOM_RESYNC_US)"
+expect_grep "宿主按符号处理两个方向" "$TMP/rs_bi/nuttx/ecos_nuttx_main.c" \
+    "int32_t _d = ecos_xdom_resync_take()" "base += (uint64_t)_d" \
+    "base -= (uint64_t)(-_d)"
+expect_absent "主域=nuttx：root 侧整条不生成" "$TMP/rs_bi/root/ecos_fused_linux.c" \
+    "xdom_shift"
+expect_grep "主域=nuttx：root 侧桥宏归零" "$TMP/rs_bi/root/ecos_xdom.c" \
+    "#define ECOS_XDOM_RESYNC_US 0"
+# 没有声明主域 ⇒ 判错。这条是 §26.4 用一批拒收换来的：两侧各自按门限搬，
+# 相对相位一次被推过整拍。
+"$PY" - "$XC_BI" "$TMP/rs_nomaster.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"].pop("xdom_resync_domain")
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "没有声明重同步主域 ⇒ 判错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_nomaster.contract.json"
+# 主域写错名字 / 写成没有跨域入边的纯生产者 ⇒ 判错（配了永远不会触发）
+"$PY" - "$XC_BI" "$TMP/rs_badmaster.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"]["xdom_resync_domain"] = "nuttxx"
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "主域名字不存在 ⇒ 判错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_badmaster.contract.json"
+# 消费侧是内核模块时（root 侧 ch0）也必须有：§25 只做了 NuttX 一侧，
+# 而 ch0 的年龄是**上升**的（+15.5 ppm）——方向一反，缺的就是这一侧。
+# 这里用 master=root 的夹具验"换主域"：生成物必须**整条翻过来**。
+XC_BI_ROOT="$HERE/../../contracts/examples/xdom_loop_resync_bi_root.contract.json"
+rm -rf "$TMP/rs_biroot"
+expect_rc "主域切到 root 也能生成" 0 \
+    bash "$ECOS" --dag "$FIX/xdom_loop.dag.json" --contract "$XC_BI_ROOT" \
+    --platforms "$CAPS" --platform linux_kernel --release-cost-us 21 \
+    --exec-us "$EX5" --source "$LOOPSRC" --out-dir "$TMP/rs_biroot" \
+    --split-by-domain --call "stage_pid=stage_pid(1000)"
+expect_grep "主域=root：内核侧宿主应用平移（按拍广播给所有组）" "$TMP/rs_biroot/root/ecos_fused_linux.c" \
+    "ecos_xdom_resync_take()" "xdom_shift_left = ECOS_GROUPS" \
+    "hrtimer_forward_now(&g->timer, ktime_set(0, _next * 1000))" \
+    "xdom resync shift_us="
+expect_grep "主域=root：内核侧桥里有门限宏" "$TMP/rs_biroot/root/ecos_xdom.c" \
+    "#define ECOS_XDOM_RESYNC_US 500" "#define ECOS_XDOM_RESYNC_HI_US 800"
+expect_absent "主域=root：nuttx 侧整条不生成" "$TMP/rs_biroot/nuttx/ecos_nuttx_main.c" \
+    "ecos_xdom_resync_take"
+expect_grep "主域=root：nuttx 侧桥宏归零" "$TMP/rs_biroot/nuttx/ecos_xdom.c" \
+    "#define ECOS_XDOM_RESYNC_US 0"
+# 平移量必须小于一个整拍：否则前移会让本拍早于上一拍（时间倒退）
+"$PY" - "$XC_BI" "$TMP/rs_ge.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"]["xdom_resync_us"] = 1000
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "平移量 ≥ 一个周期 ⇒ 判错（会时间倒退）" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_ge.contract.json"
+# 上边界不早于预算 ⇒ 等越界才动作，那一拍已经被拒了
+"$PY" - "$XC_BI" "$TMP/rs_late.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"]["xdom_resync_hi_us"] = 1000
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "上边界 ≥ 预算 ⇒ 判错（来晚了）" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_late.contract.json"
+# 两个门限交叉 ⇒ 同一拍两边都满足，方向互相抵消
+"$PY" - "$XC_BI" "$TMP/rs_cross.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"]["xdom_resync_hi_us"] = 150
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "门限交叉（at ≥ hi）⇒ 判错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_cross.contract.json"
+# 有上边界却没有年龄预算：没有"越界"这回事，上边界无处安放
+"$PY" - "$XC_BI" "$TMP/rs_nob.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"].pop("xdom_max_age_ticks")
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "上边界但无年龄预算 ⇒ 判错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_nob.contract.json"
+# 参考模型必须能给出"方向"：反向漂移 + 只有下边界 ⇒ 前移 0 次（旧逻辑的病因）
+"$PY" - "$HERE/../ecos/xdom_timeline.py" <<'PYEOF'
+import sys
+sys.path.insert(0, sys.argv[1].rsplit("/", 1)[0])
+import xdom_timeline as tl
+def run(cdrift, lo, hi):
+    p = tl.Domain("p", 1000, exec_us=5)
+    c = tl.Domain("c", 1000, phase_us=700, drift_ppm=cdrift)
+    return tl.simulate_resync(p, c, 120000, budget_us=1000, lo_us=lo, hi_us=hi,
+                              step_us=500, cooldown_us=15000000, jitter_us=100)
+a = run(-15, 200, 0)      # 实测方向 + 只守下边界
+d = run(+15, 200, 0)      # 反向 + 只守下边界（旧逻辑）
+e = run(+15, 200, 800)    # 反向 + 双向
+assert a["shifts_pos"] > 0 and a["shifts_neg"] == 0, a
+assert d["shifts_neg"] == 0, "反向漂移时旧逻辑不该前移"
+assert d["stale"] > a["stale"], "反向漂移 + 只有下边界，拒收必须变多（%r vs %r）" % (d["stale"], a["stale"])
+assert e["shifts_neg"] > 0 and e["stale"] == 0, e
+print("  ✅ 参考模型：反向漂移下只有下边界不动作（拒收 %d→%d），双向前移 %d 次后归零"
+      % (a["stale"], d["stale"], e["shifts_neg"]))
+PYEOF
+_rc=$?; [ "$_rc" = 0 ] && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "  ❌ 参考模型双向判据"; }
+
+echo
+echo "=== PR11-D §27：门限/步长的结构性约束 ==="
+# 两条都是"看起来配了、实际更差"的配置，参考模型能直接把后果算出来：
+#   step ≥ hi−lo   → 一次前移落到下边界以下，两门限互抓（带宽 = hi−lo）
+#   lo+step ≥ 预算 → 后移立刻越界，带宽退化成一整个周期
+"$PY" - "$XC_BI" "$TMP/rs_s700.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+d["timing_constraints"]["xdom_resync_us"] = 700      # hi−lo = 600 ⇒ 700 ≥ 600
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "步长 ≥ hi−lo（两门限互抓）⇒ 判错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_s700.contract.json"
+"$PY" - "$XC_BI" "$TMP/rs_s400.contract.json" <<'PYEOF'
+import io, json, sys
+d = json.load(io.open(sys.argv[1], encoding="utf-8"))
+tc = d["timing_constraints"]
+tc.update({"xdom_resync_at_us": 400, "xdom_resync_us": 700, "xdom_resync_hi_us": 0})
+json.dump(d, io.open(sys.argv[2], "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+PYEOF
+expect_rc "lo+step ≥ 预算（带宽退化）⇒ 判错" 3 \
+    "$PY" "$HERE/../ecos/contract_validate.py" "$FIX/xdom_loop.dag.json" \
+    "$TMP/rs_s400.contract.json"
+# 参考模型：稳态带宽 = step（与 lo/hi 的位置无关），这是设计公式而不是巧合
+"$PY" - "$HERE/../ecos/xdom_timeline.py" <<'PYEOF'
+import sys
+sys.path.insert(0, sys.argv[1].rsplit("/", 1)[0])
+import xdom_timeline as tl
+def band(step, lo, hi, cdrift):
+    p = tl.Domain("p", 1000, exec_us=5)
+    c = tl.Domain("c", 1000, phase_us=700, drift_ppm=cdrift)
+    r = tl.simulate_resync(p, c, 120000, budget_us=1000, lo_us=lo, hi_us=hi,
+                           step_us=step, cooldown_us=15000000, jitter_us=0)
+    w = r["ages"][20000:]
+    return max(w) - min(w)
+for step in (300, 500, 700):
+    b = band(step, 200, 0, -15)
+    assert abs(b - step) <= 2, "递减方向带宽应等于 step：step=%d 得 %.0f" % (step, b)
+for step in (300, 500, 700):
+    b = band(step, 200, 800, +15)
+    assert abs(b - step) <= 2, "递增方向带宽应等于 step：step=%d 得 %.0f" % (step, b)
+print("  ✅ 参考模型：两个方向的稳态带宽都等于 step（±2 µs），与门限的绝对位置无关")
+PYEOF
+_rc=$?; [ "$_rc" = 0 ] && PASS=$((PASS+1)) || { FAIL=$((FAIL+1)); echo "  ❌ 带宽 = step 的判据"; }
 
 echo
 echo "通过 $PASS / 失败 $FAIL"

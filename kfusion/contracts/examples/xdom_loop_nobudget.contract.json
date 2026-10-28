@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "task": {
+    "period_us": 1000,
+    "deadline_us": 2500
+  },
+  "timing_constraints": {
+    "feedback_delay_max_us": 2500
+  },
+  "_note": [
+    "PR11-A 的 A/B 基线夹具：与 xdom_loop.contract.json **只差「没有年龄预算」这一个字段**。",
+    "用途是让「取最旧 vs 取最新」成为唯一的自变量（PR10-F §13.12 的 LAG=0 基线也是无预算）。",
+    "若用带预算的契约跑「取最旧」，age>1 的值会被拒收，那就同时改了两个变量：",
+    "既量不到「取最旧把 age 抬到几拍」，也说不清发散是被延迟改的还是被拒收改的。",
+    "",
+    "板上配对：",
+    "  xdom_loop.contract.json        + --xdom-mode latest → 对照",
+    "  xdom_loop_nobudget.contract.json + --xdom-mode oldest → 实验（直接量旧桥语义）",
+    "",
+    "⚠ 这份**不得**用于论文主张：它刻意去掉了运行时兜底。"
+  ]
+}

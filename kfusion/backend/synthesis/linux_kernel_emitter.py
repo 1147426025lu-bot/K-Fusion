@@ -66,6 +66,7 @@ _LINUX_C = """/* %(name)s —— 由 ECoS 融合方案生成的 ring-0 宿主；
 #include <linux/ktime.h>
 #include <linux/sched.h>
 #include <linux/sched/rt.h>
+#include <linux/atomic.h>	/* 释放计数：hrtimer 回调与内核线程共享，必须原子 */
 #include <linux/string.h>
 #include <linux/smp.h>
 #include <uapi/linux/sched/types.h>	/* struct sched_attr（uapi；内部 sched/types.h 里没有） */
@@ -75,6 +76,9 @@ _LINUX_C = """/* %(name)s —— 由 ECoS 融合方案生成的 ring-0 宿主；
 %(xdom_include)s
 
 #define ECOS_GROUPS %(ngroups)d
+#define ECOS_NSTAGES %(nstages)d
+#define ECOS_FIRST_GROUP %(first_group)d
+#define ECOS_LAST_GROUP %(last_group)d
 
 static unsigned int period_us = %(period)d;
 module_param(period_us, uint, 0444);
@@ -106,13 +110,19 @@ static void ecos_set_fifo(struct task_struct *t, unsigned int prio)
 		sched_set_fifo(t);	/* 退回导出接口（优先级 MAX_RT_PRIO/2） */
 }
 
-/* 1 组 1 个定时器 + 1 个线程 + 1 个唤醒点 */
+/* 1 组 1 个定时器 + 1 个线程 + 1 个唤醒点。
+ *
+ * ⚠ 释放计数必须是**原子**的：hrtimer 回调（硬中断上下文）与内核线程并发读写。
+ * 旧实现用普通 `bool pending`，两处裸访问既非原子、又把"多次释放"塌成"一次"
+ * ——线程落后时丢拍且完全不可见。换成 atomic_t 后：每次定时器 atomic_inc，
+ * 线程用 atomic_xchg 一次取走全部，n-1 即积压拍数（记进 missed）。 */
 struct ecos_group {
 	int id;
 	struct hrtimer timer;
 	struct task_struct *task;
 	wait_queue_head_t wait;
-	bool pending;
+	atomic_t releases;	/* 自上次运行以来定时器释放了几次（原子） */
+	s64 last_r_ns;		/* 本拍名义释放 r_k（hrtimer 到期时刻） */
 };
 
 static struct ecos_group ecos_groups[ECOS_GROUPS] = {
@@ -132,6 +142,13 @@ static unsigned long periods;      /* 已完成周期数（由组 0 计数） */
 module_param(periods, ulong, 0444);
 MODULE_PARM_DESC(periods, "已完成周期数");
 
+/* 积压拍数：线程来不及跑时，定时器已释放但它还没跑的拍数（Σ(n-1)）。
+ * 严格周期配对实验里这个数必须为 0；非 0 说明"周期体超时/线程被抢占到兑现不了
+ * 周期"，此时再谈死区与延迟都没有意义——先把落后消掉。 */
+static unsigned long missed;
+module_param(missed, ulong, 0444);
+MODULE_PARM_DESC(missed, "积压拍数（线程落后于定时器释放的次数，正常应为 0）");
+
 /* 冻结开关：sysfs 上分几次 cat 参数之间会跨周期（10 ms 周期下必然发生），
  * 读出来的 periods / 观察变量就不属于同一拍。写 1 暂停周期体，取完快照再写 0。
  * 冻结期间不执行、也不计数——所以快照里的 periods 与各变量严格同拍。 */
@@ -140,16 +157,19 @@ module_param(frozen, bool, 0644);
 MODULE_PARM_DESC(frozen, "写 1 暂停周期体（取一致快照），写 0 恢复");
 
 %(probe_decls)s
-
+%(rsf_probe)s
+%(stage_profile)s
+%(xdom_shift_decls)s
 static enum hrtimer_restart ecos_tick(struct hrtimer *t)
 {
 	struct ecos_group *g = container_of(t, struct ecos_group, timer);
 
-	/* 定时器里只置位 + 唤醒；业务逻辑留给线程，避免在硬中断上下文跑控制律 */
-	g->pending = true;
+	/* 定时器里只计数 + 唤醒；业务逻辑留给线程，避免在硬中断上下文跑控制律。
+	 * atomic_inc 保证"落后时的多次释放"一次不丢——这正是严格配对实验要看的。 */
+	g->last_r_ns = ktime_to_ns(hrtimer_get_expires(t));
+	atomic_inc(&g->releases);
 	wake_up_interruptible(&g->wait);
-	hrtimer_forward_now(&g->timer, ktime_set(0, (s64)period_us * 1000));
-	return HRTIMER_RESTART;
+%(xdom_tick_shift)s	return HRTIMER_RESTART;
 }
 
 static void ecos_run_body(int id)
@@ -159,7 +179,7 @@ static void ecos_run_body(int id)
 	}
 	if (id == 0)
 		periods++;
-%(digest_update)s
+%(digest_update)s%(xdom_report)s
 }
 
 struct ecos_start_arg {
@@ -181,15 +201,44 @@ static int ecos_runner(void *data)
 {	struct ecos_group *g = data;
 
 	while (!kthread_should_stop()) {
-		wait_event_interruptible(g->wait, g->pending || kthread_should_stop());
+		wait_event_interruptible(g->wait,
+					 atomic_read(&g->releases) != 0 || kthread_should_stop());
 		if (kthread_should_stop())
 			break;
-		g->pending = false;
+		{
+			/* 原子取走并清零释放计数：n = 自上次运行以来定时器释放了几次。
+			 * n == 0：伪唤醒，回去睡。n > 1：线程落后，n-1 记进 missed（积压拍数），
+			 * 但**只跑一次**周期体——固定周期控制律不该用"追赶"抹掉迟到的事实，
+			 * 把落后暴露出来才是严格配对实验要的。 */
+			int n = atomic_xchg(&g->releases, 0);
+
+			if (n == 0)
+				continue;
+			if (n > 1)
+				missed += (unsigned long)(n - 1);
+		}
 		/* 冻结：不执行、不计数 —— 保证 sysfs 快照同拍 */
 		if (unlikely(frozen))
 			continue;
-%(probe_before)s
-		ecos_run_body(g->id);
+%(xdom_anchor)s%(probe_before)s
+		{
+			s64 r_ns = g->last_r_ns;
+			s64 s_ns = ktime_get();
+
+			ecos_run_body(g->id);
+			{
+				s64 f_ns = ktime_get();
+
+				/* 端到端 R：首组的 r/s + 末组的 f（与用户态 driver 的 response 同口径）。
+				 * 单组融合时 FIRST==LAST，退化为组内三戳。 */
+				if (g->id == ECOS_FIRST_GROUP) {
+					ecos_rsf_r0 = r_ns;
+					ecos_rsf_s0 = s_ns;
+				}
+				if (g->id == ECOS_LAST_GROUP)
+					ecos_rsf_add(ecos_rsf_r0, ecos_rsf_s0, f_ns);
+			}
+		}
 %(probe_after)s
 	}
 	return 0;
@@ -213,7 +262,7 @@ static int __init ecos_init(void)
 		struct ecos_group *g = &ecos_groups[i];
 
 		init_waitqueue_head(&g->wait);
-		g->pending = false;
+		atomic_set(&g->releases, 0);
 
 		hrtimer_init(&g->timer, CLOCK_MONOTONIC, HRTIMER_MODE_ABS_PINNED);
 		g->timer.function = ecos_tick;
@@ -266,6 +315,7 @@ static void __exit ecos_exit(void)
 		if (ecos_groups[i].task)
 			kthread_stop(ecos_groups[i].task);
 	}
+	ecos_stage_report();
 	pr_info("ecos: 已停止\\n");
 }
 
@@ -275,6 +325,196 @@ module_exit(ecos_exit);
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("ECoS fused periodic control (%(ngroups)d groups)");
 """
+
+_STAGE_PROFILE = r'''
+/* ---- 阶段执行时间实测（profiler）----
+ * 每个阶段在 ecos_fused_body.c 里被 ecos_stage_enter/exit 包裹（弱符号钩子）。
+ * 这里提供强定义覆盖弱符号，用 ktime_get() 量出每个阶段的真实执行时间。
+ * 用途：消除 ast_to_plan 里 exec_us 的“占位”诚实边界——在目标板上跑一次，
+ * 读 exec_probe 即可拿到每阶段 max/avg（ns），回填 --exec-us。 */
+#include <linux/math64.h>	/* div_s64 */
+
+static s64 ecos_stage_max_ns[ECOS_NSTAGES];
+static s64 ecos_stage_sum_ns[ECOS_NSTAGES];
+static unsigned long ecos_stage_cnt[ECOS_NSTAGES];
+static s64 ecos_stage_t0[ECOS_NSTAGES];
+static const char *ecos_stage_names[ECOS_NSTAGES] = {
+%(stage_names)s
+};
+
+void ecos_stage_enter(unsigned int idx)
+{
+	if (idx < ECOS_NSTAGES)
+		ecos_stage_t0[idx] = ktime_get();
+}
+
+void ecos_stage_exit(unsigned int idx)
+{
+	if (idx < ECOS_NSTAGES) {
+		s64 d = ktime_get() - ecos_stage_t0[idx];
+
+		if (d > 0) {
+			ecos_stage_cnt[idx]++;
+			ecos_stage_sum_ns[idx] += d;
+			if (ecos_stage_cnt[idx] == 1 || d > ecos_stage_max_ns[idx])
+				ecos_stage_max_ns[idx] = d;
+		}
+	}
+}
+
+static void ecos_stage_report(void)
+{
+	int i;
+
+	pr_info("ecos: 阶段执行时间实测（ns）：");
+	for (i = 0; i < ECOS_NSTAGES; i++) {
+		s64 avg = ecos_stage_cnt[i]
+			? div_s64(ecos_stage_sum_ns[i], ecos_stage_cnt[i]) : 0;
+
+		pr_info("  [%%d] %%s: max=%%lld avg=%%lld n=%%lu", i,
+			ecos_stage_names[i], (long long)ecos_stage_max_ns[i],
+			(long long)avg, ecos_stage_cnt[i]);
+	}
+}
+
+/* 读 exec_probe 即打印每阶段 max/avg（ns），无需卸载模块。 */
+static int ecos_stage_show(char *buf, const struct kernel_param *kp)
+{
+	int n = 0, i;
+	unsigned long long tot = 0;
+
+	for (i = 0; i < ECOS_NSTAGES; i++)
+		tot += (unsigned long long)ecos_stage_cnt[i];
+	n += scnprintf(buf + n, PAGE_SIZE - n, "count=%%llu samples\n", tot);
+	for (i = 0; i < ECOS_NSTAGES; i++) {
+		s64 avg = ecos_stage_cnt[i]
+			? div_s64(ecos_stage_sum_ns[i], ecos_stage_cnt[i]) : 0;
+
+		n += scnprintf(buf + n, PAGE_SIZE - n,
+			       "  [%%d] %%s: max=%%lldns avg=%%lldns n=%%lu\n",
+			       i, ecos_stage_names[i],
+			       (long long)ecos_stage_max_ns[i],
+			       (long long)avg, ecos_stage_cnt[i]);
+	}
+	return n;
+}
+
+static const struct kernel_param_ops ecos_stage_ops = {
+	.get = ecos_stage_show,
+};
+
+module_param_cb(exec_probe, &ecos_stage_ops, NULL, 0444);
+MODULE_PARM_DESC(exec_probe, "每阶段实测 max/avg 执行时间（ns），读即打印");
+'''
+
+_RSF_PROBE = r'''
+/* 与 plc_probe__统一测量探针.h 同口径的 r/s/f（内核不能 include 用户态 stdio 头）。
+ *   start_lat = s − r    唤醒延迟
+ *   exec      = f − s    执行时间
+ *   response  = f − r    端到端 R（论文量）
+ *   miss      = f > r + T
+ * 只在组 0 记账（与 periods 同一拍）。读 rsf_probe。 */
+#include <linux/math64.h>
+
+#define ECOS_RSF_BUCKETS 1024	/* 0..1023 µs，与 fusion_codegen 默认桶对齐（flat 的 R≈800µs） */
+
+struct ecos_rsf_series {
+	const char *name;
+	unsigned long hist[ECOS_RSF_BUCKETS];
+	unsigned long n;
+	unsigned long over;
+	long min_ns, max_ns;
+	s64 sum_ns;
+};
+
+static struct ecos_rsf_series ecos_rsf_start = { .name = "start_lat", .min_ns = LONG_MAX };
+static struct ecos_rsf_series ecos_rsf_exec  = { .name = "exec",      .min_ns = LONG_MAX };
+static struct ecos_rsf_series ecos_rsf_resp  = { .name = "response",  .min_ns = LONG_MAX };
+static unsigned long ecos_rsf_miss;
+static s64 ecos_rsf_r0, ecos_rsf_s0;	/* 本拍首组 r/s，末组完成时配对 */
+
+static void ecos_rsf_push(struct ecos_rsf_series *s, s64 v_ns)
+{
+	unsigned int b;
+	long v;
+
+	if (v_ns < 0)
+		v_ns = 0;
+	v = (long)v_ns;
+	s->n++;
+	s->sum_ns += v_ns;
+	if (s->n == 1 || v < s->min_ns)
+		s->min_ns = v;
+	if (v > s->max_ns)
+		s->max_ns = v;
+	b = (unsigned int)div_s64(v_ns, 1000);
+	if (b < ECOS_RSF_BUCKETS)
+		s->hist[b]++;
+	else
+		s->over++;
+}
+
+static void ecos_rsf_add(s64 r_ns, s64 s_ns, s64 f_ns)
+{
+	s64 T = (s64)period_us * 1000;
+
+	ecos_rsf_push(&ecos_rsf_start, s_ns - r_ns);
+	ecos_rsf_push(&ecos_rsf_exec,  f_ns - s_ns);
+	ecos_rsf_push(&ecos_rsf_resp,  f_ns - r_ns);
+	if (f_ns > r_ns + T)
+		ecos_rsf_miss++;
+}
+
+static long ecos_rsf_pct(const struct ecos_rsf_series *s, unsigned int permille)
+{
+	unsigned long need, cum = 0;
+	int i;
+
+	if (!s->n)
+		return -1;
+	need = (s->n * (unsigned long)permille + 999UL) / 1000UL;
+	if (need == 0)
+		need = 1;
+	for (i = 0; i < ECOS_RSF_BUCKETS; i++) {
+		cum += s->hist[i];
+		if (cum >= need)
+			return (long)i;
+	}
+	return (long)ECOS_RSF_BUCKETS;	/* over 夹持：分位是下界 */
+}
+
+static int ecos_rsf_show(char *buf, const struct kernel_param *kp)
+{
+	int n = 0;
+	const struct ecos_rsf_series *ss[3] = {
+		&ecos_rsf_start, &ecos_rsf_exec, &ecos_rsf_resp
+	};
+	int i;
+
+	n += scnprintf(buf + n, PAGE_SIZE - n,
+		       "PLC_PROBE r/s/f v1.2 kernel miss=%lu periods=%lu\n",
+		       ecos_rsf_miss, periods);
+	for (i = 0; i < 3; i++) {
+		const struct ecos_rsf_series *s = ss[i];
+		s64 avg = s->n ? div_s64(s->sum_ns, s->n) : 0;
+
+		n += scnprintf(buf + n, PAGE_SIZE - n,
+			       "  %s n=%lu over=%lu min=%ldns p50=%ldus p99=%ldus "
+			       "avg=%lldns max=%ldns\n",
+			       s->name, s->n, s->over, s->min_ns,
+			       ecos_rsf_pct(s, 500), ecos_rsf_pct(s, 990),
+			       (long long)avg, s->max_ns);
+	}
+	return n;
+}
+
+static const struct kernel_param_ops ecos_rsf_ops = {
+	.get = ecos_rsf_show,
+};
+
+module_param_cb(rsf_probe, &ecos_rsf_ops, NULL, 0444);
+MODULE_PARM_DESC(rsf_probe, "统一 r/s/f：start_lat / exec / response（与用户态 plc_probe 同口径）");
+'''
 
 _KBUILD = """# 由 ECoS 方案生成；在目标侧（内核树）执行：
 #   make -C <KDIR> M=$PWD modules
@@ -300,6 +540,8 @@ _README = """%(name)s —— 构建说明（必须在内核侧构建）
    sudo insmod %(mod)s.ko period_us=%(period)d
    dmesg | tail
    cat /sys/module/%(mod)s/parameters/periods
+   cat /sys/module/%(mod)s/parameters/rsf_probe
+   cat /sys/module/%(mod)s/parameters/exec_probe
    # 取“同拍”快照：先冻结，再读，读完解冻（sysfs 分开读会跨周期）
    echo 1 | sudo tee /sys/module/%(mod)s/parameters/frozen >/dev/null
 %(digest_hint)s
@@ -327,7 +569,7 @@ def _ident(s):
     return s if not s[:1].isdigit() else "v_" + s
 
 
-def emit(ir, module_name, phases_known=True, xdom=False):
+def emit(ir, module_name, phases_known=True, xdom=False, xdom_resync=False):
     ngroups = len(ir.groups)
     layout = " | ".join(
         "%s@%sµs[%s]" % (g.gid,
@@ -372,9 +614,7 @@ def emit(ir, module_name, phases_known=True, xdom=False):
                   for i, g in enumerate(ir.groups)]
         first_g = min(phases)[1]
         last_g = max(phases)[1]
-        probe_includes = ("#include <linux/math64.h>\t/* div_s64，探针求均值用 */\n"
-                          "\n#define ECOS_FIRST_GROUP %d\n#define ECOS_LAST_GROUP %d"
-                          % (first_g, last_g))
+        probe_includes = "#include <linux/math64.h>\t/* div_s64，探针求均值用 */\n"
         probe_decls = """/* 死区探针：量的是环闭合边 dz = t(本拍首组开始) − t(上拍末组结束)。
  * 每拍两次 ktime_get()（几十 ns），读数里已含这点开销。
  * 注意：首组与末组在不同内核线程时，dz_last_ns 的读写是跨线程的
@@ -484,8 +724,68 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
 			}
 		}"""
 
+    # ---- 周期性重同步（消费侧是内核模块时）----
+    # 为什么内核侧也必须有一份：§25 只做了 NuttX 宿主，理由是"漂移让 age 单调下降"。
+    # 但那是**一个方向**的结论：实测 root 侧 ch0（nuttx→root）的 age 是**上升**的
+    # （588→603 µs / 60 s，+15 ppm）。方向反了以后，消费者恰好就是 root 这一侧，
+    # 而它当时没有任何应用平移的代码 —— 上边界根本无从守。
+    #
+    # 与 NuttX 侧的差别：那边只有一个 base，直接 += d 就行；这边每组一个 hrtimer、
+    # 各自 forward_now 推进。所以平移必须**广播给本拍所有组**（各用一次），
+    # 否则只动一组会把组间相位差改掉 —— 那等于偷偷改了方案。
+    # 各组定时器都 PINNED 到同一个核，回调串行，因此共享两个普通变量即可。
+    if xdom_resync:
+        xdom_shift_decls = (
+            "\n/* 一次性周期伸缩：待应用位移（µs，带符号）与剩余组数。\n"
+            " * 只在消费侧是内核模块时才生成；关闭时这两行与下面的代码都不存在。 */\n"
+            "static int32_t xdom_shift_us;\n"
+            "static int xdom_shift_left;\n")
+        xdom_tick_shift = (
+            "\t{\n"
+            "\t\t/* 组 0 负责向桥要一次请求，并广播给本拍的全部组 */\n"
+            "\t\tif (g->id == 0) {\n"
+            "\t\t\tint32_t _d = ecos_xdom_resync_take();\n"
+            "\n"
+            "\t\t\tif (_d) {\n"
+            "\t\t\t\txdom_shift_us = _d;\n"
+            "\t\t\t\txdom_shift_left = ECOS_GROUPS;\n"
+            "\t\t\t\tpr_info(\"xdom resync shift_us=%d left=%d n=%u\\n\",\n"
+            "\t\t\t\t\t(int)_d, xdom_shift_left,\n"
+            "\t\t\t\t\tecos_xdom_resync_count());\n"
+            "\t\t\t}\n"
+            "\t\t}\n"
+            "\t\t{\n"
+            "\t\t\ts64 _next = (s64)period_us;\n"
+            "\n"
+            "\t\t\tif (xdom_shift_left > 0) {\n"
+            "\t\t\t\t_next += xdom_shift_us;\n"
+            "\t\t\t\txdom_shift_left--;\n"
+            "\t\t\t}\n"
+            "\t\t\tif (_next < 1)\n"
+            "\t\t\t\t_next = 1;   /* 契约层已禁止 |d| >= period，这里只是兜底 */\n"
+            "\t\t\thrtimer_forward_now(&g->timer, ktime_set(0, _next * 1000));\n"
+            "\t\t}\n"
+            "\t}\n")
+    else:
+        xdom_shift_decls = ""
+        xdom_tick_shift = \
+            "\thrtimer_forward_now(&g->timer, ktime_set(0, (s64)period_us * 1000));\n"
+
+    # 阶段名（按 body 遍历顺序跨组累计），与 ecos_fused_body.c 里
+    # ecos_stage_enter(idx) 的索引严格对齐 —— 供 exec_probe 打印时给出名字。
+    stage_names = "\n".join('\t"%s",' % s.name
+                             for g in ir.groups for s in g.stages)
+    # 预渲染 profiler：把 %% 转成单 %、把 %(stage_names)s 注入名字列表；
+    # 结果作为值插入 _LINUX_C，其内部的 %d 不会被模板 % 操作符二次解析。
+    stage_profile = _STAGE_PROFILE % {"stage_names": stage_names}
+    phases = [((g.phase_us if g.phase_us is not None else 0.0), i)
+              for i, g in enumerate(ir.groups)]
+    first_group = min(phases)[1] if phases else 0
+    last_group = max(phases)[1] if phases else 0
+
     host = _LINUX_C % {
         "name": HOST_C, "ngroups": ngroups, "nstages": len(ir.order),
+        "first_group": first_group, "last_group": last_group,
         "period": int(ir.period_us or 0), "rtprio": 99, "evidence": ir.evidence,
         "layout": layout, "group_init": group_init,
         "phase_ns": phase_ns, "body_cases": body_cases,
@@ -500,6 +800,25 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
                       "\tecos_xdom_init();\n" if xdom else ""),
         "xdom_include": ('#include "ecos_xdom.h"\t/* 跨域数据桥 */\n'
                          if xdom else ""),
+        # root 侧的证据：以前一个都没有（只有 nuttx 侧会调 report_evidence），
+        # 于是"谁消费我"这个方向的年龄在串口上根本看不到（§18.4 的边界）。
+        # 这里按秒打一次，走 pr_info → dmesg。
+        # 注意：这是**代入值**，不是模板本体，所以取模写单个 %（写 %% 会原样漏进 C）；
+        # 前面要补一个换行——digest_update 结尾没有换行，否则会粘在同一行上。
+        "xdom_report": ('\n\tif (id == 0 && periods % 1000UL == 0UL)\n'
+                        '\t\tecos_xdom_report_evidence();'
+                        if xdom else ""),
+        # 周期锚点：**首拍真正跑起来的时刻**（µs）。不是 init 时刻——
+        # init 到首拍之间还隔着建线程、起 hrtimer，差几百 µs 到几毫秒。
+        # 两域的相对偏移 ρ 只能用它算（PR10-F 已经栽过"各自 init 起算"一次）。
+        "xdom_anchor": ('\t\tif (unlikely(periods == 0 && g->id == 0))\n'
+                        '\t\t\tpr_info("xdom anchor now_us=%u period_us=%u\\n",\n'
+                        '\t\t\t\tecos_xdom_now_us(), period_us);\n'
+                        if xdom else ""),
+        "xdom_shift_decls": xdom_shift_decls,
+        "xdom_tick_shift": xdom_tick_shift,
+        "stage_profile": stage_profile,
+        "rsf_probe": _RSF_PROBE,
     }
     return {
         HOST_C: host,

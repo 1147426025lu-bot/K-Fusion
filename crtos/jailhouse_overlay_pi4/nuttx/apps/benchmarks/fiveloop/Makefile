@@ -1,10 +1,9 @@
 include $(APPDIR)/Make.defs
 
-PROGNAME  = fiveloop
-PRIORITY  = 200
-STACKSIZE = 16384
 MODULE    = $(CONFIG_BENCHMARK_FIVELOOP)
 
-MAINSRC = fiveloop_main.c
+# This inmate is launched directly by CONFIG_INIT_ENTRYPOINT.  Keep both
+# translation units in libapps.a instead of registering shell builtins.
+CSRCS = fiveloop_main.c ecos_boot.c
 
 include $(APPDIR)/Application.mk

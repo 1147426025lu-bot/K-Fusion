@@ -1,0 +1,20 @@
+{
+  "version": 2,
+  "meta": { "mode": "stages", "task": { "name": "mmio_sensor", "entry": "chain_main", "period_us": 1000, "step_us": 1000 } },
+  "nodes": [
+    {
+      "name": "sensor_prepare",
+      "fns": ["sensor_prepare"],
+      "effects": ["mmio", "state_write"],
+      "phase_us": 0
+    }
+  ],
+  "edges": [],
+  "candidates": [],
+  "phase": { "known": true, "unit": "us", "period_us": 1000, "offsets": { "sensor_prepare": 0 } },
+  "topo_order": ["sensor_prepare"],
+  "topo_order_delayed": ["sensor_prepare"],
+  "recurrences": [],
+  "algebraic_loops": [],
+  "stats": {}
+}

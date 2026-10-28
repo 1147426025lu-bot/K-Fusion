@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "mode": "strict_period",
+  "period_us": 1000,
+  "allow_period_stretch": false,
+  "pins": {},
+  "windows": [
+    {
+      "from": "producer",
+      "to": "consumer",
+      "w_us": 100,
+      "r_us": 400,
+      "H_us": 0,
+      "notes": "单独看：提交 100 赶得上读取 400"
+    },
+    {
+      "from": "producer",
+      "to": "consumer",
+      "w_us": 350,
+      "r_us": 200,
+      "H_us": 0,
+      "notes": "另一条合法窗：若走这条则读在 200。两条一起交集为空"
+    }
+  ]
+}

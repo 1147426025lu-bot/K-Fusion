@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "kfusion://ir/temporal_effect_ir.schema.json",
+  "title": "TEIR",
+  "description": "Temporal Effect IR：计算效果 + 数据版本 + 允许执行域。不是 DAG 加几个时间字段。",
+  "type": "object",
+  "required": ["version", "kind", "task", "nodes", "edges", "events", "transform"],
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "kind": { "type": "string", "const": "teir" },
+    "task": { "type": "object" },
+    "nodes": { "type": "array", "items": { "type": "object", "required": ["name", "must_preserve", "may_delete"] } },
+    "edges": { "type": "array", "items": { "type": "object", "required": ["from", "to", "version"] } },
+    "events": { "type": "array" },
+    "persistent_state": { "type": "array" },
+    "transform": {
+      "type": "object",
+      "required": ["closed", "alias_uncertain"],
+      "properties": {
+        "closed": { "type": "boolean" },
+        "alias_uncertain": { "type": "boolean" },
+        "reasons": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

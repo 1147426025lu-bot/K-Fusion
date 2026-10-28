@@ -65,6 +65,9 @@ class PlanVerifier(object):
                  budget_us=None, contract=None):
         dag = dag or {}
         self.dag = dag
+        self.contract = contract or {}
+        # 跨域部署可行性（PR11-D）：None = 不适用（单域），True/False = 判过
+        self.xdom_feasible = None
         self.plat = platform or {}
         self.exec_us = exec_us or {}
         self.budget = budget_us
@@ -93,7 +96,8 @@ class PlanVerifier(object):
         # 跨域边与 z⁻¹ 同构：生产者在一个 cell、消费者在另一个 cell，只能在下一个
         # 周期边界看到它，所以它不约束同一拍内的先后（也不该被它否掉合法方案）。
         self.dom = domain_model.load(dag, period_us=self.tm.period,
-                                     topo=self.order)
+                                     topo=self.order,
+                                     domain_period_us=self.tm.domain_periods)
         self.edges = [e for e in (dag.get("edges") or [])
                       if (e.get("from"), e.get("to")) not in self.closing
                       and (e.get("from"), e.get("to")) not in self.dom.xdom_set]
@@ -263,9 +267,14 @@ class PlanVerifier(object):
             if self.budget and tot > self.budget + 1e-9:
                 add("CAPACITY", "期限：组 %s 执行 %.1f µs 超过预算 %.1f µs"
                     % (gid, tot, self.budget))
-            if self.tm.period and tot > float(self.tm.period) + 1e-9:
-                add("CAPACITY_PERIOD", "单拍容量：组 %s 执行 %.1f µs 超过周期 %.1f µs"
-                    % (gid, tot, float(self.tm.period)))
+            # 单拍容量按**该组自己所在域**的周期卡（PR11-D）：2 ms 域的组
+            # 用 1 ms 去卡会误杀（执行时间 1.5 ms 其实合法）。
+            g_period = self.tm.period_of(self.tm.group_domain(members))
+            if g_period and tot > float(g_period) + 1e-9:
+                add("CAPACITY_PERIOD",
+                    "单拍容量：组 %s（域 %s）执行 %.1f µs 超过该域周期 %.1f µs"
+                    % (gid, self.tm.group_domain(members) or "?", tot,
+                       float(g_period)))
             # 3b) 跨域不可融合：融合要求"同一次释放"，两个 cell 各有内核与调度器，
             #     物理上不存在跨域融合。这条要独立判，不能信规划器自己的结论。
             if self.dom.mixed(members):
@@ -295,24 +304,30 @@ class PlanVerifier(object):
             for v in self.tm.legacy_drift(members, self.legacy_output):
                 add(v["code"], "组 %s：%s" % (gid, v["msg"]))
 
-        # 4b) 反馈闭合边：融进同一组 ⇒ 死区≈一整拍
-        gid_of = {}
-        for gi, g in enumerate(groups):
-            for m in (g.get("members") or []):
-                gid_of[m] = g.get("id") or ("g%d" % gi)
-        for (a, b), meta in self.closing_meta.items():
-            if a in gid_of and b in gid_of and gid_of[a] == gid_of[b]:
-                period = float(self.tm.period or 0.0)
-                cap = self.tm.feedback_max
-                if cap is not None and period > float(cap):
-                    add("FEEDBACK_FUSED",
-                        "控制：反馈边 %s→%s 若并入同组，死区≈一整拍（%.0f µs）"
-                        "超过上限 %.0f µs，必须跨组" % (a, b, period, float(cap)))
-                else:
-                    warns.append(
-                        "控制：反馈边 %s→%s 并入同组，死区≈一整拍（%.0f µs）%s"
-                        % (a, b, period,
-                           "（未给上限，仅提示）" if cap is None else ""))
+        # 4b) 反馈闭合边：算**总死区**并对照契约上限。
+        #     以前这里只判"反馈边并入同一组（融合）"这一种情形；反馈边跨组
+        #     （含跨域）时直接跳过 ⇒ "死区因跨域翻倍"在验证器里是静默的。
+        #     实测后果（PR10-D）：xdom_loop 单域稳定收敛，跨域后反馈延迟
+        #     从 1 拍变 2 拍、回路发散到 ±60000，而工具链一路绿灯。
+        #     现在死区计算与判据都走 temporal_model 里**同一份**实现，
+        #     规划器与验证器不可能再给出两个不同的定义。
+        fb_errs, fb_warns = self.tm.feedback_violations(
+            groups, dom=self.dom, sched=sched)
+        for code, msg in fb_errs:
+            add(code, msg)
+        warns.extend(fb_warns)
+        for note in (getattr(self.tm, "notes", None) or []):
+            warns.append("契约：%s" % note)
+
+        # 4b-2) 证据级别与主张是否相称
+        #     契约声称 bounded（有可信上界）却拿不出 wcet ⇒ 这是**未证明的证明**，
+        #     拒绝这种声明；只有经验成本时只能出实验性方案。
+        if self.tm.evidence == "bounded" and not (self.contract.get("wcet_us")):
+            add("FEEDBACK_MODEL_UNPROVEN",
+                "证据：契约声称 evidence.exec=bounded（硬实时上界），"
+                "但没有 wcet_us 或任何有界执行时间凭据。"
+                "反馈死区满足上限 ≠ 证明了控制稳定；没有可信成本就只能按 "
+                "empirical 出实验性方案")
 
         # 4c) 期限（含组间积压）
         d = self.tm.deadline_violation(groups)
@@ -323,7 +338,7 @@ class PlanVerifier(object):
         #     独立重算一次——规划器算的 extra_periods 不能自证。
         if self.dom.multi and self.dom.extra_periods:
             extra = self.dom.extra_latency_us
-            comp = (sched[-1]["finish_us"] if sched else 0.0)
+            comp = max((r["finish_us"] for r in sched), default=0.0)
             if self.tm.deadline is not None and \
                     comp + extra > float(self.tm.deadline) + 1e-9:
                 add("XDOM_DEADLINE",
@@ -335,11 +350,35 @@ class PlanVerifier(object):
             warns.append(
                 "跨域：%d 条跨域边，端到端至少多 %d 拍（%.0f µs，按 %.0f µs/拍）"
                 % (len(self.dom.xdom), self.dom.extra_periods, extra,
-                   float(self.tm.period or 0)))
+                   float(self.dom.hop_period_us or 0)))
+
+        # 4e) 跨域部署可行性（PR11-D）：与 contract_validate / emit **同一份**判据。
+        #     以前这条只判在"门"上（契约层 + 生成层），不在验证器里；而项目铁律是
+        #     "整方案合法性只认 plan_verify"。于是会出现：一个方案在这里"验证通过"，
+        #     却在该速率组合下根本排不出预算内的年龄——那种通过是假的。
+        #     判据仍然只此一份（xdom_timeline.check_contract_coded），这里只负责归类。
+        if self.dom.multi:
+            try:
+                _tl_dir = os.path.dirname(os.path.abspath(__file__))
+                if _tl_dir not in sys.path:
+                    sys.path.insert(0, _tl_dir)
+                import xdom_timeline as _tl
+                _e, _w = _tl.check_contract_coded(self.dag, self.contract,
+                                                 exec_us=self.exec_us)
+                for _c, _m in _e:
+                    add(_c, _m)
+                for _c, _m in _w:
+                    warns.append("[%s] %s" % (_c, _m))
+                self.xdom_feasible = not _e
+            except Exception as _ex:      # 判不了就 fail-closed，绝不静默放行
+                add("XDOM_CHECK_FAILED",
+                    "跨域部署可行性检查无法执行（%s: %s）；拒绝为这份方案背书"
+                    % (type(_ex).__name__, _ex))
 
         rep = self._report(errs, warns, plan)
         if sched:
-            rep["stats"]["completion_us"] = sched[-1]["finish_us"]
+            # 多域并行 ⇒ 完成时刻取最晚的一行（不是"最后一行"）
+            rep["stats"]["completion_us"] = max(r["finish_us"] for r in sched)
             rep["stats"]["backlog_us"] = round(
                 sum(r["backlog_us"] for r in sched), 3)
             rep["schedule"] = sched
@@ -376,6 +415,12 @@ class PlanVerifier(object):
                 "cross_domain_edges": len(self.dom.xdom),
                 "cross_domain_periods": self.dom.extra_periods,
                 "cross_domain_extra_us": round(self.dom.extra_latency_us, 3),
+                # 多速率（PR11-D）：声明了各域周期就必须出现在报告里，
+                # 否则"按哪个周期判的"事后无从复核
+                "period_us": self.tm.period,
+                "domain_period_us": dict(self.tm.domain_periods),
+                "multirate": bool(self.tm.multirate),
+                "xdom_deployable": self.xdom_feasible,
             },
         }
 
@@ -405,3 +450,53 @@ def print_report(rep, plan=None, out=None):
     for w in rep["warnings"]:
         print("   ⚠ %s" % w, file=out)
     return 0 if rep["ok"] else 3
+
+
+def _load(path):
+    import json
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def main(argv=None):
+    import argparse
+    import json
+    ap = argparse.ArgumentParser(description="DAG 全局方案验证器（与 fusion_plan 分离）")
+    ap.add_argument("--dag", required=True)
+    ap.add_argument("--plan", required=True)
+    ap.add_argument("--platforms", required=True)
+    ap.add_argument("--platform", default="linux_kernel")
+    ap.add_argument("--stamp-plan", action="store_true",
+                    help="把 verification 写回 plan.json，供 emit.py 门禁")
+    ap.add_argument("-o", "--out", default=None)
+    args = ap.parse_args(argv)
+    dag = _load(args.dag)
+    plan = _load(args.plan)
+    caps = _load(args.platforms)
+    plats = [p for p in (caps.get("platforms") or []) if p.get("name") == args.platform]
+    if not plats:
+        plats = list(caps.get("platforms") or [])
+    if not plats:
+        print("!! 没有平台", file=sys.stderr)
+        return 2
+    rep = verify_plan(dag, plan, plats[0])
+    rc = print_report(rep, plan)
+    plan["verification"] = {
+        "ok": bool(rep.get("ok")),
+        "by": "kfusion/scripts/ecos/plan_verify.py",
+        "errors": rep.get("errors") or [],
+        "stats": rep.get("stats") or {},
+    }
+    if args.stamp_plan:
+        with open(args.plan, "w", encoding="utf-8") as f:
+            json.dump(plan, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(rep, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main())

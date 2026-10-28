@@ -114,7 +114,7 @@ int %(main_name)s(int argc, char *argv[])
 	base = (uint64_t)now.tv_sec * 1000000u + (uint64_t)now.tv_nsec / 1000u;
 
 	for (;;) {
-%(t_first_decl)s
+%(xdom_anchor)s%(xdom_resync)s%(t_first_decl)s
 		base += (uint64_t)ECOS_PERIOD_US;
 		for (i = 0; i < ECOS_GROUPS; i++) {
 			ecos_sleep_until(base + ecos_phase_us[i]);
@@ -261,7 +261,7 @@ def nuttx_symbol(prog_name):
 
 
 def emit(ir, module_name, main_name=None, probe=False, xdom=False,
-         prog_name=None):
+         prog_name=None, xdom_resync=False):
     """prog_name：NuttX app 的 PROGNAME（注册表按它生成入口符号）。
 
     main_name：一般**不用传**——入口名由 prog_name 派生（见 nuttx_symbol）。
@@ -294,16 +294,22 @@ def emit(ir, module_name, main_name=None, probe=False, xdom=False,
     # 跨域观测：把 --digest-var 指定的全局量周期性打到串口。
     # 没有它，这一侧发生了什么完全看不见——而跨域实验的核心恰恰是"两边看到的值
     # 是否一致（差一拍）"。root 侧有 sysfs，inmate 侧只有 mini-UART。
-    xdom_report = ""
+    # 跨域逐拍证据：每 ECOS_XDOM_REPORT_EVERY 拍把各通道的 prod/cons/age 打到串口。
+    # 串口是 inmate 唯一的窗口（root 侧有 sysfs），年龄证据不从这走就看不见。
+    _xr = []
+    if xdom:
+        _xr.append("\t\tif (periods % ECOS_XDOM_REPORT_EVERY == 0)\n"
+                   "\t\t\tecos_xdom_report_evidence();")
     dvs = getattr(ir, "digest_vars", None) or []
     if dvs:
         calls = ['printf("ecos: periods=%lu", (unsigned long)periods);']
         for v in dvs:
             calls.append('printf(" %s=%%ld", (long)%s);' % (v, v))
         calls.append('printf("\\n");')
-        xdom_report = ("\t\tif (periods % ECOS_XDOM_REPORT_EVERY == 0) {\n"
-                       + "\n".join("\t\t\t" + c for c in calls)
-                       + "\n\t\t}")
+        _xr.append("\t\tif (periods % ECOS_XDOM_REPORT_EVERY == 0) {\n"
+                   + "\n".join("\t\t\t" + c for c in calls)
+                   + "\n\t\t}")
+    xdom_report = "\n".join(_xr)
 
     body_cases = "\n".join(
         "\tcase %d:\n\t\t%s();\n\t\tbreak;" % (i, g.body)
@@ -338,6 +344,28 @@ def emit(ir, module_name, main_name=None, probe=False, xdom=False,
                           "\tecos_xdom_init();\n" if xdom else ""),
             "xdom_include": ('#include "ecos_xdom.h"\t/* 跨域数据桥 */\n'
                              if xdom else ""),
+            # 周期锚点：首拍真正跑起来的时刻（base 本身就是 µs）。
+            # 不用 init 时刻——init 之后还要等环、建定时器，差好几百 µs。
+            # 周期性重同步：把桥请求的一次性平移加到**本域绝对基准**上。
+            # 平移是**有符号**的：>0 后移（本周期变长，年龄变大），
+            # <0 前移（本周期变短，年龄变小）。两个方向都要，因为漂移方向不保证。
+            # 只在契约声明了 xdom_resync_us 时生成；否则这一行不存在，产物一字不变。
+            "xdom_resync": ('\t\t{\n'
+                            '\t\t\tint32_t _d = ecos_xdom_resync_take();\n'
+                            '\t\t\tif (_d > 0)\n'
+                            '\t\t\t\tbase += (uint64_t)_d;\t/* 本周期被拉长 _d µs */\n'
+                            '\t\t\telse if (_d < 0)\n'
+                            '\t\t\t\tbase -= (uint64_t)(-_d);\t/* 本周期被缩短 */\n'
+                            '\t\t\tif (_d)\n'
+                            '\t\t\t\tprintf("xdom resync shift_us=%ld n=%u\\n",\n'
+                            '\t\t\t\t       (long)_d, ecos_xdom_resync_count());\n'
+                            '\t\t}\n'
+                            if xdom_resync else ""),
+            "xdom_anchor": ('\t\tif (periods == 0)\n'
+                            '\t\t\tprintf("xdom anchor base_us=%llu now_us=%u period_us=%d\\n",\n'
+                            '\t\t\t       (unsigned long long)base, ecos_xdom_now_us(),\n'
+                            '\t\t\t       (int)ECOS_PERIOD_US);\n'
+                            if xdom else ""),
         },
         MAKEFILE: _MAKEFILE % {"mod": module_name, "upper": upper,
                                "prog": prog, "main_name": main_name,

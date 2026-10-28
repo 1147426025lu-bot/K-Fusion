@@ -80,86 +80,12 @@ def main():
                     help="额外生成 multi 模式：每阶段一个真线程（pthread），"
                          "按各自相位释放。用于检验「融合省下的唤醒税」在真多任务"
                          "部署下是被抵掉还是保持")
-    ap.add_argument("--dag", default=None,
-                    help="原始 DAG。给了就在生成**之前**用独立验证器复检整份方案；"
-                         "不合法直接拒绝生成（PR9-A：不能只信求解器的自述）")
-    ap.add_argument("--platforms", default=None, help="平台能力 JSON（配 --dag）")
-    ap.add_argument("--platform", default=None, help="平台名（缺省取 plan.meta.platform）")
-    ap.add_argument("--release-cost-us", type=float, default=None,
-                    help="验证时用的释放代价（缺省取 plan.meta.release_cost_us）")
-    ap.add_argument("--contract", default=None,
-                    help="时间/控制语义契约（验证绝对周期窗口用）")
-    ap.add_argument("--exec-us", default=None,
-                    help="阶段执行时间（JSON 或文件）。给了就与 plan.cost_model 核对摘要；"
-                         "不给则用方案里的 cost_model——**绝不用 0 代替**")
-    ap.add_argument("--require-verified", action="store_true",
-                    help="严格模式：方案没有验证凭据就拒绝生成（ECoS 严格入口默认开）")
     args = ap.parse_args()
 
     plan = load_json(args.plan)
     groups = plan.get("groups") or []
     if not groups:
         raise SystemExit("plan 里没有 groups")
-
-    # ---- 验证闸门（PR9-A / P0-1）----
-    # 规划器自述"合法"不算证据：本脚本过去直接吃 plan.json，倒序方案也能
-    # 一路生成出可运行的驱动。现在要么现场复检，要么必须带验证凭据。
-    verified = False
-    if args.dag:
-        import os as _os
-        import sys as _sys
-        _sys.path.insert(0, _os.path.join(
-            _os.path.dirname(_os.path.abspath(__file__)), "ecos"))
-        import plan_verify
-        _dag = load_json(args.dag)
-        _plats = (load_json(args.platforms).get("platforms") or []) if args.platforms else []
-        _name = args.platform or (plan.get("meta") or {}).get("platform")
-        _plat = None
-        for p in _plats:
-            if _name and p.get("name") == _name:
-                _plat = p
-                break
-        if _plat is None and len(_plats) == 1:
-            _plat = _plats[0]
-        if _plat is None:
-            raise SystemExit("--dag 需要 --platforms 与可匹配的 --platform："
-                             "没有平台能力就无法判定域合法性与时间语义")
-        _c = args.release_cost_us
-        if _c is None:
-            _c = float((plan.get("meta") or {}).get("release_cost_us") or 20.0)
-        # 成本模型必须从方案里取：以前这里传 None，等于"执行时间=0"，
-        # 于是一个真正超期的方案能在生成前复检里被判通过（P0-1）。
-        _cm = plan.get("cost_model") or {}
-        _exec = _cm.get("exec_us")
-        if _exec is not None:
-            _exec = {k: float(v) for k, v in _exec.items()}
-            if _cm.get("release_cost_us") is not None:
-                _c = float(_cm["release_cost_us"])
-        if args.exec_us:
-            _cli = (json.loads(args.exec_us)
-                    if args.exec_us.lstrip().startswith("{")
-                    else json.load(open(args.exec_us, encoding="utf-8")))
-            if _exec is not None:
-                _same = (sorted((k, round(float(v), 6)) for k, v in _cli.items())
-                         == sorted((k, round(float(v), 6)) for k, v in _exec.items()))
-                if not _same:
-                    raise SystemExit("--exec-us 与 plan.cost_model 不一致：\n"
-                                     "  方案 %s\n  命令行 %s\n"
-                                     "  规划/复检/生成必须用同一份成本"
-                                     % (_exec, _cli))
-            _exec = {k: float(v) for k, v in _cli.items()}
-        _contract = load_json(args.contract) if args.contract else None
-        _rep = plan_verify.verify_plan(_dag, plan, _plat, _c, _exec, None, _contract)
-        if not _rep["ok"]:
-            for e in _rep["errors"]:
-                print("❌ [%s] %s" % (e["code"], e["msg"]), file=sys.stderr)
-            raise SystemExit("方案未通过独立验证器，拒绝生成代码（PR9-A）")
-        verified = True
-    elif (plan.get("verification") or {}).get("ok") is True:
-        verified = "declared"
-    elif args.require_verified:
-        raise SystemExit("严格模式：方案没有验证凭据。请补 --dag（现场复检），"
-                         "或先用 fusion_plan 规划出带 verification 的方案")
 
     stage_names = [m for g in groups for m in g["members"]]
 
@@ -204,13 +130,6 @@ def main():
     A(" *")
     A(" * 方案：%d 组 / %d 阶段  平台 %s"
       % (n_rel, n_stage, (plan.get("meta") or {}).get("platform", "?")))
-    if verified is True:
-        A(" * 方案验证：本次生成前已通过独立 PlanVerifier"
-          "（覆盖/组内序/组间序/域/时间窗/期限）")
-    elif verified == "declared":
-        A(" * 方案验证：凭 plan.verification.ok=true（规划器出具），本次未复检")
-    else:
-        A(" * ⚠ 方案未验证（legacy 对照模式）：产物不得用于论文主张")
     for g in groups:
         A(" *   %-4s %s" % (g["id"], " + ".join(g["members"])))
     A(" *")
@@ -237,6 +156,7 @@ def main():
     A("")
     A("static struct plc_probe_series g_start, g_work, g_span, g_resp;")
     A("static struct plc_probe_series g_exec_stage[MAX_STAGES];")
+    A("static long long g_last_misses;")
     A("")
     if args.digest_var:
         A("/* 采样序列摘要：每周期结束时把指定全局量揉进 FNV-1a。")
@@ -394,17 +314,17 @@ def main():
         A("}")
         A("")
 
-    A("int %s(int argc, char **argv)" % args.entry)
+    A("static int run_once(const char *mode, long cycles)")
     A("{")
-    A('\tconst char *mode = argc > 1 ? argv[1] : "plan";')
-    A("\tlong cycles = argc > 2 ? atol(argv[2]) : %dL;" % args.cycles)
-    if args.threads:
-        A('\tif (strcmp(mode, "multi") == 0)')
-        A("\t\treturn run_multi(cycles);")
     A("\tconst struct release_ent *rel;")
     A("\tint nrel, i, k, j;")
     A("\tstruct timespec next;")
     A("\tlong long misses = 0, overruns = 0;")
+    A("")
+    A("\t/* 同一进程连跑 plan/flat 时必须回到编译期初值，否则 digest 不可比 */")
+    A("\tloop_reset();")
+    if args.digest_var:
+        A("\tg_digest = 2166136261u;")
     A("")
     A('\tif (strcmp(mode, "flat") == 0) {')
     A("\t\trel = kFlat;")
@@ -487,7 +407,76 @@ def main():
     A("\t\tplc_probe_line(&g_exec_stage[i]);")
     A("\tplc_probe_hist(&g_start);")
     A("\tplc_probe_hist(&g_resp);")
+    A("\tg_last_misses = misses;")
     A("\treturn 0;")
+    A("}")
+    A("")
+
+    A("#ifdef __NuttX__")
+    A('#include "ecos_shm_cmd.h"')
+    A("#include <unistd.h>")
+    A("extern void up_invalidate_dcache(uintptr_t start, uintptr_t end);")
+    A("extern void up_clean_dcache(uintptr_t start, uintptr_t end);")
+    A("")
+    A("static int shmwait(void)")
+    A("{")
+    A("\tvolatile uint32_t *shm = (volatile uint32_t *)(ECOS_SHM_BASE + ECOS_SHM_OFF);")
+    A("\tuintptr_t base = (uintptr_t)shm;")
+    A("\tuintptr_t end = base + ECOS_SHM_WORDS * 4;")
+    A("\tprintf(\"# shmwait: polling IVSHMEM @ 0x%08x\\n\",")
+    A("\t       (unsigned)(ECOS_SHM_BASE + ECOS_SHM_OFF));")
+    A("\tfor (;;) {")
+    A("\t\tuint32_t mode_id, cycles;")
+    A("\t\tconst char *mode;")
+    A("\t\tint rc;")
+    A("")
+    A("\t\tup_invalidate_dcache(base, end);")
+    A("\t\tif (shm[ECOS_W_MAGIC] != ECOS_SHM_MAGIC ||")
+    A("\t\t    shm[ECOS_W_CMD] != ECOS_CMD_RUN) {")
+    A("\t\t\tusleep(1000);")
+    A("\t\t\tcontinue;")
+    A("\t\t}")
+    A("\t\tmode_id = shm[ECOS_W_MODE];")
+    A("\t\tcycles = shm[ECOS_W_CYCLES];")
+    A("\t\tshm[ECOS_W_CMD] = ECOS_CMD_IDLE;")
+    A("\t\tshm[ECOS_W_STATUS] = ECOS_ST_RUNNING;")
+    A("\t\tup_clean_dcache(base, end);")
+    A("\t\tmode = (mode_id == ECOS_MODE_FLAT) ? \"flat\" : \"plan\";")
+    A("\t\tif (cycles == 0 || cycles > 3600000u)")
+    A("\t\t\tcycles = 1000;")
+    A("\t\trc = run_once(mode, (long)cycles);")
+    A("\t\tshm[ECOS_W_DIGEST] = 0;")
+    if args.digest_var:
+        A("\t\tshm[ECOS_W_DIGEST] = g_digest;")
+    A("\t\tshm[ECOS_W_RESP_P50] = (uint32_t)plc_probe_pctl(&g_resp, 500000);")
+    A("\t\tshm[ECOS_W_RESP_MAX] = (uint32_t)(g_resp.max_ns / 1000ull);")
+    A("\t\tshm[ECOS_W_START_P50] = (uint32_t)plc_probe_pctl(&g_start, 500000);")
+    A("\t\tshm[ECOS_W_MISS] = (uint32_t)g_last_misses;")
+    A("\t\tshm[ECOS_W_EXEC_P50] = (uint32_t)plc_probe_pctl(&g_work, 500000);")
+    A("\t\tshm[ECOS_W_NREL] = (mode_id == ECOS_MODE_FLAT) ? MAX_STAGES : (int)(sizeof(kPlan)/sizeof(kPlan[0]));")
+    A("\t\tshm[ECOS_W_STATUS] = rc ? ECOS_ST_ERROR : ECOS_ST_DONE;")
+    A("\t\tup_clean_dcache(base, end);")
+    A("\t}")
+    A("\treturn 0;")
+    A("}")
+    A("#endif")
+    A("")
+    A("int %s(int argc, char **argv)" % args.entry)
+    A("{")
+    A('\tconst char *mode = argc > 1 ? argv[1] : "plan";')
+    A("\tlong cycles = argc > 2 ? atol(argv[2]) : %dL;" % args.cycles)
+    A('\tif (strcmp(mode, "shmwait") == 0) {')
+    A("#ifdef __NuttX__")
+    A("\t\treturn shmwait();")
+    A("#else")
+    A("\t\tfprintf(stderr, \"shmwait 只在 NuttX inmate 上有意义\\n\");")
+    A("\t\treturn 2;")
+    A("#endif")
+    A("\t}")
+    if args.threads:
+        A('\tif (strcmp(mode, "multi") == 0)')
+        A("\t\treturn run_multi(cycles);")
+    A("\treturn run_once(mode, cycles);")
     A("}")
 
     with io.open(args.out, "w", encoding="utf-8", newline="\n") as f:

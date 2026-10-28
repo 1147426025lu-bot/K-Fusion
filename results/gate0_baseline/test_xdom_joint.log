@@ -1,0 +1,11 @@
+  ok A1: disjoint -> empty
+  ok A2: intersect -> [100,300]
+  ok A3: cross-lcm disjoint -> empty
+  ok A4: cross-lcm intersect -> [400,500]
+  ok B: cross_edges keeps both nuttx->root edges (no directional dedup)
+  ok C: exec changes feasible window shape + check_contract_coded accepts exec_us dict
+  ok D: cons_drift_ppm passed + changes multi-rate feasibility
+  ok E: backward-compat single drift (no cons_drift) works
+  ok F: two same-(Pp,Pc) edges w/o baseline -> no joint error (backward-compat)
+  ok G: contradictory per-edge baselines -> XDOM_JOINT_INFEASIBLE (end-to-end)
+PR11-E LOGIC CHECKS PASSED
