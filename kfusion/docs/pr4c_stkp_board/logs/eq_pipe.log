@@ -1,0 +1,108 @@
+
+──── 1) Clang AST → 阶段骨架（替代手写 stages.json / dag.json） ────
+extracted 5 stages from loop_main:
+  0. stage_sample @0µs  stage_sample()
+  1. stage_fir @200µs  stage_fir()
+  2. stage_pid @400µs  stage_pid(1000)
+  3. stage_clamp @600µs  stage_clamp()
+  4. stage_plant @800µs  stage_plant()
+wrote /tmp/pr4c_stkp/eq/stages.json
+
+──── 2) C → LLVM IR（禁内联，保留阶段函数） ────
+
+──── 3) IR → EffectSummary（效果不是人写的） ────
+[EffectSummary] 写出 /tmp/pr4c_stkp/eq/effect_summary.json（7 个函数）
+
+──── 4) 摘要 + 自动骨架 → 契约 ────
+写出 /tmp/pr4c_stkp/eq/task.contract.json（5 个阶段）
+  stage_sample             state_read/state_write
+  stage_fir                state_read/state_write
+  stage_pid                state_read/state_write
+  stage_clamp              state_read/state_write
+  stage_plant              state_read/state_write
+
+──── 5) 契约门禁（linux_userspace 为底线；内核是否可行交给选型） ────
+== task.contract.json  (task=five_stage_loop)
+   [linux_userspace] ✅ PASS
+== task.contract.json  (task=five_stage_loop)
+   [linux_kernel] ✅ PASS
+  内核域契约可通过（是否部署仍由 A/B/C/D 决定）
+
+──── 6) DAG（数据边来自 IR，相位来自骨架） ────
+== 节点 5（stages 视图） ==
+  stage_clamp            state_read,state_write
+  stage_fir              state_read,state_write
+  stage_pid              state_read,state_write
+  stage_plant            state_read,state_write
+  stage_sample           state_read,state_write
+== 边 ==
+  stage_clamp          -> stage_plant          [data    ] @g_out
+  stage_fir            -> stage_pid            [data    ] @g_fir_out
+  stage_pid            -> stage_clamp          [data    ] @g_act
+  stage_plant          -> stage_sample         [data    ] @g_plant
+  stage_sample         -> stage_fir            [data    ] @g_raw
+== 拓扑序 ==
+  （严格拓扑序不可用：有环）
+  摘掉延迟边后的相位序：stage_sample -> stage_fir -> stage_pid -> stage_clamp -> stage_plant
+== ↻ 延迟反馈环 1 个（合法：延迟由调度强制为 1 拍）==
+  环：stage_sample -> stage_fir -> stage_pid -> stage_clamp -> stage_plant
+    闭合边 stage_plant→stage_sample：相位 800→0 µs，未融合时间隔 200 µs
+      证据：@g_plant
+== 闭环路径（原始走向，供人工核对）==
+  stage_clamp -> stage_plant -> stage_sample -> stage_fir -> stage_pid -> stage_clamp
+== 统计 ==
+  边 5（call 0 / spawn 0 / data 5 / anti 0 / conflict 0）· 候选 0
+  区域具体化：唯一绑定 0 · 多绑定 0 · 完全未解析 0 · 调用已解释 0
+
+──── 6b) TEIR（状态版本 + 时间事件 + 允许域） ────
+TEIR 5 nodes (must_preserve=5 may_delete=0)  edges previous-job=1  policy=ok
+wrote /tmp/pr4c_stkp/eq/task.teir.json
+
+──── 7) 单域融合规划（对照报告；失败不阻断 STKP） ────
+  写出对照 /tmp/pr4c_stkp/eq/plan.planner.json
+
+──── 7c) A–F 对照基线（失败不阻断 STKP） ────
+A/B/C/D/E/F legal=4/4  chosen=B
+    A LEGAL   fused=False  Cost=105.0  
+  → B LEGAL   fused=True  Cost=21.0  Cost=G·c + E + extra = 21.0; G=1 c=21.0 extra=0.0; 内核最优 D 的 Cost=21.0 ≥ 用户态，故不迁移
+    C LEGAL   fused=False  Cost=105.0  
+    D LEGAL   fused=True  Cost=21.0  
+wrote /tmp/pr4c_stkp/eq/candidates.json
+
+──── 7c2) STKP 穷举求解（入选方案才是生成输入） ────
+STKP chosen plan → /tmp/pr4c_stkp/eq/chosen.plan.json  (B linux_userspace Ĉ=None)
+STKP v1 raw=162 enum=162 deployable=32 model=162 chosen=B claim=placeholder_no_optimum
+  prune domain=0 semantic=0 temporal=0 mixed=130 missing=162
+  g0  stage_sample + stage_fir + stage_pid + stage_clamp + stage_plant @ linux_userspace
+  vs A–F: baseline=B STKP=B missed_by_af=False
+wrote /tmp/pr4c_stkp/eq/stkp.json
+  STKP 入选 B  域 linux_userspace
+
+──── 7b) 独立验证器（验证入选方案，不调用规划器） ────
+VERIFY PASS
+
+──── 7b2) DAG 全局验证器（写回 verification，供 emit 门禁） ────
+· 组 g0   stage_sample + stage_fir + stage_pid + stage_clamp + stage_plant
+✅ 方案验证通过（1 组 · 同拍边 4 · 跨周期边 1 · 时间证据 empirical）
+  deploy.json chosen=B domain=linux_userspace
+
+──── 8) 生成用户态驱动（#include 原计算体，不复制） ────
+写出 /tmp/pr4c_stkp/eq/driver.c（plan 1 次释放/周期，flat 5 次/周期，5 阶段）
+
+──── 8b) 入选用户态：不生成内核部署产物 ────
+  skip kmod_hrtimer（chosen=B domain=linux_userspace）
+跳过宿主编译（SKIP_HOST=1）
+
+✅ 从 C 到 A/B/C/D 流水线完成
+   骨架  /tmp/pr4c_stkp/eq/stages.json
+   DAG   /tmp/pr4c_stkp/eq/task.dag.json
+   TEIR  /tmp/pr4c_stkp/eq/task.teir.json
+   入选  /tmp/pr4c_stkp/eq/chosen.plan.json  (B / linux_userspace)
+   部署  /tmp/pr4c_stkp/eq/deploy.json
+   方案  /tmp/pr4c_stkp/eq/plan.json
+   验证  /tmp/pr4c_stkp/eq/verify.json
+   选型  /tmp/pr4c_stkp/eq/candidates.json  (A–F 基线)
+   STKP  /tmp/pr4c_stkp/eq/stkp.json
+   用户态 /tmp/pr4c_stkp/eq/driver.c
+   kmod   （未生成：入选用户态）
+   计算体始终是 /root/K-Fusion/kfusion/examples/ecos/five_stage_loop__闭环五阶段示例.c ，没有第二份手写阶段函数

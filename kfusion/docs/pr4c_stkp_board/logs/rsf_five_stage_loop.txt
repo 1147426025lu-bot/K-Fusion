@@ -1,0 +1,4 @@
+PLC_PROBE r/s/f v1.2 kernel miss=0 periods=453
+  start_lat n=453 over=0 min=9458ns p50=11us p99=28us avg=12111ns max=38066ns
+  exec n=453 over=0 min=1722ns p50=1us p99=2us avg=1782ns max=2982ns
+  response n=453 over=0 min=11197ns p50=12us p99=30us avg=13894ns max=40695ns

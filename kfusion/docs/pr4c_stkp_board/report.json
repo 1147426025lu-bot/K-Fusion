@@ -1,0 +1,285 @@
+{
+  "kind": "stkp_board_loop",
+  "claim": "empirical; not WCET; STKP drives emit",
+  "host": "Linux version 5.15.86 (builder@e3665d6e1a6c) (aarch64-linux-gnu-gcc (Debian 10.2.1-6) 10.2.1 20210110, GNU ld (GNU Binutils for Debian) 2.35.2) #1 SMP PREEMPT Wed Oct 14 10:16:11 UTC 2026",
+  "controls": {
+    "cpu": "0",
+    "fifo": 80,
+    "period_us": 1000,
+    "cycles_user": 200
+  },
+  "cells": {
+    "A": {
+      "raw_tail": "# hist_start_lat_us: 16 2\n# hist_start_lat_us: 17 3\n# hist_start_lat_us: 20 1\n# hist_start_lat_us: 21 2\n# hist_start_lat_us: 22 1\n# hist_start_lat_us: 26 1\n# hist_start_lat_us: 27 2\n# hist_start_lat_us: 28 1\n# hist_response_us: 809 30\n# hist_response_us: 810 41\n# hist_response_us: 811 88\n# hist_response_us: 812 39\n# hist_response_us: 813 1\n# hist_response_us: 829 1",
+      "digest": "5d4cda7d",
+      "miss": 0,
+      "cycles": 200,
+      "start_lat": {
+        "min_us": 9.295,
+        "avg_us": 11.071,
+        "p50_us": 11,
+        "max_us": 28.258,
+        "over": 0
+      },
+      "exec": {
+        "min_us": 1.647,
+        "avg_us": 1.987,
+        "p50_us": 1,
+        "max_us": 5.946,
+        "over": 0
+      },
+      "response": {
+        "min_us": 809.717,
+        "avg_us": 811.272,
+        "p50_us": 811,
+        "max_us": 829.128,
+        "over": 0
+      },
+      "span": {
+        "min_us": 782.951,
+        "avg_us": 800.284,
+        "p50_us": 800,
+        "max_us": 819.283,
+        "over": 0
+      },
+      "cmd": [
+        "taskset",
+        "-c",
+        "0",
+        "chrt",
+        "-f",
+        "80",
+        "/tmp/pr4c_stkp/eq/driver",
+        "flat",
+        "200"
+      ],
+      "domain": "linux_userspace",
+      "fused": false,
+      "id": "A"
+    },
+    "B": {
+      "raw_tail": "# hist_response_us: 18 1\n# hist_response_us: 19 2\n# hist_response_us: 20 1\n# hist_response_us: 22 1\n# hist_response_us: 23 1\n# hist_response_us: 25 2\n# hist_response_us: 26 1\n# hist_response_us: 27 1\n# hist_response_us: 28 1\n# hist_response_us: 29 1\n# hist_response_us: 35 1\n# hist_response_us: 37 1\n# hist_response_us: 39 1\n# hist_response_us: 46 1",
+      "digest": "5d4cda7d",
+      "miss": 0,
+      "cycles": 200,
+      "start_lat": {
+        "min_us": 9.474,
+        "avg_us": 12.705,
+        "p50_us": 11,
+        "max_us": 42.668,
+        "over": 0
+      },
+      "exec": {
+        "min_us": 1.203,
+        "avg_us": 1.475,
+        "p50_us": 1,
+        "max_us": 4.685,
+        "over": 0
+      },
+      "response": {
+        "min_us": 10.751,
+        "avg_us": 14.181,
+        "p50_us": 13,
+        "max_us": 46.039,
+        "over": 0
+      },
+      "span": {
+        "min_us": 1.203,
+        "avg_us": 1.475,
+        "p50_us": 1,
+        "max_us": 4.685,
+        "over": 0
+      },
+      "cmd": [
+        "taskset",
+        "-c",
+        "0",
+        "chrt",
+        "-f",
+        "80",
+        "/tmp/pr4c_stkp/eq/driver",
+        "plan",
+        "200"
+      ],
+      "domain": "linux_userspace",
+      "fused": true,
+      "id": "B"
+    },
+    "D": {
+      "raw": "PLC_PROBE r/s/f v1.2 kernel miss=0 periods=453\n  start_lat n=453 over=0 min=9458ns p50=11us p99=28us avg=12111ns max=38066ns\n  exec n=453 over=0 min=1722ns p50=1us p99=2us avg=1782ns max=2982ns\n  response n=453 over=0 min=11197ns p50=12us p99=30us avg=13894ns max=40695ns",
+      "miss": 0,
+      "n": 453,
+      "start_lat": {
+        "n": 453,
+        "over": 0,
+        "min_ns": 9458,
+        "p50_us": 11,
+        "p99_us": 28,
+        "avg_ns": 12111,
+        "max_ns": 38066
+      },
+      "exec": {
+        "n": 453,
+        "over": 0,
+        "min_ns": 1722,
+        "p50_us": 1,
+        "p99_us": 2,
+        "avg_ns": 1782,
+        "max_ns": 2982
+      },
+      "response": {
+        "n": 453,
+        "over": 0,
+        "min_ns": 11197,
+        "p50_us": 12,
+        "p99_us": 30,
+        "avg_ns": 13894,
+        "max_ns": 40695
+      },
+      "periods": 454,
+      "missed_backlog": 0,
+      "domain": "linux_kernel",
+      "ko": "/tmp/pr4c_stkp/dkern/kmod_hrtimer/five_stage_loop.ko",
+      "legal_run": true,
+      "id": "D",
+      "fused": true
+    }
+  },
+  "selection": {
+    "placeholder": {
+      "deploy": {
+        "chosen": "B",
+        "domain": "linux_userspace",
+        "fused": true,
+        "cost_us": null,
+        "why": "STKP Ĉ=ΣC_i,d + ΣL_g + ΣH_q + C_sync = None; groups=1 channels=0; deployment_ready; 同分或不优于内核时保留用户态; claim=placeholder_no_optimum",
+        "deployable": true
+      },
+      "stkp_chosen": "B",
+      "stkp_claim": "placeholder_no_optimum",
+      "domain": "linux_userspace",
+      "has_driver": true,
+      "has_kbuild": false,
+      "log": "/root/K-Fusion/kfusion/docs/pr4c_stkp_board/logs/eq_pipe.log"
+    },
+    "measured_low_ck": {
+      "deploy": {
+        "chosen": "D",
+        "domain": "linux_kernel",
+        "fused": true,
+        "cost_us": 15.0,
+        "why": "STKP Ĉ=ΣC_i,d + ΣL_g + ΣH_q + C_sync = 15.0; groups=1 channels=0; deployment_ready; claim=empirical_model_not_wcet",
+        "deployable": true
+      },
+      "stkp_chosen": "D",
+      "stkp_claim": "empirical_model_not_wcet",
+      "domain": "linux_kernel",
+      "has_driver": true,
+      "has_kbuild": true,
+      "log": "/root/K-Fusion/kfusion/docs/pr4c_stkp_board/logs/dkern_pipe.log"
+    }
+  },
+  "refill": {
+    "chosen": "B",
+    "claim": "empirical_model_not_wcet",
+    "domain": "linux_userspace",
+    "why": "STKP Ĉ=ΣC_i,d + ΣL_g + ΣH_q + C_sync = 12.0; groups=1 channels=0; deployment_ready; 同分或不优于内核时保留用户态; claim=empirical_model_not_wcet",
+    "cost": {
+      "comparable": true,
+      "final_rankable": true,
+      "explore_rankable": true,
+      "missing_costs": [],
+      "evidence": [
+        "stage_sample@linux_userspace:cli_override",
+        "stage_fir@linux_userspace:cli_override",
+        "stage_pid@linux_userspace:cli_override",
+        "stage_clamp@linux_userspace:cli_override",
+        "stage_plant@linux_userspace:cli_override"
+      ],
+      "compute_us": 1.0,
+      "release_us": 11.0,
+      "handoff_us": 0.0,
+      "handoff_channels": 0,
+      "channels": [],
+      "sync_us": 0.0,
+      "predicted_R_us": 12.0,
+      "total_us": 12.0,
+      "grade": "empirical_model_not_wcet",
+      "temporal_ok": true,
+      "temporal_why": null
+    },
+    "vs_baseline": {
+      "cost_model": "stkp_unified",
+      "note": "A–F 旧公式不用于论文优劣证据；此处用同一套 STKP 成本",
+      "af_chosen": "B",
+      "stkp_chosen": "B",
+      "stkp_cost_of_af_ids": {
+        "B": 12.0,
+        "D": 12.0,
+        "A": 56.0,
+        "C": 56.0
+      },
+      "stkp_total_us": 12.0,
+      "stkp_missed_by_af": false,
+      "claim": "empirical_model_not_wcet"
+    },
+    "stkp_json": "/tmp/pr4c_stkp/refill/stkp.json"
+  },
+  "chain_window": {
+    "chosen": "STKP:L[s1+s2]|L[s3+s4]",
+    "claim": "placeholder_no_optimum",
+    "groups": [
+      [
+        "s1",
+        "s2"
+      ],
+      [
+        "s3",
+        "s4"
+      ]
+    ],
+    "pruned": {
+      "domain": 0,
+      "semantic": 0,
+      "temporal": 8,
+      "runtime": 38,
+      "incomparable": 46
+    },
+    "full_fusion_temporally_rejected": true,
+    "matches_expected_split": true,
+    "stkp_json": "/tmp/pr4c_stkp/chain_window/stkp.json"
+  },
+  "digest_match_AB": true,
+  "measured": {
+    "c_user_start_lat_p50_us": 11,
+    "c_kernel_start_lat_p50_us": 11,
+    "exec_user_p50_us": 1,
+    "exec_kernel_p50_us": 1,
+    "stage_cost": {
+      "linux_userspace": {
+        "stage_sample": 0.2,
+        "stage_fir": 0.2,
+        "stage_pid": 0.2,
+        "stage_clamp": 0.2,
+        "stage_plant": 0.2
+      },
+      "linux_kernel": {
+        "stage_sample": 0.2,
+        "stage_fir": 0.2,
+        "stage_pid": 0.2,
+        "stage_clamp": 0.2,
+        "stage_plant": 0.2
+      }
+    },
+    "note": "start_lat≈L_g；exec 按阶段均分，不是逐阶段剖析。经验值，不是 WCET。"
+  },
+  "conclusions": {
+    "stkp_drives_emit": true,
+    "digest_match_AB": true,
+    "fusion_helps_user": true,
+    "window_blocks_full_fusion": true,
+    "refill_claim": "empirical_model_not_wcet",
+    "refill_chosen": "B",
+    "note": "B/D 经验 R 接近时，回填后不应仅因占位选内核。chain_window 证明时间契约能挡住全融合。"
+  }
+}

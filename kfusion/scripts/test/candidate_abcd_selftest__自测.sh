@@ -113,9 +113,17 @@ SO="$KF/analysis/build/PLCEffectSummary.so"
 if [ ! -f "$SO" ]; then
   echo "  （跳过：无 EffectSummary.so）"
 else
+  mkdir -p "$TMP/user" "$TMP/kern"
+  "$PY" - "$TMP/stage_cost.json" <<'PY'
+import json, sys
+names = ["stage_sample", "stage_fir", "stage_pid", "stage_clamp", "stage_plant"]
+one = {n: 1.0 for n in names}
+json.dump({"linux_userspace": one, "linux_kernel": one}, open(sys.argv[1], "w"))
+PY
   SKIP_HOST=1 SKIP_KMOD=1 C_USER_US=21 C_KERNEL_US=21 KERNEL_EXTRA_US=80 \
     OUT_DIR="$TMP/user" bash "$PIPE" "$SRC" >/dev/null
   SKIP_HOST=1 SKIP_KMOD=1 C_USER_US=21 C_KERNEL_US=10 KERNEL_EXTRA_US=0 \
+    STAGE_COST="$TMP/stage_cost.json" \
     OUT_DIR="$TMP/kern" bash "$PIPE" "$SRC" >/dev/null
   "$PY" - "$TMP/user/deploy.json" "$TMP/kern/deploy.json" <<'PY' && ok "成本翻转 → 选型与产物一起变" || bad "选型未驱动生成"
 import json, os, sys
