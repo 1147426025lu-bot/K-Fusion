@@ -476,6 +476,58 @@ class StkpV1(unittest.TestCase):
         self.assertIsNotNone(rec)
         self.assertNotEqual(rec.get("domain"), "mixed")
 
+    def test_uku_pid_session_single_int32_is_deployable(self):
+        names = ["sample", "pid", "sink"]
+        teir = chain_teir(names, kernelizable={
+            "sample": False, "pid": True, "sink": False})
+        teir["nodes"][1]["reads"] = ["g_in", "g_integ"]
+        teir["nodes"][1]["writes"] = ["g_out", "g_integ"]
+        teir["nodes"][1]["persistent"] = ["@g_integ"]
+        prove_uku_iface(teir)
+        groups = [
+            {"domain": "linux_userspace", "members": ["sample"]},
+            {"domain": "linux_kernel", "members": ["pid"]},
+            {"domain": "linux_userspace", "members": ["sink"]},
+        ]
+        chk = stkp.uku_mod.check(self._uku_plan(groups), teir)
+        self.assertTrue(chk["ok"], chk.get("errors"))
+        self.assertEqual((chk["interface"] or {}).get("session", {}).get("region"),
+                         "g_integ")
+        self.assertNotIn("g_integ", chk["interface"]["copy_in"])
+        self.assertNotIn("g_integ", chk["interface"]["copy_out"])
+        self.assertIn("g_in", chk["interface"]["copy_in"])
+        self.assertIn("g_out", chk["interface"]["copy_out"])
+        override = {
+            "linux_userspace": {"sample": 1.0, "pid": 80.0, "sink": 1.0},
+            "linux_kernel": {"pid": 1.0},
+        }
+        doc = stkp.solve(teir, self.v, c_user=21, c_kernel=5, extra_kernel=0,
+                         handoff_us=1.0, override=override)
+        rec = doc["chosen_record"]
+        self.assertEqual(rec.get("domain"), "mixed")
+        self.assertEqual((rec.get("plan") or {}).get("meta", {}).get(
+            "uku_session", {}).get("kind"), "integ_i32")
+        teir2 = json.loads(json.dumps(teir))
+        teir2["nodes"][1]["persistent"] = ["@g_integ", "@g_other"]
+        prove_uku_iface(teir2, extra_types={"g_other": "int32_t"})
+        chk2 = stkp.uku_mod.check(self._uku_plan(groups), teir2)
+        self.assertFalse(chk2["ok"])
+        self.assertIn("E_UKU_PERSISTENT", stkp.uku_mod.codes(chk2))
+        cg_path = os.path.join(KF, "scripts", "mixed_uku_codegen__混合交接.py")
+        spec_cg = importlib.util.spec_from_file_location("uku_cg_pid", cg_path)
+        cg = importlib.util.module_from_spec(spec_cg)
+        spec_cg.loader.exec_module(cg)
+        plan = self._uku_plan(groups)
+        plan["meta"]["uku_session"] = {"kind": "integ_i32", "region": "g_integ"}
+        drv = cg.emit_driver(
+            plan, ["pid"], ["g_in"], ["g_out"],
+            {"sample": "stage_sample()", "pid": "stage_pid()",
+             "sink": "stage_sink()"},
+            "stage_impl.c", "plc_probe.h", 1000, 8,
+            ["g_out", "g_seq", "g_integ"])
+        self.assertNotIn("DIGEST_MIX(g_integ)", drv)
+        self.assertIn("DIGEST_MIX(g_out)", drv)
+
     def test_uku_does_not_drop_g_seq(self):
         groups = [
             {"domain": "linux_userspace", "members": ["sample"]},
@@ -566,6 +618,13 @@ class StkpV1(unittest.TestCase):
         self.assertIn("start_lat", drv)
         self.assertIn("exec_stage_", drv)
         self.assertNotIn("uku_handoff", drv)
+        idx_copy = kmod.find("copy_to_user")
+        idx_inc = kmod.find("uku_expect++")
+        self.assertGreater(idx_copy, 0)
+        self.assertGreater(idx_inc, idx_copy)
+        self.assertIn("loop_reset();", kmod.split("uku_release")[1][:400])
+        self.assertLess(kmod.find("copy_to_user"), kmod.find("uku_expect++"))
+        self.assertIn("loop_reset();", kmod)
 
     def test_parse_ioctl_roundtrip_is_not_kernel_compute(self):
         text = (
@@ -653,6 +712,8 @@ class StkpV1(unittest.TestCase):
         self.assertIn('LET_V+=(--contract "$TIME_CONTRACT")', text)
         self.assertIn("SKIP_LET_EMIT", text)
         self.assertIn("不生成 let_host（STKP plan 仍是部署源）", text)
+        self.assertIn("contract_gate.py", text)
+        self.assertIn("rec.get(\"deployable\") is False", text)
 
     def test_let_chain_window_rejects_full_fuse(self):
         spec = importlib.util.spec_from_file_location(
@@ -683,6 +744,19 @@ class StkpV1(unittest.TestCase):
         self.assertIn("s3", doc["contract"]["pinned"])
         codes = [d["code"] for d in by["full_fuse"]["diagnostics"]]
         self.assertIn("E_PIN_EARLY_COMMIT", codes)
+        self.assertFalse(by["full_fuse_let"]["deployable"])
+        spec_g = importlib.util.spec_from_file_location(
+            "contract_gate", os.path.join(KF, "scripts", "ecos", "contract_gate.py"))
+        gate = importlib.util.module_from_spec(spec_g)
+        spec_g.loader.exec_module(gate)
+        fused = by["full_fuse"]["plan"]
+        split = {"groups": [
+            {"id": "g0", "members": ["s1", "s2"], "domain": "linux_userspace"},
+            {"id": "g1", "members": ["s3", "s4"], "domain": "linux_userspace"},
+        ]}
+        self.assertFalse(gate.check(teir, fused, contract)["deploy_ok"])
+        self.assertTrue(gate.check(teir, split, contract)["deploy_ok"])
+        self.assertTrue(gate.check(teir, split, contract)["teir_ok"])
 
     def test_pr6_empty_board_is_not_end_to_end(self):
         board = {}
@@ -698,10 +772,9 @@ class StkpV1(unittest.TestCase):
     def test_pr7c_fold_and_holdout_gates(self):
         sc = stkp.stage_cost_mod
         slot = {"value": 0.4, "evidence": "measured", "source_log": "/tmp/M.log"}
-        folded = sc.fold_group_cost(slot, ["add", "shift"])
-        self.assertAlmostEqual(folded["add"]["value"], 0.4)
-        self.assertAlmostEqual(folded["shift"]["value"], 0.0)
-        self.assertTrue(folded["shift"]["folded"])
+        gmeas = sc.group_measurement(slot, ["add", "shift"], "linux_kernel")
+        self.assertEqual(gmeas["members"], ["add", "shift"])
+        self.assertFalse(gmeas["reusable_for_other_groups"])
         gold = {"stages": {
             "sample": {"value": 0.3, "evidence": "measured",
                        "source_log": "/tmp/G.log"},
@@ -717,7 +790,10 @@ class StkpV1(unittest.TestCase):
         }
         ov, ioctl = sc.override_from_gold_mixed(
             gold, mixed, ["sample", "add", "sink"], ["add"])
-        self.assertAlmostEqual(ov["linux_kernel"]["add"]["value"], 0.4)
+        hit = sc.lookup_group_cost(ov, ["add"], "linux_kernel")
+        self.assertIsNotNone(hit)
+        self.assertAlmostEqual(hit["value"], 0.4)
+        self.assertIsNone(sc.lookup_group_cost(ov, ["shift"], "linux_kernel"))
         self.assertEqual(ov["linux_kernel"]["sample"]["evidence"], "missing")
         spec = importlib.util.spec_from_file_location(
             "pr7c", os.path.join(
@@ -757,6 +833,53 @@ class StkpV1(unittest.TestCase):
                    encoding="utf-8").read()
         self.assertIn("KFUSION_UKU_PID_MAGIC", hdr)
         self.assertIn("kfusion_pid_step", hdr)
+
+    def test_group_kernel_cost_not_inherited_by_subset(self):
+        names = ["sample", "add", "shift", "sink"]
+        teir = chain_teir(names, kernelizable={
+            "sample": False, "add": True, "shift": True, "sink": False})
+        teir["nodes"][1]["reads"] = ["g_in"]
+        teir["nodes"][1]["writes"] = ["g_mid"]
+        teir["nodes"][2]["reads"] = ["g_mid"]
+        teir["nodes"][2]["writes"] = ["g_out"]
+        prove_uku_iface(teir)
+        slot = {"value": 1.0, "evidence": "measured",
+                "source_log": "/tmp/U.log", "statistic": "avg"}
+        us = {n: dict(slot) for n in names}
+        kcomp = {"value": 0.197, "evidence": "measured",
+                 "source_log": "/tmp/M.log"}
+        ov, _ioctl = stkp.stage_cost_mod.override_from_gold_mixed(
+            {"stages": us}, {"kernel_compute": kcomp}, names, ["add", "shift"])
+        ioctl = {"value": 3.3, "evidence": "measured",
+                 "source_log": "/tmp/M.log"}
+        plan_full = stkp.build_plan(
+            names, [["sample"], ["add", "shift"], ["sink"]],
+            ["linux_userspace", "linux_kernel", "linux_userspace"],
+            nodes=stkp.node_map(teir))
+        plan_full["meta"]["xdom_adapter"] = "uku_ioctl"
+        plan_full["meta"]["deployment_ready"] = True
+        sched = stkp.candidate_schedule(plan_full, teir, ov, 12.0, 12.0)
+        self.assertTrue(sched["complete"])
+        self.assertAlmostEqual(sched["exec_us"]["add"] + sched["exec_us"]["shift"],
+                               0.197)
+        plan_shift = stkp.build_plan(
+            names, [["sample", "add"], ["shift"], ["sink"]],
+            ["linux_userspace", "linux_kernel", "linux_userspace"],
+            nodes=stkp.node_map(teir))
+        sched2 = stkp.candidate_schedule(plan_shift, teir, ov, 12.0, 12.0)
+        self.assertIn("shift@linux_kernel", sched2["missing"])
+        self.assertFalse(sched2["complete"])
+        self.assertNotIn("shift", sched2["exec_us"])
+        doc = stkp.solve(teir, self.v, c_user=12, c_kernel=12, extra_kernel=0,
+                         handoff_us=0, override=ov, ioctl_cost=ioctl)
+        for c in doc.get("candidates") or []:
+            groups = (c.get("plan") or {}).get("groups") or []
+            kern = [g.get("members") for g in groups
+                    if g.get("domain") == "linux_kernel"]
+            if kern == [["shift"]]:
+                self.assertFalse((c.get("cost") or {}).get("comparable"))
+                self.assertNotEqual(
+                    (c.get("cost") or {}).get("grade"), "empirical_model_not_wcet")
 
 
 if __name__ == "__main__":

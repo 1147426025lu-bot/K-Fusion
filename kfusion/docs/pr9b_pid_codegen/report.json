@@ -1,0 +1,29 @@
+{
+  "kind": "pr9b_pid_codegen",
+  "claim": "compiler-emitted UKU PID session; not arbitrary persistent; not WCET",
+  "source": "kfusion/examples/ecos/mixed_pid_stateful__积分混合.c",
+  "chosen": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
+  "domain": "mixed",
+  "adapter": "uku_ioctl",
+  "uku_session": {
+    "kind": "integ_i32",
+    "region": "g_integ"
+  },
+  "mailbox": {
+    "copy_in": [
+      "g_in"
+    ],
+    "copy_out": [
+      "g_out"
+    ],
+    "session": "g_integ"
+  },
+  "board": {
+    "cycles": 40,
+    "digest": "6f40d786",
+    "digest_match": true,
+    "last_g_out": -581,
+    "seq_ok": true
+  },
+  "note": "g_integ 不进用户态 digest；逐拍 g_out 与 gold 一致。不是任意 persistent 放开。"
+}

@@ -221,6 +221,14 @@ print("STAGE_SRC=%s" % src)
 PY
 )"
 
+step "7e) 共用时间/版本门禁（STKP 入选方案；采样/提交/数据版本）"
+GATE_V=(--teir "$OUT/task.teir.json" --plan "$OUT/plan.json" -o "$OUT/verify_contract.json")
+if [ -n "${TIME_CONTRACT:-}" ] && [ -f "${TIME_CONTRACT}" ]; then
+  GATE_V+=(--contract "$TIME_CONTRACT")
+fi
+"$PY" "$KF/scripts/ecos/contract_gate.py" "${GATE_V[@]}" \
+  || die "contract_gate 拒绝入选方案" 8
+
 step "8) 生成用户态驱动（#include 原计算体，不复制）"
 if [ "$DOMAIN" = "mixed" ]; then
   "$PY" "$KF/scripts/mixed_uku_codegen__混合交接.py" \
@@ -301,7 +309,9 @@ let_g = [g.get("members") for g in (plan.get("groups") or [])]
 uses_let = bool((rec.get("cost") or {}).get("uses_let") or plan.get("let_events"))
 flag = sys.argv[4]
 # 无 LET 的全融合不得作为第二部署源；须与 STKP 同组，或带钉扎事件。
-if let.get("chosen") == "full_fuse" or (not uses_let and let_g != stkp_g):
+# LET 事件不能单独豁免窗口：deployable=false 则不生成。
+if (let.get("chosen") == "full_fuse" or (not uses_let and let_g != stkp_g)
+        or rec.get("deployable") is False):
     open(flag, "w").write("1\n")
     print("skip let_host: chosen=%s uses_let=%s" % (let.get("chosen"), uses_let))
     raise SystemExit(0)
@@ -311,7 +321,7 @@ print("LET chosen=%s uses_let=%s" % (let.get("chosen"), uses_let))
 PY
   SKIP_LET_EMIT="$(tr -d '[:space:]' < "$OUT/let_emit.flag" 2>/dev/null || echo 1)"
   if [ "${SKIP_LET_EMIT:-0}" = "1" ] || [ ! -f "$OUT/plan_let.json" ]; then
-    echo "⚠ LET 全融合无钉扎事件或与 STKP 分组冲突：不生成 let_host"
+    echo "⚠ LET 方案不可部署或与 STKP 分组冲突：不生成 let_host"
     rm -rf "$OUT/let_host"
     rm -f "$OUT/plan_let.json"
   else
@@ -323,7 +333,10 @@ PY
     if [ -n "${TIME_CONTRACT:-}" ] && [ -f "${TIME_CONTRACT}" ]; then
       LET_V+=(--contract "$TIME_CONTRACT")
     fi
-    if "$PY" "$KF/scripts/ecos/plan_verify.py" "${LET_V[@]}"; then
+    if "$PY" "$KF/scripts/ecos/plan_verify.py" "${LET_V[@]}" \
+       && "$PY" "$KF/scripts/ecos/contract_gate.py" \
+            --teir "$OUT/task.teir.json" --plan "$OUT/plan_let.json" \
+            --contract "$TIME_CONTRACT" -o "$OUT/verify_let_contract.json"; then
       "$PY" "$KF/backend/synthesis/emit.py" \
         --plan "$OUT/plan_let.json" --dag "$OUT/task.dag.json" \
         --source "$STAGE_SRC" \

@@ -1,0 +1,14 @@
+{
+  "teir_ok": true,
+  "teir_diagnostics": [],
+  "pin_ok_with_let": true,
+  "pin_diagnostics": [],
+  "window_ok_without_let": true,
+  "window_diagnostics": [],
+  "deploy_ok": true,
+  "ok": true,
+  "contract_pinned": [
+    "s1",
+    "s3"
+  ]
+}

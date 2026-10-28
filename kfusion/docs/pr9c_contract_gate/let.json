@@ -1,0 +1,355 @@
+{
+  "version": 1,
+  "kind": "let_decide",
+  "task": {
+    "name": "chain_window",
+    "entry": "loop_main",
+    "period_us": 1000,
+    "deadline_us": 1000,
+    "step_us": 200,
+    "notes": "由 Clang AST 抽取；相位来自源注释或命令行，不是分析猜测"
+  },
+  "contract": {
+    "mode": "strict_period",
+    "period_us": 1000,
+    "allow_period_stretch": false,
+    "pinned": [
+      "s1",
+      "s3"
+    ]
+  },
+  "model": {
+    "formula": "Cost = G*c + |LET|*let_event + E",
+    "c_us": 21.0,
+    "let_event_us": 21.0,
+    "note": "LET 是可选变换；更贵就不用。不是 WCET。"
+  },
+  "candidates": [
+    {
+      "id": "unfused",
+      "legal": true,
+      "deployable": true,
+      "diagnostics": [],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_userspace",
+          "generator": "let_decide",
+          "let": false
+        },
+        "order": [
+          "s1",
+          "s2",
+          "s3",
+          "s4"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "s1"
+            ]
+          },
+          {
+            "id": "g1",
+            "members": [
+              "s2"
+            ]
+          },
+          {
+            "id": "g2",
+            "members": [
+              "s3"
+            ]
+          },
+          {
+            "id": "g3",
+            "members": [
+              "s4"
+            ]
+          }
+        ],
+        "let_events": []
+      },
+      "cost": {
+        "groups": 4,
+        "let_events": 0,
+        "c_us": 21.0,
+        "let_event_us": 21.0,
+        "exec_us": 0.0,
+        "total_us": 84.0,
+        "uses_let": false
+      },
+      "why": "不用 LET"
+    },
+    {
+      "id": "full_fuse",
+      "legal": false,
+      "deployable": false,
+      "diagnostics": [
+        {
+          "code": "E_PIN_EARLY_COMMIT",
+          "where": "s3",
+          "msg": "提交钉在 380 µs，融合后组头 0，无输出保持 LET"
+        }
+      ],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_userspace",
+          "generator": "let_decide",
+          "let": false
+        },
+        "order": [
+          "s1",
+          "s2",
+          "s3",
+          "s4"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "s1",
+              "s2",
+              "s3",
+              "s4"
+            ]
+          }
+        ],
+        "let_events": []
+      },
+      "cost": {
+        "groups": 1,
+        "let_events": 0,
+        "c_us": 21.0,
+        "let_event_us": 21.0,
+        "exec_us": 0.0,
+        "total_us": 21.0,
+        "uses_let": false
+      },
+      "why": "拒绝: E_PIN_EARLY_COMMIT"
+    },
+    {
+      "id": "full_fuse_let",
+      "legal": true,
+      "deployable": false,
+      "diagnostics": [],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_userspace",
+          "generator": "let_decide",
+          "let": true
+        },
+        "order": [
+          "s1",
+          "s2",
+          "s3",
+          "s4"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "s1",
+              "s2",
+              "s3",
+              "s4"
+            ]
+          }
+        ],
+        "let_events": [
+          {
+            "kind": "output_commit",
+            "stage": "s3",
+            "at_us": 380.0,
+            "compute_at_us": 0.0
+          }
+        ]
+      },
+      "cost": {
+        "groups": 1,
+        "let_events": 1,
+        "c_us": 21.0,
+        "let_event_us": 21.0,
+        "exec_us": 0.0,
+        "total_us": 42.0,
+        "uses_let": true
+      },
+      "why": "LET×1; 全融合无 LET 非法; LET 修复钉扎后仍更便宜"
+    },
+    {
+      "id": "selective_pins",
+      "legal": true,
+      "deployable": true,
+      "diagnostics": [],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_userspace",
+          "generator": "let_decide",
+          "let": false
+        },
+        "order": [
+          "s1",
+          "s2",
+          "s3",
+          "s4"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "s1"
+            ]
+          },
+          {
+            "id": "g1",
+            "members": [
+              "s2"
+            ]
+          },
+          {
+            "id": "g2",
+            "members": [
+              "s3"
+            ]
+          },
+          {
+            "id": "g3",
+            "members": [
+              "s4"
+            ]
+          }
+        ],
+        "let_events": []
+      },
+      "cost": {
+        "groups": 4,
+        "let_events": 0,
+        "c_us": 21.0,
+        "let_event_us": 21.0,
+        "exec_us": 0.0,
+        "total_us": 84.0,
+        "uses_let": false
+      },
+      "why": "不用 LET"
+    },
+    {
+      "id": "stretch_period",
+      "legal": false,
+      "deployable": false,
+      "diagnostics": [
+        {
+          "code": "E_PERIOD_STRETCH",
+          "where": "period_us",
+          "msg": "严格周期模式拒绝 1000 → 1500.0"
+        }
+      ],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_userspace",
+          "generator": "let_decide",
+          "let": false,
+          "period_us": 1500.0
+        },
+        "order": [
+          "s1",
+          "s2",
+          "s3",
+          "s4"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "s1"
+            ]
+          },
+          {
+            "id": "g1",
+            "members": [
+              "s2"
+            ]
+          },
+          {
+            "id": "g2",
+            "members": [
+              "s3"
+            ]
+          },
+          {
+            "id": "g3",
+            "members": [
+              "s4"
+            ]
+          }
+        ],
+        "let_events": []
+      },
+      "cost": {
+        "groups": 4,
+        "let_events": 0,
+        "c_us": 21.0,
+        "let_event_us": 21.0,
+        "exec_us": 0.0,
+        "total_us": 84.0,
+        "uses_let": false
+      },
+      "why": "拒绝: E_PERIOD_STRETCH"
+    }
+  ],
+  "chosen": "full_fuse_let",
+  "chosen_record": {
+    "id": "full_fuse_let",
+    "legal": true,
+    "deployable": false,
+    "diagnostics": [],
+    "plan": {
+      "version": 2,
+      "meta": {
+        "platform": "linux_userspace",
+        "generator": "let_decide",
+        "let": true
+      },
+      "order": [
+        "s1",
+        "s2",
+        "s3",
+        "s4"
+      ],
+      "groups": [
+        {
+          "id": "g0",
+          "members": [
+            "s1",
+            "s2",
+            "s3",
+            "s4"
+          ]
+        }
+      ],
+      "let_events": [
+        {
+          "kind": "output_commit",
+          "stage": "s3",
+          "at_us": 380.0,
+          "compute_at_us": 0.0
+        }
+      ]
+    },
+    "cost": {
+      "groups": 1,
+      "let_events": 1,
+      "c_us": 21.0,
+      "let_event_us": 21.0,
+      "exec_us": 0.0,
+      "total_us": 42.0,
+      "uses_let": true
+    },
+    "why": "LET×1; 全融合无 LET 非法; LET 修复钉扎后仍更便宜"
+  },
+  "n_legal": 3
+}

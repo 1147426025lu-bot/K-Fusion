@@ -79,16 +79,15 @@ def slot_final(slot):
 
 
 def calib_inputs_ok(override, ioctl, names, kernel_members):
-    """标定输入：用户态每阶段、内核组成员、T_ioctl 均须 measured+日志。"""
+    """标定输入：用户态逐阶段 + 内核融合组 C(G,d) + T_ioctl，均须 measured+日志。"""
     us = (override or {}).get("linux_userspace") or {}
-    ks = (override or {}).get("linux_kernel") or {}
     why = []
     for n in names:
         if not slot_final(us.get(n)):
             why.append("user:%s" % n)
-    for n in kernel_members:
-        if not slot_final(ks.get(n)):
-            why.append("kernel:%s" % n)
+    gslot = sc.lookup_group_cost(override, kernel_members, "linux_kernel")
+    if kernel_members and not slot_final(gslot):
+        why.append("group:%s" % "+".join(kernel_members))
     if not slot_final(ioctl):
         why.append("T_ioctl")
     return (not why), why

@@ -301,13 +301,16 @@ def decide(teir, contract, verifier, c_us, let_event_us, exec_us,
             plan = let_repair(plan, ph, contract)
         ok_v, d_v = verifier.verify(teir, plan)
         d_pin = pin_violations(plan, ph, contract, apply_let=True)
+        d_raw = pin_violations(plan, ph, contract, apply_let=False)
         d_per = period_ok(plan, contract)
         d_win = window_ok(contract)
         diags = list(d_v) + d_pin + d_per + d_win
         legal = ok_v and not d_pin and not d_per and not d_win
+        deployable = legal and not d_raw and not d_per and not d_win
         rec = {
             "id": name,
             "legal": legal,
+            "deployable": deployable,
             "diagnostics": diags,
             "plan": plan,
             "cost": cost_plan(plan, c_us, let_event_us, exec_us),

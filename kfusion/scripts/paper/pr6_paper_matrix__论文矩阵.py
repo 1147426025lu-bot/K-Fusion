@@ -59,6 +59,7 @@ def rec_stkp(pdir):
         "deployment_ready": rec.get("deployment_ready"),
         "adapter": meta.get("xdom_adapter"),
         "uku_reject": meta.get("uku_reject"),
+        "uku_session": meta.get("uku_session"),
         "groups": [g.get("members") for g in plan.get("groups") or []],
         "domains": [g.get("domain") for g in plan.get("groups") or []],
         "predicted_R_us": (rec.get("cost") or {}).get("predicted_R_us"),
@@ -175,11 +176,17 @@ def w2(out):
     teir = json.load(open(os.path.join(pdir, "task.teir.json")))
     pid = [n for n in teir.get("nodes") or [] if n.get("name") == "stage_pid"]
     rec["pid_persistent"] = (pid[0].get("persistent") if pid else None)
-    rec["plan_pass"] = rec.get("domain") != "mixed" and rec.get("adapter") != "uku_ioctl"
+    rec["plan_pass"] = (
+        rec.get("adapter") == "uku_ioctl"
+        and rec.get("domain") == "mixed"
+        and bool(rec.get("uku_session"))
+        and (rec.get("uku_session") or {}).get("kind") == "integ_i32"
+        and os.path.isfile(os.path.join(pdir, "kmod_uku", "kfusion_uku_mod.c"))
+    )
     rec["board_pass"] = False
     rec["end_to_end_pass"] = False
     rec["ok"] = rec["plan_pass"]
-    rec["note"] = "积分跨拍：UKU v1 拒绝（规划证据，SKIP_HOST 非板级）"
+    rec["note"] = "单 int32 积分会话：STKP 可生成 UKU；非任意 persistent（规划证据）"
     return rec
 
 
@@ -200,6 +207,7 @@ def w3(out):
     letp = os.path.join(pdir, "let.json")
     let_chosen = None
     let_full_fuse_legal = None
+    by = {}
     if os.path.isfile(letp):
         let = json.load(open(letp))
         let_chosen = let.get("chosen")
@@ -208,7 +216,13 @@ def w3(out):
             let_full_fuse_legal = bool(by["full_fuse"].get("legal"))
     rec["let_chosen"] = let_chosen
     rec["let_full_fuse_legal"] = let_full_fuse_legal
+    rec["let_full_fuse_let_legal"] = (
+        bool(by["full_fuse_let"].get("legal")) if "full_fuse_let" in by else None)
+    rec["let_full_fuse_let_deployable"] = (
+        bool(by["full_fuse_let"].get("deployable")) if "full_fuse_let" in by else None)
     rec["let_host_emitted"] = os.path.isdir(os.path.join(pdir, "let_host"))
+    gatep = os.path.join(pdir, "verify_contract.json")
+    rec["contract_gate"] = json.load(open(gatep)) if os.path.isfile(gatep) else None
     rec["plan_pass"] = (
         rec.get("groups") == [["s1", "s2"], ["s3", "s4"]]
         and rec.get("domain") == "linux_userspace"
@@ -216,7 +230,8 @@ def w3(out):
         and rec.get("chosen") not in ("B", "D")
         and let_full_fuse_legal is not True
         and rec.get("let_chosen") != "full_fuse"
-        and (not rec["let_host_emitted"] or rec.get("let_chosen") != "full_fuse")
+        and not rec["let_host_emitted"]
+        and (rec.get("contract_gate") or {}).get("deploy_ok") is True
     )
     rec["board_pass"] = False
     rec["end_to_end_pass"] = False

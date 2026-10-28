@@ -93,7 +93,7 @@ def kernel_calls(kmem, calls):
     return out
 
 
-def emit_mod(kmem, reads, writes, calls, stage_src_name):
+def emit_mod(kmem, reads, writes, calls, stage_src_name, session_vars=None):
     aset = []
     for i, v in enumerate(reads):
         aset.append("\t%s = msg.in[%d];" % (v, i))
@@ -102,8 +102,11 @@ def emit_mod(kmem, reads, writes, calls, stage_src_name):
         oset.append("\tmsg.out[%d] = %s;" % (i, v))
     run = "\n".join("\t%s;" % c for c in kernel_calls(kmem, calls))
     ext = ["extern void loop_reset(void);"]
-    for v in reads + writes:
-        ext.append("extern int32_t %s;" % v)
+    seen = []
+    for v in list(reads) + list(writes) + list(session_vars or []):
+        if v and v not in seen:
+            seen.append(v)
+            ext.append("extern int32_t %s;" % v)
     for m in kmem:
         fn = (calls.get(m) or ("%s()" % m)).split("(")[0].strip()
         ext.append("extern void %s(void);" % fn)
@@ -156,9 +159,11 @@ static long uku_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 	t1 = ktime_get_ns();
 	msg.k_start_ns = (int64_t)t0;
 	msg.k_end_ns = (int64_t)t1;
-	uku_expect++;
-	if (copy_to_user((void __user *)arg, &msg, sizeof(msg)))
+	if (copy_to_user((void __user *)arg, &msg, sizeof(msg))) {
 		rc = -EFAULT;
+		goto out;
+	}
+	uku_expect++;
 out:
 	mutex_unlock(&uku_mu);
 	return rc;
@@ -181,6 +186,7 @@ static int uku_open(struct inode *i, struct file *f)
 static int uku_release(struct inode *i, struct file *f)
 {
 	mutex_lock(&uku_mu);
+	loop_reset();
 	uku_busy = false;
 	uku_expect = 0;
 	mutex_unlock(&uku_mu);
@@ -227,6 +233,11 @@ MODULE_DESCRIPTION("K-Fusion UKU ioctl compute");
 def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
                 cycles, digest_vars):
     groups = plan.get("groups") or []
+    sess = set()
+    meta = plan.get("meta") or {}
+    if (meta.get("uku_session") or {}).get("region"):
+        sess.add(meta["uku_session"]["region"])
+    digest_vars = [v for v in (digest_vars or []) if v not in sess]
     lines = []
     A = lines.append
     A("/* UKU 混合驱动：gold=全用户态；mixed=中间组走 /dev/kfusion_uku */")
@@ -437,7 +448,8 @@ def main():
     dump(os.path.join(out, "kfusion_uku.h"), HDR)
     dump(os.path.join(out, "compat/stdint.h"), COMPAT)
     dump(os.path.join(out, "kfusion_uku_mod.c"),
-         emit_mod(kmem, reads, writes, calls, a.source))
+         emit_mod(kmem, reads, writes, calls, a.source,
+                  session_vars=(iface or {}).get("session_vars")))
     src_abs = os.path.abspath(a.source)
     # stage_impl.c is a copy/include of user source
     with io.open(src_abs, encoding="utf-8") as f:
@@ -449,9 +461,11 @@ def main():
          "KDIR ?= /root/linux-5.15.86\n"
          "all:\n\t$(MAKE) -C $(KDIR) M=$(PWD) modules\n"
          "clean:\n\t$(MAKE) -C $(KDIR) M=$(PWD) clean\n")
+    sess = set((iface or {}).get("session_vars") or [])
+    digest = [v for v in (a.digest_var or ["g_out", "g_seq"]) if v not in sess]
     dump(os.path.join(out, "driver.c"), emit_driver(
         plan, kmem, reads, writes, calls, a.source, a.probe_header,
-        a.period_us, a.cycles, a.digest_var or ["g_out", "g_seq"]))
+        a.period_us, a.cycles, digest))
     dump(os.path.join(out, "interface.json"),
          json.dumps(iface, indent=2, ensure_ascii=False) + "\n")
     print("UKU 写出 %s  in=%s out=%s stages=%s" % (out, reads, writes, kmem))

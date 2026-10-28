@@ -84,30 +84,44 @@ def _unsupported_type(teir, name):
     return None
 
 
-def persistent_errors(plan, teir):
+def kernel_persistent_regions(plan, teir):
     kset = set()
     for g in kernel_groups(plan):
         kset.update(g.get("members") or [])
-    bad = []
+    found = []
     for n in teir.get("nodes") or []:
         if n.get("name") not in kset:
             continue
-        pers = n.get("persistent") or []
-        if pers:
-            bad.append({
-                "code": "E_UKU_PERSISTENT",
-                "msg": "内核阶段 %s 持有跨拍状态 %s，UKU v1 无状态版本" % (
-                    n.get("name"), ",".join(pers)),
-            })
+        for p in n.get("persistent") or []:
+            x = region_name(p)
+            if x and x not in found:
+                found.append(x)
     for p in teir.get("persistent_state") or []:
         if p.get("writer") in kset:
-            r = p.get("region")
-            if r and not any(r in (e.get("msg") or "") for e in bad):
-                bad.append({
-                    "code": "E_UKU_PERSISTENT",
-                    "msg": "内核写者 %s 的持久区 %s" % (p.get("writer"), r),
-                })
-    return bad
+            x = region_name(p.get("region"))
+            if x and x not in found:
+                found.append(x)
+    return found
+
+
+def persistent_errors(plan, teir):
+    """无状态 UKU 仍拒绝任意 persistent。会话协议只放行一个已证明的 int32 积分。"""
+    found = kernel_persistent_regions(plan, teir)
+    if not found:
+        return []
+    if len(found) != 1:
+        return [{
+            "code": "E_UKU_PERSISTENT",
+            "msg": "会话协议只允许一个 int32 积分状态，实际 %s" % ",".join(found),
+        }]
+    name = found[0]
+    t = _unsupported_type(teir, name)
+    if t:
+        return [{
+            "code": "E_UKU_PERSISTENT",
+            "msg": "会话状态 %s 不合格：%s" % (name, t[1]),
+        }]
+    return []
 
 
 def _call_has_args(expr):
@@ -214,8 +228,16 @@ def check(plan, teir, contract=None, calls=None):
         return {"ok": False, "errors": errors, "interface": None}
     # 相位窗口改由 STKP 串行时间线（Ĉ 同一份 exec）裁剪，不再在此 fail-closed。
     errors.extend(call_errors(plan, teir, calls))
-    errors.extend(persistent_errors(plan, teir))
+    perr = persistent_errors(plan, teir)
+    errors.extend(perr)
     kmem, reads, writes = collect_kernel_io(plan, teir)
+    session_vars = []
+    if not perr:
+        session_vars = kernel_persistent_regions(plan, teir)
+        if len(session_vars) == 1:
+            sess = session_vars[0]
+            reads = [x for x in reads if x != sess]
+            writes = [x for x in writes if x != sess]
     if not reads or not writes:
         errors.append({
             "code": "E_UKU_NO_REGIONS",
@@ -235,6 +257,7 @@ def check(plan, teir, contract=None, calls=None):
         t = _unsupported_type(teir, name)
         if t:
             errors.append({"code": t[0], "msg": t[1]})
+    sess = session_vars[0] if len(session_vars) == 1 else None
     iface = {
         "adapter": "uku_ioctl",
         "kernel_stages": kmem,
@@ -242,6 +265,8 @@ def check(plan, teir, contract=None, calls=None):
         "copy_out": list(writes),
         "device": "/dev/kfusion_uku",
         "max": UKU_MAX,
+        "session": ({"kind": "integ_i32", "region": sess} if sess else None),
+        "session_vars": ([sess] if sess else []),
     }
     ok = not errors
     return {"ok": ok, "errors": errors, "interface": iface if ok else None}

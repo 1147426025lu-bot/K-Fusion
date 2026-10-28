@@ -9,7 +9,7 @@ from __future__ import print_function
 import os
 import re
 
-EV_FINAL = frozenset(("measured", "test"))
+EV_FINAL = frozenset(("measured", "test", "group_bound"))
 EV_EXPLORE = frozenset((
     "estimated", "dag_exec", "shared_exec", "scalar",
     "cli_override", "empirical",
@@ -208,51 +208,57 @@ def bind_to_teir(stages, teir_names):
     return out
 
 
-def fold_group_cost(total_slot, members):
-    """组级一次测量记在首成员，其余 0。禁止把总额再均分。"""
-    out = {}
-    if not members:
-        return out
-    base = dict(total_slot or {})
-    total = base.get("value")
-    try:
-        total = float(total)
-    except (TypeError, ValueError):
-        total = None
-    for i, m in enumerate(members):
-        slot = dict(base)
-        slot["value"] = (total if (i == 0 and total is not None) else
-                         (0.0 if total is not None else None))
-        slot["covers_group"] = list(members)
-        slot["folded"] = bool(i)
-        slot["note"] = ("组级测量记在 %s，其余成员 0；不得均分" % members[0])
-        out[m] = slot
-    return out
+def group_key(members):
+    return frozenset(members or [])
+
+
+def group_measurement(total_slot, members, domain):
+    """组级测量：只绑定这一组，不得拆成可重组的逐阶段表。"""
+    slot = dict(total_slot or {})
+    slot["members"] = list(members or [])
+    slot["domain"] = domain
+    slot["reusable_for_other_groups"] = False
+    slot.setdefault("note", "C(G,d) 仅当候选组与实测组成员完全一致才可用")
+    return slot
+
+
+def lookup_group_cost(override, members, domain):
+    """精确匹配 (成员集合, 域)。子集/超集一律不算命中。"""
+    if not override:
+        return None
+    want = group_key(members)
+    if not want:
+        return None
+    for g in override.get("groups") or []:
+        if not isinstance(g, dict):
+            continue
+        if g.get("domain") != domain:
+            continue
+        if g.get("reusable_for_other_groups"):
+            continue
+        if group_key(g.get("members")) != want:
+            continue
+        return g
+    return None
 
 
 def override_from_gold_mixed(gold, mixed, teir_names, kernel_members):
-    """gold 提供用户态逐阶段；mixed 提供内核组 kernel_compute 与 T_ioctl。"""
+    """gold 提供用户态逐阶段；mixed 的 kernel_compute 记成内核融合组，不拆阶段。"""
     gold = gold or {}
     mixed = mixed or {}
     names = list(teir_names or [])
     user = bind_to_teir(gold.get("stages") or {}, names)
     kmem = list(kernel_members or [])
     kcomp = mixed.get("kernel_compute")
+    groups = []
     if kcomp and kmem:
-        folded = fold_group_cost(kcomp, kmem)
-        kernel = {}
-        for n in names:
-            if n in folded:
-                kernel[n] = folded[n]
-            else:
-                kernel[n] = {
-                    "value": None, "evidence": "missing",
-                    "note": "该阶段不在内核组，不以 gold 用户态值冒充 C_K",
-                }
-    else:
-        kernel = kernel_missing(names)
+        groups.append(group_measurement(kcomp, kmem, "linux_kernel"))
     ioctl = mixed.get("T_ioctl")
-    return {"linux_userspace": user, "linux_kernel": kernel}, ioctl
+    return {
+        "linux_userspace": user,
+        "linux_kernel": kernel_missing(names),
+        "groups": groups,
+    }, ioctl
 
 
 def kernel_missing(names):

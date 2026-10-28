@@ -56,39 +56,46 @@ A/B/C/D/E/F legal=4/6  chosen=B
 wrote /tmp/pr6_matrix/w2/candidates.json
 
 ──── 7c2) STKP 穷举求解（入选方案才是生成输入） ────
-STKP chosen plan → /tmp/pr6_matrix/w2/chosen.plan.json  (B linux_userspace Ĉ=103.0)
-STKP v1 raw=18 enum=18 deployable=4 model=5 chosen=B claim=explore_uncertain
-  prune domain=13 semantic=0 temporal=0 mixed=1 missing=0
-  g0  stage_sample + stage_pid + stage_sink @ linux_userspace
-  vs A–F: baseline=B STKP=B missed_by_af=False
+STKP chosen plan → /tmp/pr6_matrix/w2/chosen.plan.json  (STKP:L[stage_sample]|L[stage_pid]|L[stage_sink] mixed Ĉ=25.0)
+STKP v1 raw=18 enum=18 deployable=5 model=5 chosen=STKP:L[stage_sample]|L[stage_pid]|L[stage_sink] claim=explore_uncertain
+  prune domain=13 semantic=0 temporal=0 mixed=0 missing=0
+  g0  stage_sample                 @ linux_userspace
+  g1  stage_pid                    @ linux_kernel
+  g2  stage_sink                   @ linux_userspace
+  vs A–F: baseline=B STKP=STKP:L[stage_sample]|L[stage_pid]|L[stage_sink] missed_by_af=True
 wrote /tmp/pr6_matrix/w2/stkp.json
-  STKP 入选 B  域 linux_userspace
+  STKP 入选 STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]  域 mixed
 
 ──── 7b) 独立验证器（验证入选方案，不调用规划器） ────
 VERIFY PASS
 
 ──── 7b2) DAG 全局验证器（写回 verification，供 emit 门禁） ────
-· 组 g0   stage_sample + stage_pid + stage_sink
-✅ 方案验证通过（1 组 · 同拍边 1 · 跨周期边 0 · 时间证据 empirical）
-  deploy.json chosen=B domain=linux_userspace
+· 组 g0   stage_sample
+· 组 g1   stage_pid
+· 组 g2   stage_sink
+✅ 方案验证通过（3 组 · 同拍边 1 · 跨周期边 0 · 时间证据 empirical）
+  deploy.json chosen=STKP:L[stage_sample]|L[stage_pid]|L[stage_sink] domain=mixed
+
+──── 7e) 共用时间/版本门禁（STKP 入选方案；采样/提交/数据版本） ────
+contract_gate teir_ok=True window_raw=True deploy_ok=True
 
 ──── 8) 生成用户态驱动（#include 原计算体，不复制） ────
-写出 /tmp/pr6_matrix/w2/driver.c（plan 1 次释放/周期，flat 3 次/周期，3 阶段）
+UKU 写出 /tmp/pr6_matrix/w2/kmod_uku  in=['g_in'] out=['g_out'] stages=['stage_pid']
 
-──── 8b) 入选用户态：不生成内核部署产物 ────
-  skip kmod（chosen=B domain=linux_userspace）
+──── 8b) UKU ioctl 内核计算模块 ────
+跳过 UKU .ko（无 KERNELDIR 或 SKIP_KMOD=1）
 跳过宿主编译（SKIP_HOST=1）
 
 ✅ 从 C 到 A/B/C/D 流水线完成
    骨架  /tmp/pr6_matrix/w2/stages.json
    DAG   /tmp/pr6_matrix/w2/task.dag.json
    TEIR  /tmp/pr6_matrix/w2/task.teir.json
-   入选  /tmp/pr6_matrix/w2/chosen.plan.json  (B / linux_userspace)
+   入选  /tmp/pr6_matrix/w2/chosen.plan.json  (STKP:L[stage_sample]|L[stage_pid]|L[stage_sink] / mixed)
    部署  /tmp/pr6_matrix/w2/deploy.json
    方案  /tmp/pr6_matrix/w2/plan.json
    验证  /tmp/pr6_matrix/w2/verify.json
    选型  /tmp/pr6_matrix/w2/candidates.json  (A–F 基线)
    STKP  /tmp/pr6_matrix/w2/stkp.json
    用户态 /tmp/pr6_matrix/w2/driver.c
-   kmod   （未生成：入选用户态）
+   UKU    /tmp/pr6_matrix/w2/kmod_uku/  adapter=uku_ioctl
    计算体始终是 /root/K-Fusion/kfusion/examples/ecos/mixed_pid_stateful__积分混合.c ，没有第二份手写阶段函数

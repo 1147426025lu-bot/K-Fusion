@@ -1,0 +1,42 @@
+{
+  "kind": "pr9c_contract_gate",
+  "claim": "shared sample/commit/data-version gate; LET legal != deployable; not WCET",
+  "tests": "test_stkp 37 OK",
+  "w3": {
+    "src": "examples/ecos/chain_window__四段窗口示例.c",
+    "log": "docs/pr6_paper_matrix/logs/w3_pipe.log",
+    "stkp_chosen": "STKP:L[s1+s2]|L[s3+s4]",
+    "domain": "linux_userspace",
+    "groups": [
+      [
+        "s1",
+        "s2"
+      ],
+      [
+        "s3",
+        "s4"
+      ]
+    ],
+    "contract_gate": {
+      "teir_ok": true,
+      "teir_diagnostics": [],
+      "pin_ok_with_let": true,
+      "pin_diagnostics": [],
+      "window_ok_without_let": true,
+      "window_diagnostics": [],
+      "deploy_ok": true,
+      "ok": true,
+      "contract_pinned": [
+        "s1",
+        "s3"
+      ]
+    },
+    "let_chosen": "full_fuse_let",
+    "full_fuse_legal": false,
+    "full_fuse_let_legal": true,
+    "full_fuse_let_deployable": false,
+    "let_host_emitted": false,
+    "note": "LET full_fuse_let 可分析合法，无 LET 窗口仍失败，不生成 let_host；部署源是 STKP 两段用户态"
+  },
+  "ok": true
+}

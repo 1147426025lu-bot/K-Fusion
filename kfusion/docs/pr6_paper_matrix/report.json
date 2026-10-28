@@ -62,32 +62,48 @@
         "seq_ok": true
       },
       "ok": true,
-      "note": "无状态 UKU；digest 一致不是内核更快；非 WCET"
+      "note": "无状态 UKU；digest 一致不是内核更快；非 WCET",
+      "plan_pass": true,
+      "board_pass": true,
+      "end_to_end_pass": true
     },
     "W2_stateful_pid": {
-      "chosen": "B",
+      "chosen": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
       "claim": "explore_uncertain",
-      "domain": "linux_userspace",
+      "domain": "mixed",
       "deployment_ready": true,
-      "adapter": null,
+      "adapter": "uku_ioctl",
       "uku_reject": null,
+      "uku_session": {
+        "kind": "integ_i32",
+        "region": "g_integ"
+      },
       "groups": [
         [
-          "stage_sample",
-          "stage_pid",
+          "stage_sample"
+        ],
+        [
+          "stage_pid"
+        ],
+        [
           "stage_sink"
         ]
       ],
       "domains": [
+        "linux_userspace",
+        "linux_kernel",
         "linux_userspace"
       ],
-      "predicted_R_us": 103.0,
+      "predicted_R_us": 25.0,
       "grade": "explore_uncertain",
       "pid_persistent": [
         "@g_integ"
       ],
+      "plan_pass": true,
+      "board_pass": false,
+      "end_to_end_pass": false,
       "ok": true,
-      "note": "积分跨拍：UKU v1 拒绝，不把状态内核化"
+      "note": "单 int32 积分会话：STKP 可生成 UKU；非任意 persistent（规划证据）"
     },
     "W3_actuator_window": {
       "chosen": "STKP:L[s1+s2]|L[s3+s4]",
@@ -96,6 +112,7 @@
       "deployment_ready": true,
       "adapter": null,
       "uku_reject": null,
+      "uku_session": null,
       "groups": [
         [
           "s1",
@@ -112,8 +129,30 @@
       ],
       "predicted_R_us": 44.4,
       "grade": "explore_uncertain",
+      "let_chosen": "full_fuse_let",
+      "let_full_fuse_legal": false,
+      "let_full_fuse_let_legal": true,
+      "let_full_fuse_let_deployable": false,
+      "let_host_emitted": false,
+      "contract_gate": {
+        "teir_ok": true,
+        "teir_diagnostics": [],
+        "pin_ok_with_let": true,
+        "pin_diagnostics": [],
+        "window_ok_without_let": true,
+        "window_diagnostics": [],
+        "deploy_ok": true,
+        "ok": true,
+        "contract_pinned": [
+          "s1",
+          "s3"
+        ]
+      },
+      "plan_pass": true,
+      "board_pass": false,
+      "end_to_end_pass": false,
       "ok": true,
-      "note": "s3 窗口 [380,520]；合法两段用户态，不得 UKU/全融合"
+      "note": "s3 窗口 [380,520]；STKP 两段用户态；无 LET 全融合产物（规划证据）"
     }
   },
   "all_ok": true

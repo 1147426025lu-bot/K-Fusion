@@ -154,7 +154,24 @@ def candidate_schedule(plan, teir, override, c_user, c_kernel):
             "L_us": float(L),
             "phase_us": g.get("release_phase_us"),
         })
-        for m in g.get("members") or []:
+        members = g.get("members") or []
+        gslot = stage_cost_mod.lookup_group_cost(override, members, d)
+        if gslot is not None:
+            val, ev = slot_value(gslot, from_override=True)
+            evidence.append("C(%s,%s):%s" % ("+".join(members), d, ev))
+            if val is None or not _finite_nonneg(val):
+                for m in members:
+                    missing.append("%s@%s" % (m, d))
+            else:
+                # 总额记在组尾；组内 0 标 group_bound，不得当作独立阶段实测。
+                for i, m in enumerate(members):
+                    if i == len(members) - 1:
+                        exec_us[m] = float(val)
+                    else:
+                        exec_us[m] = 0.0
+                    evidence.append("%s@%s:group_bound" % (m, d))
+            continue
+        for m in members:
             val, ev = stage_compute_cost(nodes.get(m) or {"name": m}, d,
                                          override)
             evidence.append("%s@%s:%s" % (m, d, ev))
@@ -591,6 +608,10 @@ def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
                     plan["meta"]["deployment_ready"] = False
                     plan["meta"]["xdom_adapter"] = None
                     plan["meta"]["uku_reject"] = uku_mod.codes(chk)
+                else:
+                    sess = (chk.get("interface") or {}).get("session")
+                    if sess:
+                        plan["meta"]["uku_session"] = sess
             ok, diags = verifier.verify(teir, plan)
             if not ok:
                 prune["semantic"] += 1
