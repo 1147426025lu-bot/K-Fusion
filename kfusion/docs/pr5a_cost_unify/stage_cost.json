@@ -1,0 +1,116 @@
+{
+  "linux_userspace": {
+    "stage_sample": {
+      "value": 0.378,
+      "exec_us": 0.378,
+      "evidence": "measured",
+      "statistic": "avg",
+      "min_us": 0.277,
+      "avg_us": 0.378,
+      "p50_us": 0,
+      "p99_us": 1,
+      "p99_9_us": 1,
+      "p99_99_us": 1,
+      "max_us": 1.944,
+      "over": 0,
+      "samples": 2000,
+      "source_log": "/root/K-Fusion/kfusion/docs/pr4c_bd_paired/logs/B_0.log",
+      "note": "p50 受 1µs 分桶影响，Ĉ 使用 avg"
+    },
+    "stage_fir": {
+      "value": 0.467,
+      "exec_us": 0.467,
+      "evidence": "measured",
+      "statistic": "avg",
+      "min_us": 0.277,
+      "avg_us": 0.467,
+      "p50_us": 0,
+      "p99_us": 1,
+      "p99_9_us": 2,
+      "p99_99_us": 3,
+      "max_us": 3.667,
+      "over": 0,
+      "samples": 2000,
+      "source_log": "/root/K-Fusion/kfusion/docs/pr4c_bd_paired/logs/B_0.log",
+      "note": "p50 受 1µs 分桶影响，Ĉ 使用 avg"
+    },
+    "stage_pid": {
+      "value": 0.302,
+      "exec_us": 0.302,
+      "evidence": "measured",
+      "statistic": "avg",
+      "min_us": 0.259,
+      "avg_us": 0.302,
+      "p50_us": 0,
+      "p99_us": 0,
+      "p99_9_us": 0,
+      "p99_99_us": 1,
+      "max_us": 1.204,
+      "over": 0,
+      "samples": 2000,
+      "source_log": "/root/K-Fusion/kfusion/docs/pr4c_bd_paired/logs/B_0.log",
+      "note": "p50 受 1µs 分桶影响，Ĉ 使用 avg"
+    },
+    "stage_clamp": {
+      "value": 0.302,
+      "exec_us": 0.302,
+      "evidence": "measured",
+      "statistic": "avg",
+      "min_us": 0.24,
+      "avg_us": 0.302,
+      "p50_us": 0,
+      "p99_us": 0,
+      "p99_9_us": 0,
+      "p99_99_us": 0,
+      "max_us": 0.796,
+      "over": 0,
+      "samples": 2000,
+      "source_log": "/root/K-Fusion/kfusion/docs/pr4c_bd_paired/logs/B_0.log",
+      "note": "p50 受 1µs 分桶影响，Ĉ 使用 avg"
+    },
+    "stage_plant": {
+      "value": 0.262,
+      "exec_us": 0.262,
+      "evidence": "measured",
+      "statistic": "avg",
+      "min_us": 0.222,
+      "avg_us": 0.262,
+      "p50_us": 0,
+      "p99_us": 0,
+      "p99_9_us": 0,
+      "p99_99_us": 0,
+      "max_us": 0.741,
+      "over": 0,
+      "samples": 2000,
+      "source_log": "/root/K-Fusion/kfusion/docs/pr4c_bd_paired/logs/B_0.log",
+      "note": "p50 受 1µs 分桶影响，Ĉ 使用 avg"
+    }
+  },
+  "linux_kernel": {
+    "stage_sample": {
+      "value": null,
+      "evidence": "missing",
+      "note": "内核 rsf_probe 无逐阶段剖析，不得均分整组 exec"
+    },
+    "stage_fir": {
+      "value": null,
+      "evidence": "missing",
+      "note": "内核 rsf_probe 无逐阶段剖析，不得均分整组 exec"
+    },
+    "stage_pid": {
+      "value": null,
+      "evidence": "missing",
+      "note": "内核 rsf_probe 无逐阶段剖析，不得均分整组 exec"
+    },
+    "stage_clamp": {
+      "value": null,
+      "evidence": "missing",
+      "note": "内核 rsf_probe 无逐阶段剖析，不得均分整组 exec"
+    },
+    "stage_plant": {
+      "value": null,
+      "evidence": "missing",
+      "note": "内核 rsf_probe 无逐阶段剖析，不得均分整组 exec"
+    }
+  }
+}

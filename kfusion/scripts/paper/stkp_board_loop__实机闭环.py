@@ -308,36 +308,29 @@ def main():
     report["cells"]["D"]["id"] = "D"
     report["cells"]["D"]["fused"] = True
 
-    print("== 5) 实测回填 STKP ==")
-    n_stages = 5
-    c_u = p50(report["cells"]["B"], "start_lat")
-    e_u = p50(report["cells"]["B"], "exec")
-    c_k = p50(report["cells"].get("D"), "start_lat")
-    e_k = p50(report["cells"].get("D"), "exec")
-    stage_cost = {"linux_userspace": {}, "linux_kernel": {}}
-    names = []
+    print("== 5) 实测回填 STKP（逐阶段 avg，内核缺剖析则 missing） ==")
+    sys.path.insert(0, os.path.join(KF, "scripts", "ecos"))
+    import stage_cost as sc
+    blog = os.path.join(LOGDIR, "user_B.log")
+    parsed = sc.load_user_stage_log(blog) if os.path.isfile(blog) else {"stages": {}}
     teir = json.load(open(os.path.join(user_dir, "task.teir.json")))
     names = [n["name"] for n in teir.get("nodes") or []]
-    if e_u is not None and names:
-        share = float(e_u) / max(len(names), 1)
-        for n in names:
-            stage_cost["linux_userspace"][n] = round(share, 3)
-    if e_k is not None and names:
-        share_k = float(e_k) / max(len(names), 1)
-        for n in names:
-            stage_cost["linux_kernel"][n] = round(share_k, 3)
-    # 缺内核测 → 不填 kernel 键，STKP 不得用 0 宣称 D 最优
-    if not stage_cost["linux_kernel"]:
-        del stage_cost["linux_kernel"]
+    stage_cost = sc.build_override(parsed.get("stages") or {}, teir_names=names)
+    c_u = ((parsed.get("start_lat") or {}).get("avg_us")
+           or p50(report["cells"]["B"], "start_lat"))
+    e_u = (parsed.get("exec") or {}).get("avg_us")
+    c_k = p50(report["cells"].get("D"), "start_lat")
+    e_k = p50(report["cells"].get("D"), "exec")
     c_user_m = float(c_u) if c_u is not None else 21.0
     c_kern_m = float(c_k) if c_k is not None else 21.0
     report["measured"] = {
-        "c_user_start_lat_p50_us": c_u,
+        "c_user_start_lat_avg_us": c_u,
         "c_kernel_start_lat_p50_us": c_k,
-        "exec_user_p50_us": e_u,
+        "exec_user_avg_us": e_u,
         "exec_kernel_p50_us": e_k,
         "stage_cost": stage_cost,
-        "note": "start_lat≈L_g；exec 按阶段均分，不是逐阶段剖析。经验值，不是 WCET。",
+        "note": ("Ĉ 用 stat_exec_stage_* 的 avg；内核无逐阶段探针，标 missing。"
+                 "经验值，不是 WCET。不得均分整组 exec。"),
     }
     refill = refill_stkp(
         os.path.join(user_dir, "task.teir.json"),

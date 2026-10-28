@@ -9,7 +9,7 @@
 层次：
   1. 静态合法性（TEIR allowed_domains、K-C0、版本边）
   2. 部署×融合联合枚举 + 安全剪枝
-  3. 独立验证；混合域只记 model_feasible，不可 deployment_ready
+  3. 独立验证；混合域默认可部署仅限 UKU ioctl 适配器（用户态—内核—用户态）
 
 A–F（candidate_generate）保留为论文对照基线，不驱动代码生成。
 """
@@ -26,11 +26,12 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 KF = os.path.abspath(os.path.join(HERE, ".."))
 DOMAINS = ("linux_userspace", "linux_kernel")
-# 证据等级：只有 measured 能作最终部署优劣结论
-EV_FINAL = frozenset(("measured", "cli_override", "empirical", "test"))
-EV_EXPLORE = frozenset(("estimated", "dag_exec", "shared_exec", "scalar"))
-EV_WEAK = frozenset(("placeholder",))
-EV_MISSING = frozenset(("missing",))
+sys.path.insert(0, os.path.join(HERE, "ecos"))
+import stage_cost as stage_cost_mod  # noqa: E402
+EV_FINAL = stage_cost_mod.EV_FINAL
+EV_EXPLORE = stage_cost_mod.EV_EXPLORE
+EV_WEAK = stage_cost_mod.EV_WEAK
+EV_MISSING = stage_cost_mod.EV_MISSING
 
 
 def load_json(path):
@@ -103,31 +104,53 @@ def node_map(teir):
     return {n["name"]: n for n in (teir.get("nodes") or [])}
 
 
-def slot_value(slot):
-    if slot is None:
-        return None, "missing"
-    if isinstance(slot, dict):
-        v = slot.get("value")
-        ev = slot.get("evidence") or ("missing" if v is None else "empirical")
-        if v is None:
-            return None, ev
-        return float(v), ev
-    return float(slot), "scalar"
+def slot_value(slot, from_override=False):
+    return stage_cost_mod.parse_cost_entry(slot, from_override=from_override)
 
 
 def stage_compute_cost(node, domain, override):
-    """缺测不得当 0。override 可补分域实测。"""
+    """缺测不得当 0。裸 CLI 覆盖是 cli_override，不是 measured。"""
     if override and domain in override and node["name"] in override[domain]:
-        v = override[domain][node["name"]]
-        if v is None:
-            return None, "missing"
-        return float(v), "cli_override"
+        return slot_value(override[domain][node["name"]], from_override=True)
     cbd = node.get("cost_us_by_domain") or {}
     if domain in cbd:
-        return slot_value(cbd[domain])
+        return slot_value(cbd[domain], from_override=False)
     if node.get("exec_us") is not None:
         return float(node["exec_us"]), "shared_exec"
     return None, "missing"
+
+
+def candidate_schedule(plan, teir, override, c_user, c_kernel):
+    """同一份分域 exec / 释放代价，供 Ĉ 与 DAG 窗口。"""
+    nodes = node_map(teir)
+    exec_us = {}
+    evidence = []
+    missing = []
+    release = []
+    for g in plan.get("groups") or []:
+        d = g.get("domain")
+        L = c_kernel if d == "linux_kernel" else c_user
+        release.append({
+            "group": g.get("id"),
+            "domain": d,
+            "L_us": float(L),
+            "phase_us": g.get("release_phase_us"),
+        })
+        for m in g.get("members") or []:
+            val, ev = stage_compute_cost(nodes.get(m) or {"name": m}, d,
+                                         override)
+            evidence.append("%s@%s:%s" % (m, d, ev))
+            if val is None:
+                missing.append("%s@%s" % (m, d))
+            else:
+                exec_us[m] = val
+    return {
+        "exec_us": exec_us,
+        "release": release,
+        "evidence": evidence,
+        "missing": missing,
+        "complete": not missing,
+    }
 
 
 def batched_handoffs(order, named_groups, domains, teir):
@@ -162,6 +185,27 @@ def plan_platform(domains):
     return "mixed"
 
 
+def collapsed_domains(groups):
+    seq = []
+    for g in groups or []:
+        d = g.get("domain")
+        if d and (not seq or seq[-1] != d):
+            seq.append(d)
+    return seq
+
+
+def mixed_adapter_kind(groups):
+    """PR-5B：只承认一种可部署混合形态。
+
+    用户态采样 → 内核纯计算 → 用户态收回。交接走 ioctl 邮箱，不是 IVSHMEM。
+    其它混合（UK、KU、KUK…）仍只记 model_feasible。
+    """
+    seq = collapsed_domains(groups)
+    if seq == ["linux_userspace", "linux_kernel", "linux_userspace"]:
+        return "uku_ioctl"
+    return None
+
+
 def group_release_phase(members, nodes):
     phs = []
     for m in members:
@@ -186,6 +230,8 @@ def build_plan(order, named_groups, domains, nodes=None):
             stage_dom[m] = d
     plat = plan_platform(domains)
     fused = len(groups) == 1
+    adapter = mixed_adapter_kind(groups) if plat == "mixed" else None
+    ready = plat in ("linux_userspace", "linux_kernel") or adapter == "uku_ioctl"
     return {
         "version": 2,
         "meta": {
@@ -193,7 +239,8 @@ def build_plan(order, named_groups, domains, nodes=None):
             "fusion": fused,
             "generator": "stkp_v1",
             "model_feasible": True,
-            "deployment_ready": plat in ("linux_userspace", "linux_kernel"),
+            "deployment_ready": ready,
+            "xdom_adapter": adapter,
         },
         "order": list(order),
         "groups": groups,
@@ -223,45 +270,26 @@ def af_label(plan):
 
 def evaluate_cost(plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
                   override, deadline_us):
-    nodes = node_map(teir)
-    groups = plan.get("groups") or []
-    compute = 0.0
-    evidence = []
-    missing = []
-    for g in groups:
-        d = g.get("domain")
-        for m in g.get("members") or []:
-            val, ev = stage_compute_cost(nodes.get(m) or {"name": m}, d,
-                                         override)
-            evidence.append("%s@%s:%s" % (m, d, ev))
-            if val is None:
-                missing.append("%s@%s" % (m, d))
-            else:
-                compute += val
-    release = 0.0
-    has_k = False
-    for g in groups:
-        d = g.get("domain")
-        if d == "linux_kernel":
-            release += c_kernel
-            has_k = True
-        else:
-            release += c_user
-    named = [g["members"] for g in groups]
-    domains = [g["domain"] for g in groups]
+    sched = candidate_schedule(plan, teir, override, c_user, c_kernel)
+    evidence = list(sched["evidence"])
+    missing = list(sched["missing"])
+    compute = sum(sched["exec_us"].values()) if sched["complete"] else None
+    release = sum(r["L_us"] for r in sched["release"])
+    has_k = any(r["domain"] == "linux_kernel" for r in sched["release"])
+    named = [g["members"] for g in (plan.get("groups") or [])]
+    domains = [g["domain"] for g in (plan.get("groups") or [])]
     channels = batched_handoffs(plan.get("order") or [], named, domains, teir)
     h_total = len(channels) * handoff_us
     sync = extra_kernel if has_k else 0.0
-    kinds = []
-    for item in evidence:
-        kinds.append(item.rsplit(":", 1)[-1])
+    kinds = [item.rsplit(":", 1)[-1] for item in evidence]
     has_missing = bool(missing) or any(k in EV_MISSING for k in kinds)
     has_ph = any(k in EV_WEAK for k in kinds)
     comparable = not has_missing
     final_rankable = comparable and (not has_ph) and all(
         k in EV_FINAL for k in kinds)
     explore_rankable = comparable and (not has_ph)
-    pred = None if not comparable else round(compute + release + h_total + sync, 3)
+    pred = None if not comparable else round(
+        (compute or 0.0) + release + h_total + sync, 3)
     temporal_ok = True
     temporal_why = None
     if comparable and deadline_us is not None and pred is not None:
@@ -293,6 +321,7 @@ def evaluate_cost(plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
         "grade": grade,
         "temporal_ok": temporal_ok,
         "temporal_why": temporal_why,
+        "schedule": sched,
     }, channels
 
 
@@ -301,13 +330,22 @@ def load_dag_verifier():
                        "ecos_plan_verify")
 
 
-def dag_temporal_ok(plan, dag, contract, platforms, c_user, c_kernel, exec_us):
-    """整份方案的 DAG 时间契约（窗口前拉/推后），不只 R̂≤D。"""
+def dag_temporal_ok(plan, dag, contract, platforms, c_user, c_kernel, sched):
+    """窗口检查必须用与 Ĉ 同一份 CandidateSchedule.exec_us。"""
     if not dag:
         return True, []
     plat_name = (plan.get("meta") or {}).get("platform")
     if plat_name == "mixed":
         return True, []
+    if sched is not None and not sched.get("complete"):
+        # 缺测不得把 0 喂给 inst(m)；成本路径已标 incomparable
+        return True, []
+    exec_us = (sched or {}).get("exec_us") or {}
+    rel = (sched or {}).get("release") or []
+    if rel:
+        c = float(rel[0]["L_us"])
+    else:
+        c = c_kernel if plat_name == "linux_kernel" else c_user
     mod = load_dag_verifier()
     plats = []
     if platforms:
@@ -320,10 +358,9 @@ def dag_temporal_ok(plan, dag, contract, platforms, c_user, c_kernel, exec_us):
             "allow_mmio": plat_name != "linux_kernel",
             "allow_sleep": True,
         }]
-    c = c_kernel if plat_name == "linux_kernel" else c_user
     try:
         rep = mod.verify_plan(dag, plan, plats[0],
-                              release_cost_us=c, exec_us=exec_us or {},
+                              release_cost_us=c, exec_us=exec_us,
                               contract=contract)
     except Exception as exc:
         return False, [{"code": "DAG_VERIFY", "msg": str(exc)}]
@@ -369,10 +406,6 @@ def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
         raise SystemExit("阶段数 %d 超过 STKP v1 穷举上限 %d" % (n, max_stages))
     nodes = node_map(teir)
     deadline = (teir.get("task") or {}).get("deadline_us")
-    exec_us = {}
-    for n0 in teir.get("nodes") or []:
-        if n0.get("exec_us") is not None:
-            exec_us[n0["name"]] = float(n0["exec_us"])
     prune = {"domain": 0, "semantic": 0, "temporal": 0, "runtime": 0,
              "incomparable": 0}
     feasible, rejected = [], []
@@ -422,8 +455,15 @@ def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
                 "diagnostics": [],
                 "plan": plan,
                 "cost": cost,
+                "schedule": cost.get("schedule"),
                 "why": None,
             }
+            if cost.get("schedule"):
+                plan["schedule"] = {
+                    "exec_us": cost["schedule"].get("exec_us") or {},
+                    "release": cost["schedule"].get("release") or [],
+                    "complete": cost["schedule"].get("complete"),
+                }
             rec["id"] = af_label(plan) or ("STKP:%s" % "|".join(
                 "%s[%s]" % (d[0].upper(), "+".join(g))
                 for g, d in zip(named, domains)))
@@ -437,7 +477,8 @@ def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
                 continue
             if rec["deployment_ready"] and dag:
                 ok_d, derrs = dag_temporal_ok(
-                    plan, dag, contract, platforms, c_user, c_kernel, exec_us)
+                    plan, dag, contract, platforms, c_user, c_kernel,
+                    cost.get("schedule"))
                 if not ok_d:
                     prune["temporal"] += 1
                     rec["legal"] = False
@@ -451,7 +492,9 @@ def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
                     continue
             if not rec["deployment_ready"]:
                 prune["runtime"] += 1
-                rec["why"] = "混合域无跨用户态—内核交接适配器，不可部署"
+                rec["why"] = (
+                    "混合域仅 UKU ioctl（用户态—内核—用户态）可部署，"
+                    "当前形态无适配器")
             if not rec["comparable"]:
                 prune["incomparable"] += 1
                 rec["why"] = (rec["why"] or "") + (
@@ -724,7 +767,7 @@ def main():
     ap.add_argument("--c-kernel-us", type=float, default=21.0)
     ap.add_argument("--kernel-extra-us", type=float, default=0.0)
     ap.add_argument("--stage-cost", default=None,
-                    help="分域实测 {linux_userspace:{stage:us}, linux_kernel:{...}}")
+                    help="分域成本 {domain:{stage: number|{value,evidence,source_log}}}")
     ap.add_argument("--contract", default=None, help="时间契约 JSON（窗口/期限）")
     ap.add_argument("--max-stages", type=int, default=8)
     ap.add_argument("--oracle", action="store_true")

@@ -1,0 +1,32 @@
+{
+  "chosen": "B",
+  "claim": "empirical_model_not_wcet",
+  "domain": "linux_userspace",
+  "final_rankable": true,
+  "evidence": [
+    "stage_sample@linux_userspace:measured",
+    "stage_fir@linux_userspace:measured",
+    "stage_pid@linux_userspace:measured",
+    "stage_clamp@linux_userspace:measured",
+    "stage_plant@linux_userspace:measured"
+  ],
+  "schedule": {
+    "exec_us": {
+      "stage_sample": 0.378,
+      "stage_fir": 0.467,
+      "stage_pid": 0.302,
+      "stage_clamp": 0.302,
+      "stage_plant": 0.262
+    },
+    "release": [
+      {
+        "group": "g0",
+        "domain": "linux_userspace",
+        "L_us": 12.976,
+        "phase_us": 0.0
+      }
+    ],
+    "complete": true
+  },
+  "incomparable": 146
+}

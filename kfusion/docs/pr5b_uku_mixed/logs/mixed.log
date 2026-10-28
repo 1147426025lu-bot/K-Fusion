@@ -1,0 +1,16 @@
+
+# mode: mixed  cycles=200
+
+# probe: r/s/f v1.2
+# period_ns: 1000000
+# deadline_ns: 1000000
+# samples: 200
+# release_id: serial 0..199
+# series_us: start_lat exec response  (1us buckets, cap 199)
+# stat_response_us: min=62.712 avg=65.964 p50=65 p90=68 p99=77 p99.9=86 p99.99=86 max=86.186 over=0 neg=0 min_signed=62.712 n=200
+# stat_uku_handoff_us: min=0.148 avg=0.163 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.407 over=0 neg=0 min_signed=0.148 n=200
+# deadline_miss: 0/200
+# uku_seq_mismatch: 0/200
+# uku_ioctl_error: 0/200
+# digest: 4356494d
+# last_seq: 200 g_in=3403 g_out=6808

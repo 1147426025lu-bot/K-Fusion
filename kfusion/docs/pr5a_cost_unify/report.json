@@ -1,0 +1,43 @@
+{
+  "kind": "pr5a_cost_unify",
+  "claim": "empirical; not WCET; cli is not measured",
+  "source_log": "/root/K-Fusion/kfusion/docs/pr4c_bd_paired/logs/B_0.log",
+  "user_stages_avg_us": {
+    "stage_sample": 0.378,
+    "stage_fir": 0.467,
+    "stage_pid": 0.302,
+    "stage_clamp": 0.302,
+    "stage_plant": 0.262
+  },
+  "start_lat_avg_us": 12.976,
+  "kernel": "missing_per_stage",
+  "traced": {
+    "chosen": "B",
+    "claim": "empirical_model_not_wcet",
+    "domain": "linux_userspace",
+    "final_rankable": true
+  },
+  "forged_measured": {
+    "claim": "explore_uncertain",
+    "chosen": "D",
+    "final_rankable": false
+  },
+  "blown_fir_400us": {
+    "chosen": "B",
+    "claim": "empirical_model_not_wcet",
+    "schedule_exec_us": {
+      "stage_sample": 0.378,
+      "stage_fir": 400.0,
+      "stage_pid": 0.302,
+      "stage_clamp": 0.302,
+      "stage_plant": 0.262
+    },
+    "compute_us": 401.244,
+    "same_fir": true
+  },
+  "checks": {
+    "traced_is_measured_userspace": true,
+    "forged_not_final": true,
+    "schedule_matches_cost": true
+  }
+}

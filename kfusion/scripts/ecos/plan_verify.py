@@ -468,6 +468,10 @@ def main(argv=None):
     ap.add_argument("--platform", default="linux_kernel")
     ap.add_argument("--stamp-plan", action="store_true",
                     help="把 verification 写回 plan.json，供 emit.py 门禁")
+    ap.add_argument("--contract", default=None, help="时间契约 JSON")
+    ap.add_argument("--exec-us", default=None,
+                    help="阶段执行时间 JSON {stage:us}；缺省读 plan.schedule.exec_us")
+    ap.add_argument("--release-cost-us", type=float, default=None)
     ap.add_argument("-o", "--out", default=None)
     args = ap.parse_args(argv)
     dag = _load(args.dag)
@@ -479,7 +483,20 @@ def main(argv=None):
     if not plats:
         print("!! 没有平台", file=sys.stderr)
         return 2
-    rep = verify_plan(dag, plan, plats[0])
+    contract = _load(args.contract) if args.contract else None
+    sched = plan.get("schedule") or {}
+    if args.exec_us:
+        exec_us = _load(args.exec_us) if args.exec_us.endswith(".json") else json.loads(args.exec_us)
+    else:
+        exec_us = sched.get("exec_us") or None
+    if args.release_cost_us is not None:
+        c = args.release_cost_us
+    elif sched.get("release"):
+        c = float(sched["release"][0]["L_us"])
+    else:
+        c = 20.0
+    rep = verify_plan(dag, plan, plats[0], release_cost_us=c,
+                      exec_us=exec_us, contract=contract)
     rc = print_report(rep, plan)
     plan["verification"] = {
         "ok": bool(rep.get("ok")),

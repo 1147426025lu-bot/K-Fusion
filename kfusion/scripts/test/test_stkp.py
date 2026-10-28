@@ -62,6 +62,29 @@ class StkpV1(unittest.TestCase):
     def setUp(self):
         self.v = stkp.load_verifier()
 
+    def test_parse_stage_log_uses_avg_not_p50(self):
+        text = (
+            "# stat_exec_stage_fir_us: min=0.2 avg=0.609 p50=0 p90=1 p99=1 "
+            "p99.9=2 p99.99=39 max=39.0 over=0 neg=0 min_signed=0.2 n=2000\n"
+        )
+        p = stkp.stage_cost_mod.parse_user_stage_log(text, source_log="B.log")
+        self.assertEqual(p["stages"]["fir"]["value"], 0.609)
+        self.assertEqual(p["stages"]["fir"]["p50_us"], 0)
+        self.assertEqual(p["stages"]["fir"]["evidence"], "measured")
+        self.assertEqual(p["stages"]["fir"]["source_log"], "B.log")
+
+    def test_pin_teir_from_source(self):
+        sys.path.insert(0, os.path.join(KF, "scripts", "ecos"))
+        import pin_teir
+        with open(os.path.join(
+                KF, "examples", "ecos", "mixed_uku__无状态混合.c"),
+                encoding="utf-8") as fh:
+            src = fh.read()
+        pins = pin_teir.pins_from_source(src)
+        self.assertEqual(pins.get("stage_sample"), "linux_userspace")
+        self.assertEqual(pins.get("stage_sink"), "linux_userspace")
+        self.assertNotIn("stage_add", pins)
+
     def test_raw_space_five(self):
         self.assertEqual(stkp.raw_space_size(5), 162)
         self.assertEqual(stkp.raw_space_size(8), 4374)
@@ -88,20 +111,22 @@ class StkpV1(unittest.TestCase):
         self.assertEqual(doc["chosen"], "B")
 
     def test_mmio_prunes_kernel_and_mixed_not_deployable(self):
+        """UK（无收回段）不是 UKU，混合仍不可部署。"""
         teir = chain_teir(
-            ["sample", "fir", "pid"],
-            kernelizable={"sample": False, "fir": True, "pid": True})
+            ["sample", "fir"],
+            kernelizable={"sample": False, "fir": True})
         doc = stkp.solve(teir, self.v, c_user=21, c_kernel=1, extra_kernel=0,
                          handoff_us=3.0)
         self.assertGreater(doc["pruned"]["domain"], 0)
         self.assertEqual(doc["chosen_record"]["domain"], "linux_userspace")
         self.assertTrue(doc["chosen_record"]["deployment_ready"])
-        mixed = doc.get("model_only") or []
-        self.assertTrue(any(not r["deployment_ready"] for r in mixed) or
-                        doc["n_model_feasible"] >= doc["n_deployment_ready"])
+        mixed = [c for c in (doc.get("candidates") or []) + (doc.get("model_only") or [])
+                 if c.get("domain") == "mixed"]
         for r in mixed:
             self.assertFalse(r["deployment_ready"])
-            self.assertEqual(r["domain"], "mixed")
+            self.assertNotEqual(
+                (r.get("plan") or {}).get("meta", {}).get("xdom_adapter"),
+                "uku_ioctl")
 
     def test_missing_cost_not_zero_winner(self):
         teir = chain_teir(["a", "b"])
@@ -116,26 +141,30 @@ class StkpV1(unittest.TestCase):
         self.assertTrue(all(not (c.get("cost") or {}).get("final_rankable")
                             for c in kern))
 
-    def test_partial_kernel_cheaper_in_model_not_deployed(self):
-        """FIR+PID 进内核更便宜，但无 xdom → 仍部署全用户态。"""
+    def test_uku_mixed_is_deployable_when_cheaper(self):
+        """采样/执行器留用户态，中间计算进内核：UKU ioctl 可部署。"""
         names = ["sample", "fir", "pid", "clamp", "plant"]
         teir = chain_teir(names, kernelizable={
             "sample": False, "fir": True, "pid": True,
             "clamp": True, "plant": False,
         })
         override = {
-            "linux_userspace": {n: 10.0 for n in names},
+            "linux_userspace": {
+                "sample": 1.0, "fir": 40.0, "pid": 40.0,
+                "clamp": 40.0, "plant": 1.0,
+            },
             "linux_kernel": {n: 1.0 for n in names},
         }
         doc = stkp.solve(teir, self.v, c_user=21, c_kernel=5, extra_kernel=0,
                          handoff_us=1.0, override=override)
-        self.assertEqual(doc["chosen_record"]["domain"], "linux_userspace")
-        bm = doc.get("best_model")
-        self.assertIsNotNone(bm)
-        if bm["domain"] == "mixed":
-            self.assertFalse(bm["deployment_ready"])
-            self.assertLess(bm["cost"]["total_us"],
-                            doc["chosen_record"]["cost"]["total_us"])
+        rec = doc["chosen_record"]
+        self.assertEqual(rec["domain"], "mixed")
+        self.assertTrue(rec["deployment_ready"])
+        self.assertEqual(rec["plan"]["meta"].get("xdom_adapter"), "uku_ioctl")
+        groups = rec["plan"]["groups"]
+        seq = stkp.collapsed_domains(groups)
+        self.assertEqual(seq, ["linux_userspace", "linux_kernel",
+                               "linux_userspace"])
 
     def test_deadline_prunes(self):
         teir = chain_teir(["a", "b"], exec_us=400.0)
@@ -199,6 +228,88 @@ class StkpV1(unittest.TestCase):
         self.assertEqual(rec["domain"], "linux_userspace")
         plant_group = [g for g in rec["plan"]["groups"] if "plant" in g["members"]][0]
         self.assertEqual(plant_group["members"][0], "plant")  # 未与 sample 全融合
+
+    def test_cli_override_is_not_measured(self):
+        names = ["s", "f", "p"]
+        teir = chain_teir(names)
+        bare = {
+            "linux_userspace": {n: 1.0 for n in names},
+            "linux_kernel": {n: 0.1 for n in names},
+        }
+        doc = stkp.solve(teir, self.v, c_user=21, c_kernel=10, override=bare)
+        self.assertEqual(doc.get("claim"), "explore_uncertain")
+        rec = doc["chosen_record"]
+        self.assertFalse((rec.get("cost") or {}).get("final_rankable"))
+        self.assertTrue((rec.get("cost") or {}).get("explore_rankable"))
+
+    def test_forged_measured_downgraded(self):
+        names = ["s", "f", "p"]
+        teir = chain_teir(names)
+        fake = {n: {"value": 0.1, "evidence": "measured"} for n in names}
+        doc = stkp.solve(teir, self.v, c_user=21, c_kernel=5, override={
+            "linux_userspace": fake, "linux_kernel": fake,
+        })
+        self.assertNotEqual(doc.get("claim"), "empirical_model_not_wcet")
+        kinds = (doc["chosen_record"].get("cost") or {}).get("evidence") or []
+        self.assertTrue(any(k.endswith("cli_override") for k in kinds))
+
+    def test_measured_with_source_log_is_final(self):
+        names = ["s", "f", "p"]
+        teir = chain_teir(names)
+        slot = {"value": 1.0, "evidence": "measured",
+                "source_log": "/tmp/B.log", "statistic": "avg", "samples": 2000}
+        kslot = dict(slot)
+        kslot["value"] = 0.2
+        ov = {
+            "linux_userspace": {n: dict(slot) for n in names},
+            "linux_kernel": {n: dict(kslot) for n in names},
+        }
+        doc = stkp.solve(teir, self.v, c_user=21, c_kernel=10, override=ov)
+        self.assertEqual(doc.get("claim"), "empirical_model_not_wcet")
+        self.assertTrue(doc["chosen_record"]["cost"]["final_rankable"])
+        self.assertEqual(doc["chosen"], "D")
+
+    def test_dag_window_uses_same_override_exec(self):
+        """teir exec 使融合越窗；覆盖大 exec 后窗口必须用同一份数据放行 B。"""
+        names = ["sample", "fir", "plant"]
+        phases = [0.0, 10.0, 20.0]
+        teir = chain_teir(names, exec_us=1.0)
+        for n, ph in zip(teir["nodes"], phases):
+            n["phase_us"] = ph
+        dag = {
+            "nodes": [{
+                "name": n, "effects": ["state_read"], "contexts": ["thread"],
+                "phase_us": ph, "fns": [n],
+            } for n, ph in zip(names, phases)],
+            "edges": [{"from": a, "to": b, "kind": "data"}
+                      for a, b in zip(names, names[1:])],
+            "topo_order": names, "topo_order_delayed": names,
+            "phase": {"offsets": dict(zip(names, phases)), "period_us": 1000},
+            "meta": {"task": {"period_us": 1000, "deadline_us": 1000}},
+            "recurrences": [], "algebraic_loops": [], "candidates": [],
+        }
+        contract = {
+            "task": {"period_us": 1000, "deadline_us": 1000},
+            "timing_constraints": {
+                "actuator": {"stage": "plant", "earliest_us": 50,
+                             "latest_us": 1000},
+            },
+            "evidence": {"exec": "empirical"},
+        }
+        # teir exec=1：融合 inst(plant)≈23 早于 50，只能 A
+        small = stkp.solve(teir, self.v, c_user=21, c_kernel=21,
+                           dag=dag, contract=contract)
+        self.assertEqual(small["chosen"], "A")
+        ov = {
+            "linux_userspace": {n: 25.0 for n in names},
+            "linux_kernel": {n: 25.0 for n in names},
+        }
+        # 同一份覆盖让融合 inst(plant)≈71 进窗；若 DAG 仍用 teir exec 会继续拒 B
+        big = stkp.solve(teir, self.v, c_user=21, c_kernel=21,
+                         dag=dag, contract=contract, override=ov)
+        self.assertEqual(big["chosen"], "B")
+        sched = (big["chosen_record"].get("plan") or {}).get("schedule") or {}
+        self.assertEqual(sched.get("exec_us", {}).get("plant"), 25.0)
 
     def test_pipeline_does_not_die_on_fusion_plan(self):
         sh = os.path.join(KF, "scripts", "ecos_from_c__从C编译.sh")

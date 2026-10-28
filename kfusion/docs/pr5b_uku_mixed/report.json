@@ -1,0 +1,88 @@
+{
+  "kind": "pr5b_uku_mixed",
+  "claim": "empirical UKU ioctl; not WCET; not IVSHMEM",
+  "host": "Linux version 5.15.86 (builder@e3665d6e1a6c) (aarch64-linux-gnu-gcc (Debian 10.2.1-6) 10.2.1 20210110, GNU ld (GNU Binutils for Debian) 2.35.2) #1 SMP PREEMPT Wed Oct 14 10:16:11 UTC 2026",
+  "controls": {
+    "cpu": "0",
+    "fifo": 80,
+    "cycles": 200,
+    "period_us": 1000
+  },
+  "stkp": {
+    "chosen": "STKP:L[stage_sample]|L[stage_add+stage_shift]|L[stage_sink]",
+    "domain": "mixed",
+    "adapter": "uku_ioctl",
+    "groups": [
+      [
+        "stage_sample"
+      ],
+      [
+        "stage_add",
+        "stage_shift"
+      ],
+      [
+        "stage_sink"
+      ]
+    ],
+    "domains": [
+      "linux_userspace",
+      "linux_kernel",
+      "linux_userspace"
+    ],
+    "claim": "explore_uncertain",
+    "cost_us": 58.0
+  },
+  "gold": {
+    "digest": "4356494d",
+    "last_seq": 200,
+    "g_in": 3403,
+    "g_out": 6808,
+    "response": {
+      "p50_us": 63,
+      "min_us": 22.498,
+      "max_us": 154.176
+    },
+    "miss": 0
+  },
+  "mixed": {
+    "digest": "4356494d",
+    "last_seq": 200,
+    "g_in": 3403,
+    "g_out": 6808,
+    "seq_mismatch": 0,
+    "ioctl_error": 0,
+    "response": {
+      "p50_us": 65,
+      "min_us": 62.712,
+      "max_us": 86.186
+    },
+    "handoff": {
+      "min_us": 0.148,
+      "avg_us": 0.163,
+      "max_us": 0.407
+    },
+    "miss": 0
+  },
+  "interface": {
+    "adapter": "uku_ioctl",
+    "kernel_stages": [
+      "stage_add",
+      "stage_shift"
+    ],
+    "copy_in": [
+      "g_in",
+      "g_mid"
+    ],
+    "copy_out": [
+      "g_mid",
+      "g_out"
+    ],
+    "device": "/dev/kfusion_uku"
+  },
+  "checks": {
+    "stkp_uku": true,
+    "digest_match": true,
+    "seq_ok": true,
+    "same_final": true
+  }
+}

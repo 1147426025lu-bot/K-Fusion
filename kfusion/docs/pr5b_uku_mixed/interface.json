@@ -1,0 +1,16 @@
+{
+  "adapter": "uku_ioctl",
+  "kernel_stages": [
+    "stage_add",
+    "stage_shift"
+  ],
+  "copy_in": [
+    "g_in",
+    "g_mid"
+  ],
+  "copy_out": [
+    "g_mid",
+    "g_out"
+  ],
+  "device": "/dev/kfusion_uku"
+}

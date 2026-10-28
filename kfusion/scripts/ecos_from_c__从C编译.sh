@@ -91,6 +91,7 @@ step "6b) TEIR（状态版本 + 时间事件 + 允许域）"
   --stages "$OUT/stages.json" \
   --platforms "$CAPS" \
   -o "$OUT/task.teir.json" || die "TEIR 失败" 7
+"$PY" "$KF/scripts/ecos/pin_teir.py" "$OUT/task.teir.json" "$SRC" || die "pin TEIR 失败" 7
 
 step "7) 单域融合规划（对照报告；失败不阻断 STKP）"
 if "$PY" "$KF/scripts/fusion_plan__融合规划.py" "$OUT/task.dag.json" \
@@ -140,8 +141,9 @@ echo "  STKP 入选 $CHOSEN  域 $DOMAIN"
 if [ -z "$CHOSEN" ]; then
   die "无入选候选" 8
 fi
-if [ "$DOMAIN" = "mixed" ]; then
-  die "混合部署尚未打通跨域数据交接，拒绝标记为可部署（选型 $CHOSEN）" 8
+ADAPTER="$("$PY" -c "import json; print((json.load(open('$OUT/stkp.json')).get('chosen_record') or {}).get('plan',{}).get('meta',{}).get('xdom_adapter') or '')")"
+if [ "$DOMAIN" = "mixed" ] && [ "$ADAPTER" != "uku_ioctl" ]; then
+  die "混合形态 $CHOSEN 无 UKU ioctl 适配器，拒绝部署" 8
 fi
 cp "$OUT/chosen.plan.json" "$OUT/plan.json"
 
@@ -151,10 +153,20 @@ step "7b) 独立验证器（验证入选方案，不调用规划器）"
   -o "$OUT/verify.json" || die "TEIR 验证器拒绝入选方案" 8
 
 step "7b2) DAG 全局验证器（写回 verification，供 emit 门禁）"
-"$PY" "$KF/scripts/ecos/plan_verify.py" \
-  --dag "$OUT/task.dag.json" --plan "$OUT/plan.json" \
-  --platforms "$CAPS" --platform "$DOMAIN" \
-  --stamp-plan -o "$OUT/verify_dag.json" || die "DAG 验证器拒绝入选方案" 8
+DAG_PLAT="$DOMAIN"
+if [ "$DOMAIN" = "mixed" ]; then
+  DAG_PLAT=linux_userspace
+fi
+DAG_V=(
+  --dag "$OUT/task.dag.json" --plan "$OUT/plan.json"
+  --platforms "$CAPS" --platform "$DAG_PLAT"
+  --stamp-plan -o "$OUT/verify_dag.json"
+)
+if [ -n "${TIME_CONTRACT:-}" ] && [ -f "${TIME_CONTRACT}" ]; then
+  DAG_V+=(--contract "$TIME_CONTRACT")
+fi
+"$PY" "$KF/scripts/ecos/plan_verify.py" "${DAG_V[@]}" \
+  || die "DAG 验证器拒绝入选方案" 8
 
 "$PY" - "$OUT/stkp.json" "$OUT/deploy.json" <<'PY'
 import json, sys
@@ -166,7 +178,9 @@ doc = {
     "fused": rec.get("fused"),
     "cost_us": (rec.get("cost") or {}).get("total_us"),
     "why": rec.get("why"),
-    "deployable": rec.get("domain") in ("linux_userspace", "linux_kernel"),
+    "adapter": (rec.get("plan") or {}).get("meta", {}).get("xdom_adapter"),
+    "deployable": rec.get("domain") in ("linux_userspace", "linux_kernel")
+        or (rec.get("plan") or {}).get("meta", {}).get("xdom_adapter") == "uku_ioctl",
 }
 json.dump(doc, open(sys.argv[2], "w"), ensure_ascii=False, indent=2)
 print("  deploy.json chosen=%s domain=%s" % (doc["chosen"], doc["domain"]))
@@ -205,6 +219,15 @@ PY
 )"
 
 step "8) 生成用户态驱动（#include 原计算体，不复制）"
+if [ "$DOMAIN" = "mixed" ]; then
+  "$PY" "$KF/scripts/mixed_uku_codegen__混合交接.py" \
+    --plan "$OUT/plan.json" --teir "$OUT/task.teir.json" \
+    --source "$STAGE_SRC" --out-dir "$OUT/kmod_uku" \
+    --probe-header "$PROBE" --period-us "$PERIOD" --cycles "$CYCLES" \
+    "${CALLS[@]}" "${DIGEST[@]}" || die "UKU codegen 失败" 9
+  cp "$OUT/kmod_uku/driver.c" "$OUT/driver.c"
+  cp "$OUT/kmod_uku/kfusion_uku.h" "$OUT/kfusion_uku.h"
+else
 "$PY" "$KF/scripts/fusion_codegen__生成融合代码.py" "$OUT/plan.json" \
   -o "$OUT/driver.c" \
   --stage-source "$STAGE_SRC" \
@@ -213,6 +236,7 @@ step "8) 生成用户态驱动（#include 原计算体，不复制）"
   --cycles "$CYCLES" \
   --expect-order "$EXPECT" \
   "${CALLS[@]}" "${DIGEST[@]}" || die "codegen 失败" 9
+fi
 
 EMIT_DIGEST=()
 eval "$("$PY" - "$OUT/stages.json" <<'PY'
@@ -224,6 +248,7 @@ for g in d.get("globals") or []:
 PY
 )"
 
+KDIR="${KERNELDIR:-/root/linux-5.15.86}"
 if [ "$DOMAIN" = "linux_kernel" ]; then
   step "8b) hrtimer 内核宿主（入选域=linux_kernel）"
   "$PY" "$KF/backend/synthesis/emit.py" \
@@ -234,16 +259,23 @@ if [ "$DOMAIN" = "linux_kernel" ]; then
     --name five_stage_loop \
     "${CALLS[@]}" "${EMIT_DIGEST[@]}" || die "emit linux-kernel 失败" 9
   cp "$STAGE_SRC" "$OUT/kmod_hrtimer/stage_impl.c"
-  KDIR="${KERNELDIR:-/root/linux-5.15.86}"
   if [ "${SKIP_KMOD:-0}" != "1" ] && [ -d "$KDIR" ]; then
     make -C "$KDIR" M="$OUT/kmod_hrtimer" modules || echo "⚠ 内核模块构建失败（源码仍保留）"
   else
     echo "跳过 .ko 构建（无 KERNELDIR 或 SKIP_KMOD=1）"
   fi
+elif [ "$DOMAIN" = "mixed" ]; then
+  step "8b) UKU ioctl 内核计算模块"
+  rm -rf "$OUT/kmod_hrtimer"
+  if [ "${SKIP_KMOD:-0}" != "1" ] && [ -d "$KDIR" ]; then
+    make -C "$KDIR" M="$OUT/kmod_uku" modules || echo "⚠ UKU 模块构建失败（源码仍保留）"
+  else
+    echo "跳过 UKU .ko（无 KERNELDIR 或 SKIP_KMOD=1）"
+  fi
 else
   step "8b) 入选用户态：不生成内核部署产物"
-  rm -rf "$OUT/kmod_hrtimer"
-  echo "  skip kmod_hrtimer（chosen=$CHOSEN domain=$DOMAIN）"
+  rm -rf "$OUT/kmod_hrtimer" "$OUT/kmod_uku"
+  echo "  skip kmod（chosen=$CHOSEN domain=$DOMAIN）"
 fi
 
 if [ -n "${TIME_CONTRACT:-}" ] && [ -f "${TIME_CONTRACT}" ] && [ -f "$OUT/let.json" ]; then
@@ -274,6 +306,12 @@ PY
 fi
 
 if [ "${SKIP_HOST:-0}" != "1" ]; then
+  if [ "$DOMAIN" = "mixed" ]; then
+    step "9) UKU 用户态驱动（gold；mixed 需 insmod 后跑）"
+    gcc -O2 -std=gnu11 -Wall -Werror -I"$KF/include" -I"$OUT" -I"$OUT/kmod_uku" \
+      "$OUT/driver.c" -o "$OUT/driver" -lrt || die "gcc 失败" 10
+    "$OUT/driver" gold "$CYCLES" | tee "$OUT/driver.gold.log"
+  else
   step "9) 宿主编译并短跑 plan/flat（digest 必须相同）"
   gcc -O2 -std=gnu11 -Wall -Werror -I"$KF/include" \
     "$OUT/driver.c" -o "$OUT/driver" -lrt || die "gcc 失败" 10
@@ -293,6 +331,7 @@ if digs[0] != digs[1]:
     sys.exit(12)
 print("digest match:", digs[0])
 PY
+  fi
 else
   echo "跳过宿主编译（SKIP_HOST=1）"
 fi
@@ -314,6 +353,8 @@ fi
 echo "   用户态 $OUT/driver.c"
 if [ "$DOMAIN" = "linux_kernel" ]; then
   echo "   kmod   $OUT/kmod_hrtimer/"
+elif [ "$DOMAIN" = "mixed" ]; then
+  echo "   UKU    $OUT/kmod_uku/  adapter=$ADAPTER"
 else
   echo "   kmod   （未生成：入选用户态）"
 fi
