@@ -99,6 +99,10 @@ class Gate1Local(unittest.TestCase):
         self.assertEqual(dag["phase"]["offsets"]["stage_clamp"], 15.0)
         plan = _read_json(os.path.join(self.out, "plan.json"))
         self.assertTrue(plan["verification"]["ok"], "plan 必须带真实验证凭据")
+        self.assertEqual(plan["meta"].get("generator"), "candidate_generate A/B/C/D")
+        cand = _read_json(os.path.join(self.out, "candidates.json"))
+        self.assertEqual(cand["chosen"], "B")
+        self.assertEqual(plan["meta"].get("platform"), "linux_userspace")
 
         # Gate 2：数据依赖边应来自 IR use-def（不再按调用序近似）
         dag_edges = dag["edges"]
@@ -126,14 +130,19 @@ class Gate1Local(unittest.TestCase):
         self.assertEqual(byname_t["stage_pid"]["writes"], ["g_integral", "g_output"])
 
     def test_full_chain_emits_source(self):
-        # 1) ast_to_plan
+        # 默认同分不强制内核化：入选 B。压低 c_kernel 才生成可部署内核源。
         rc = _run_main(ast_to_plan, [
             "ast_to_plan.py", self.extract_p, "--period-us", "1000",
             "--exec-us", '{"stage_sample":10,"stage_pid":5,"stage_clamp":3}',
             "--task-name", "demo", "--out-dir", self.out,
+            "--c-user-us", "21", "--c-kernel-us", "1",
         ])
         self.assertEqual(rc, 0)
-        # 2) emit linux-kernel
+        cand = _read_json(os.path.join(self.out, "candidates.json"))
+        self.assertEqual(cand["chosen"], "D")
+        self.assertEqual(
+            _read_json(os.path.join(self.out, "plan.json"))["meta"]["platform"],
+            "linux_kernel")
         gen = os.path.join(self.d, "gen")
         rc2 = _run_main(emit_mod, [
             "emit.py",
@@ -143,7 +152,7 @@ class Gate1Local(unittest.TestCase):
             "--source", self.src_p,
             "--out-dir", gen, "--target", "linux-kernel", "--name", "demo",
         ])
-        self.assertEqual(rc2, 0, "emit.py 应能从自动构造的 plan 生成源码")
+        self.assertEqual(rc2, 0, "emit.py 应能从入选内核方案生成源码")
         for fn in ("ecos_fused_body.c", "ecos_fused_body.h",
                    "ecos_fused_linux.c", "Kbuild"):
             self.assertTrue(os.path.exists(os.path.join(gen, fn)),

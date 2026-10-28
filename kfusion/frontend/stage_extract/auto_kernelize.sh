@@ -57,12 +57,24 @@ if [ -n "$EXEC_US" ]; then
 fi
 python3 "$HERE/ast_to_plan.py" "$OUT/extract.json" --period-us "$PERIOD" --out-dir "$OUT" $EXEC_ARG
 
-# 4) 生成源码
-echo "== [4/4] 生成 $TARGET 源码 =="
-python3 "$KF/backend/synthesis/emit.py" \
-	--plan "$OUT/plan.json" --dag "$OUT/dag.json" \
-	--contract "$OUT/contract.json" --source "$SRC" \
-	--out-dir "$OUT/gen" --target "$TARGET"
+DOMAIN=$(python3 -c "import json; print((json.load(open('$OUT/candidates.json')).get('chosen_record') or {}).get('domain') or '')")
+CHOSEN=$(python3 -c "import json; print(json.load(open('$OUT/candidates.json')).get('chosen') or '')")
+echo "  入选 $CHOSEN  域 $DOMAIN"
+
+# 4) 生成源码：内核宿主只在入选 linux_kernel 时写出
+if [ "$DOMAIN" = "linux_kernel" ]; then
+	echo "== [4/4] 入选内核域，生成 $TARGET 源码 =="
+	python3 "$KF/backend/synthesis/emit.py" \
+		--plan "$OUT/plan.json" --dag "$OUT/dag.json" \
+		--contract "$OUT/contract.json" --source "$SRC" \
+		--out-dir "$OUT/gen" --target "$TARGET"
+else
+	echo "== [4/4] 入选 $DOMAIN，不生成内核部署产物 =="
+	rm -rf "$OUT/gen"
+	mkdir -p "$OUT/gen"
+	echo "skip linux-kernel emit (chosen=$CHOSEN domain=$DOMAIN)" > "$OUT/gen/SKIPPED"
+fi
 
 echo ""
-echo "== 完成：中间产物 $OUT/{extract.json,dag.json,contract.json,plan.json}，源码在 $OUT/gen =="
+echo "== 完成：中间产物 $OUT/{extract.json,dag.json,contract.json,chosen.plan.json,plan.json} =="
+echo "   选型 $CHOSEN / $DOMAIN；内核源码仅在 domain=linux_kernel 时出现在 $OUT/gen"

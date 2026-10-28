@@ -90,6 +90,18 @@ else
     else
       bad "生成物里看不到原阶段"
     fi
+    if "$PY" - "$TMP/pipe/chosen.plan.json" "$TMP/pipe/plan.json" <<'PY'
+import json, sys
+c, p = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
+assert c.get("groups") == p.get("groups")
+assert (c.get("meta") or {}).get("platform") == (p.get("meta") or {}).get("platform")
+assert (p.get("meta") or {}).get("generator") == "candidate_generate A/B/C/D"
+PY
+    then
+      ok "plan.json 就是入选方案（不是 fusion_plan 对照）"
+    else
+      bad "plan.json 与 chosen.plan 不一致"
+    fi
     DEP=$("$PY" -c "import json; print(json.load(open('$TMP/pipe/deploy.json'))['domain'])")
     if [ "$DEP" = "linux_userspace" ] && [ ! -f "$TMP/pipe/kmod_hrtimer/Kbuild" ]; then
       ok "默认成本选用户态，未写出内核部署产物"

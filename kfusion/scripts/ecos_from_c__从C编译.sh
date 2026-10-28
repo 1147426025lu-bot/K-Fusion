@@ -67,9 +67,17 @@ step "4) 摘要 + 自动骨架 → 契约"
   --skeleton "$OUT/stages.json" \
   --out "$OUT/task.contract.json" || die "契约合成失败" 5
 
-step "5) 契约门禁（$PLATFORM）"
+step "5) 契约门禁（linux_userspace 为底线；内核是否可行交给选型）"
 "$PY" "$KF/scripts/contract_check__契约校验.py" "$OUT/task.contract.json" \
-  --platforms "$CAPS" --platform "$PLATFORM" || die "契约拒绝 $PLATFORM" 6
+  --platforms "$CAPS" --platform linux_userspace || die "契约拒绝 linux_userspace" 6
+if [ "$PLATFORM" = "linux_kernel" ]; then
+  if "$PY" "$KF/scripts/contract_check__契约校验.py" "$OUT/task.contract.json" \
+       --platforms "$CAPS" --platform linux_kernel; then
+    echo "  内核域契约可通过（是否部署仍由 A/B/C/D 决定）"
+  else
+    echo "  ⚠ 内核域契约未过：C/D 将非法，选型只能留用户态"
+  fi
+fi
 
 step "6) DAG（数据边来自 IR，相位来自骨架）"
 "$PY" "$KF/scripts/dag_build__任务DAG生成.py" "$OUT/effect_summary.json" \

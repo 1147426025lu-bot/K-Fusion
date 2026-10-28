@@ -8,8 +8,8 @@ Gate 1 的「自动生成」环节：用户不再手写 DAG，而是由编译器
 输出：
   · dag.json      —— 阶段节点 + 相位 + 执行序（供规划器与 emit 使用）
   · contract.json —— 最小时间契约（task.period_us/deadline_us）
-  · plan.json     —— **由现有规划器 fusion_plan__融合规划.py 生成并签署**，
-                     其 verification.ok 来自独立验证器 plan_verify（不是本脚本伪造）
+  · plan.json     —— **由 A/B/C/D 入选方案 chosen.plan 签署后写出**；
+                     fusion_plan 只写 plan.planner.json 作对照，不驱动生成
 
 诚实边界（v1）：
   · 执行时间若未给 --exec-us，按 --default-exec-us 占位（默认 10 µs），并标记为
@@ -36,6 +36,7 @@ import sys
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(_HERE)))  # .../kfusion/frontend/stage_extract -> repo
 _PLANNER = os.path.join(_REPO, "kfusion", "scripts", "fusion_plan__融合规划.py")
+_CAND = os.path.join(_REPO, "kfusion", "scripts", "ecos", "candidate_generate.py")
 _CAPS = os.path.join(_REPO, "kfusion", "contracts", "examples", "platform_caps.json")
 _TEIR_MOD = os.path.join(_REPO, "kfusion", "ir", "temporal_effect_ir.py")
 _VER_MOD = os.path.join(_REPO, "kfusion", "ir", "version_deps.py")
@@ -270,6 +271,9 @@ def main():
     ap.add_argument("--planner", default=_PLANNER)
     ap.add_argument("--platforms", default=_CAPS)
     ap.add_argument("--release-cost-us", type=float, default=20.0)
+    ap.add_argument("--c-user-us", type=float, default=21.0)
+    ap.add_argument("--c-kernel-us", type=float, default=21.0)
+    ap.add_argument("--kernel-extra-us", type=float, default=0.0)
     a = ap.parse_args()
 
     if a.period_us is None or a.period_us <= 0:
@@ -303,6 +307,9 @@ def main():
     dag_p = os.path.join(a.out_dir, "dag.json")
     contract = {"task": {"period_us": a.period_us, "deadline_us": deadline}}
     contract_p = os.path.join(a.out_dir, "contract.json")
+    planner_p = os.path.join(a.out_dir, "plan.planner.json")
+    chosen_p = os.path.join(a.out_dir, "chosen.plan.json")
+    cand_p = os.path.join(a.out_dir, "candidates.json")
     plan_p = os.path.join(a.out_dir, "plan.json")
     _write(dag_p, dag)
     _write(contract_p, contract)
@@ -331,25 +338,49 @@ def main():
            "--platforms", a.platforms, "--platform", a.domain,
            "--exec-us", json.dumps(ex, ensure_ascii=False),
            "--release-cost-us", str(a.release_cost_us),
-           "-o", plan_p, "--quiet"]
-    print("== 调用规划器 ==", file=sys.stderr)
+           "-o", planner_p, "--quiet"]
+    print("== 调用规划器（对照基线，不驱动生成） ==", file=sys.stderr)
     rc = subprocess.call(cmd)
     if rc != 0:
-        print("ast_to_plan: 规划器返回 %d（多半是该部署不可行/被验证器拒绝，见上）" % rc,
+        print("ast_to_plan: 规划器返回 %d（对照失败可忽略，选型仍进行）" % rc,
               file=sys.stderr)
-        return rc
-    if not os.path.isfile(plan_p):
-        raise SystemExit("ast_to_plan: 规划器没有产出 plan.json")
 
-    # 本机 fusion_plan 不写 verification；用 temporal PlanVerifier 签署（不调用规划器）
+    if not os.path.isfile(_CAND):
+        raise SystemExit("ast_to_plan: 找不到 candidate_generate.py")
+    print("== A/B/C/D 选型（入选方案写入 plan.json） ==", file=sys.stderr)
+    rc_c = subprocess.call([
+        sys.executable, _CAND, "--teir", teir_p,
+        "--c-user-us", str(a.c_user_us),
+        "--c-kernel-us", str(a.c_kernel_us),
+        "--kernel-extra-us", str(a.kernel_extra_us),
+        "-o", cand_p, "--chosen-plan", chosen_p,
+    ])
+    if rc_c != 0 or not os.path.isfile(chosen_p):
+        print("ast_to_plan: 选型失败（exit %d）" % rc_c, file=sys.stderr)
+        return rc_c if rc_c else 3
+    cand = _load(cand_p)
+    rec = cand.get("chosen_record") or {}
+    domain = rec.get("domain") or ""
+    if not rec.get("plan") or not cand.get("chosen"):
+        print("ast_to_plan: 无入选候选", file=sys.stderr)
+        return 3
+    if domain == "mixed":
+        print("ast_to_plan: 混合域尚未打通跨域交接，拒绝部署（选型 %s）"
+              % cand.get("chosen"), file=sys.stderr)
+        return 8
+    _write(plan_p, rec["plan"])
+    print("  入选 %s  域 %s → plan.json" % (cand.get("chosen"), domain),
+          file=sys.stderr)
+
+    # 本机 fusion_plan 不写 verification；用 temporal PlanVerifier 签署入选方案
     _VERIFY = os.path.join(_REPO, "kfusion", "scripts", "ecos", "plan_verify.py")
     if os.path.isfile(_VERIFY):
         rc_v = subprocess.call([
             sys.executable, _VERIFY, "--dag", dag_p, "--plan", plan_p,
-            "--platforms", a.platforms, "--platform", a.domain, "--stamp-plan",
+            "--platforms", a.platforms, "--platform", domain, "--stamp-plan",
         ])
         if rc_v != 0:
-            print("ast_to_plan: PlanVerifier 拒绝该方案（exit %d）" % rc_v,
+            print("ast_to_plan: PlanVerifier 拒绝入选方案（exit %d）" % rc_v,
                   file=sys.stderr)
             return rc_v
 
@@ -369,9 +400,11 @@ def main():
     for w in vrep.get("warnings") or []:
         print("  ⚠ " + w, file=sys.stderr)
 
-    print("dag=%s\ncontract=%s\nplan=%s\nverification.ok=%s groups=%d\n"
+    print("dag=%s\ncontract=%s\nplan=%s\nchosen=%s domain=%s\n"
+          "verification.ok=%s groups=%d\n"
           "version_deps.ok=%s (edges=%d, xdom=%d)"
-          % (dag_p, contract_p, plan_p, ok, len(plan.get("groups") or []),
+          % (dag_p, contract_p, plan_p, cand.get("chosen"), domain,
+             ok, len(plan.get("groups") or []),
              vrep["ok"], len(vrep["edges"]),
              sum(1 for e in vrep["edges"] if e.get("xdom"))),
           file=sys.stderr)
