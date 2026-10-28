@@ -38,10 +38,10 @@ SRC = os.path.join(KF, "examples", "ecos", "mixed_pid_stateful__积分混合.c")
 ECOS_FROM_C = os.path.join(KF, "scripts", "ecos_from_c__从C编译.sh")
 OUT_ROOT = os.path.join(KF, "docs", "pr10e_baseline")
 
-SCEN = {
-    "user_only": {"u": 5.0, "k": 50.0, "ioctl": 30.0},
-    "partial_kernel": {"u": 5.0, "k": 0.05, "ioctl": 0.3},
-}
+# 只构建一份 UKU 产物：全用户态与部分内核化**共用同一份驱动**，
+# 二者只差中间组是否走 ioctl —— 这样比较的是部署差异，不是两份代码的差异。
+BUILD = {"u": 5.0, "k": 0.05, "ioctl": 0.3}
+MODES = {"user_only": "gold", "partial_kernel": "mixed"}
 SCHEDS = ["cfs", "fifo99"]
 PIN_CPU = 3
 
@@ -147,12 +147,12 @@ def parse_csv(text):
     return rows
 
 
-def measure(cell, sched, cycles, repeat, out_dir):
+def measure(cell, mode, sched, cycles, repeat, out_dir):
     runs = []
     for i in range(repeat):
         before = env_snapshot()
         insmoded = False
-        if cell["mode"] == "mixed" and cell.get("ko"):
+        if mode == "mixed" and cell.get("ko"):
             rc_i, _ = run(["insmod", cell["ko"]])
             insmoded = (rc_i == 0)
             if not insmoded:
@@ -160,7 +160,7 @@ def measure(cell, sched, cycles, repeat, out_dir):
         cmd = ["taskset", "-c", str(PIN_CPU)]
         if sched == "fifo99":
             cmd += ["chrt", "-f", "99"]
-        cmd += [cell["driver"], cell["mode"], str(cycles), "csv"]
+        cmd += [cell["driver"], mode, str(cycles), "csv"]
         try:
             rc, txt = run(cmd)
         finally:
@@ -216,23 +216,24 @@ def main():
     a = ap.parse_args()
 
     os.makedirs(a.out, exist_ok=True)
+    print("[build] UKU 产物（gold/mixed 共用）", file=sys.stderr)
+    b = build("uku", BUILD, a.out)
+    if b["status"] != "ok":
+        print("构建失败：%s" % (b.get("log_tail") or b["status"]), file=sys.stderr)
+        return 3
+
     cells = []
-    for scn, spec in SCEN.items():
-        print("[build] %s" % scn, file=sys.stderr)
-        b = build(scn, spec, a.out)
-        if b["status"] != "ok":
-            cells.append({"scenario": scn, "status": b["status"],
-                          "log_tail": b.get("log_tail")})
-            continue
-        entry = {"scenario": scn, "status": "ok", "mode": b["mode"],
-                 "session": b["session"], "scenario_cost": spec,
+    for deploy, mode in MODES.items():
+        entry = {"scenario": deploy, "status": "ok", "mode": mode,
+                 "driver": os.path.relpath(b["driver"], REPO),
+                 "ko": os.path.relpath(b["ko"], REPO) if b.get("ko") else None,
                  "conditions": []}
         for sched in a.scheds:
-            d = os.path.join(a.out, "runs_%s_%s" % (scn, sched))
+            d = os.path.join(a.out, "runs_%s_%s" % (deploy, sched))
             os.makedirs(d, exist_ok=True)
-            print("  [run] %s × %s × %d 轮" % (scn, sched, a.repeat),
-                  file=sys.stderr)
-            res = measure(b, sched, a.cycles, a.repeat, d)
+            print("  [run] %s(%s) × %s × %d 轮"
+                  % (deploy, mode, sched, a.repeat), file=sys.stderr)
+            res = measure(b, mode, sched, a.cycles, a.repeat, d)
             cond = {"sched": sched, "status": res["status"], "runs": res["runs"],
                     "dir": os.path.relpath(d, REPO)}
             r = res["runs"]
