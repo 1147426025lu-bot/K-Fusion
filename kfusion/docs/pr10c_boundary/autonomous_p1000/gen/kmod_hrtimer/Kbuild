@@ -1,0 +1,8 @@
+# 由 ECoS 方案生成；在目标侧（内核树）执行：
+#   make -C <KDIR> M=$PWD modules
+obj-m := five_stage_loop.o
+five_stage_loop-y := ecos_fused_linux.o ecos_fused_body.o stage_impl.o
+
+# 阶段源码若是用户态 C（#include <stdint.h>），用 compat/ 补定宽整数 typedef。
+# 只补 typedef，不补 libc——用到 libc 的阶段要先过 LLVM 内核化 Pass。
+ccflags-y += -I$(src)/compat

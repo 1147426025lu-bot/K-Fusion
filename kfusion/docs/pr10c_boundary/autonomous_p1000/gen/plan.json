@@ -1,0 +1,78 @@
+{
+  "version": 2,
+  "meta": {
+    "platform": "linux_kernel",
+    "fusion": true,
+    "generator": "stkp_v1",
+    "model_feasible": true,
+    "deployment_ready": true,
+    "xdom_adapter": null
+  },
+  "order": [
+    "stage_sample",
+    "stage_pid",
+    "stage_sink"
+  ],
+  "groups": [
+    {
+      "id": "g0",
+      "members": [
+        "stage_sample",
+        "stage_pid",
+        "stage_sink"
+      ],
+      "domain": "linux_kernel",
+      "release_phase_us": 0.0
+    }
+  ],
+  "domains": {
+    "stage_sample": "linux_kernel",
+    "stage_pid": "linux_kernel",
+    "stage_sink": "linux_kernel"
+  },
+  "cost": {
+    "predicted_R_us": 21.15,
+    "grade": "explore_uncertain"
+  },
+  "schedule": {
+    "exec_us": {
+      "stage_sample": 0.05,
+      "stage_pid": 0.05,
+      "stage_sink": 0.05
+    },
+    "release": [
+      {
+        "group": "g0",
+        "domain": "linux_kernel",
+        "L_us": 21.0,
+        "phase_us": 0.0
+      }
+    ],
+    "complete": true
+  },
+  "verification": {
+    "ok": true,
+    "by": "kfusion/scripts/ecos/plan_verify.py",
+    "errors": [],
+    "stats": {
+      "groups": 1,
+      "nodes": 3,
+      "same_cycle_edges": 1,
+      "cross_cycle_edges": 0,
+      "evidence": "empirical",
+      "temporal_source": "none",
+      "domains": [
+        "default"
+      ],
+      "cross_domain_edges": 0,
+      "cross_domain_periods": 0,
+      "cross_domain_extra_us": 0.0,
+      "period_us": 1000.0,
+      "domain_period_us": {},
+      "multirate": false,
+      "xdom_deployable": null,
+      "completion_us": 21.15,
+      "backlog_us": 0.0
+    }
+  }
+}

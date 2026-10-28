@@ -1,0 +1,259 @@
+{
+  "version": 1,
+  "kind": "selective_kernelize",
+  "task": {
+    "name": "mixed_pid",
+    "entry": "loop_main",
+    "period_us": 1000,
+    "deadline_us": 1000,
+    "step_us": 200,
+    "notes": "由 Clang AST 抽取；相位来自源注释或命令行，不是分析猜测"
+  },
+  "model": {
+    "formula": "Cost = G*c_domain + E + extra_domain; Benefit = Cost(A)-Cost(p)",
+    "c_user_us": 21.0,
+    "c_kernel_us": 21.0,
+    "extra_kernel_us": 0.0,
+    "exec_us": 0.0,
+    "note": "经验成本，不是 WCET；同分不强制内核化"
+  },
+  "candidates": [
+    {
+      "id": "A",
+      "domain": "linux_userspace",
+      "fused": false,
+      "legal": true,
+      "diagnostics": [],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_userspace",
+          "fusion": false,
+          "generator": "candidate_generate A/B/C/D"
+        },
+        "order": [
+          "stage_sample",
+          "stage_pid",
+          "stage_sink"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "stage_sample"
+            ]
+          },
+          {
+            "id": "g1",
+            "members": [
+              "stage_pid"
+            ]
+          },
+          {
+            "id": "g2",
+            "members": [
+              "stage_sink"
+            ]
+          }
+        ]
+      },
+      "cost": {
+        "groups": 3,
+        "c_us": 21.0,
+        "release_us": 63.0,
+        "exec_us": 0.0,
+        "extra_us": 0.0,
+        "total_us": 63.0,
+        "saved_release_vs_A_us": 0.0,
+        "added_runtime_us": 0.0,
+        "saved_boundary_us": 0.0,
+        "benefit_vs_A_us": 0.0
+      },
+      "why": null
+    },
+    {
+      "id": "B",
+      "domain": "linux_userspace",
+      "fused": true,
+      "legal": true,
+      "diagnostics": [],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_userspace",
+          "fusion": true,
+          "generator": "candidate_generate A/B/C/D"
+        },
+        "order": [
+          "stage_sample",
+          "stage_pid",
+          "stage_sink"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "stage_sample",
+              "stage_pid",
+              "stage_sink"
+            ]
+          }
+        ]
+      },
+      "cost": {
+        "groups": 1,
+        "c_us": 21.0,
+        "release_us": 21.0,
+        "exec_us": 0.0,
+        "extra_us": 0.0,
+        "total_us": 21.0,
+        "saved_release_vs_A_us": 42.0,
+        "added_runtime_us": 0.0,
+        "saved_boundary_us": 0.0,
+        "benefit_vs_A_us": 42.0
+      },
+      "why": "Cost=G·c + E + extra = 21.0; G=1 c=21.0 extra=0.0; 内核最优 D 的 Cost=21.0 ≥ 用户态，故不迁移"
+    },
+    {
+      "id": "C",
+      "domain": "linux_kernel",
+      "fused": false,
+      "legal": true,
+      "diagnostics": [],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_kernel",
+          "fusion": false,
+          "generator": "candidate_generate A/B/C/D"
+        },
+        "order": [
+          "stage_sample",
+          "stage_pid",
+          "stage_sink"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "stage_sample"
+            ]
+          },
+          {
+            "id": "g1",
+            "members": [
+              "stage_pid"
+            ]
+          },
+          {
+            "id": "g2",
+            "members": [
+              "stage_sink"
+            ]
+          }
+        ]
+      },
+      "cost": {
+        "groups": 3,
+        "c_us": 21.0,
+        "release_us": 63.0,
+        "exec_us": 0.0,
+        "extra_us": 0.0,
+        "total_us": 63.0,
+        "saved_release_vs_A_us": 0.0,
+        "added_runtime_us": 0.0,
+        "saved_boundary_us": 0.0,
+        "benefit_vs_A_us": 0.0
+      },
+      "why": null
+    },
+    {
+      "id": "D",
+      "domain": "linux_kernel",
+      "fused": true,
+      "legal": true,
+      "diagnostics": [],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_kernel",
+          "fusion": true,
+          "generator": "candidate_generate A/B/C/D"
+        },
+        "order": [
+          "stage_sample",
+          "stage_pid",
+          "stage_sink"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "stage_sample",
+              "stage_pid",
+              "stage_sink"
+            ]
+          }
+        ]
+      },
+      "cost": {
+        "groups": 1,
+        "c_us": 21.0,
+        "release_us": 21.0,
+        "exec_us": 0.0,
+        "extra_us": 0.0,
+        "total_us": 21.0,
+        "saved_release_vs_A_us": 42.0,
+        "added_runtime_us": 0.0,
+        "saved_boundary_us": 0.0,
+        "benefit_vs_A_us": 42.0
+      },
+      "why": null
+    }
+  ],
+  "chosen": "B",
+  "chosen_record": {
+    "id": "B",
+    "domain": "linux_userspace",
+    "fused": true,
+    "legal": true,
+    "diagnostics": [],
+    "plan": {
+      "version": 2,
+      "meta": {
+        "platform": "linux_userspace",
+        "fusion": true,
+        "generator": "candidate_generate A/B/C/D"
+      },
+      "order": [
+        "stage_sample",
+        "stage_pid",
+        "stage_sink"
+      ],
+      "groups": [
+        {
+          "id": "g0",
+          "members": [
+            "stage_sample",
+            "stage_pid",
+            "stage_sink"
+          ]
+        }
+      ]
+    },
+    "cost": {
+      "groups": 1,
+      "c_us": 21.0,
+      "release_us": 21.0,
+      "exec_us": 0.0,
+      "extra_us": 0.0,
+      "total_us": 21.0,
+      "saved_release_vs_A_us": 42.0,
+      "added_runtime_us": 0.0,
+      "saved_boundary_us": 0.0,
+      "benefit_vs_A_us": 42.0
+    },
+    "why": "Cost=G·c + E + extra = 21.0; G=1 c=21.0 extra=0.0; 内核最优 D 的 Cost=21.0 ≥ 用户态，故不迁移"
+  },
+  "n_legal": 4
+}

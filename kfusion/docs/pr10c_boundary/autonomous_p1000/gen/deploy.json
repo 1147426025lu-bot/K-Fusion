@@ -1,0 +1,9 @@
+{
+  "chosen": "D",
+  "domain": "linux_kernel",
+  "fused": true,
+  "cost_us": 21.15,
+  "why": "STKP Ĉ=ΣC_i,d + ΣL_g + ΣH_q + C_sync = 21.15; groups=1 channels=0; deployment_ready; claim=explore_uncertain",
+  "adapter": null,
+  "deployable": true
+}

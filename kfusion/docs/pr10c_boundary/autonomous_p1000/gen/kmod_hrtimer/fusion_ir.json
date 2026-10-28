@@ -1,0 +1,57 @@
+{
+  "period_us": 1000,
+  "deadline_us": 1000,
+  "release_cost_us": 20.0,
+  "evidence": "empirical",
+  "verified": true,
+  "digest_vars": [
+    "g_in",
+    "g_integ",
+    "g_out",
+    "g_seq"
+  ],
+  "groups": [
+    {
+      "id": "g0",
+      "phase_us": 0.0,
+      "exec_us": 0.0,
+      "body": "ecos_body_g0",
+      "stages": [
+        {
+          "name": "stage_sample",
+          "call": "stage_sample()",
+          "exec_us": 0.0,
+          "effects": [
+            "state_read",
+            "state_write"
+          ],
+          "phase_us": 0.0
+        },
+        {
+          "name": "stage_pid",
+          "call": "stage_pid()",
+          "exec_us": 0.0,
+          "effects": [
+            "state_read",
+            "state_write"
+          ],
+          "phase_us": 200.0
+        },
+        {
+          "name": "stage_sink",
+          "call": "stage_sink()",
+          "exec_us": 0.0,
+          "effects": [
+            "pure"
+          ],
+          "phase_us": 400.0
+        }
+      ]
+    }
+  ],
+  "order": [
+    "stage_sample",
+    "stage_pid",
+    "stage_sink"
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "version": 1,
+  "task": {
+    "name": "mixed_pid",
+    "entry": "loop_main",
+    "period_us": 1000,
+    "deadline_us": 1000,
+    "step_us": 200,
+    "notes": "由 Clang AST 抽取；相位来自源注释或命令行，不是分析猜测"
+  },
+  "stages": [
+    {
+      "name": "stage_sample",
+      "fn": "stage_sample",
+      "depends_on": [],
+      "context": "thread",
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "derived_allowed_contexts": [
+        "thread",
+        "softirq"
+      ],
+      "reads": [
+        "@g_seq"
+      ],
+      "writes": [
+        "@g_in",
+        "@g_seq"
+      ]
+    },
+    {
+      "name": "stage_pid",
+      "fn": "stage_pid",
+      "depends_on": [
+        "stage_sample"
+      ],
+      "context": "thread",
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "derived_allowed_contexts": [
+        "thread",
+        "softirq"
+      ],
+      "reads": [
+        "@g_in",
+        "@g_integ"
+      ],
+      "writes": [
+        "@g_integ",
+        "@g_out"
+      ]
+    },
+    {
+      "name": "stage_sink",
+      "fn": "stage_sink",
+      "depends_on": [
+        "stage_pid"
+      ],
+      "context": "thread",
+      "effects": [
+        "pure"
+      ],
+      "derived_allowed_contexts": [
+        "thread",
+        "softirq"
+      ]
+    }
+  ],
+  "generated": {
+    "by": "EffectSummaryAnalysis + effect_to_contract",
+    "summary_module": "/root/K-Fusion/kfusion/docs/pr10c_boundary/autonomous_p1000/gen/task.ll",
+    "note": "effects 由 LLVM 分析推导，非人工声明；拓扑与 context 来自 skeleton"
+  }
+}

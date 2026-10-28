@@ -1,0 +1,31 @@
+{
+  "_note": "PR-10C2：内核域便宜，逼出内核自主部署",
+  "linux_userspace": {
+    "stage_sample": {
+      "value": 50.0,
+      "evidence": "scenario"
+    },
+    "stage_pid": {
+      "value": 50.0,
+      "evidence": "scenario"
+    },
+    "stage_sink": {
+      "value": 50.0,
+      "evidence": "scenario"
+    }
+  },
+  "linux_kernel": {
+    "stage_sample": {
+      "value": 0.05,
+      "evidence": "scenario"
+    },
+    "stage_pid": {
+      "value": 0.05,
+      "evidence": "scenario"
+    },
+    "stage_sink": {
+      "value": 0.05,
+      "evidence": "scenario"
+    }
+  }
+}

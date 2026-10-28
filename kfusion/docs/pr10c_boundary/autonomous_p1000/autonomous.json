@@ -1,0 +1,49 @@
+{
+  "kind": "pr10c2_autonomous",
+  "period_us": 1000,
+  "seconds": 5.0,
+  "expected_periods": 5000,
+  "periods": "5007",
+  "missed": "0",
+  "domains": [
+    "linux_kernel"
+  ],
+  "source_pin_removed": true,
+  "rsf": {
+    "start_lat": {
+      "n": 5007,
+      "over": 0,
+      "min_ns": 10430,
+      "p50_us": 12,
+      "p99_us": 20,
+      "avg_ns": 13334,
+      "max_ns": 38536
+    },
+    "exec": {
+      "n": 5007,
+      "over": 0,
+      "min_ns": 1037,
+      "p50_us": 1,
+      "p99_us": 1,
+      "avg_ns": 1054,
+      "max_ns": 1944
+    },
+    "response": {
+      "n": 5007,
+      "over": 0,
+      "min_ns": 11486,
+      "p50_us": 13,
+      "p99_us": 21,
+      "avg_ns": 14388,
+      "max_ns": 39758
+    },
+    "_head": {
+      "miss": 0,
+      "periods": 5007
+    }
+  },
+  "raw_head": [
+    "PLC_PROBE r/s/f v1.2 kernel miss=0 periods=5007"
+  ],
+  "boundary": "同一份计算换成内核自主周期执行；去掉用户态钉扎是唯一源码差异。不比较端到端 response（语义不同）。实测非 WCET。"
+}
