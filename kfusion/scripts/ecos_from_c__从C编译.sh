@@ -92,29 +92,44 @@ step "6b) TEIR（状态版本 + 时间事件 + 允许域）"
   --platforms "$CAPS" \
   -o "$OUT/task.teir.json" || die "TEIR 失败" 7
 
-step "7) 单域融合规划（对照基线，不直接驱动生成）"
-"$PY" "$KF/scripts/fusion_plan__融合规划.py" "$OUT/task.dag.json" \
-  --platforms "$CAPS" --platform "$PLATFORM" \
-  --release-cost-us 21 --quiet \
-  -o "$OUT/plan.planner.json" || die "fusion_plan 失败" 8
+step "7) 单域融合规划（对照报告；失败不阻断 STKP）"
+if "$PY" "$KF/scripts/fusion_plan__融合规划.py" "$OUT/task.dag.json" \
+     --platforms "$CAPS" --platform "${PLATFORM:-linux_kernel}" \
+     --release-cost-us 21 --quiet \
+     -o "$OUT/plan.planner.json"; then
+  echo "  写出对照 $OUT/plan.planner.json"
+else
+  echo "  ⚠ fusion_plan 对照失败（常见于内核域非法），继续 STKP / 用户态"
+  rm -f "$OUT/plan.planner.json"
+fi
 
-step "7c) A–F 对照基线（不驱动生成）"
-"$PY" "$KF/scripts/ecos/candidate_generate.py" \
-  --teir "$OUT/task.teir.json" \
-  --c-user-us "${C_USER_US:-21}" \
-  --c-kernel-us "${C_KERNEL_US:-21}" \
-  --kernel-extra-us "${KERNEL_EXTRA_US:-0}" \
-  -o "$OUT/candidates.json" || die "A/B/C/D 基线失败" 8
+step "7c) A–F 对照基线（失败不阻断 STKP）"
+if ! "$PY" "$KF/scripts/ecos/candidate_generate.py" \
+     --teir "$OUT/task.teir.json" \
+     --c-user-us "${C_USER_US:-21}" \
+     --c-kernel-us "${C_KERNEL_US:-21}" \
+     --kernel-extra-us "${KERNEL_EXTRA_US:-0}" \
+     -o "$OUT/candidates.json"; then
+  echo "  ⚠ A–F 基线失败，STKP 仍独立求解"
+fi
 
 step "7c2) STKP 穷举求解（入选方案才是生成输入）"
-"$PY" "$KF/scripts/ecos_plan_joint.py" \
-  --teir "$OUT/task.teir.json" \
-  --c-user-us "${C_USER_US:-21}" \
-  --c-kernel-us "${C_KERNEL_US:-21}" \
-  --kernel-extra-us "${KERNEL_EXTRA_US:-0}" \
-  --handoff-cost-us "${HANDOFF_US:-0}" \
-  -o "$OUT/stkp.json" \
-  --chosen-plan "$OUT/chosen.plan.json" || die "STKP 无 deployment_ready 方案" 8
+STKP_ARGS=(
+  --teir "$OUT/task.teir.json"
+  --dag "$OUT/task.dag.json"
+  --platforms "$CAPS"
+  --c-user-us "${C_USER_US:-21}"
+  --c-kernel-us "${C_KERNEL_US:-21}"
+  --kernel-extra-us "${KERNEL_EXTRA_US:-0}"
+  --handoff-cost-us "${HANDOFF_US:-0}"
+  -o "$OUT/stkp.json"
+  --chosen-plan "$OUT/chosen.plan.json"
+)
+if [ -n "${TIME_CONTRACT:-}" ] && [ -f "${TIME_CONTRACT}" ]; then
+  STKP_ARGS+=(--contract "$TIME_CONTRACT")
+fi
+"$PY" "$KF/scripts/ecos_plan_joint.py" "${STKP_ARGS[@]}" \
+  || die "STKP 无 deployment_ready 方案" 8
 
 CHOSEN="$("$PY" -c "import json; print(json.load(open('$OUT/stkp.json'))['chosen'] or '')")"
 DOMAIN="$("$PY" -c "import json; print((json.load(open('$OUT/stkp.json')).get('chosen_record') or {}).get('domain') or '')")"

@@ -26,6 +26,11 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 KF = os.path.abspath(os.path.join(HERE, ".."))
 DOMAINS = ("linux_userspace", "linux_kernel")
+# 证据等级：只有 measured 能作最终部署优劣结论
+EV_FINAL = frozenset(("measured", "cli_override", "empirical", "test"))
+EV_EXPLORE = frozenset(("estimated", "dag_exec", "shared_exec", "scalar"))
+EV_WEAK = frozenset(("placeholder",))
+EV_MISSING = frozenset(("missing",))
 
 
 def load_json(path):
@@ -157,11 +162,26 @@ def plan_platform(domains):
     return "mixed"
 
 
-def build_plan(order, named_groups, domains):
+def group_release_phase(members, nodes):
+    phs = []
+    for m in members:
+        p = (nodes.get(m) or {}).get("phase_us")
+        if p is not None:
+            phs.append(float(p))
+    return min(phs) if phs else 0.0
+
+
+def build_plan(order, named_groups, domains, nodes=None):
     stage_dom = {}
     groups = []
+    nodes = nodes or {}
     for i, (members, d) in enumerate(zip(named_groups, domains)):
-        groups.append({"id": "g%d" % i, "members": list(members), "domain": d})
+        groups.append({
+            "id": "g%d" % i,
+            "members": list(members),
+            "domain": d,
+            "release_phase_us": group_release_phase(members, nodes),
+        })
         for m in members:
             stage_dom[m] = d
     plat = plan_platform(domains)
@@ -232,7 +252,15 @@ def evaluate_cost(plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
     channels = batched_handoffs(plan.get("order") or [], named, domains, teir)
     h_total = len(channels) * handoff_us
     sync = extra_kernel if has_k else 0.0
-    comparable = not missing
+    kinds = []
+    for item in evidence:
+        kinds.append(item.rsplit(":", 1)[-1])
+    has_missing = bool(missing) or any(k in EV_MISSING for k in kinds)
+    has_ph = any(k in EV_WEAK for k in kinds)
+    comparable = not has_missing
+    final_rankable = comparable and (not has_ph) and all(
+        k in EV_FINAL for k in kinds)
+    explore_rankable = comparable and (not has_ph)
     pred = None if not comparable else round(compute + release + h_total + sync, 3)
     temporal_ok = True
     temporal_why = None
@@ -240,8 +268,18 @@ def evaluate_cost(plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
         if pred > float(deadline_us):
             temporal_ok = False
             temporal_why = "R̂=%.3f > deadline %s" % (pred, deadline_us)
+    if has_missing:
+        grade = "missing"
+    elif has_ph:
+        grade = "placeholder_no_optimum"
+    elif final_rankable:
+        grade = "empirical_model_not_wcet"
+    else:
+        grade = "explore_uncertain"
     return {
         "comparable": comparable,
+        "final_rankable": final_rankable,
+        "explore_rankable": explore_rankable,
         "missing_costs": missing,
         "evidence": evidence,
         "compute_us": None if not comparable else round(compute, 3),
@@ -252,10 +290,59 @@ def evaluate_cost(plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
         "sync_us": round(sync, 3),
         "predicted_R_us": pred,
         "total_us": pred,
-        "grade": "empirical_model_not_wcet",
+        "grade": grade,
         "temporal_ok": temporal_ok,
         "temporal_why": temporal_why,
     }, channels
+
+
+def load_dag_verifier():
+    return load_module(os.path.join(HERE, "ecos", "plan_verify.py"),
+                       "ecos_plan_verify")
+
+
+def dag_temporal_ok(plan, dag, contract, platforms, c_user, c_kernel, exec_us):
+    """整份方案的 DAG 时间契约（窗口前拉/推后），不只 R̂≤D。"""
+    if not dag:
+        return True, []
+    plat_name = (plan.get("meta") or {}).get("platform")
+    if plat_name == "mixed":
+        return True, []
+    mod = load_dag_verifier()
+    plats = []
+    if platforms:
+        plats = [p for p in (platforms.get("platforms") or [])
+                 if p.get("name") == plat_name]
+    if not plats:
+        plats = [{
+            "name": plat_name or "linux_userspace",
+            "contexts": ["thread", "softirq"],
+            "allow_mmio": plat_name != "linux_kernel",
+            "allow_sleep": True,
+        }]
+    c = c_kernel if plat_name == "linux_kernel" else c_user
+    try:
+        rep = mod.verify_plan(dag, plan, plats[0],
+                              release_cost_us=c, exec_us=exec_us or {},
+                              contract=contract)
+    except Exception as exc:
+        return False, [{"code": "DAG_VERIFY", "msg": str(exc)}]
+    return bool(rep.get("ok")), list(rep.get("errors") or [])
+
+
+def pick_chosen(codegen):
+    """占位成本不得宣称最优；缺测不得进入排序。"""
+    if not codegen:
+        return None, None
+    final = [r for r in codegen if (r.get("cost") or {}).get("final_rankable")]
+    if final:
+        return min(final, key=rank_key), "empirical_model_not_wcet"
+    explore = [r for r in codegen if (r.get("cost") or {}).get("explore_rankable")]
+    if explore:
+        return min(explore, key=rank_key), "explore_uncertain"
+    user = [r for r in codegen if r.get("domain") == "linux_userspace"]
+    pool = user or codegen
+    return min(pool, key=rank_key), "placeholder_no_optimum"
 
 
 def rank_key(rec):
@@ -272,7 +359,8 @@ def rank_key(rec):
 
 
 def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
-          handoff_us=0.0, override=None, max_stages=8, keep_rejected=40):
+          handoff_us=0.0, override=None, max_stages=8, keep_rejected=40,
+          dag=None, contract=None, platforms=None):
     order = stage_order(teir)
     n = len(order)
     if n == 0:
@@ -281,6 +369,10 @@ def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
         raise SystemExit("阶段数 %d 超过 STKP v1 穷举上限 %d" % (n, max_stages))
     nodes = node_map(teir)
     deadline = (teir.get("task") or {}).get("deadline_us")
+    exec_us = {}
+    for n0 in teir.get("nodes") or []:
+        if n0.get("exec_us") is not None:
+            exec_us[n0["name"]] = float(n0["exec_us"])
     prune = {"domain": 0, "semantic": 0, "temporal": 0, "runtime": 0,
              "incomparable": 0}
     feasible, rejected = [], []
@@ -293,15 +385,15 @@ def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
             why_dom = []
             for members, d in zip(named, domains):
                 for m in members:
-                    allowed = (nodes.get(m) or {}).get("allowed_domains") or []
-                    if allowed and d not in allowed:
+                    allowed = (nodes.get(m) or {}).get("allowed_domains")
+                    if not allowed or d not in allowed:
                         blocked = True
-                        why_dom.append("%s∉%s" % (m, d))
+                        why_dom.append("%s∉%s" % (m, d or "?"))
             if blocked:
                 prune["domain"] += 1
                 rejected.append({"reason": "domain", "detail": why_dom[:6]})
                 continue
-            plan = build_plan(order, named, domains)
+            plan = build_plan(order, named, domains, nodes)
             ok, diags = verifier.verify(teir, plan)
             if not ok:
                 prune["semantic"] += 1
@@ -343,6 +435,20 @@ def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
                 rejected.append({"reason": "temporal", "id": rec["id"],
                                  "detail": cost["temporal_why"]})
                 continue
+            if rec["deployment_ready"] and dag:
+                ok_d, derrs = dag_temporal_ok(
+                    plan, dag, contract, platforms, c_user, c_kernel, exec_us)
+                if not ok_d:
+                    prune["temporal"] += 1
+                    rec["legal"] = False
+                    rec["model_feasible"] = False
+                    rec["why"] = "DAG 时间契约: " + "; ".join(
+                        (e.get("code") or "") for e in derrs[:4])
+                    rejected.append({
+                        "reason": "temporal", "id": rec["id"],
+                        "codes": [e.get("code") for e in derrs[:6]],
+                    })
+                    continue
             if not rec["deployment_ready"]:
                 prune["runtime"] += 1
                 rec["why"] = "混合域无跨用户态—内核交接适配器，不可部署"
@@ -352,12 +458,13 @@ def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
                     "; 缺测不得当 0: " + ",".join(cost["missing_costs"]))
             feasible.append(rec)
 
-    deployable = [r for r in feasible
-                  if r["deployment_ready"] and r["comparable"] and r["legal"]]
-    model_ok = [r for r in feasible if r["model_feasible"] and r["comparable"]
-                and r["legal"]]
-    best_deploy = min(deployable, key=rank_key) if deployable else None
-    best_model = min(model_ok, key=rank_key) if model_ok else None
+    codegen = [r for r in feasible if r["deployment_ready"] and r["legal"]]
+    deployable = [r for r in codegen if r["comparable"]]
+    model_ok = [r for r in feasible if r["model_feasible"] and r["legal"]]
+    best_deploy, claim = pick_chosen(codegen)
+    best_model = min(
+        [r for r in model_ok if r.get("comparable")],
+        key=rank_key) if any(r.get("comparable") for r in model_ok) else None
     if best_deploy:
         c = best_deploy["cost"]
         parts = [
@@ -375,6 +482,8 @@ def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
                             best_model["id"], best_model["cost"]["total_us"]))
         if best_deploy["domain"] == "linux_userspace":
             parts.append("同分或不优于内核时保留用户态")
+        if claim:
+            parts.append("claim=%s" % claim)
         best_deploy["why"] = "; ".join(parts)
 
     return {
@@ -388,8 +497,9 @@ def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
         "enumerated": raw,
         "pruned": prune,
         "n_model_feasible": len(model_ok),
-        "n_deployment_ready": len(deployable),
-        "candidates": deployable,
+        "n_deployment_ready": len(codegen),
+        "claim": claim,
+        "candidates": codegen,
         "model_only": [r for r in model_ok if not r["deployment_ready"]][:20],
         "rejected_sample": rejected[:keep_rejected],
         "best_model": best_model,
@@ -418,18 +528,22 @@ def attach_baseline(doc, teir, c_user, c_kernel, extra_kernel, verifier):
         ],
     }
     stkp_c = (doc.get("chosen_record") or {}).get("cost") or {}
-    af_c = None
-    for c in af.get("candidates") or []:
-        if c.get("id") == af.get("chosen") and c.get("legal"):
-            af_c = (c.get("cost") or {}).get("total_us")
+    by = {}
+    for c in doc.get("candidates") or []:
+        i = c.get("id")
+        if i in ("A", "B", "C", "D", "E", "F"):
+            by[i] = (c.get("cost") or {}).get("total_us")
     doc["vs_baseline"] = {
+        "cost_model": "stkp_unified",
+        "note": "A–F 旧公式不用于论文优劣证据；此处用同一套 STKP 成本",
         "af_chosen": af.get("chosen"),
         "stkp_chosen": doc.get("chosen"),
-        "af_total_us": af_c,
+        "stkp_cost_of_af_ids": by,
         "stkp_total_us": stkp_c.get("total_us"),
         "stkp_missed_by_af": (
             doc.get("chosen") not in (None, "A", "B", "C", "D", "E", "F")
         ),
+        "claim": doc.get("claim"),
     }
     return doc
 
@@ -446,6 +560,9 @@ def run_stkp(args):
     teir = load_json(args.teir)
     v = load_verifier()
     override = parse_override(args.stage_cost) if args.stage_cost else None
+    dag = load_json(args.dag) if args.dag else None
+    contract = load_json(args.contract) if args.contract else None
+    platforms = load_json(args.platforms) if args.platforms else None
     doc = solve(
         teir, v,
         c_user=args.c_user_us,
@@ -454,6 +571,7 @@ def run_stkp(args):
         handoff_us=args.handoff_cost_us,
         override=override,
         max_stages=args.max_stages,
+        dag=dag, contract=contract, platforms=platforms,
     )
     if not args.no_baseline:
         doc = attach_baseline(doc, teir, args.c_user_us, args.c_kernel_us,
@@ -470,9 +588,9 @@ def run_stkp(args):
         print("STKP chosen plan → %s  (%s %s Ĉ=%s)" % (
             args.chosen_plan, doc.get("chosen"), rec.get("domain"),
             (rec.get("cost") or {}).get("total_us")))
-    print("STKP v1 raw=%d enum=%d deployable=%d model=%d chosen=%s" % (
+    print("STKP v1 raw=%d enum=%d deployable=%d model=%d chosen=%s claim=%s" % (
         doc["raw_space"], doc["enumerated"], doc["n_deployment_ready"],
-        doc["n_model_feasible"], doc["chosen"]))
+        doc["n_model_feasible"], doc["chosen"], doc.get("claim")))
     pr = doc["pruned"]
     print("  prune domain=%d semantic=%d temporal=%d mixed=%d missing=%d" % (
         pr["domain"], pr["semantic"], pr["temporal"], pr["runtime"],
@@ -607,6 +725,7 @@ def main():
     ap.add_argument("--kernel-extra-us", type=float, default=0.0)
     ap.add_argument("--stage-cost", default=None,
                     help="分域实测 {linux_userspace:{stage:us}, linux_kernel:{...}}")
+    ap.add_argument("--contract", default=None, help="时间契约 JSON（窗口/期限）")
     ap.add_argument("--max-stages", type=int, default=8)
     ap.add_argument("--oracle", action="store_true")
     ap.add_argument("--no-baseline", action="store_true")

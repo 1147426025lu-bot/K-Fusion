@@ -123,8 +123,12 @@ def verify(teir, plan, claims=None):
         dom = assigned_domain(plan, name)
         if not dom:
             continue
-        allowed = n.get("allowed_domains") or []
-        if allowed and dom not in allowed:
+        allowed = n.get("allowed_domains")
+        if not allowed:
+            diags.append(diagnose(
+                "E_NO_DOMAIN", name,
+                "allowed_domains 为空：没有已证明合法的执行域，拒绝部署"))
+        elif dom not in allowed:
             diags.append(diagnose(
                 "E_DOMAIN", name,
                 "域 %s 不在 allowed_domains %s" % (dom, allowed)))

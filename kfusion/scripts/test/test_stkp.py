@@ -113,7 +113,8 @@ class StkpV1(unittest.TestCase):
         rec = doc["chosen_record"]
         self.assertEqual(rec["domain"], "linux_userspace")
         kern = [c for c in doc["candidates"] if c["domain"] == "linux_kernel"]
-        self.assertFalse(kern)  # incomparable kernel never enters deployable
+        self.assertTrue(all(not (c.get("cost") or {}).get("final_rankable")
+                            for c in kern))
 
     def test_partial_kernel_cheaper_in_model_not_deployed(self):
         """FIR+PID 进内核更便宜，但无 xdom → 仍部署全用户态。"""
@@ -142,6 +143,69 @@ class StkpV1(unittest.TestCase):
         doc = stkp.solve(teir, self.v, c_user=21, c_kernel=21)
         self.assertGreater(doc["pruned"]["temporal"], 0)
         self.assertIsNone(doc["chosen_record"])
+
+    def test_empty_allowed_domains_fail_closed(self):
+        teir = chain_teir(["a", "b"])
+        for n in teir["nodes"]:
+            n["allowed_domains"] = []
+        doc = stkp.solve(teir, self.v, c_user=21, c_kernel=21)
+        self.assertIsNone(doc["chosen_record"])
+        self.assertGreater(doc["pruned"]["domain"], 0)
+
+    def test_placeholder_cannot_claim_kernel_optimum(self):
+        teir = chain_teir(["s", "f", "p"])
+        for n in teir["nodes"]:
+            for d, slot in (n.get("cost_us_by_domain") or {}).items():
+                slot["evidence"] = "placeholder"
+                slot["note"] = "不是分域实测"
+        doc = stkp.solve(teir, self.v, c_user=21, c_kernel=1)
+        self.assertEqual(doc["chosen_record"]["domain"], "linux_userspace")
+        self.assertEqual(doc.get("claim"), "placeholder_no_optimum")
+        self.assertNotEqual(doc["chosen"], "D")
+
+    def test_output_window_rejects_full_fusion(self):
+        names = ["sample", "fir", "plant"]
+        teir = chain_teir(names, exec_us=5.0)
+        for i, n in enumerate(teir["nodes"]):
+            n["phase_us"] = [0.0, 200.0, 800.0][i]
+        dag = {
+            "nodes": [{
+                "name": n, "effects": ["state_read"], "contexts": ["thread"],
+                "phase_us": ph, "fns": [n],
+            } for n, ph in zip(names, [0.0, 200.0, 800.0])],
+            "edges": [{"from": a, "to": b, "kind": "data"}
+                      for a, b in zip(names, names[1:])],
+            "topo_order": names, "topo_order_delayed": names,
+            "phase": {"offsets": dict(zip(names, [0.0, 200.0, 800.0])),
+                      "period_us": 1000},
+            "meta": {"task": {"period_us": 1000, "deadline_us": 1000}},
+            "recurrences": [], "algebraic_loops": [], "candidates": [],
+        }
+        contract = {
+            "task": {"period_us": 1000, "deadline_us": 1000},
+            "timing_constraints": {
+                "actuator": {"stage": "plant", "earliest_us": 650,
+                             "latest_us": 850},
+            },
+            "evidence": {"exec": "empirical"},
+        }
+        doc = stkp.solve(teir, self.v, c_user=21, c_kernel=21,
+                         dag=dag, contract=contract)
+        self.assertGreater(doc["pruned"]["temporal"], 0)
+        self.assertNotEqual(doc["chosen"], "B")
+        self.assertNotEqual(doc["chosen"], "D")
+        rec = doc["chosen_record"]
+        self.assertIsNotNone(rec)
+        self.assertEqual(rec["domain"], "linux_userspace")
+        plant_group = [g for g in rec["plan"]["groups"] if "plant" in g["members"]][0]
+        self.assertEqual(plant_group["members"][0], "plant")  # 未与 sample 全融合
+
+    def test_pipeline_does_not_die_on_fusion_plan(self):
+        sh = os.path.join(KF, "scripts", "ecos_from_c__从C编译.sh")
+        with open(sh, encoding="utf-8") as f:
+            text = f.read()
+        self.assertIn("失败不阻断 STKP", text)
+        self.assertNotIn('|| die "fusion_plan 失败"', text)
 
 
 if __name__ == "__main__":

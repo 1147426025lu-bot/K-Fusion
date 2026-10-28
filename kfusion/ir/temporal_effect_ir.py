@@ -77,7 +77,7 @@ def cost_slot(value, evidence, note=None):
 
 
 def build_teir_from_extract(extract, dag, ex, order, stage_rw, data_edges,
-                            cross_inputs, kernelizable):
+                            cross_inputs, kernelizable, placeholder_exec=None):
     """feat/ecos-temporal-semantics 的 TEIR 构造（抽阶段 JSON + 调用序依赖）。"""
     ex = ex or {}
     nodes = []
@@ -91,12 +91,16 @@ def build_teir_from_extract(extract, dag, ex, order, stage_rw, data_edges,
         writes = list(rw.get("writes") or [])
         persist = sorted(set(reads) & set(writes))
         ev = None if ex.get(n) is None else float(ex.get(n))
-        note = "两域共用占位，不是分域实测"
-        cbd = {"linux_userspace": cost_slot(
-            ev, "placeholder" if ev is not None else "missing", note)}
+        ph_set = set(placeholder_exec or [])
+        if ev is None:
+            kind, note = "missing", "无执行时间，不得参与排序"
+        elif n in ph_set:
+            kind, note = "placeholder", "默认占位，不是分域实测，不得宣称最优"
+        else:
+            kind, note = "estimated", "调用方给出的执行时间，非板上分域实测"
+        cbd = {"linux_userspace": cost_slot(ev, kind, note)}
         if kernelizable:
-            cbd["linux_kernel"] = cost_slot(
-                ev, "placeholder" if ev is not None else "missing", note)
+            cbd["linux_kernel"] = cost_slot(ev, kind, note)
         nodes.append({
             "name": n,
             "fns": [n],
@@ -301,7 +305,7 @@ def build_teir(*args, **kwargs):
       · temporal ast_to_plan：8 个位置参数（extract, dag, ex, order, ...）
     """
     if len(args) >= 6:
-        return build_teir_from_extract(*args)
+        return build_teir_from_extract(*args, **kwargs)
     return _build_teir_from_dag(*args, **kwargs)
 
 

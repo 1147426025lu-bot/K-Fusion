@@ -321,7 +321,8 @@ def main():
     kc_ok = bool((extract.get("k_c0") or {}).get("ok", True))
     teir_mod = _load_teir_module()
     teir = teir_mod.build_teir(extract, dag, ex, order, stage_rw,
-                              data_edges, cross_inputs, kc_ok)
+                              data_edges, cross_inputs, kc_ok,
+                              placeholder_exec=placeholders)
     teir_p = os.path.join(a.out_dir, "teir.json")
     teir_mod.write_teir(teir, teir_p)
     print("teir=%s (数据边 %d，跨周期输入 %d)"
@@ -358,15 +359,16 @@ def main():
         "-o", cand_p,
     ])
     if rc_c != 0:
-        print("ast_to_plan: A–F 基线失败（exit %d）" % rc_c, file=sys.stderr)
-        return rc_c
+        print("ast_to_plan: A–F 对照失败（exit %d），STKP 仍进行" % rc_c,
+              file=sys.stderr)
 
     if not os.path.isfile(_STKP):
         raise SystemExit("ast_to_plan: 找不到 ecos_plan_joint.py")
     stkp_p = os.path.join(a.out_dir, "stkp.json")
     print("== STKP 穷举求解（入选方案写入 plan.json） ==", file=sys.stderr)
     rc_s = subprocess.call([
-        sys.executable, _STKP, "--teir", teir_p,
+        sys.executable, _STKP, "--teir", teir_p, "--dag", dag_p,
+        "--platforms", a.platforms,
         "--c-user-us", str(a.c_user_us),
         "--c-kernel-us", str(a.c_kernel_us),
         "--kernel-extra-us", str(a.kernel_extra_us),
