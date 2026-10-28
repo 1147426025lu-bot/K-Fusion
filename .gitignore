@@ -114,3 +114,6 @@ crtos/results/xlat/**/*.bin
 
 # PR-10A 端到端产物目录（构建输出，不入库）
 kfusion/docs/pr9b_pid_codegen/gen/
+
+# PR-10B 构建产物
+kfusion/docs/pr10b_matrix/cells/*/gen/
