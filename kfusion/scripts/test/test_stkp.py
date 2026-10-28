@@ -59,8 +59,13 @@ def chain_teir(names, kernelizable=None, exec_us=1.0, period=1000.0):
     }
 
 
-def prove_uku_iface(teir, extra_types=None):
-    """单测里钉 int32_t 与无参调用，模拟 Clang 已证明的接口。"""
+def prove_uku_iface(teir, extra_types=None, session_init="zero"):
+    """单测里钉 int32_t 与无参调用，模拟 Clang 已证明的接口。
+
+    session_init：PR-9D 要求会话状态有显式初值证据；传 None 表示"没有证据"，
+    用来测 E_UKU_STATE_INIT_UNKNOWN。默认 zero，对应示例里
+    `int32_t g_integ;`（无初值 → C 语义零初始化）可被静态证明的情形。
+    """
     types = dict(teir.get("region_types") or {})
     calls = dict(teir.get("calls") or {})
     for n in teir["nodes"]:
@@ -79,6 +84,15 @@ def prove_uku_iface(teir, extra_types=None):
         types.update(extra_types)
     teir["region_types"] = types
     teir["calls"] = calls
+    if session_init is not None:
+        meta = teir.setdefault("meta", {})
+        m = dict(meta.get("session_init") or {})
+        for n in teir["nodes"]:
+            for p in n.get("persistent") or []:
+                x = p[1:] if str(p).startswith("@") else p
+                if x:
+                    m.setdefault(x, session_init)
+        meta["session_init"] = m
     return teir
 
 
@@ -475,6 +489,58 @@ class StkpV1(unittest.TestCase):
         rec = doc["chosen_record"]
         self.assertIsNotNone(rec)
         self.assertNotEqual(rec.get("domain"), "mixed")
+
+    def _session_groups(self):
+        return [
+            {"domain": "linux_userspace", "members": ["sample"]},
+            {"domain": "linux_kernel", "members": ["pid"]},
+            {"domain": "linux_userspace", "members": ["sink"]},
+        ]
+
+    def _session_teir(self):
+        teir = chain_teir(["sample", "pid", "sink"], kernelizable={
+            "sample": False, "pid": True, "sink": False})
+        teir["nodes"][1]["reads"] = ["g_in", "g_integ"]
+        teir["nodes"][1]["writes"] = ["g_out", "g_integ"]
+        teir["nodes"][1]["persistent"] = ["@g_integ"]
+        return teir
+
+    def test_uku_rejects_userspace_reader_of_session(self):
+        """PR-9D：会话状态被内核独占后，组外阶段再读它拿到的就是过期副本。
+
+        会话变量会被摘出邮箱（不再 copy_out），此时用户态读到的永远是旧值，
+        必须拒绝而不是静默接受。
+        """
+        teir = self._session_teir()
+        teir["nodes"][2]["reads"] = ["g_integ"]      # sink 在用户态读会话状态
+        prove_uku_iface(teir)
+        chk = stkp.uku_mod.check(self._uku_plan(self._session_groups()), teir)
+        self.assertFalse(chk["ok"])
+        self.assertIn("E_UKU_STATE_OWNER", stkp.uku_mod.codes(chk))
+
+    def test_uku_rejects_userspace_writer_of_session(self):
+        """PR-9D：组外阶段写会话状态，写回会被内核那份覆盖。"""
+        teir = self._session_teir()
+        teir["nodes"][2]["writes"] = ["g_integ"]
+        prove_uku_iface(teir)
+        chk = stkp.uku_mod.check(self._uku_plan(self._session_groups()), teir)
+        self.assertFalse(chk["ok"])
+        self.assertIn("E_UKU_STATE_OWNER", stkp.uku_mod.codes(chk))
+
+    def test_uku_rejects_session_without_init_evidence(self):
+        """PR-9D：不得假定内核打开设备时把会话状态清零。"""
+        teir = self._session_teir()
+        prove_uku_iface(teir, session_init=None)
+        chk = stkp.uku_mod.check(self._uku_plan(self._session_groups()), teir)
+        self.assertFalse(chk["ok"])
+        self.assertIn("E_UKU_STATE_INIT_UNKNOWN", stkp.uku_mod.codes(chk))
+
+    def test_uku_rejects_session_with_bad_init(self):
+        teir = self._session_teir()
+        prove_uku_iface(teir, session_init="garbage")
+        chk = stkp.uku_mod.check(self._uku_plan(self._session_groups()), teir)
+        self.assertFalse(chk["ok"])
+        self.assertIn("E_UKU_STATE_INIT", stkp.uku_mod.codes(chk))
 
     def test_uku_pid_session_single_int32_is_deployable(self):
         names = ["sample", "pid", "sink"]
@@ -880,6 +946,59 @@ class StkpV1(unittest.TestCase):
                 self.assertFalse((c.get("cost") or {}).get("comparable"))
                 self.assertNotEqual(
                     (c.get("cost") or {}).get("grade"), "empirical_model_not_wcet")
+
+
+class PlanJointCostSeparation(unittest.TestCase):
+    """PR-9E：组级实测成本 ↔ 组内阶段执行时间必须分开。
+
+    组总额记在组尾、其余成员记 0，只用于把整组代价加进 Ĉ；
+    这些 0 一旦流进相位窗口/顺序校验，就等于凭空证明「FIR 只要 0 µs」。
+    """
+
+    def _fixture(self):
+        groups = [
+            {"id": "g0", "domain": "linux_userspace",
+             "members": ["fir", "pid"], "release_phase_us": 0.0},
+            {"id": "g1", "domain": "linux_userspace",
+             "members": ["sink"], "release_phase_us": 500.0},
+        ]
+        plan = {"version": 2, "groups": groups,
+                "meta": {"platform": "linux_userspace"}}
+        teir = chain_teir(["fir", "pid", "sink"])
+        dag = {"nodes": [{"name": "fir", "phase_us": 0.0},
+                         {"name": "pid", "phase_us": 8.0},
+                         {"name": "sink", "phase_us": 500.0}],
+               "edges": []}
+        override = {"groups": [{"members": ["fir", "pid"],
+                                "domain": "linux_userspace",
+                                "value": 20.0, "evidence": "measured"}]}
+        return plan, teir, dag, override
+
+    def test_group_bound_members_are_flagged(self):
+        plan, teir, dag, override = self._fixture()
+        sched = stkp.candidate_schedule(plan, teir, override, 21.0, 5.0)
+        self.assertEqual(sched["exec_us"]["pid"], 20.0)
+        self.assertEqual(sched["exec_us"]["fir"], 0.0)
+        self.assertIn("fir", sched["timing_bound"])
+        self.assertNotIn("pid", sched["timing_bound"])
+
+    def test_window_check_rejects_group_bound_substitution(self):
+        plan, teir, dag, override = self._fixture()
+        sched = stkp.candidate_schedule(plan, teir, override, 21.0, 5.0)
+        contract = {"timing_constraints": {"sample": {"latest_us": 100.0}}}
+        ok, errs = stkp.dag_temporal_ok(plan, dag, contract, None,
+                                        21.0, 5.0, sched)
+        self.assertFalse(ok, "组级成本不得当组内阶段时间通过窗口检查")
+        self.assertIn("E_WINDOW_GROUP_BOUND",
+                      [e.get("code") for e in (errs or [])])
+
+    def test_no_window_keeps_cost_ranking(self):
+        plan, teir, dag, override = self._fixture()
+        sched = stkp.candidate_schedule(plan, teir, override, 21.0, 5.0)
+        _ok, errs = stkp.dag_temporal_ok(plan, dag, None, None,
+                                         21.0, 5.0, sched)
+        self.assertNotIn("E_WINDOW_GROUP_BOUND",
+                         [e.get("code") for e in (errs or [])])
 
 
 if __name__ == "__main__":

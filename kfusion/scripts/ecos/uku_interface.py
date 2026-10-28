@@ -220,6 +220,85 @@ def call_errors(plan, teir, calls):
     return bad
 
 
+def _declared_init(teir, name):
+    """会话状态的初始化证据（PR-9D）。只认显式声明，绝不猜。"""
+    meta = teir.get("meta") or {}
+    for key in ("session_init", "region_init"):
+        m = meta.get(key) or {}
+        if isinstance(m, dict) and name in m:
+            return m[name]
+    for p in teir.get("persistent_state") or []:
+        if region_name(p.get("region")) == name and p.get("init"):
+            return p.get("init")
+    for n in teir.get("nodes") or []:
+        m = n.get("init") or {}
+        if isinstance(m, dict) and name in m:
+            return m[name]
+    return None
+
+
+def state_ownership_errors(plan, teir):
+    """PR-9D：内核独占的会话状态，其读写者必须全在内核组内。
+
+    会话协议会把该状态从邮箱摘掉（见 collect_kernel_io 里对 session 的过滤），
+    所以只要还有组外阶段读它，用户态拿到的就是过期副本；组外阶段写它，
+    写回也会被内核那份覆盖。两种都必须拒绝，而不是静默接受。
+    """
+    found = kernel_persistent_regions(plan, teir)
+    if not found:
+        return []
+    kset = set()
+    for g in kernel_groups(plan):
+        kset.update(g.get("members") or [])
+    errors = []
+    for name in found:
+        outside = []
+        for n in teir.get("nodes") or []:
+            if n.get("name") in kset:
+                continue
+            rd = [region_name(r) for r in (n.get("reads") or [])]
+            wr = [region_name(r) for r in (n.get("writes") or [])]
+            if name in wr:
+                outside.append("%s(写)" % n.get("name"))
+            elif name in rd:
+                outside.append("%s(读)" % n.get("name"))
+        if outside:
+            errors.append({
+                "code": "E_UKU_STATE_OWNER",
+                "msg": ("会话状态 %s 被内核组独占，但组外阶段仍在访问：%s；"
+                        "要么把这些阶段也并入内核组，要么让 %s 留在邮箱里"
+                        % (name, "、".join(outside), name)),
+            })
+    return errors
+
+
+def state_init_errors(plan, teir):
+    """PR-9D：会话状态必须有明确的初值语义。
+
+    内核打开设备时不得默认清零——积分器初值到底是 0 还是残留，决定整条轨迹。
+    v1 只接受显式声明 init ∈ {"zero", "const:<int>"}；没有证据即拒绝。
+    """
+    errors = []
+    for name in kernel_persistent_regions(plan, teir):
+        init = _declared_init(teir, name)
+        if init is None:
+            errors.append({
+                "code": "E_UKU_STATE_INIT_UNKNOWN",
+                "msg": ("会话状态 %s 无初值证据：不得假定内核打开设备时清零，"
+                        "请在 TEIR meta.session_init 声明 zero 或 const:<int>" % name),
+            })
+            continue
+        s = str(init).strip().lower()
+        if s == "zero" or s.startswith("const:"):
+            continue
+        errors.append({
+            "code": "E_UKU_STATE_INIT",
+            "msg": "会话状态 %s 初值声明 %r 不受支持（只接受 zero / const:<int>）"
+                   % (name, init),
+        })
+    return errors
+
+
 def check(plan, teir, contract=None, calls=None):
     """返回 {ok, errors, interface}。ok 才可 deployment_ready。"""
     errors = []
@@ -230,6 +309,9 @@ def check(plan, teir, contract=None, calls=None):
     errors.extend(call_errors(plan, teir, calls))
     perr = persistent_errors(plan, teir)
     errors.extend(perr)
+    # PR-9D：状态所有权与初值语义。不通过就不得把 session 从邮箱摘掉。
+    errors.extend(state_ownership_errors(plan, teir))
+    errors.extend(state_init_errors(plan, teir))
     kmem, reads, writes = collect_kernel_io(plan, teir)
     session_vars = []
     if not perr:

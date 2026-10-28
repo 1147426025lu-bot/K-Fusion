@@ -140,6 +140,9 @@ def candidate_schedule(plan, teir, override, c_user, c_kernel):
     evidence = []
     missing = []
     release = []
+    # PR-9E：这些阶段的 exec_us 是 0（组总额记在组尾），只是为了让 Ĉ 的把总成本
+    # 加回来，**不是**它们的执行时间。任何窗口/顺序证明都不得用这些 0。
+    timing_bound = []
     uku = is_uku_ioctl(plan)
     for g in plan.get("groups") or []:
         d = g.get("domain")
@@ -164,11 +167,14 @@ def candidate_schedule(plan, teir, override, c_user, c_kernel):
                     missing.append("%s@%s" % (m, d))
             else:
                 # 总额记在组尾；组内 0 标 group_bound，不得当作独立阶段实测。
+                # PR-9E：0 值只用于「把组总成本加回去」，不能当组内阶段的时间证据，
+                # 因此单独记进 timing_bound，禁止流入窗口/顺序校验。
                 for i, m in enumerate(members):
                     if i == len(members) - 1:
                         exec_us[m] = float(val)
                     else:
                         exec_us[m] = 0.0
+                        timing_bound.append(m)
                     evidence.append("%s@%s:group_bound" % (m, d))
             continue
         for m in members:
@@ -189,6 +195,7 @@ def candidate_schedule(plan, teir, override, c_user, c_kernel):
         "release": release,
         "evidence": evidence,
         "missing": missing,
+        "timing_bound": timing_bound,
         "complete": not missing,
         "model": "uku_ioctl_serial" if uku else "per_group_release",
     }
@@ -510,6 +517,17 @@ def dag_temporal_ok(plan, dag, contract, platforms, c_user, c_kernel, sched):
             return False, [{"code": "E_WINDOW_NO_COST",
                             "msg": "有相位窗口但缺测，不得用 0 过窗"}]
         return True, []
+    # PR-9E：组级实测成本只用于比较整组代价；组内成员被记成 0 的那些，
+    # 没有任何执行时间证据。有相位窗口时不能拿它当时间证明。
+    bound = (sched or {}).get("timing_bound") or []
+    if bound:
+        ctr = (contract or {}).get("timing_constraints") or {}
+        if any(ctr.get(k) for k in ("sample", "actuator", "output")):
+            return False, [{
+                "code": "E_WINDOW_GROUP_BOUND",
+                "msg": ("组级实测成本不得当组内阶段执行时间：%s 无逐阶段测量，"
+                        "存在相位窗口时不得宣称时间合法" % ",".join(bound)),
+            }]
     exec_us = (sched or {}).get("exec_us") or {}
     rel = (sched or {}).get("release") or []
     if rel:
