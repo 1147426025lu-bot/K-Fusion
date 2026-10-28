@@ -600,6 +600,20 @@ def _build_teir_from_dag(dag, summary=None, stages=None, caps=None, kc0=None):
         ),
     }
 
+    # PR-9D/PR-10A：会话状态的初值证据。文件级全局**没有初始化器**时，C 语义
+    # 保证它就是零初始化（BSS），这是可静态证明的；有初始化器但值未知则不声明，
+    # 交给 uku_interface 的初值门禁拒绝（fail-closed，不猜）。
+    _typed = {}
+    for g in ((stages or {}).get("globals_typed") or []):
+        if isinstance(g, dict) and g.get("name"):
+            _typed[g["name"]] = g
+    session_init = {}
+    for p in persistent:
+        r = p.get("region")
+        g = _typed.get(r)
+        if g is not None and not g.get("has_init", True):
+            session_init[r] = "zero"
+
     teir = {
         "version": 1,
         "kind": "teir",
@@ -611,6 +625,7 @@ def _build_teir_from_dag(dag, summary=None, stages=None, caps=None, kc0=None):
         "transform": transform,
         "meta": {
             "note": "输出本拍未读 ≠ 可删除；别名未证则保留依赖或拒绝变换",
+            "session_init": session_init,
             "delay_edges": [
                 {"from": a, "to": b} for a, b in sorted(delay_pairs)
             ],
