@@ -1,6 +1,6 @@
 # Gate 3：与规划器分离的验证（验生成物 + 独立事件解释器）
 
-日期：2026-10-28　分支：`feat/ecos-temporal-semantics`　提交：`a328a0d`
+日期：2026-10-28　分支：`feat/ecos-temporal-semantics`　提交：`dee4b78`
 
 ## 动机
 
