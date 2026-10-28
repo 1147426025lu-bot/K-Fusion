@@ -148,12 +148,14 @@ def w1(out):
             "seq_ok": m.get("seq_mismatch") == 0 and m.get("ioctl_error") == 0,
         }
     rec["board"] = board
-    rec["ok"] = (
-        rec.get("adapter") == "uku_ioctl"
-        and rec.get("deployment_ready")
-        and (not board or (board.get("digest_match") and board.get("seq_ok")))
-    )
-    rec["note"] = "无状态 UKU；digest 一致不是内核更快；非 WCET"
+    rec["plan_pass"] = (
+        rec.get("adapter") == "uku_ioctl" and rec.get("deployment_ready"))
+    rec["board_pass"] = bool(
+        board.get("digest_match") and board.get("seq_ok")
+        and board.get("gold") and board.get("mixed"))
+    rec["end_to_end_pass"] = rec["plan_pass"] and rec["board_pass"]
+    rec["ok"] = rec["end_to_end_pass"]
+    rec["note"] = "无状态 UKU；digest 一致不是内核更快；非 WCET；无板级日志不得标 end_to_end"
     return rec
 
 
@@ -173,8 +175,11 @@ def w2(out):
     teir = json.load(open(os.path.join(pdir, "task.teir.json")))
     pid = [n for n in teir.get("nodes") or [] if n.get("name") == "stage_pid"]
     rec["pid_persistent"] = (pid[0].get("persistent") if pid else None)
-    rec["ok"] = rec.get("domain") != "mixed" and rec.get("adapter") != "uku_ioctl"
-    rec["note"] = "积分跨拍：UKU v1 拒绝，不把状态内核化"
+    rec["plan_pass"] = rec.get("domain") != "mixed" and rec.get("adapter") != "uku_ioctl"
+    rec["board_pass"] = False
+    rec["end_to_end_pass"] = False
+    rec["ok"] = rec["plan_pass"]
+    rec["note"] = "积分跨拍：UKU v1 拒绝（规划证据，SKIP_HOST 非板级）"
     return rec
 
 
@@ -192,13 +197,31 @@ def w3(out):
         "C_KERNEL_US": "21",
     }, skip_host=True, skip_kmod=True)
     open(os.path.join(out, "logs", "w3_pipe.log"), "w").write(log)
-    rec["ok"] = (
+    letp = os.path.join(pdir, "let.json")
+    let_chosen = None
+    let_full_fuse_legal = None
+    if os.path.isfile(letp):
+        let = json.load(open(letp))
+        let_chosen = let.get("chosen")
+        by = {c["id"]: c for c in (let.get("candidates") or [])}
+        if "full_fuse" in by:
+            let_full_fuse_legal = bool(by["full_fuse"].get("legal"))
+    rec["let_chosen"] = let_chosen
+    rec["let_full_fuse_legal"] = let_full_fuse_legal
+    rec["let_host_emitted"] = os.path.isdir(os.path.join(pdir, "let_host"))
+    rec["plan_pass"] = (
         rec.get("groups") == [["s1", "s2"], ["s3", "s4"]]
         and rec.get("domain") == "linux_userspace"
         and rec.get("adapter") != "uku_ioctl"
         and rec.get("chosen") not in ("B", "D")
+        and let_full_fuse_legal is not True
+        and rec.get("let_chosen") != "full_fuse"
+        and (not rec["let_host_emitted"] or rec.get("let_chosen") != "full_fuse")
     )
-    rec["note"] = "s3 窗口 [380,520]；合法两段用户态，不得 UKU/全融合"
+    rec["board_pass"] = False
+    rec["end_to_end_pass"] = False
+    rec["ok"] = rec["plan_pass"]
+    rec["note"] = "s3 窗口 [380,520]；STKP 两段用户态；无 LET 全融合产物（规划证据）"
     return rec
 
 
@@ -222,14 +245,20 @@ def main():
     md = os.path.join(OUT, "RESULT_PR6__论文矩阵.md")
     with open(md, "w", encoding="utf-8") as f:
         f.write("# PR-6 选择性内核化矩阵\n\n经验值，不是 WCET。不得从短重叠 R 写内核更快。\n\n")
-        f.write("| 负载 | chosen | 域 | adapter | ok |\n|---|---|---|---|---|\n")
+        f.write("| 负载 | chosen | 域 | plan_pass | board_pass | end_to_end |\n"
+                "|---|---|---|---|---|---|\n")
         for k, w in report["workloads"].items():
-            f.write("| %s | %s | %s | %s | %s |\n" % (
-                k, w.get("chosen"), w.get("domain"), w.get("adapter"), w.get("ok")))
+            f.write("| %s | %s | %s | %s | %s | %s |\n" % (
+                k, w.get("chosen"), w.get("domain"),
+                w.get("plan_pass"), w.get("board_pass"),
+                w.get("end_to_end_pass")))
         f.write("\n")
         for k, w in report["workloads"].items():
             f.write("- **%s**：%s\n" % (k, w.get("note")))
-    print(json.dumps({k: {"ok": v.get("ok"), "chosen": v.get("chosen"),
+    print(json.dumps({k: {"ok": v.get("ok"), "plan_pass": v.get("plan_pass"),
+                           "board_pass": v.get("board_pass"),
+                           "end_to_end_pass": v.get("end_to_end_pass"),
+                           "chosen": v.get("chosen"),
                            "domain": v.get("domain"), "adapter": v.get("adapter")}
                       for k, v in report["workloads"].items()},
                      indent=2, ensure_ascii=False))

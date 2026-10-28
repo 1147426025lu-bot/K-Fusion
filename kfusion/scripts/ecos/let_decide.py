@@ -48,6 +48,57 @@ def load_verifier():
     return mod
 
 
+def _one_constraint(raw):
+    if not raw:
+        return []
+    return raw if isinstance(raw, list) else [raw]
+
+
+def hydrate_pins(contract, teir):
+    """把 timing_constraints 收成 LET pins，避免与 STKP 窗口各说各话。"""
+    c = json.loads(json.dumps(contract or {}))
+    pins = dict(c.get("pins") or {})
+    ph = phase_map(teir)
+    ctr = c.get("timing_constraints") or {}
+    task = c.get("task") or teir.get("task") or {}
+    if c.get("period_us") is None and task.get("period_us") is not None:
+        c["period_us"] = task.get("period_us")
+    if c.get("mode") is None:
+        c["mode"] = "strict_period"
+
+    def add(stage, kind, phase, extra):
+        if not stage:
+            return
+        cur = dict(pins.get(stage) or {})
+        if "kind" not in cur:
+            cur["kind"] = kind
+        if cur.get("phase_us") is None:
+            cur["phase_us"] = float(phase)
+        cur.update(extra)
+        pins[stage] = cur
+
+    for it in _one_constraint(ctr.get("sample")):
+        if not isinstance(it, dict):
+            continue
+        st = it.get("stage")
+        phase = it.get("earliest_us")
+        if phase is None:
+            phase = ph.get(st, 0.0)
+        add(st, "input_snapshot", phase, {"pull_forbidden": True})
+    for key in ("actuator", "output"):
+        for it in _one_constraint(ctr.get(key)):
+            if not isinstance(it, dict):
+                continue
+            st = it.get("stage")
+            phase = it.get("earliest_us")
+            if phase is None:
+                phase = ph.get(st, 0.0)
+            add(st, "output_commit", phase,
+                {"early_commit_forbidden": True})
+    c["pins"] = pins
+    return c
+
+
 def phase_map(teir):
     return {n["name"]: float(n.get("phase_us") or 0)
             for n in teir.get("nodes") or []}
@@ -238,6 +289,7 @@ def cost_plan(plan, c_us, let_event_us, exec_us):
 
 def decide(teir, contract, verifier, c_us, let_event_us, exec_us,
            platform="linux_userspace"):
+    contract = hydrate_pins(contract, teir)
     ph = phase_map(teir)
     order = order_of(teir)
     pins = contract.get("pins") or {}

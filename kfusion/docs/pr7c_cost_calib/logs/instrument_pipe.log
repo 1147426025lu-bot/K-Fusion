@@ -1,0 +1,142 @@
+
+──── 1) Clang AST → 阶段骨架（替代手写 stages.json / dag.json） ────
+extracted 4 stages from loop_main:
+  0. stage_sample @0µs  stage_sample()
+  1. stage_add @200µs  stage_add()
+  2. stage_shift @400µs  stage_shift()
+  3. stage_sink @600µs  stage_sink()
+wrote /tmp/pr7c_calib/pipe/stages.json
+
+──── 2) C → LLVM IR（禁内联，保留阶段函数） ────
+
+──── 3) IR → EffectSummary（效果不是人写的） ────
+[EffectSummary] 写出 /tmp/pr7c_calib/pipe/effect_summary.json（6 个函数）
+
+──── 4) 摘要 + 自动骨架 → 契约 ────
+写出 /tmp/pr7c_calib/pipe/task.contract.json（4 个阶段）
+  stage_sample             state_read/state_write
+  stage_add                state_read/state_write
+  stage_shift              state_read/state_write
+  stage_sink               pure
+
+──── 5) 契约门禁（linux_userspace 为底线；内核是否可行交给选型） ────
+== task.contract.json  (task=mixed_uku)
+   [linux_userspace] ✅ PASS
+== task.contract.json  (task=mixed_uku)
+   [linux_kernel] ✅ PASS
+  内核域契约可通过（是否部署仍由 A/B/C/D 决定）
+
+──── 6) DAG（数据边来自 IR，相位来自骨架） ────
+== 节点 4（stages 视图） ==
+  stage_add              state_read,state_write
+  stage_sample           state_read,state_write
+  stage_shift            state_read,state_write
+  stage_sink             pure
+== 边 ==
+  stage_add            -> stage_shift          [data    ] @g_mid
+  stage_sample         -> stage_add            [data    ] @g_in
+== 拓扑序 ==
+  stage_sample -> stage_add -> stage_shift -> stage_sink
+== 统计 ==
+  边 2（call 0 / spawn 0 / data 2 / anti 0 / conflict 0）· 候选 0
+  区域具体化：唯一绑定 0 · 多绑定 0 · 完全未解析 0 · 调用已解释 0
+
+──── 6b) TEIR（状态版本 + 时间事件 + 允许域） ────
+TEIR 4 nodes (must_preserve=3 may_delete=1)  edges previous-job=0  policy=ok
+wrote /tmp/pr7c_calib/pipe/task.teir.json
+  pin 2 个阶段
+
+──── 7) 单域融合规划（对照报告；失败不阻断 STKP） ────
+  写出对照 /tmp/pr7c_calib/pipe/plan.planner.json
+
+──── 7c) A–F 对照基线（失败不阻断 STKP） ────
+A/B/C/D/E/F legal=4/6  chosen=B
+    A LEGAL   fused=False  Cost=84.0  
+  → B LEGAL   fused=True  Cost=21.0  Cost=G·c + E + extra = 21.0; G=1 c=21.0 extra=0.0; 全内核非法；部分内核化 E Cost=102.0 ≥ 用户态，故不迁移
+    C REJECT  fused=False  Cost=-  验证器拒绝: E_DOMAIN; E_DOMAIN
+    D REJECT  fused=True  Cost=-  验证器拒绝: E_DOMAIN; E_DOMAIN
+    E LEGAL   fused=True  Cost=102.0  
+    F LEGAL   fused=False  Cost=112.0  
+wrote /tmp/pr7c_calib/pipe/candidates.json
+
+──── 7c2) STKP 穷举求解（入选方案才是生成输入） ────
+STKP chosen plan → /tmp/pr7c_calib/pipe/chosen.plan.json  (STKP:L[stage_sample]|L[stage_add+stage_shift]|L[stage_sink] mixed Ĉ=24.2)
+STKP v1 raw=54 enum=54 deployable=11 model=14 chosen=STKP:L[stage_sample]|L[stage_add+stage_shift]|L[stage_sink] claim=explore_uncertain
+  prune domain=40 semantic=0 temporal=0 mixed=3 missing=0
+  g0  stage_sample                 @ linux_userspace
+  g1  stage_add + stage_shift      @ linux_kernel
+  g2  stage_sink                   @ linux_userspace
+  vs A–F: baseline=B STKP=STKP:L[stage_sample]|L[stage_add+stage_shift]|L[stage_sink] missed_by_af=True
+wrote /tmp/pr7c_calib/pipe/stkp.json
+  STKP 入选 STKP:L[stage_sample]|L[stage_add+stage_shift]|L[stage_sink]  域 mixed
+
+──── 7b) 独立验证器（验证入选方案，不调用规划器） ────
+VERIFY PASS
+
+──── 7b2) DAG 全局验证器（写回 verification，供 emit 门禁） ────
+· 组 g0   stage_sample
+· 组 g1   stage_add + stage_shift
+· 组 g2   stage_sink
+✅ 方案验证通过（3 组 · 同拍边 2 · 跨周期边 0 · 时间证据 empirical）
+  deploy.json chosen=STKP:L[stage_sample]|L[stage_add+stage_shift]|L[stage_sink] domain=mixed
+
+──── 8) 生成用户态驱动（#include 原计算体，不复制） ────
+UKU 写出 /tmp/pr7c_calib/pipe/kmod_uku  in=['g_in', 'g_mid'] out=['g_mid', 'g_out'] stages=['stage_add', 'stage_shift']
+
+──── 8b) UKU ioctl 内核计算模块 ────
+make: Entering directory '/root/linux-5.15.86'
+  CC [M]  /tmp/pr7c_calib/pipe/kmod_uku/kfusion_uku_mod.o
+  CC [M]  /tmp/pr7c_calib/pipe/kmod_uku/stage_impl.o
+  LD [M]  /tmp/pr7c_calib/pipe/kmod_uku/kfusion_uku.o
+WARNING: Symbol version dump "Module.symvers" is missing.
+         Modules may not have dependencies or modversions.
+         You may get many unresolved symbol warnings.
+  MODPOST /tmp/pr7c_calib/pipe/kmod_uku/Module.symvers
+WARNING: modpost: "__arch_copy_from_user" [/tmp/pr7c_calib/pipe/kmod_uku/kfusion_uku.ko] undefined!
+WARNING: modpost: "ktime_get" [/tmp/pr7c_calib/pipe/kmod_uku/kfusion_uku.ko] undefined!
+WARNING: modpost: "mutex_unlock" [/tmp/pr7c_calib/pipe/kmod_uku/kfusion_uku.ko] undefined!
+WARNING: modpost: "misc_register" [/tmp/pr7c_calib/pipe/kmod_uku/kfusion_uku.ko] undefined!
+WARNING: modpost: "mutex_lock" [/tmp/pr7c_calib/pipe/kmod_uku/kfusion_uku.ko] undefined!
+WARNING: modpost: "__arch_copy_to_user" [/tmp/pr7c_calib/pipe/kmod_uku/kfusion_uku.ko] undefined!
+WARNING: modpost: "__stack_chk_fail" [/tmp/pr7c_calib/pipe/kmod_uku/kfusion_uku.ko] undefined!
+WARNING: modpost: "misc_deregister" [/tmp/pr7c_calib/pipe/kmod_uku/kfusion_uku.ko] undefined!
+  CC [M]  /tmp/pr7c_calib/pipe/kmod_uku/kfusion_uku.mod.o
+  LD [M]  /tmp/pr7c_calib/pipe/kmod_uku/kfusion_uku.ko
+make: Leaving directory '/root/linux-5.15.86'
+
+──── 9) UKU 用户态驱动（gold；mixed 需 insmod 后跑） ────
+
+# mode: gold  cycles=40
+
+# probe: r/s/f v1.2
+# period_ns: 1000000
+# deadline_ns: 1000000
+# samples: 40
+# release_id: serial 0..39
+# series_us: start_lat exec response  (1us buckets, cap 199)
+# stat_start_lat_us: min=61.087 avg=62.610 p50=61 p90=64 p99=73 p99.9=73 p99.99=73 max=73.984 over=0 neg=0 min_signed=61.087 n=40
+# stat_exec_us: min=1.870 avg=2.244 p50=2 p90=2 p99=2 p99.9=2 p99.99=2 max=2.778 over=0 neg=0 min_signed=1.870 n=40
+# stat_response_us: min=63.113 avg=64.854 p50=63 p90=67 p99=76 p99.9=76 p99.99=76 max=76.613 over=0 neg=0 min_signed=63.113 n=40
+# stat_exec_stage_stage_sample_us: min=0.148 avg=0.157 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.167 over=0 neg=0 min_signed=0.148 n=40
+# stat_exec_stage_stage_add_us: min=0.148 avg=0.154 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.167 over=0 neg=0 min_signed=0.148 n=40
+# stat_exec_stage_stage_shift_us: min=0.148 avg=0.155 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.167 over=0 neg=0 min_signed=0.148 n=40
+# stat_exec_stage_stage_sink_us: min=0.148 avg=0.155 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.167 over=0 neg=0 min_signed=0.148 n=40
+# deadline_miss: 0/40
+# uku_seq_mismatch: 0/40
+# uku_ioctl_error: 0/40
+# digest: f349d86d
+# last_seq: 40 g_in=683 g_out=1368
+
+✅ 从 C 到 A/B/C/D 流水线完成
+   骨架  /tmp/pr7c_calib/pipe/stages.json
+   DAG   /tmp/pr7c_calib/pipe/task.dag.json
+   TEIR  /tmp/pr7c_calib/pipe/task.teir.json
+   入选  /tmp/pr7c_calib/pipe/chosen.plan.json  (STKP:L[stage_sample]|L[stage_add+stage_shift]|L[stage_sink] / mixed)
+   部署  /tmp/pr7c_calib/pipe/deploy.json
+   方案  /tmp/pr7c_calib/pipe/plan.json
+   验证  /tmp/pr7c_calib/pipe/verify.json
+   选型  /tmp/pr7c_calib/pipe/candidates.json  (A–F 基线)
+   STKP  /tmp/pr7c_calib/pipe/stkp.json
+   用户态 /tmp/pr7c_calib/pipe/driver.c
+   UKU    /tmp/pr7c_calib/pipe/kmod_uku/  adapter=uku_ioctl
+   计算体始终是 /root/K-Fusion/kfusion/examples/ecos/mixed_uku__无状态混合.c ，没有第二份手写阶段函数

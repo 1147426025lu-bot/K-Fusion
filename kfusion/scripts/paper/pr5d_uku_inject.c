@@ -112,6 +112,8 @@ int main(void)
 		fprintf(stderr, "FAIL poison n_out accepted\n");
 		return 1;
 	}
+	if (errno != EINVAL)
+		return fail("poison n_out want EINVAL");
 	printf("poison_nout_einval_ok\n");
 
 	for (i = 2; i <= 40; i++) {

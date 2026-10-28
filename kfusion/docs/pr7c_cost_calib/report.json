@@ -1,0 +1,55 @@
+{
+  "kind": "pr7c_cost_calib",
+  "claim": "empirical; not WCET; not kernel-faster from short R",
+  "host": "Linux version 5.15.86 (builder@e3665d6e1a6c) (aarch64-linux-gnu-gcc (Debian 10.2.1-6) 10.2.1 20210110, GNU ld (GNU Binutils for Debian) 2.35.2) #1 SMP PREEMPT Wed Oct 14 10:16:11 UTC 2026",
+  "calib_pass": true,
+  "holdout_pass": true,
+  "end_to_end_pass": true,
+  "note": "；holdout 未显示 mixed 更快",
+  "calib": {
+    "logs": {
+      "gold": "/root/K-Fusion/kfusion/docs/pr7c_cost_calib/logs/calib_gold.log",
+      "mixed": "/root/K-Fusion/kfusion/docs/pr7c_cost_calib/logs/calib_mixed.log"
+    },
+    "inputs_ok": true,
+    "inputs_why": [],
+    "start_lat_avg_us": 13.315,
+    "T_ioctl": {
+      "value": 6.261,
+      "evidence": "measured",
+      "statistic": "avg_roundtrip_minus_kcompute",
+      "source_log": "/root/K-Fusion/kfusion/docs/pr7c_cost_calib/logs/calib_mixed.log",
+      "ioctl_roundtrip_us": 6.458,
+      "kernel_compute_us": 0.197,
+      "samples": 40,
+      "kind": "T_ioctl",
+      "note": "T_ioctl=ioctl_roundtrip−kernel_compute；非 WCET"
+    },
+    "chosen": "B",
+    "claim": "empirical_model_not_wcet",
+    "domain": "linux_userspace",
+    "grade": "empirical_model_not_wcet",
+    "final_rankable": true,
+    "predicted_R_us": 13.876,
+    "mixed_predicted_R_us": 20.004,
+    "instrument_cost_not_used": true
+  },
+  "holdout": {
+    "independent": true,
+    "why": "ok",
+    "logs": {
+      "gold": "/root/K-Fusion/kfusion/docs/pr7c_cost_calib/logs/holdout_gold.log",
+      "mixed": "/root/K-Fusion/kfusion/docs/pr7c_cost_calib/logs/holdout_mixed.log"
+    },
+    "digest_match": true,
+    "seq_ok": true,
+    "gold_R_avg_us": 15.746,
+    "mixed_R_avg_us": 21.59,
+    "gold_R_p50_us": 11,
+    "mixed_R_p50_us": 16,
+    "chosen_measured_R_avg_us": 15.746,
+    "pred_rel_err": 0.11876032008129055,
+    "mixed_pred_rel_err": 0.07345993515516436,
+    "mixed_faster_on_holdout": false
+  }
+}

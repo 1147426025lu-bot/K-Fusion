@@ -286,35 +286,41 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     A("	return 0;")
     A("}")
     A("")
-    A("static void run_local_kernel_group(void)")
-    A("{")
-    for c in kernel_calls(kmem, calls):
-        A("	%s;" % c)
-    A("}")
-    A("")
+    order = []
+    for g in groups:
+        order.extend(g.get("members") or [])
+    nst = len(order) or 1
     A("static int run_mode(const char *mode, long cycles)")
     A("{")
     A("	int mixed = (strcmp(mode, \"mixed\") == 0);")
     A("	long k, miss = 0, bad_seq = 0, bad_ioctl = 0;")
     A("	struct timespec next;")
-    A("	struct plc_probe_series g_resp, g_hand, g_rt;")
+    A("	struct plc_probe_series g_start, g_work, g_resp, g_hand, g_rt;")
+    A("	struct plc_probe_series g_exec_stage[%d];" % nst)
     A("	loop_reset();")
     A("	g_digest = 2166136261u;")
     A("	if (mixed) {")
     A("		uku_fd = open(\"/dev/kfusion_uku\", O_RDWR);")
     A("		if (uku_fd < 0) { perror(\"/dev/kfusion_uku\"); return 2; }")
     A("	}")
+    A("	plc_probe_reset(&g_start, \"start_lat\");")
+    A("	plc_probe_reset(&g_work, \"exec\");")
     A("	plc_probe_reset(&g_resp, \"response\");")
     A("	plc_probe_reset(&g_hand, \"kernel_compute\");")
     A("	plc_probe_reset(&g_rt, \"ioctl_roundtrip\");")
+    for i, name in enumerate(order):
+        A("	plc_probe_reset(&g_exec_stage[%d], \"exec_stage_%s\");" % (i, name))
     A("	if (clock_gettime(CLOCK_MONOTONIC, &next) != 0) return 1;")
     A("	for (k = 0; k < cycles; k++) {")
-    A("		long long r, f, hns = 0;")
+    A("		long long r, s, f, hns = 0, _a;")
     A("		int rc;")
     A("		bump_ns(&next, PERIOD_NS);")
     A("		r = (long long)next.tv_sec * 1000000000LL + next.tv_nsec;")
     A("		if (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL) != 0)")
     A("			return 1;")
+    A("		s = now_ns();")
+    A("		plc_probe_add(&g_start, s - r);")
+    si = 0
     for g in groups:
         dom = g.get("domain")
         members = g.get("members") or []
@@ -333,12 +339,22 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
             A("			}")
             A("			plc_probe_add(&g_hand, hns);")
             A("		} else {")
-            A("			run_local_kernel_group();")
+            for m in members:
+                expr = calls.get(m) or ("%s()" % m)
+                A("			_a = now_ns();")
+                A("			%s;" % expr)
+                A("			plc_probe_add(&g_exec_stage[%d], now_ns() - _a);" % si)
+                si += 1
             A("		}")
         else:
             for m in members:
-                A("		%s;" % (calls.get(m) or ("%s()" % m)))
+                expr = calls.get(m) or ("%s()" % m)
+                A("		_a = now_ns();")
+                A("		%s;" % expr)
+                A("		plc_probe_add(&g_exec_stage[%d], now_ns() - _a);" % si)
+                si += 1
     A("		f = now_ns();")
+    A("		plc_probe_add(&g_work, f - s);")
     A("		plc_probe_add(&g_resp, f - r);")
     for v in digest_vars:
         A("		DIGEST_MIX(%s);" % v)
@@ -347,11 +363,15 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     A("	if (uku_fd >= 0) { close(uku_fd); uku_fd = -1; }")
     A("	printf(\"\\n# mode: %s  cycles=%ld\\n\", mode, cycles);")
     A("	plc_probe_head(PERIOD_NS, DEADLINE_NS, (unsigned long long)cycles);")
+    A("	plc_probe_line(&g_start);")
+    A("	plc_probe_line(&g_work);")
     A("	plc_probe_line(&g_resp);")
     A("	if (mixed) {")
     A("		plc_probe_line(&g_hand);")
     A("		plc_probe_line(&g_rt);")
     A("	}")
+    for i, _name in enumerate(order):
+        A("	plc_probe_line(&g_exec_stage[%d]);" % i)
     A("	printf(\"# deadline_miss: %ld/%ld\\n\", miss, cycles);")
     A("	printf(\"# uku_seq_mismatch: %ld/%ld\\n\", bad_seq, cycles);")
     A("	printf(\"# uku_ioctl_error: %ld/%ld\\n\", bad_ioctl, cycles);")

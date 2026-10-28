@@ -1,0 +1,11 @@
+{
+  "value": 6.261,
+  "evidence": "measured",
+  "statistic": "avg_roundtrip_minus_kcompute",
+  "source_log": "/root/K-Fusion/kfusion/docs/pr7c_cost_calib/logs/calib_mixed.log",
+  "ioctl_roundtrip_us": 6.458,
+  "kernel_compute_us": 0.197,
+  "samples": 40,
+  "kind": "T_ioctl",
+  "note": "T_ioctl=ioctl_roundtrip−kernel_compute；非 WCET"
+}

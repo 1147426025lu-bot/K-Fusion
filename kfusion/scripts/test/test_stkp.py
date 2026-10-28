@@ -3,6 +3,7 @@
 from __future__ import print_function
 
 import importlib.util
+import json
 import os
 import sys
 import unittest
@@ -89,12 +90,15 @@ class StkpV1(unittest.TestCase):
         text = (
             "# stat_exec_stage_fir_us: min=0.2 avg=0.609 p50=0 p90=1 p99=1 "
             "p99.9=2 p99.99=39 max=39.0 over=0 neg=0 min_signed=0.2 n=2000\n"
+            "# stat_response_us: min=9.5 avg=18.2 p50=13 p90=29 p99=67 "
+            "p99.9=67 p99.99=67 max=67.9 over=0 neg=0 min_signed=9.5 n=80\n"
         )
         p = stkp.stage_cost_mod.parse_user_stage_log(text, source_log="B.log")
         self.assertEqual(p["stages"]["fir"]["value"], 0.609)
         self.assertEqual(p["stages"]["fir"]["p50_us"], 0)
         self.assertEqual(p["stages"]["fir"]["evidence"], "measured")
         self.assertEqual(p["stages"]["fir"]["source_log"], "B.log")
+        self.assertAlmostEqual(p["response"]["avg_us"], 18.2)
 
     def test_pin_teir_from_source(self):
         sys.path.insert(0, os.path.join(KF, "scripts", "ecos"))
@@ -559,6 +563,8 @@ class StkpV1(unittest.TestCase):
         self.assertIn("uku_fail_closed", drv)
         self.assertIn("ioctl_roundtrip", drv)
         self.assertIn("kernel_compute", drv)
+        self.assertIn("start_lat", drv)
+        self.assertIn("exec_stage_", drv)
         self.assertNotIn("uku_handoff", drv)
 
     def test_parse_ioctl_roundtrip_is_not_kernel_compute(self):
@@ -644,6 +650,113 @@ class StkpV1(unittest.TestCase):
             text = f.read()
         self.assertIn("失败不阻断 STKP", text)
         self.assertNotIn('|| die "fusion_plan 失败"', text)
+        self.assertIn('LET_V+=(--contract "$TIME_CONTRACT")', text)
+        self.assertIn("SKIP_LET_EMIT", text)
+        self.assertIn("不生成 let_host（STKP plan 仍是部署源）", text)
+
+    def test_let_chain_window_rejects_full_fuse(self):
+        spec = importlib.util.spec_from_file_location(
+            "let_decide", os.path.join(KF, "scripts", "ecos", "let_decide.py"))
+        let = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(let)
+
+        class V(object):
+            def verify(self, teir, plan):
+                return True, []
+
+        names = ["s1", "s2", "s3", "s4"]
+        teir = chain_teir(names, exec_us=0.6)
+        for i, n in enumerate(teir["nodes"]):
+            n["phase_us"] = float((i) * 200)
+        con_path = os.path.join(
+            KF, "contracts", "examples", "chain_window.contract.json")
+        with open(con_path, encoding="utf-8") as f:
+            contract = json.load(f)
+        hydrated = let.hydrate_pins(contract, teir)
+        self.assertEqual(hydrated["pins"]["s1"]["kind"], "input_snapshot")
+        self.assertEqual(hydrated["pins"]["s3"]["kind"], "output_commit")
+        self.assertTrue(hydrated["pins"]["s3"]["early_commit_forbidden"])
+        doc = let.decide(teir, contract, V(), 21.0, 21.0, 0.0)
+        by = {c["id"]: c for c in doc["candidates"]}
+        self.assertFalse(by["full_fuse"]["legal"])
+        self.assertNotEqual(doc["chosen"], "full_fuse")
+        self.assertIn("s3", doc["contract"]["pinned"])
+        codes = [d["code"] for d in by["full_fuse"]["diagnostics"]]
+        self.assertIn("E_PIN_EARLY_COMMIT", codes)
+
+    def test_pr6_empty_board_is_not_end_to_end(self):
+        board = {}
+        board_pass = bool(
+            board.get("digest_match") and board.get("seq_ok")
+            and board.get("gold") and board.get("mixed"))
+        self.assertFalse(board_pass)
+        src = open(os.path.join(KF, "scripts", "paper", "pr5d_uku_inject.c"),
+                   encoding="utf-8").read()
+        self.assertIn('errno != EINVAL', src)
+        self.assertIn("poison n_out want EINVAL", src)
+
+    def test_pr7c_fold_and_holdout_gates(self):
+        sc = stkp.stage_cost_mod
+        slot = {"value": 0.4, "evidence": "measured", "source_log": "/tmp/M.log"}
+        folded = sc.fold_group_cost(slot, ["add", "shift"])
+        self.assertAlmostEqual(folded["add"]["value"], 0.4)
+        self.assertAlmostEqual(folded["shift"]["value"], 0.0)
+        self.assertTrue(folded["shift"]["folded"])
+        gold = {"stages": {
+            "sample": {"value": 0.3, "evidence": "measured",
+                       "source_log": "/tmp/G.log"},
+            "add": {"value": 0.5, "evidence": "measured",
+                    "source_log": "/tmp/G.log"},
+            "sink": {"value": 0.2, "evidence": "measured",
+                     "source_log": "/tmp/G.log"},
+        }}
+        mixed = {
+            "kernel_compute": dict(slot),
+            "T_ioctl": {"value": 3.3, "evidence": "measured",
+                        "source_log": "/tmp/M.log"},
+        }
+        ov, ioctl = sc.override_from_gold_mixed(
+            gold, mixed, ["sample", "add", "sink"], ["add"])
+        self.assertAlmostEqual(ov["linux_kernel"]["add"]["value"], 0.4)
+        self.assertEqual(ov["linux_kernel"]["sample"]["evidence"], "missing")
+        spec = importlib.util.spec_from_file_location(
+            "pr7c", os.path.join(
+                KF, "scripts", "paper", "pr7c_cost_calib__成本标定.py"))
+        pr7c = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(pr7c)
+        ok, why = pr7c.calib_inputs_ok(
+            ov, ioctl, ["sample", "add", "sink"], ["add"])
+        self.assertTrue(ok, why)
+        fake = json.loads(json.dumps(ov))
+        fake["linux_userspace"]["add"] = {"value": 80.0, "evidence": "measured"}
+        ok2, why2 = pr7c.calib_inputs_ok(
+            fake, ioctl, ["sample", "add", "sink"], ["add"])
+        self.assertFalse(ok2)
+        self.assertIn("user:add", why2)
+        okh, wh = pr7c.holdout_independent(
+            ("/tmp/G.log", "/tmp/M.log"), ("/tmp/G.log", "/tmp/M.log"))
+        self.assertFalse(okh)
+        self.assertEqual(wh, "same_log_as_calib")
+        okh2, _ = pr7c.holdout_independent(
+            ("/tmp/G.log", "/tmp/M.log"), ("/tmp/G2.log", "/tmp/M2.log"))
+        self.assertTrue(okh2)
+
+    def test_pr8_pid_gold_matches_c_formula(self):
+        spec = importlib.util.spec_from_file_location(
+            "pr8", os.path.join(
+                KF, "scripts", "paper", "pr8_pid_session__积分会话.py"))
+        pr8 = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(pr8)
+        t = pr8.gold_traj(3)
+        # seq=1 gin=(13&0x7ff)-256=-243; err=243; integ=243; out=486+30=516
+        self.assertEqual(t[0]["g_in"], pr8.sample(1))
+        self.assertEqual(t[0]["g_in"], (13 & 0x7ff) - 256)
+        self.assertEqual(t[0]["integ"], 243)
+        self.assertEqual(t[0]["g_out"], (243 << 1) + (243 >> 3))
+        hdr = open(os.path.join(KF, "scripts", "paper", "pr8_pid_session.h"),
+                   encoding="utf-8").read()
+        self.assertIn("KFUSION_UKU_PID_MAGIC", hdr)
+        self.assertIn("kfusion_pid_step", hdr)
 
 
 if __name__ == "__main__":

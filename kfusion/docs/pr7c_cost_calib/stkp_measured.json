@@ -1,0 +1,55 @@
+{
+  "chosen": "B",
+  "claim": "empirical_model_not_wcet",
+  "domain": "linux_userspace",
+  "cost": {
+    "comparable": true,
+    "final_rankable": true,
+    "explore_rankable": true,
+    "missing_costs": [],
+    "evidence": [
+      "stage_sample@linux_userspace:measured",
+      "stage_add@linux_userspace:measured",
+      "stage_shift@linux_userspace:measured",
+      "stage_sink@linux_userspace:measured"
+    ],
+    "compute_us": 0.561,
+    "release_us": 13.315,
+    "handoff_us": 0.0,
+    "handoff_channels": 0,
+    "channels": [],
+    "sync_us": 0.0,
+    "ioctl_model": null,
+    "predicted_R_us": 13.876,
+    "total_us": 13.876,
+    "grade": "empirical_model_not_wcet",
+    "temporal_ok": true,
+    "temporal_why": null,
+    "schedule": {
+      "exec_us": {
+        "stage_sample": 0.157,
+        "stage_add": 0.137,
+        "stage_shift": 0.133,
+        "stage_sink": 0.134
+      },
+      "release": [
+        {
+          "group": "g0",
+          "domain": "linux_userspace",
+          "L_us": 13.315,
+          "phase_us": 0.0
+        }
+      ],
+      "evidence": [
+        "stage_sample@linux_userspace:measured",
+        "stage_add@linux_userspace:measured",
+        "stage_shift@linux_userspace:measured",
+        "stage_sink@linux_userspace:measured"
+      ],
+      "missing": [],
+      "complete": true,
+      "model": "per_group_release",
+      "T_ioctl_us": 0.0
+    }
+  }
+}

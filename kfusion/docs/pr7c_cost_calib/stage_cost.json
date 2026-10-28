@@ -1,0 +1,116 @@
+{
+  "linux_userspace": {
+    "stage_sample": {
+      "value": 0.157,
+      "exec_us": 0.157,
+      "evidence": "measured",
+      "statistic": "avg",
+      "min_us": 0.129,
+      "avg_us": 0.157,
+      "p50_us": 0,
+      "p99_us": 0,
+      "p99_9_us": 0,
+      "p99_99_us": 0,
+      "max_us": 0.278,
+      "over": 0,
+      "samples": 40,
+      "source_log": "/root/K-Fusion/kfusion/docs/pr7c_cost_calib/logs/calib_gold.log",
+      "note": "p50 受 1µs 分桶影响，Ĉ 使用 avg"
+    },
+    "stage_add": {
+      "value": 0.137,
+      "exec_us": 0.137,
+      "evidence": "measured",
+      "statistic": "avg",
+      "min_us": 0.129,
+      "avg_us": 0.137,
+      "p50_us": 0,
+      "p99_us": 0,
+      "p99_9_us": 0,
+      "p99_99_us": 0,
+      "max_us": 0.149,
+      "over": 0,
+      "samples": 40,
+      "source_log": "/root/K-Fusion/kfusion/docs/pr7c_cost_calib/logs/calib_gold.log",
+      "note": "p50 受 1µs 分桶影响，Ĉ 使用 avg"
+    },
+    "stage_shift": {
+      "value": 0.133,
+      "exec_us": 0.133,
+      "evidence": "measured",
+      "statistic": "avg",
+      "min_us": 0.129,
+      "avg_us": 0.133,
+      "p50_us": 0,
+      "p99_us": 0,
+      "p99_9_us": 0,
+      "p99_99_us": 0,
+      "max_us": 0.149,
+      "over": 0,
+      "samples": 40,
+      "source_log": "/root/K-Fusion/kfusion/docs/pr7c_cost_calib/logs/calib_gold.log",
+      "note": "p50 受 1µs 分桶影响，Ĉ 使用 avg"
+    },
+    "stage_sink": {
+      "value": 0.134,
+      "exec_us": 0.134,
+      "evidence": "measured",
+      "statistic": "avg",
+      "min_us": 0.129,
+      "avg_us": 0.134,
+      "p50_us": 0,
+      "p99_us": 0,
+      "p99_9_us": 0,
+      "p99_99_us": 0,
+      "max_us": 0.148,
+      "over": 0,
+      "samples": 40,
+      "source_log": "/root/K-Fusion/kfusion/docs/pr7c_cost_calib/logs/calib_gold.log",
+      "note": "p50 受 1µs 分桶影响，Ĉ 使用 avg"
+    }
+  },
+  "linux_kernel": {
+    "stage_sample": {
+      "value": null,
+      "evidence": "missing",
+      "note": "该阶段不在内核组，不以 gold 用户态值冒充 C_K"
+    },
+    "stage_add": {
+      "value": 0.197,
+      "evidence": "measured",
+      "statistic": "avg",
+      "avg_us": 0.197,
+      "max_us": 0.425,
+      "samples": 40,
+      "source_log": "/root/K-Fusion/kfusion/docs/pr7c_cost_calib/logs/calib_mixed.log",
+      "kind": "kernel_compute",
+      "covers_group": [
+        "stage_add",
+        "stage_shift"
+      ],
+      "folded": false,
+      "note": "组级测量记在 stage_add，其余成员 0；不得均分"
+    },
+    "stage_shift": {
+      "value": 0.0,
+      "evidence": "measured",
+      "statistic": "avg",
+      "avg_us": 0.197,
+      "max_us": 0.425,
+      "samples": 40,
+      "source_log": "/root/K-Fusion/kfusion/docs/pr7c_cost_calib/logs/calib_mixed.log",
+      "kind": "kernel_compute",
+      "covers_group": [
+        "stage_add",
+        "stage_shift"
+      ],
+      "folded": true,
+      "note": "组级测量记在 stage_add，其余成员 0；不得均分"
+    },
+    "stage_sink": {
+      "value": null,
+      "evidence": "missing",
+      "note": "该阶段不在内核组，不以 gold 用户态值冒充 C_K"
+    }
+  }
+}

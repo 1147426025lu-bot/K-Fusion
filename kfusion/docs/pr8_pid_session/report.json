@@ -1,0 +1,14 @@
+{
+  "kind": "pr8_pid_session",
+  "claim": "session PID state; not generic persistent UKU; not WCET",
+  "stkp_still_rejects_silent_persist": true,
+  "gold_last": {
+    "seq": 40,
+    "g_in": 264,
+    "g_out": -581,
+    "integ": -420
+  },
+  "board_pass": true,
+  "end_to_end_pass": true,
+  "log_tail": "second_open_ebusy_ok\nbad_magic_einval_ok\ntraj_match_ok n=40 last_out=-581\nreplay_eilseq_ok\npost_replay_traj_ok\nreopen_resets_ok out=516\nall_ok"
+}

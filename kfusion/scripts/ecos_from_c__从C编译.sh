@@ -282,30 +282,62 @@ else
 fi
 
 if [ -n "${TIME_CONTRACT:-}" ] && [ -f "${TIME_CONTRACT}" ] && [ -f "$OUT/let.json" ]; then
-  step "8c) LET 作业表（plc_let，钉扎快照/提交；由 let_decide 选型）"
-  "$PY" - "$OUT/let.json" "$OUT/plan_let.json" <<'PY'
+  step "8c) LET 作业表（plc_let；须通过同一 TIME_CONTRACT，且不得用无 LET 全融合绕过 STKP）"
+  SKIP_LET_EMIT=0
+  "$PY" - "$OUT/let.json" "$OUT/plan_let.json" "$OUT/plan.json" "$OUT/let_emit.flag" <<'PY'
 import json, sys
 let = json.load(open(sys.argv[1]))
 rec = let.get("chosen_record") or {}
 plan = rec.get("plan")
 if not plan:
     raise SystemExit("let.json 无 chosen plan")
+stkp = {}
+try:
+    stkp = json.load(open(sys.argv[3]))
+except Exception:
+    pass
+stkp_g = [g.get("members") for g in (stkp.get("groups") or [])]
+let_g = [g.get("members") for g in (plan.get("groups") or [])]
+uses_let = bool((rec.get("cost") or {}).get("uses_let") or plan.get("let_events"))
+flag = sys.argv[4]
+# 无 LET 的全融合不得作为第二部署源；须与 STKP 同组，或带钉扎事件。
+if let.get("chosen") == "full_fuse" or (not uses_let and let_g != stkp_g):
+    open(flag, "w").write("1\n")
+    print("skip let_host: chosen=%s uses_let=%s" % (let.get("chosen"), uses_let))
+    raise SystemExit(0)
 json.dump(plan, open(sys.argv[2], "w"), ensure_ascii=False, indent=2)
-print("LET chosen=%s uses_let=%s" % (
-    let.get("chosen"), (rec.get("cost") or {}).get("uses_let")))
+open(flag, "w").write("0\n")
+print("LET chosen=%s uses_let=%s" % (let.get("chosen"), uses_let))
 PY
-  "$PY" "$KF/scripts/ecos/plan_verify.py" \
-    --dag "$OUT/task.dag.json" --plan "$OUT/plan_let.json" \
-    --platforms "$CAPS" --platform linux_userspace \
-    --stamp-plan -o "$OUT/verify_let_dag.json" || die "LET 方案 DAG 验证失败" 8
-  "$PY" "$KF/backend/synthesis/emit.py" \
-    --plan "$OUT/plan_let.json" --dag "$OUT/task.dag.json" \
-    --source "$STAGE_SRC" \
-    --out-dir "$OUT/let_host" \
-    --target let \
-    --name five_stage_loop \
-    "${CALLS[@]}" "${EMIT_DIGEST[@]}" || die "emit let 失败" 9
-  cp "$STAGE_SRC" "$OUT/let_host/stage_impl.c" 2>/dev/null || true
+  SKIP_LET_EMIT="$(tr -d '[:space:]' < "$OUT/let_emit.flag" 2>/dev/null || echo 1)"
+  if [ "${SKIP_LET_EMIT:-0}" = "1" ] || [ ! -f "$OUT/plan_let.json" ]; then
+    echo "⚠ LET 全融合无钉扎事件或与 STKP 分组冲突：不生成 let_host"
+    rm -rf "$OUT/let_host"
+    rm -f "$OUT/plan_let.json"
+  else
+    LET_V=(
+      --dag "$OUT/task.dag.json" --plan "$OUT/plan_let.json"
+      --platforms "$CAPS" --platform linux_userspace
+      --stamp-plan -o "$OUT/verify_let_dag.json"
+    )
+    if [ -n "${TIME_CONTRACT:-}" ] && [ -f "${TIME_CONTRACT}" ]; then
+      LET_V+=(--contract "$TIME_CONTRACT")
+    fi
+    if "$PY" "$KF/scripts/ecos/plan_verify.py" "${LET_V[@]}"; then
+      "$PY" "$KF/backend/synthesis/emit.py" \
+        --plan "$OUT/plan_let.json" --dag "$OUT/task.dag.json" \
+        --source "$STAGE_SRC" \
+        --out-dir "$OUT/let_host" \
+        --target let \
+        --name five_stage_loop \
+        "${CALLS[@]}" "${EMIT_DIGEST[@]}" || die "emit let 失败" 9
+      cp "$STAGE_SRC" "$OUT/let_host/stage_impl.c" 2>/dev/null || true
+    else
+      echo "⚠ LET 入选方案未通过同一 TIME_CONTRACT，不生成 let_host（STKP plan 仍是部署源）"
+      rm -rf "$OUT/let_host"
+      rm -f "$OUT/plan_let.json"
+    fi
+  fi
 fi
 
 if [ "${SKIP_HOST:-0}" != "1" ]; then

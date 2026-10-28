@@ -30,6 +30,9 @@ _LAT_RE = re.compile(
 _EXEC_RE = re.compile(
     r"# stat_exec_us: min=([0-9.]+) avg=([0-9.]+) p50=(\d+).*?max=([0-9.]+)"
 )
+_RESP_RE = re.compile(
+    r"# stat_response_us: min=([0-9.]+) avg=([0-9.]+) p50=(\d+).*?max=([0-9.]+)"
+)
 _IOCTL_RE = re.compile(
     r"# stat_ioctl_roundtrip_us: min=([0-9.]+) avg=([0-9.]+) p50=(\d+).*?"
     r"max=([0-9.]+).*? n=(\d+)"
@@ -117,6 +120,15 @@ def parse_user_stage_log(text, source_log=None):
             "p50_us": int(m.group(3)),
             "max_us": float(m.group(4)),
         }
+    resp = None
+    m = _RESP_RE.search(text)
+    if m:
+        resp = {
+            "min_us": float(m.group(1)),
+            "avg_us": float(m.group(2)),
+            "p50_us": int(m.group(3)),
+            "max_us": float(m.group(4)),
+        }
     ioctl = None
     m = _IOCTL_RE.search(text)
     if m:
@@ -164,6 +176,7 @@ def parse_user_stage_log(text, source_log=None):
         tax["kind"] = "T_ioctl"
         tax["note"] = "无 kernel_compute 对照时 T_ioctl 用整段 roundtrip"
     return {"stages": stages, "start_lat": lat, "exec": tot,
+            "response": resp,
             "ioctl_roundtrip": ioctl, "kernel_compute": kcomp,
             "T_ioctl": tax, "source_log": source_log}
 
@@ -193,6 +206,53 @@ def bind_to_teir(stages, teir_names):
             out[tn] = {"value": None, "evidence": "missing",
                        "note": "日志无阶段 %s" % tn}
     return out
+
+
+def fold_group_cost(total_slot, members):
+    """组级一次测量记在首成员，其余 0。禁止把总额再均分。"""
+    out = {}
+    if not members:
+        return out
+    base = dict(total_slot or {})
+    total = base.get("value")
+    try:
+        total = float(total)
+    except (TypeError, ValueError):
+        total = None
+    for i, m in enumerate(members):
+        slot = dict(base)
+        slot["value"] = (total if (i == 0 and total is not None) else
+                         (0.0 if total is not None else None))
+        slot["covers_group"] = list(members)
+        slot["folded"] = bool(i)
+        slot["note"] = ("组级测量记在 %s，其余成员 0；不得均分" % members[0])
+        out[m] = slot
+    return out
+
+
+def override_from_gold_mixed(gold, mixed, teir_names, kernel_members):
+    """gold 提供用户态逐阶段；mixed 提供内核组 kernel_compute 与 T_ioctl。"""
+    gold = gold or {}
+    mixed = mixed or {}
+    names = list(teir_names or [])
+    user = bind_to_teir(gold.get("stages") or {}, names)
+    kmem = list(kernel_members or [])
+    kcomp = mixed.get("kernel_compute")
+    if kcomp and kmem:
+        folded = fold_group_cost(kcomp, kmem)
+        kernel = {}
+        for n in names:
+            if n in folded:
+                kernel[n] = folded[n]
+            else:
+                kernel[n] = {
+                    "value": None, "evidence": "missing",
+                    "note": "该阶段不在内核组，不以 gold 用户态值冒充 C_K",
+                }
+    else:
+        kernel = kernel_missing(names)
+    ioctl = mixed.get("T_ioctl")
+    return {"linux_userspace": user, "linux_kernel": kernel}, ioctl
 
 
 def kernel_missing(names):
