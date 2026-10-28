@@ -46,6 +46,13 @@ struct kfusion_uku_msg {
 	int64_t k_end_ns;
 };
 #define KFUSION_UKU_IOC _IOWR('K', 1, struct kfusion_uku_msg)
+/* PR-10A：读回内核独占的会话状态，用于验证「状态真的在内核里延续」，
+ * 而不是只看用户态 digest（digest 不含 session，看不到内核那份）。 */
+struct kfusion_uku_state {
+	uint32_t magic;
+	int32_t value;
+};
+#define KFUSION_UKU_STATE_IOC _IOWR('K', 2, struct kfusion_uku_state)
 #endif
 """
 
@@ -94,6 +101,23 @@ def kernel_calls(kmem, calls):
 
 
 def emit_mod(kmem, reads, writes, calls, stage_src_name, session_vars=None):
+    # PR-10A：会话状态读回口。digest 明确不含 session（gold 侧没有内核那份），
+    # 所以「状态是否真的在内核里延续」只能靠这个专用 ioctl 验证。
+    _sess = [v for v in (session_vars or []) if v]
+    if _sess:
+        state_ioctl = (
+            "\tif (cmd == KFUSION_UKU_STATE_IOC) {\n"
+            "\t\tstruct kfusion_uku_state st;\n"
+            "\t\tif (!uku_busy)\n"
+            "\t\t\treturn -EBUSY;\n"
+            "\t\tst.magic = KFUSION_UKU_MAGIC;\n"
+            "\t\tst.value = %s;\n"
+            "\t\tif (copy_to_user((void __user *)arg, &st, sizeof(st)))\n"
+            "\t\t\treturn -EFAULT;\n"
+            "\t\treturn 0;\n"
+            "\t}\n" % _sess[0])
+    else:
+        state_ioctl = ""
     aset = []
     for i, v in enumerate(reads):
         aset.append("\t%s = msg.in[%d];" % (v, i))
@@ -134,7 +158,7 @@ static long uku_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 	s64 t0, t1;
 	long rc = 0;
 
-	if (cmd != KFUSION_UKU_IOC)
+%(state_ioctl)s	if (cmd != KFUSION_UKU_IOC)
 		return -ENOTTY;
 	if (copy_from_user(&msg, (void __user *)arg, sizeof(msg)))
 		return -EFAULT;
@@ -227,6 +251,7 @@ MODULE_DESCRIPTION("K-Fusion UKU ioctl compute");
         "aset": "\n".join(aset), "oset": "\n".join(oset),
         "run": run,
         "externs": "\n".join(ext),
+        "state_ioctl": state_ioctl,
     }
 
 
@@ -238,6 +263,8 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     if (meta.get("uku_session") or {}).get("region"):
         sess.add(meta["uku_session"]["region"])
     digest_vars = [v for v in (digest_vars or []) if v not in sess]
+    # PR-10A：会话状态名（读回口用）。digest 故意不含它，所以单独打一行。
+    sess_name = sorted(sess)[0] if sess else None
     lines = []
     A = lines.append
     A("/* UKU 混合驱动：gold=全用户态；mixed=中间组走 /dev/kfusion_uku */")
@@ -274,6 +301,7 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     A("}")
     A("")
     A("static int uku_fd = -1;")
+    A("static int sess_val = 0, sess_ok = 0;")
     A("static int do_kernel_group(uint32_t seq, long long *h_ns)")
     A("{")
     A("	struct kfusion_uku_msg msg;")
@@ -371,6 +399,20 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
         A("		DIGEST_MIX(%s);" % v)
     A("		if (f - r > DEADLINE_NS) miss++;")
     A("	}")
+    if sess_name:
+        A("	if (mixed) {")
+        A("		struct kfusion_uku_state st;")
+        A("		memset(&st, 0, sizeof(st));")
+        A("		if (uku_fd >= 0 &&")
+        A("		    ioctl(uku_fd, KFUSION_UKU_STATE_IOC, &st) == 0 &&")
+        A("		    st.magic == KFUSION_UKU_MAGIC) {")
+        A("			sess_val = st.value;")
+        A("			sess_ok = 1;")
+        A("		}")
+        A("	} else {")
+        A("		sess_val = %s;" % sess_name)
+        A("		sess_ok = 1;")
+        A("	}")
     A("	if (uku_fd >= 0) { close(uku_fd); uku_fd = -1; }")
     A("	printf(\"\\n# mode: %s  cycles=%ld\\n\", mode, cycles);")
     A("	plc_probe_head(PERIOD_NS, DEADLINE_NS, (unsigned long long)cycles);")
@@ -388,6 +430,9 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     A("	printf(\"# uku_ioctl_error: %ld/%ld\\n\", bad_ioctl, cycles);")
     A("	printf(\"# digest: %08x\\n\", g_digest);")
     A("	printf(\"# last_seq: %u g_in=%d g_out=%d\\n\", g_seq, g_in, g_out);")
+    if sess_name:
+        A('	printf("# session: %s=%%d readback=%%d\\n", sess_val, sess_ok);'
+          % sess_name)
     A("	return 0;")
     A("uku_fail:")
     A("	if (uku_fd >= 0) { close(uku_fd); uku_fd = -1; }")
