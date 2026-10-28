@@ -7,14 +7,15 @@
 # samples: 40
 # release_id: serial 0..39
 # series_us: start_lat exec response  (1us buckets, cap 199)
-# stat_start_lat_us: min=60.646 avg=62.653 p50=62 p90=64 p99=74 p99.9=74 p99.99=74 max=74.451 over=0 neg=0 min_signed=60.646 n=40
-# stat_exec_us: min=1.167 avg=1.284 p50=1 p90=1 p99=1 p99.9=1 p99.99=1 max=1.926 over=0 neg=0 min_signed=1.167 n=40
-# stat_response_us: min=61.850 avg=63.938 p50=63 p90=66 p99=76 p99.9=76 p99.99=76 max=76.377 over=0 neg=0 min_signed=61.850 n=40
-# stat_exec_stage_stage_sample_us: min=0.129 avg=0.135 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.167 over=0 neg=0 min_signed=0.129 n=40
-# stat_exec_stage_stage_pid_us: min=0.129 avg=0.154 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.315 over=0 neg=0 min_signed=0.129 n=40
-# stat_exec_stage_stage_sink_us: min=0.129 avg=0.133 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.149 over=0 neg=0 min_signed=0.129 n=40
+# stat_start_lat_us: min=60.708 avg=62.491 p50=61 p90=64 p99=74 p99.9=74 p99.99=74 max=74.965 over=0 neg=0 min_signed=60.708 n=40
+# stat_exec_us: min=1.352 avg=1.505 p50=1 p90=1 p99=2 p99.9=2 p99.99=2 max=2.185 over=0 neg=0 min_signed=1.352 n=40
+# stat_response_us: min=62.097 avg=63.995 p50=62 p90=65 p99=77 p99.9=77 p99.99=77 max=77.150 over=0 neg=0 min_signed=62.097 n=40
+# stat_exec_stage_stage_sample_us: min=0.148 avg=0.159 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.167 over=0 neg=0 min_signed=0.148 n=40
+# stat_exec_stage_stage_pid_us: min=0.148 avg=0.187 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.370 over=0 neg=0 min_signed=0.148 n=40
+# stat_exec_stage_stage_sink_us: min=0.148 avg=0.152 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.167 over=0 neg=0 min_signed=0.148 n=40
 # deadline_miss: 0/40
 # uku_seq_mismatch: 0/40
 # uku_ioctl_error: 0/40
-# digest: 6f40d786
+# digest: e9d8167c
 # last_seq: 40 g_in=264 g_out=-581
+# session: g_integ=-420 readback=1

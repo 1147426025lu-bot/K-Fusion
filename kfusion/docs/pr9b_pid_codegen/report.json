@@ -1,6 +1,6 @@
 {
   "kind": "pr9b_pid_codegen",
-  "claim": "compiler-emitted UKU PID session; not arbitrary persistent; not WCET",
+  "claim": "一键复现：同一份 C → STKP → UKU → 板级逐拍；会话状态由专用 ioctl 读回比对。不是 WCET，不是形式化等价。",
   "source": "kfusion/examples/ecos/mixed_pid_stateful__积分混合.c",
   "chosen": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
   "domain": "mixed",
@@ -9,21 +9,92 @@
     "kind": "integ_i32",
     "region": "g_integ"
   },
-  "mailbox": {
-    "copy_in": [
-      "g_in"
-    ],
-    "copy_out": [
-      "g_out"
-    ],
-    "session": "g_integ"
+  "fingerprint": {
+    "git": {
+      "commit": "b96e229ff14b9ebffde14779b8fd3670a0dda50d",
+      "branch": "main",
+      "dirty": true,
+      "dirty_files": 2
+    },
+    "source": {
+      "path": "kfusion/examples/ecos/mixed_pid_stateful__积分混合.c",
+      "sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72"
+    },
+    "host": {
+      "uname": "Linux-5.15.86-aarch64-with-glibc2.31",
+      "kernel": "5.15.86",
+      "machine": "aarch64",
+      "python": "3.9.2"
+    },
+    "toolchain": {
+      "clang": "Debian clang version 16.0.6 (15~deb11u2)",
+      "opt": "Debian LLVM version 16.0.6",
+      "gcc": "gcc (Debian 10.2.1-6) 10.2.1 20210110"
+    },
+    "params": {
+      "cycles": 40
+    }
+  },
+  "artifacts": {
+    "plan": "kfusion/docs/pr9b_pid_codegen/gen/plan.json",
+    "driver": "kfusion/docs/pr9b_pid_codegen/gen/driver",
+    "kmod": "kfusion/docs/pr9b_pid_codegen/gen/kmod_uku/kfusion_uku.ko"
   },
   "board": {
     "cycles": 40,
-    "digest": "6f40d786",
+    "digest": "e9d8167c",
     "digest_match": true,
     "last_g_out": -581,
-    "seq_ok": true
+    "session": {
+      "name": "g_integ",
+      "gold": -420,
+      "mixed": -420,
+      "readback": 1
+    },
+    "deadline_miss": 0,
+    "seq_mismatch": 0,
+    "checks": [
+      {
+        "check": "gold 跑通",
+        "ok": true,
+        "detail": "rc=0"
+      },
+      {
+        "check": "mixed 跑通",
+        "ok": true,
+        "detail": "rc=0"
+      },
+      {
+        "check": "digest 一致",
+        "ok": true,
+        "detail": "gold=e9d8167c mixed=e9d8167c"
+      },
+      {
+        "check": "末拍 g_out 一致",
+        "ok": true,
+        "detail": "gold=-581 mixed=-581"
+      },
+      {
+        "check": "会话状态可读回",
+        "ok": true,
+        "detail": "readback=1（0 = 未提供/未读到）"
+      },
+      {
+        "check": "会话状态与 gold 一致",
+        "ok": true,
+        "detail": "g_integ gold=-420 mixed=-420"
+      },
+      {
+        "check": "无期限超期",
+        "ok": true,
+        "detail": "miss=0"
+      },
+      {
+        "check": "无序号错配",
+        "ok": true,
+        "detail": "seq_bad=0"
+      }
+    ]
   },
-  "note": "g_integ 不进用户态 digest；逐拍 g_out 与 gold 一致。不是任意 persistent 放开。"
+  "verdict": "pass"
 }

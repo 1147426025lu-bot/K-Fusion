@@ -111,3 +111,6 @@ crtos/results/xlat/**/*.bin
 
 # 临时审查快照（从 Pi 拉回对比用，不入库）
 .review/
+
+# PR-10A 端到端产物目录（构建输出，不入库）
+kfusion/docs/pr9b_pid_codegen/gen/
