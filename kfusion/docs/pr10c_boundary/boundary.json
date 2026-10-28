@@ -1,0 +1,77 @@
+{
+  "kind": "pr10c_boundary",
+  "cycles": [
+    5000
+  ],
+  "repeat": 3,
+  "noop_ioctl": {
+    "roundtrip_p50_med": 2.0,
+    "roundtrip_p99_med": 5.0,
+    "roundtrip_max_med": 16.981,
+    "response_p50_med": 65.0,
+    "runs": [
+      {
+        "cycles": 5000,
+        "repeat": 0,
+        "rc": 0,
+        "roundtrip": {
+          "p50": 2.0,
+          "p99": 5.0,
+          "max": 22.981
+        },
+        "response": {
+          "p50": 65.0,
+          "p99": 80.0,
+          "max": 108.272
+        }
+      },
+      {
+        "cycles": 5000,
+        "repeat": 1,
+        "rc": 0,
+        "roundtrip": {
+          "p50": 2.0,
+          "p99": 5.0,
+          "max": 8.759
+        },
+        "response": {
+          "p50": 65.0,
+          "p99": 78.0,
+          "max": 97.769
+        }
+      },
+      {
+        "cycles": 5000,
+        "repeat": 2,
+        "rc": 0,
+        "roundtrip": {
+          "p50": 2.0,
+          "p99": 6.0,
+          "max": 16.981
+        },
+        "response": {
+          "p50": 65.0,
+          "p99": 81.0,
+          "max": 182.88
+        }
+      }
+    ]
+  },
+  "note": "空模块：只做 copy_in/copy_out + 时间戳 + 互斥，不含任何阶段计算。这就是同步边界的地板价。",
+  "mixed_vs_noop": [
+    {
+      "period_us": 1000,
+      "load": 0,
+      "mixed_roundtrip_p50": 2.0,
+      "noop_floor_p50": 2.0,
+      "delta_compute_p50": 0.0
+    },
+    {
+      "period_us": 1000,
+      "load": 4,
+      "mixed_roundtrip_p50": 4.0,
+      "noop_floor_p50": 2.0,
+      "delta_compute_p50": 2.0
+    }
+  ]
+}

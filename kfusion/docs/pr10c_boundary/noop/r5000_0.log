@@ -1,0 +1,13 @@
+
+# mode: noop  cycles=5000
+
+# probe: r/s/f v1.2
+# period_ns: 1000000
+# deadline_ns: 1000000
+# samples: 5000
+# release_id: serial 0..4999
+# series_us: start_lat exec response  (1us buckets, cap 199)
+# stat_ioctl_roundtrip_us: min=2.426 avg=2.789 p50=2 p90=2 p99=5 p99.9=7 p99.99=22 max=22.981 over=0 neg=0 min_signed=2.426 n=5000
+# stat_response_us: min=49.945 avg=65.988 p50=65 p90=67 p99=80 p99.9=96 p99.99=108 max=108.272 over=0 neg=0 min_signed=49.945 n=5000
+# ioctl_error: 0/5000
+# deadline_miss: 0/5000
