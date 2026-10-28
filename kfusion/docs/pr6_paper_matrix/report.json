@@ -1,0 +1,120 @@
+{
+  "kind": "pr6_paper_matrix",
+  "claim": "selective kernelization; empirical; not WCET; not kernel-faster",
+  "host": "Linux version 5.15.86 (builder@e3665d6e1a6c) (aarch64-linux-gnu-gcc (Debian 10.2.1-6) 10.2.1 20210110, GNU ld (GNU Binutils for Debian) 2.35.2) #1 SMP PREEMPT Wed Oct 14 10:16:11 UTC 2026",
+  "workloads": {
+    "W1_stateless_uku": {
+      "chosen": "STKP:L[stage_sample]|L[stage_add+stage_shift]|L[stage_sink]",
+      "claim": "explore_uncertain",
+      "domain": "mixed",
+      "deployment_ready": true,
+      "adapter": "uku_ioctl",
+      "uku_reject": null,
+      "groups": [
+        [
+          "stage_sample"
+        ],
+        [
+          "stage_add",
+          "stage_shift"
+        ],
+        [
+          "stage_sink"
+        ]
+      ],
+      "domains": [
+        "linux_userspace",
+        "linux_kernel",
+        "linux_userspace"
+      ],
+      "predicted_R_us": 26.0,
+      "grade": "explore_uncertain",
+      "board": {
+        "gold": {
+          "digest": "1a7dc565",
+          "last_seq": 80,
+          "g_in": 1363,
+          "g_out": 2728,
+          "seq_mismatch": 0,
+          "ioctl_error": 0,
+          "response": {
+            "min_us": 9.524,
+            "avg_us": 18.215,
+            "p50_us": 13,
+            "max_us": 67.939
+          }
+        },
+        "mixed": {
+          "digest": "1a7dc565",
+          "last_seq": 80,
+          "g_in": 1363,
+          "g_out": 2728,
+          "seq_mismatch": 0,
+          "ioctl_error": 0,
+          "response": {
+            "min_us": 12.931,
+            "avg_us": 18.727,
+            "p50_us": 15,
+            "max_us": 74.986
+          }
+        },
+        "digest_match": true,
+        "seq_ok": true
+      },
+      "ok": true,
+      "note": "无状态 UKU；digest 一致不是内核更快；非 WCET"
+    },
+    "W2_stateful_pid": {
+      "chosen": "B",
+      "claim": "explore_uncertain",
+      "domain": "linux_userspace",
+      "deployment_ready": true,
+      "adapter": null,
+      "uku_reject": null,
+      "groups": [
+        [
+          "stage_sample",
+          "stage_pid",
+          "stage_sink"
+        ]
+      ],
+      "domains": [
+        "linux_userspace"
+      ],
+      "predicted_R_us": 103.0,
+      "grade": "explore_uncertain",
+      "pid_persistent": [
+        "@g_integ"
+      ],
+      "ok": true,
+      "note": "积分跨拍：UKU v1 拒绝，不把状态内核化"
+    },
+    "W3_actuator_window": {
+      "chosen": "STKP:L[s1+s2]|L[s3+s4]",
+      "claim": "explore_uncertain",
+      "domain": "linux_userspace",
+      "deployment_ready": true,
+      "adapter": null,
+      "uku_reject": null,
+      "groups": [
+        [
+          "s1",
+          "s2"
+        ],
+        [
+          "s3",
+          "s4"
+        ]
+      ],
+      "domains": [
+        "linux_userspace",
+        "linux_userspace"
+      ],
+      "predicted_R_us": 44.4,
+      "grade": "explore_uncertain",
+      "ok": true,
+      "note": "s3 窗口 [380,520]；合法两段用户态，不得 UKU/全融合"
+    }
+  },
+  "all_ok": true
+}

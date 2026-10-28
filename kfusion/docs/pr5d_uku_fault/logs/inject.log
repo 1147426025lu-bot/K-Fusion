@@ -1,0 +1,9 @@
+exclusive_ebusy_ok
+bad_magic_einval_ok
+bad_nin_einval_ok
+bad_seq_eilseq_ok
+seq1_gold_ok g_in=20 g_mid=21 g_out=42
+replay_seq1_eilseq_ok
+poison_nout_einval_ok
+per_cycle_gold_ok n=40
+all_ok

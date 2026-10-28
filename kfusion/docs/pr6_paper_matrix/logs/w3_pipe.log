@@ -1,0 +1,126 @@
+
+──── 1) Clang AST → 阶段骨架（替代手写 stages.json / dag.json） ────
+extracted 4 stages from loop_main:
+  0. s1 @0µs  s1()
+  1. s2 @200µs  s2()
+  2. s3 @400µs  s3()
+  3. s4 @600µs  s4()
+wrote /tmp/pr6_matrix/w3/stages.json
+
+──── 2) C → LLVM IR（禁内联，保留阶段函数） ────
+
+──── 3) IR → EffectSummary（效果不是人写的） ────
+[EffectSummary] 写出 /tmp/pr6_matrix/w3/effect_summary.json（6 个函数）
+
+──── 4) 摘要 + 自动骨架 → 契约 ────
+写出 /tmp/pr6_matrix/w3/task.contract.json（4 个阶段）
+  s1                       state_read/state_write
+  s2                       state_read/state_write
+  s3                       state_read/state_write
+  s4                       state_read/state_write
+
+──── 5) 契约门禁（linux_userspace 为底线；内核是否可行交给选型） ────
+== task.contract.json  (task=chain_window)
+   [linux_userspace] ✅ PASS
+== task.contract.json  (task=chain_window)
+   [linux_kernel] ✅ PASS
+  内核域契约可通过（是否部署仍由 A/B/C/D 决定）
+
+──── 6) DAG（数据边来自 IR，相位来自骨架） ────
+== 节点 4（stages 视图） ==
+  s1                     state_read,state_write
+  s2                     state_read,state_write
+  s3                     state_read,state_write
+  s4                     state_read,state_write
+== 边 ==
+  s1                   -> s2                   [data    ] @cw_a
+  s1                   -> s4                   [data    ] @cw_a
+  s2                   -> s3                   [data    ] @cw_b
+  s3                   -> s4                   [data    ] @cw_c
+== 拓扑序 ==
+  s1 -> s2 -> s3 -> s4
+== 统计 ==
+  边 4（call 0 / spawn 0 / data 4 / anti 0 / conflict 0）· 候选 0
+  区域具体化：唯一绑定 0 · 多绑定 0 · 完全未解析 0 · 调用已解释 0
+
+──── 6b) TEIR（状态版本 + 时间事件 + 允许域） ────
+TEIR 4 nodes (must_preserve=4 may_delete=0)  edges previous-job=0  policy=ok
+wrote /tmp/pr6_matrix/w3/task.teir.json
+  pin 0 个阶段
+
+──── 7) 单域融合规划（对照报告；失败不阻断 STKP） ────
+  写出对照 /tmp/pr6_matrix/w3/plan.planner.json
+
+──── 7c) A–F 对照基线（失败不阻断 STKP） ────
+A/B/C/D/E/F legal=4/4  chosen=B
+    A LEGAL   fused=False  Cost=84.0  
+  → B LEGAL   fused=True  Cost=21.0  Cost=G·c + E + extra = 21.0; G=1 c=21.0 extra=0.0; 内核最优 D 的 Cost=21.0 ≥ 用户态，故不迁移
+    C LEGAL   fused=False  Cost=84.0  
+    D LEGAL   fused=True  Cost=21.0  
+wrote /tmp/pr6_matrix/w3/candidates.json
+
+──── 7c2) STKP 穷举求解（入选方案才是生成输入） ────
+STKP chosen plan → /tmp/pr6_matrix/w3/chosen.plan.json  (STKP:L[s1+s2]|L[s3+s4] linux_userspace Ĉ=44.4)
+STKP v1 raw=54 enum=54 deployable=8 model=43 chosen=STKP:L[s1+s2]|L[s3+s4] claim=explore_uncertain
+  prune domain=0 semantic=0 temporal=11 mixed=35 missing=0
+  g0  s1 + s2                      @ linux_userspace
+  g1  s3 + s4                      @ linux_userspace
+  vs A–F: baseline=B STKP=STKP:L[s1+s2]|L[s3+s4] missed_by_af=True
+wrote /tmp/pr6_matrix/w3/stkp.json
+  STKP 入选 STKP:L[s1+s2]|L[s3+s4]  域 linux_userspace
+
+──── 7b) 独立验证器（验证入选方案，不调用规划器） ────
+VERIFY PASS
+
+──── 7b2) DAG 全局验证器（写回 verification，供 emit 门禁） ────
+· 组 g0   s1 + s2
+· 组 g1   s3 + s4
+✅ 方案验证通过（2 组 · 同拍边 4 · 跨周期边 0 · 时间证据 empirical）
+  deploy.json chosen=STKP:L[s1+s2]|L[s3+s4] domain=linux_userspace
+
+──── 7d) 按需 LET（有时间契约才启用） ────
+LET decide legal=5  chosen=full_fuse
+    unfused          LEGAL  Cost=84.0  不用 LET
+  → full_fuse        LEGAL  Cost=21.0  不用 LET; 未采用 LET（钉扎已由分组保住，或 LET 更贵）
+    full_fuse_let    LEGAL  Cost=21.0  不用 LET
+    selective_pins   LEGAL  Cost=21.0  不用 LET
+    stretch_period   LEGAL  Cost=84.0  不用 LET
+wrote /tmp/pr6_matrix/w3/let.json
+
+──── 8) 生成用户态驱动（#include 原计算体，不复制） ────
+写出 /tmp/pr6_matrix/w3/driver.c（plan 2 次释放/周期，flat 4 次/周期，4 阶段）
+
+──── 8b) 入选用户态：不生成内核部署产物 ────
+  skip kmod（chosen=STKP:L[s1+s2]|L[s3+s4] domain=linux_userspace）
+
+──── 8c) LET 作业表（plc_let，钉扎快照/提交；由 let_decide 选型） ────
+LET chosen=full_fuse uses_let=False
+· 组 g0   s1 + s2 + s3 + s4
+✅ 方案验证通过（1 组 · 同拍边 4 · 跨周期边 0 · 时间证据 empirical）
+=== ECoS 合成：five_stage_loop（target=let）===
+  组 1 / 阶段 4，周期 1000 µs，证据 empirical，验证 通过
+  g0   @0      µs  s1 + s2 + s3 + s4
+  写出 7 个文件：
+    ecos_fused_body.h
+    ecos_fused_body.c
+    fusion_ir.json
+    ecos_let_jobs.h
+    ecos_let_jobs.c
+    ecos_let_main.c
+    README.let.txt
+跳过宿主编译（SKIP_HOST=1）
+
+✅ 从 C 到 A/B/C/D 流水线完成
+   骨架  /tmp/pr6_matrix/w3/stages.json
+   DAG   /tmp/pr6_matrix/w3/task.dag.json
+   TEIR  /tmp/pr6_matrix/w3/task.teir.json
+   入选  /tmp/pr6_matrix/w3/chosen.plan.json  (STKP:L[s1+s2]|L[s3+s4] / linux_userspace)
+   部署  /tmp/pr6_matrix/w3/deploy.json
+   方案  /tmp/pr6_matrix/w3/plan.json
+   验证  /tmp/pr6_matrix/w3/verify.json
+   选型  /tmp/pr6_matrix/w3/candidates.json  (A–F 基线)
+   STKP  /tmp/pr6_matrix/w3/stkp.json
+   LET   /tmp/pr6_matrix/w3/let.json
+   用户态 /tmp/pr6_matrix/w3/driver.c
+   kmod   （未生成：入选用户态）
+   计算体始终是 /root/K-Fusion/kfusion/examples/ecos/chain_window__四段窗口示例.c ，没有第二份手写阶段函数

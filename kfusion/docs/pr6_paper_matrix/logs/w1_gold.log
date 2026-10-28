@@ -1,0 +1,15 @@
+
+# mode: gold  cycles=80
+
+# probe: r/s/f v1.2
+# period_ns: 1000000
+# deadline_ns: 1000000
+# samples: 80
+# release_id: serial 0..79
+# series_us: start_lat exec response  (1us buckets, cap 199)
+# stat_response_us: min=9.524 avg=18.215 p50=13 p90=29 p99=67 p99.9=67 p99.99=67 max=67.939 over=0 neg=0 min_signed=9.524 n=80
+# deadline_miss: 0/80
+# uku_seq_mismatch: 0/80
+# uku_ioctl_error: 0/80
+# digest: 1a7dc565
+# last_seq: 80 g_in=1363 g_out=2728

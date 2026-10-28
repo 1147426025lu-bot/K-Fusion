@@ -58,6 +58,29 @@ def chain_teir(names, kernelizable=None, exec_us=1.0, period=1000.0):
     }
 
 
+def prove_uku_iface(teir, extra_types=None):
+    """单测里钉 int32_t 与无参调用，模拟 Clang 已证明的接口。"""
+    types = dict(teir.get("region_types") or {})
+    calls = dict(teir.get("calls") or {})
+    for n in teir["nodes"]:
+        calls.setdefault(n["name"], "%s()" % n["name"])
+        n.setdefault("call", calls[n["name"]])
+        for r in (n.get("reads") or []) + (n.get("writes") or []):
+            x = r[1:] if str(r).startswith("@") else r
+            if x and "." not in x and "[" not in x and "*" not in x:
+                types.setdefault(x, "int32_t")
+    for e in teir.get("edges") or []:
+        for r in e.get("regions") or []:
+            x = r[1:] if str(r).startswith("@") else r
+            if x and "." not in x and "[" not in x and "*" not in x:
+                types.setdefault(x, "int32_t")
+    if extra_types:
+        types.update(extra_types)
+    teir["region_types"] = types
+    teir["calls"] = calls
+    return teir
+
+
 class StkpV1(unittest.TestCase):
     def setUp(self):
         self.v = stkp.load_verifier()
@@ -159,6 +182,7 @@ class StkpV1(unittest.TestCase):
             if n["name"] in ("fir", "pid", "clamp"):
                 n["reads"] = ["g_x"]
                 n["writes"] = ["g_y"]
+        prove_uku_iface(teir)
         doc = stkp.solve(teir, self.v, c_user=21, c_kernel=5, extra_kernel=0,
                          handoff_us=1.0, override=override)
         rec = doc["chosen_record"]
@@ -175,6 +199,10 @@ class StkpV1(unittest.TestCase):
         ioctl = cost.get("ioctl_model") or {}
         self.assertAlmostEqual(ioctl.get("T_ioctl_us"), 1.0)
         self.assertAlmostEqual(cost.get("sync_us"), 0.0)
+        self.assertEqual(ioctl.get("T_ioctl_evidence"), "cli_override")
+        self.assertFalse(cost.get("final_rankable"))
+        self.assertTrue(any(k.endswith("T_ioctl:cli_override") or k == "T_ioctl:cli_override"
+                            for k in (cost.get("evidence") or [])))
 
     def test_deadline_prunes(self):
         teir = chain_teir(["a", "b"], exec_us=400.0)
@@ -353,6 +381,28 @@ class StkpV1(unittest.TestCase):
         self.assertFalse(chk["ok"])
         self.assertIn("E_UKU_CAPACITY", stkp.uku_mod.codes(chk))
 
+    def test_uku_rejects_unknown_and_uint32_types(self):
+        groups = [
+            {"domain": "linux_userspace", "members": ["sample"]},
+            {"domain": "linux_kernel", "members": ["fir"]},
+            {"domain": "linux_userspace", "members": ["sink"]},
+        ]
+        teir = chain_teir(["sample", "fir", "sink"])
+        teir["nodes"][1]["reads"] = ["g_in"]
+        teir["nodes"][1]["writes"] = ["g_out"]
+        teir["calls"] = {n: "%s()" % n for n in ("sample", "fir", "sink")}
+        for n in teir["nodes"]:
+            n["call"] = "%s()" % n["name"]
+        chk = stkp.uku_mod.check(self._uku_plan(groups), teir)
+        self.assertFalse(chk["ok"])
+        self.assertIn("E_UKU_TYPE_UNKNOWN", stkp.uku_mod.codes(chk))
+        teir["region_types"] = {
+            "g_in": "uint32_t", "g_out": "int32_t", "x": "int32_t"}
+        chk = stkp.uku_mod.check(self._uku_plan(groups), teir)
+        self.assertFalse(chk["ok"])
+        self.assertIn("E_UKU_TYPE", stkp.uku_mod.codes(chk))
+        self.assertNotIn("E_UKU_TYPE_UNKNOWN", stkp.uku_mod.codes(chk))
+
     def test_uku_rejects_struct_and_pointer(self):
         groups = [
             {"domain": "linux_userspace", "members": ["sample"]},
@@ -380,10 +430,47 @@ class StkpV1(unittest.TestCase):
         teir = chain_teir(["sample", "pid", "sink"])
         teir["nodes"][1]["reads"] = ["g_in"]
         teir["nodes"][1]["writes"] = ["g_out"]
-        chk = stkp.uku_mod.check(self._uku_plan(groups), teir,
-                                 calls={"pid": "pid(1000)"})
+        prove_uku_iface(teir)
+        teir["nodes"][1]["call"] = "pid(1000)"
+        teir["calls"]["pid"] = "pid(1000)"
+        chk = stkp.uku_mod.check(self._uku_plan(groups), teir)
         self.assertFalse(chk["ok"])
         self.assertIn("E_UKU_ABI", stkp.uku_mod.codes(chk))
+        override = {
+            "linux_userspace": {"sample": 1.0, "pid": 80.0, "sink": 1.0},
+            "linux_kernel": {"pid": 1.0},
+        }
+        teir["nodes"][0]["allowed_domains"] = ["linux_userspace"]
+        teir["nodes"][2]["allowed_domains"] = ["linux_userspace"]
+        doc = stkp.solve(teir, self.v, c_user=21, c_kernel=5, extra_kernel=0,
+                         handoff_us=1.0, override=override)
+        rec = doc["chosen_record"]
+        self.assertIsNotNone(rec)
+        self.assertNotEqual(rec.get("domain"), "mixed")
+
+    def test_uku_rejects_persistent_kernel_state(self):
+        groups = [
+            {"domain": "linux_userspace", "members": ["sample"]},
+            {"domain": "linux_kernel", "members": ["pid"]},
+            {"domain": "linux_userspace", "members": ["sink"]},
+        ]
+        teir = chain_teir(["sample", "pid", "sink"], kernelizable={
+            "sample": False, "pid": True, "sink": False})
+        teir["nodes"][1]["reads"] = ["g_in", "g_integ"]
+        teir["nodes"][1]["writes"] = ["g_out", "g_integ"]
+        teir["nodes"][1]["persistent"] = ["@g_integ"]
+        chk = stkp.uku_mod.check(self._uku_plan(groups), teir)
+        self.assertFalse(chk["ok"])
+        self.assertIn("E_UKU_PERSISTENT", stkp.uku_mod.codes(chk))
+        override = {
+            "linux_userspace": {"sample": 1.0, "pid": 80.0, "sink": 1.0},
+            "linux_kernel": {"pid": 1.0},
+        }
+        doc = stkp.solve(teir, self.v, c_user=21, c_kernel=5, extra_kernel=0,
+                         handoff_us=1.0, override=override)
+        rec = doc["chosen_record"]
+        self.assertIsNotNone(rec)
+        self.assertNotEqual(rec.get("domain"), "mixed")
 
     def test_uku_does_not_drop_g_seq(self):
         groups = [
@@ -394,6 +481,7 @@ class StkpV1(unittest.TestCase):
         teir = chain_teir(["sample", "add", "sink"])
         teir["nodes"][1]["reads"] = ["g_in", "g_seq"]
         teir["nodes"][1]["writes"] = ["g_out"]
+        prove_uku_iface(teir)
         chk = stkp.uku_mod.check(self._uku_plan(groups), teir)
         self.assertTrue(chk["ok"], chk)
         self.assertIn("g_seq", chk["interface"]["copy_in"])
@@ -403,6 +491,7 @@ class StkpV1(unittest.TestCase):
         teir = chain_teir(names)
         teir["nodes"][1]["reads"] = ["g_in"]
         teir["nodes"][1]["writes"] = ["g_out"]
+        prove_uku_iface(teir)
         contract = {"timing_constraints": {
             "actuator": {"stage": "sink", "earliest_us": 400, "latest_us": 600}}}
         override = {
@@ -422,6 +511,7 @@ class StkpV1(unittest.TestCase):
             "sample": False, "add": True, "sink": False})
         teir["nodes"][1]["reads"] = ["g_in"]
         teir["nodes"][1]["writes"] = ["g_out"]
+        prove_uku_iface(teir)
         override = {
             "linux_userspace": {"sample": 1.0, "add": 80.0, "sink": 1.0},
             "linux_kernel": {n: 1.0 for n in names},
@@ -470,6 +560,83 @@ class StkpV1(unittest.TestCase):
         self.assertIn("ioctl_roundtrip", drv)
         self.assertIn("kernel_compute", drv)
         self.assertNotIn("uku_handoff", drv)
+
+    def test_parse_ioctl_roundtrip_is_not_kernel_compute(self):
+        text = (
+            "# stat_kernel_compute_us: min=0.148 avg=0.222 p50=0 p90=0 p99=0 "
+            "p99.9=1 p99.99=1 max=1.111 over=0 neg=0 min_signed=0.148 n=200\n"
+            "# stat_ioctl_roundtrip_us: min=2.796 avg=4.312 p50=3 p90=6 p99=11 "
+            "p99.9=24 p99.99=24 max=24.259 over=0 neg=0 min_signed=2.796 n=200\n"
+        )
+        p = stkp.stage_cost_mod.parse_user_stage_log(text, source_log="M.log")
+        self.assertAlmostEqual(p["ioctl_roundtrip"]["value"], 4.312)
+        self.assertAlmostEqual(p["kernel_compute"]["value"], 0.222)
+        self.assertAlmostEqual(p["T_ioctl"]["value"], 4.312 - 0.222)
+        self.assertEqual(p["T_ioctl"]["evidence"], "measured")
+        self.assertEqual(p["T_ioctl"]["source_log"], "M.log")
+
+    def test_uku_without_measured_ioctl_cannot_claim_final(self):
+        names = ["sample", "add", "sink"]
+        teir = chain_teir(names, kernelizable={
+            "sample": False, "add": True, "sink": False})
+        teir["nodes"][1]["reads"] = ["g_in"]
+        teir["nodes"][1]["writes"] = ["g_out"]
+        prove_uku_iface(teir)
+        slot = {"value": 1.0, "evidence": "measured",
+                "source_log": "/tmp/U.log", "statistic": "avg", "samples": 80}
+        us = {n: dict(slot) for n in names}
+        us["add"] = dict(slot)
+        us["add"]["value"] = 80.0
+        ov = {
+            "linux_userspace": us,
+            "linux_kernel": {"add": dict(slot)},
+        }
+        doc = stkp.solve(teir, self.v, c_user=21, c_kernel=5, extra_kernel=0,
+                         handoff_us=4.3, override=ov)
+        mixed = [c for c in doc["candidates"] if c.get("domain") == "mixed"]
+        self.assertTrue(mixed)
+        self.assertFalse((mixed[0].get("cost") or {}).get("final_rankable"))
+        self.assertEqual(doc["chosen_record"]["domain"], "linux_userspace")
+        self.assertEqual(doc.get("claim"), "empirical_model_not_wcet")
+        ioctl = {"value": 4.09, "evidence": "measured",
+                 "source_log": "/tmp/M.log", "statistic": "avg", "samples": 200}
+        doc2 = stkp.solve(teir, self.v, c_user=21, c_kernel=5, extra_kernel=0,
+                          handoff_us=0, override=ov, ioctl_cost=ioctl)
+        rec2 = doc2["chosen_record"]
+        self.assertEqual(rec2["domain"], "mixed")
+        self.assertTrue((rec2.get("cost") or {}).get("final_rankable"))
+        self.assertEqual(doc2.get("claim"), "empirical_model_not_wcet")
+        self.assertEqual((rec2.get("cost") or {}).get("ioctl_model", {}).get(
+            "T_ioctl_evidence"), "measured")
+
+    def test_uku_sample_window_uses_start_not_finish(self):
+        names = ["sample", "add", "sink"]
+        teir = chain_teir(names, kernelizable={
+            "sample": False, "add": True, "sink": False})
+        teir["nodes"][1]["reads"] = ["g_in"]
+        teir["nodes"][1]["writes"] = ["g_out"]
+        prove_uku_iface(teir)
+        override = {
+            "linux_userspace": {"sample": 8.0, "add": 80.0, "sink": 1.0},
+            "linux_kernel": {"add": 1.0},
+        }
+        # L=21, sample start=21 finish=29。窗口 [20,22] 只覆盖开始。
+        contract = {"timing_constraints": {
+            "sample": {"stage": "sample", "earliest_us": 20, "latest_us": 22}}}
+        doc = stkp.solve(teir, self.v, c_user=21, c_kernel=5, extra_kernel=0,
+                         handoff_us=1.0, override=override, contract=contract)
+        rec = doc["chosen_record"]
+        self.assertEqual(rec["domain"], "mixed")
+        ev = ((rec.get("cost") or {}).get("schedule") or {}).get("events_us") or {}
+        self.assertAlmostEqual(ev["sample"]["start_us"], 21.0)
+        self.assertAlmostEqual(ev["sample"]["finish_us"], 29.0)
+        late = {"timing_constraints": {
+            "sample": {"stage": "sample", "earliest_us": 0, "latest_us": 20}}}
+        doc2 = stkp.solve(teir, self.v, c_user=21, c_kernel=5, extra_kernel=0,
+                          handoff_us=1.0, override=override, contract=late)
+        rec2 = doc2["chosen_record"]
+        if rec2 is not None:
+            self.assertNotEqual(rec2.get("domain"), "mixed")
 
     def test_pipeline_does_not_die_on_fusion_plan(self):
         sh = os.path.join(KF, "scripts", "ecos_from_c__从C编译.sh")

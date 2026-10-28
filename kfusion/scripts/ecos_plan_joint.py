@@ -177,24 +177,49 @@ def candidate_schedule(plan, teir, override, c_user, c_kernel):
     }
 
 
-def uku_serial_finish(plan, sched, t_ioctl):
-    """UKU 驱动语义：一次唤醒后 U → ioctl(T_ioctl+C_K) → U，不按相位睡眠。"""
+def uku_serial_events(plan, sched, t_ioctl):
+    """一次唤醒后连续执行。采样用开始时刻，输出用提交（完成）时刻。"""
     exec_us = (sched or {}).get("exec_us") or {}
     L_by = {r.get("group"): float(r.get("L_us") or 0.0)
             for r in (sched or {}).get("release") or []}
     t = 0.0
-    finish = {}
+    events = {}
     for g in plan.get("groups") or []:
         t += L_by.get(g.get("id"), 0.0)
         if g.get("domain") == "linux_kernel":
             t += float(t_ioctl or 0.0)
         for m in g.get("members") or []:
+            start = t
             t += float(exec_us.get(m) or 0.0)
-            finish[m] = t
-    return t, finish
+            events[m] = {
+                "start_us": start,
+                "read_us": start,
+                "finish_us": t,
+                "commit_us": t,
+            }
+    return t, events
 
 
-def uku_window_errors(contract, finish):
+def uku_serial_finish(plan, sched, t_ioctl):
+    end, events = uku_serial_events(plan, sched, t_ioctl)
+    return end, {k: v["finish_us"] for k, v in events.items()}
+
+
+def _event_instant(events, stage, kind):
+    e = (events or {}).get(stage)
+    if e is None:
+        return None
+    if isinstance(e, dict) and "start_us" in e:
+        if kind == "sample":
+            return e.get("read_us", e.get("start_us"))
+        return e.get("commit_us", e.get("finish_us"))
+    try:
+        return float(e)
+    except (TypeError, ValueError):
+        return None
+
+
+def uku_window_errors(contract, events):
     if not contract:
         return []
     ctr = contract.get("timing_constraints") or {}
@@ -208,18 +233,30 @@ def uku_window_errors(contract, finish):
             if not isinstance(it, dict):
                 continue
             st = it.get("stage")
-            if not st or st not in finish:
+            t = _event_instant(events, st, key)
+            if t is None:
                 continue
-            t = finish[st]
             lo = it.get("earliest_us")
             hi = it.get("latest_us")
+            label = "采样开始" if key == "sample" else "提交"
             if lo is not None and t < float(lo) - 1e-9:
                 bad.append({"code": "E_UKU_WINDOW",
-                            "msg": "%s 完成 %.3f < earliest %s" % (st, t, lo)})
+                            "msg": "%s %s %.3f < earliest %s" % (
+                                st, label, t, lo)})
             if hi is not None and t > float(hi) + 1e-9:
                 bad.append({"code": "E_UKU_WINDOW",
-                            "msg": "%s 完成 %.3f > latest %s" % (st, t, hi)})
+                            "msg": "%s %s %.3f > latest %s" % (
+                                st, label, t, hi)})
     return bad
+
+
+def parse_ioctl_cost(ioctl_cost, handoff_us):
+    """T_ioctl：裸 --handoff-cost-us 是 cli_override，不是 measured。"""
+    if ioctl_cost is not None:
+        return stage_cost_mod.parse_cost_entry(ioctl_cost, from_override=True)
+    if handoff_us is None:
+        return 0.0, "missing"
+    return float(handoff_us), "cli_override"
 
 
 def batched_handoffs(order, named_groups, domains, teir):
@@ -340,7 +377,7 @@ def af_label(plan):
 
 
 def evaluate_cost(plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
-                  override, deadline_us, contract=None):
+                  override, deadline_us, contract=None, ioctl_cost=None):
     sched = candidate_schedule(plan, teir, override, c_user, c_kernel)
     evidence = list(sched["evidence"])
     missing = list(sched["missing"])
@@ -351,25 +388,30 @@ def evaluate_cost(plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
     domains = [g["domain"] for g in (plan.get("groups") or [])]
     channels = batched_handoffs(plan.get("order") or [], named, domains, teir)
     uku = is_uku_ioctl(plan)
+    h_val, h_ev = parse_ioctl_cost(ioctl_cost, handoff_us)
+    if h_val is None or not _finite_nonneg(h_val):
+        h_val, h_ev = 0.0, "missing"
     if uku:
-        # 一次 ioctl 往返税（copy+syscall），不含 C_K；C_K 已在 compute 里。
-        h_total = float(handoff_us or 0.0)
+        h_total = float(h_val)
         sync = 0.0
         sched["T_ioctl_us"] = h_total
+        evidence.append("T_ioctl:%s" % h_ev)
     else:
-        h_total = len(channels) * float(handoff_us or 0.0)
+        h_total = len(channels) * float(h_val)
         sync = extra_kernel if has_k else 0.0
         sched["T_ioctl_us"] = 0.0
-    if not _finite_nonneg(handoff_us if handoff_us is not None else 0.0):
-        missing.append("T_ioctl")
     if extra_kernel and not uku and not _finite_nonneg(extra_kernel):
         missing.append("extra_kernel")
     kinds = [item.rsplit(":", 1)[-1] for item in evidence]
-    has_missing = bool(missing) or any(k in EV_MISSING for k in kinds)
+    stage_kinds = [k for k in kinds if not k.startswith("T_ioctl")]
+    # T_ioctl 缺测不让整个 UKU 不可比，只禁止结题。
+    has_missing = bool(missing) or any(
+        k in EV_MISSING for k in stage_kinds)
     has_ph = any(k in EV_WEAK for k in kinds)
     comparable = not has_missing
-    final_rankable = comparable and (not has_ph) and all(
-        k in EV_FINAL for k in kinds)
+    ioctl_final = (not uku) or (h_ev in EV_FINAL)
+    final_rankable = comparable and (not has_ph) and ioctl_final and all(
+        k in EV_FINAL for k in stage_kinds)
     explore_rankable = comparable and (not has_ph)
     pred = None if not comparable else round(
         (compute or 0.0) + release + h_total + sync, 3)
@@ -385,9 +427,10 @@ def evaluate_cost(plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
             temporal_ok = False
             temporal_why = "R̂=%.3f > deadline %s" % (pred, deadline_us)
     if comparable and uku:
-        _end, finish = uku_serial_finish(plan, sched, h_total)
-        werr = uku_window_errors(contract, finish)
-        sched["finish_us"] = finish
+        _end, events = uku_serial_events(plan, sched, h_total)
+        werr = uku_window_errors(contract, events)
+        sched["events_us"] = events
+        sched["finish_us"] = {k: v["finish_us"] for k, v in events.items()}
         if werr:
             temporal_ok = False
             temporal_why = "; ".join(e["msg"] for e in werr[:4])
@@ -415,7 +458,8 @@ def evaluate_cost(plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
             "L_user_us": round(release, 3),
             "C_us": None if compute is None else round(compute, 3),
             "T_ioctl_us": round(h_total, 3),
-            "note": "Ĉ=L_U+ΣC+T_ioctl；T_ioctl≠kernel_compute；非 WCET",
+            "T_ioctl_evidence": h_ev,
+            "note": "Ĉ=L_U+ΣC+T_ioctl；T_ioctl 须实测才可结题；非 WCET",
         } if uku else None),
         "predicted_R_us": pred,
         "total_us": pred,
@@ -440,11 +484,14 @@ def dag_temporal_ok(plan, dag, contract, platforms, c_user, c_kernel, sched):
         if not is_uku_ioctl(plan):
             return True, []
         t_ioctl = (sched or {}).get("T_ioctl_us") or 0.0
-        _end, finish = uku_serial_finish(plan, sched, t_ioctl)
-        werr = uku_window_errors(contract, finish)
+        _end, events = uku_serial_events(plan, sched, t_ioctl)
+        werr = uku_window_errors(contract, events)
         return (not werr), werr
     if sched is not None and not sched.get("complete"):
-        # 缺测不得把 0 喂给 inst(m)；成本路径已标 incomparable
+        ctr = (contract or {}).get("timing_constraints") or {}
+        if any(ctr.get(k) for k in ("sample", "actuator", "output")):
+            return False, [{"code": "E_WINDOW_NO_COST",
+                            "msg": "有相位窗口但缺测，不得用 0 过窗"}]
         return True, []
     exec_us = (sched or {}).get("exec_us") or {}
     rel = (sched or {}).get("release") or []
@@ -503,7 +550,7 @@ def rank_key(rec):
 
 def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
           handoff_us=0.0, override=None, max_stages=8, keep_rejected=40,
-          dag=None, contract=None, platforms=None):
+          dag=None, contract=None, platforms=None, ioctl_cost=None):
     order = stage_order(teir)
     n = len(order)
     if n == 0:
@@ -556,7 +603,7 @@ def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
                 continue
             cost, channels = evaluate_cost(
                 plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
-                override, deadline, contract=contract)
+                override, deadline, contract=contract, ioctl_cost=ioctl_cost)
             plan["cost"] = {
                 "predicted_R_us": cost["predicted_R_us"],
                 "grade": cost["grade"],
@@ -720,6 +767,11 @@ def run_stkp(args):
     teir = load_json(args.teir)
     v = load_verifier()
     override = parse_override(args.stage_cost) if args.stage_cost else None
+    ioctl_cost = None
+    if args.ioctl_cost:
+        ioctl_cost = (json.loads(args.ioctl_cost)
+                      if str(args.ioctl_cost).lstrip().startswith("{")
+                      else load_json(args.ioctl_cost))
     dag = load_json(args.dag) if args.dag else None
     contract = load_json(args.contract) if args.contract else None
     platforms = load_json(args.platforms) if args.platforms else None
@@ -732,6 +784,7 @@ def run_stkp(args):
         override=override,
         max_stages=args.max_stages,
         dag=dag, contract=contract, platforms=platforms,
+        ioctl_cost=ioctl_cost,
     )
     if not args.no_baseline:
         doc = attach_baseline(doc, teir, args.c_user_us, args.c_kernel_us,
@@ -885,6 +938,8 @@ def main():
     ap.add_argument("--kernel-extra-us", type=float, default=0.0)
     ap.add_argument("--stage-cost", default=None,
                     help="分域成本 {domain:{stage: number|{value,evidence,source_log}}}")
+    ap.add_argument("--ioctl-cost", default=None,
+                    help="UKU T_ioctl {value,evidence,source_log,samples}")
     ap.add_argument("--contract", default=None, help="时间契约 JSON（窗口/期限）")
     ap.add_argument("--max-stages", type=int, default=8)
     ap.add_argument("--oracle", action="store_true")

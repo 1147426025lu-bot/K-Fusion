@@ -1,0 +1,47 @@
+{
+  "kind": "pr5d_uku_fault",
+  "claim": "fault injection + per-cycle gold; empirical; not WCET",
+  "host": "Linux version 5.15.86 (builder@e3665d6e1a6c) (aarch64-linux-gnu-gcc (Debian 10.2.1-6) 10.2.1 20210110, GNU ld (GNU Binutils for Debian) 2.35.2) #1 SMP PREEMPT Wed Oct 14 10:16:11 UTC 2026",
+  "inject_log_tail": [
+    "exclusive_ebusy_ok",
+    "bad_magic_einval_ok",
+    "bad_nin_einval_ok",
+    "bad_seq_eilseq_ok",
+    "seq1_gold_ok g_in=20 g_mid=21 g_out=42",
+    "replay_seq1_eilseq_ok",
+    "poison_nout_einval_ok",
+    "per_cycle_gold_ok n=40",
+    "all_ok"
+  ],
+  "gold": {
+    "digest": "1a7dc565",
+    "last_seq": 80,
+    "g_in": 1363,
+    "g_out": 2728,
+    "seq_mismatch": 0,
+    "ioctl_error": 0
+  },
+  "mixed": {
+    "digest": "1a7dc565",
+    "last_seq": 80,
+    "g_in": 1363,
+    "g_out": 2728,
+    "seq_mismatch": 0,
+    "ioctl_error": 0
+  },
+  "checks": {
+    "exclusive_ebusy": true,
+    "bad_magic": true,
+    "bad_nin": true,
+    "bad_seq": true,
+    "replay_seq": true,
+    "poison_nout": true,
+    "per_cycle_gold": true,
+    "inject_all": true,
+    "digest_match": true,
+    "same_final": true,
+    "driver_seq_ok": true
+  },
+  "all_ok": true,
+  "header": "/tmp/pr5d_uku/pipe/kmod_uku/kfusion_uku.h"
+}

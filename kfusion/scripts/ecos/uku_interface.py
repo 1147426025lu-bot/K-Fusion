@@ -9,7 +9,8 @@ from __future__ import print_function
 UKU_MAX = 8
 U = "linux_userspace"
 K = "linux_kernel"
-SCALAR = frozenset(("int32_t", "int32", "i32", "uint32_t", "uint32", "u32"))
+# 生成器固定 extern int32_t；未知类型与 uint32_t 一律拒绝。
+UKU_OK_TYPE = frozenset(("int32_t", "int32", "i32"))
 
 
 def region_name(raw):
@@ -41,14 +42,27 @@ def shape_errors(plan):
     return []
 
 
+def _norm_type(ty):
+    s = str(ty).strip()
+    for w in ("const", "volatile", "restrict"):
+        s = s.replace(w, " ")
+    return " ".join(s.split())
+
+
 def _type_of(teir, name):
     types = teir.get("region_types") or {}
     if name in types:
         return str(types[name])
+    alt = "@" + name if not str(name).startswith("@") else name
+    if alt in types:
+        return str(types[alt])
     for n in teir.get("nodes") or []:
         tmap = n.get("region_types") or n.get("types") or {}
         if name in tmap:
             return str(tmap[name])
+    for g in teir.get("globals") or []:
+        if isinstance(g, dict) and g.get("name") == name:
+            return g.get("type")
     return None
 
 
@@ -58,14 +72,42 @@ def _unsupported_type(teir, name):
     if "." in name or "[" in name or "*" in name:
         return "E_UKU_TYPE", "%s 像结构体/数组/指针，UKU v1 只支持标量" % name
     ty = _type_of(teir, name)
-    if ty is None:
-        # 无声明时只接受简单标识符（典型 g_*）
-        if not name.replace("_", "").isalnum() or name[0].isdigit():
-            return "E_UKU_TYPE", "%s 不是合法标量名" % name
-        return None
-    if ty not in SCALAR:
+    if ty is None or not str(ty).strip():
+        return "E_UKU_TYPE_UNKNOWN", (
+            "%s 无 Clang 类型证据，UKU v1 只接受已证明的 int32_t" % name)
+    nt = _norm_type(ty)
+    if "[" in nt or "*" in nt:
         return "E_UKU_TYPE", "%s 类型 %s 不受支持" % (name, ty)
+    if nt not in UKU_OK_TYPE:
+        return "E_UKU_TYPE", "%s 类型 %s 不是 int32_t（生成器只声明 int32_t）" % (
+            name, ty)
     return None
+
+
+def persistent_errors(plan, teir):
+    kset = set()
+    for g in kernel_groups(plan):
+        kset.update(g.get("members") or [])
+    bad = []
+    for n in teir.get("nodes") or []:
+        if n.get("name") not in kset:
+            continue
+        pers = n.get("persistent") or []
+        if pers:
+            bad.append({
+                "code": "E_UKU_PERSISTENT",
+                "msg": "内核阶段 %s 持有跨拍状态 %s，UKU v1 无状态版本" % (
+                    n.get("name"), ",".join(pers)),
+            })
+    for p in teir.get("persistent_state") or []:
+        if p.get("writer") in kset:
+            r = p.get("region")
+            if r and not any(r in (e.get("msg") or "") for e in bad):
+                bad.append({
+                    "code": "E_UKU_PERSISTENT",
+                    "msg": "内核写者 %s 的持久区 %s" % (p.get("writer"), r),
+                })
+    return bad
 
 
 def _call_has_args(expr):
@@ -130,18 +172,33 @@ def window_errors(contract):
     return bad
 
 
+def _call_expr(teir, node, calls, name):
+    if calls and name in calls:
+        return calls[name]
+    cmap = (teir or {}).get("calls") or {}
+    if name in cmap:
+        return cmap[name]
+    if node:
+        return node.get("call") or node.get("expr")
+    return None
+
+
 def call_errors(plan, teir, calls):
-    calls = calls or {}
     nodes = {n["name"]: n for n in (teir.get("nodes") or [])}
     kmem = []
     for g in kernel_groups(plan):
         kmem.extend(g.get("members") or [])
     bad = []
     for m in kmem:
-        expr = calls.get(m)
-        if expr is None:
-            expr = (nodes.get(m) or {}).get("call") or (nodes.get(m) or {}).get("expr")
-        if _call_has_args(expr):
+        node = nodes.get(m) or {}
+        expr = _call_expr(teir, node, calls, m)
+        if not expr:
+            bad.append({
+                "code": "E_UKU_ABI_UNKNOWN",
+                "msg": "内核阶段 %s 无调用表达式，STKP 不得假设 %s()" % (m, m),
+            })
+            continue
+        if _call_has_args(expr) or node.get("params"):
             bad.append({
                 "code": "E_UKU_ABI",
                 "msg": "内核阶段 %s 带参数 %s，UKU v1 无调用 ABI" % (m, expr),
@@ -157,6 +214,7 @@ def check(plan, teir, contract=None, calls=None):
         return {"ok": False, "errors": errors, "interface": None}
     # 相位窗口改由 STKP 串行时间线（Ĉ 同一份 exec）裁剪，不再在此 fail-closed。
     errors.extend(call_errors(plan, teir, calls))
+    errors.extend(persistent_errors(plan, teir))
     kmem, reads, writes = collect_kernel_io(plan, teir)
     if not reads or not writes:
         errors.append({

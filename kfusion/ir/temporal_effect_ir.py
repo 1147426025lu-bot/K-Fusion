@@ -48,6 +48,37 @@ def write_teir(teir, path):
     return path
 
 
+def attach_extract_facts(teir, stages=None, extract=None):
+    """把 Clang 抽取的类型与调用表达式钉到 TEIR，供 STKP UKU 门禁用。"""
+    stages = stages or {}
+    extract = extract or {}
+    src = stages if stages else extract
+    calls = dict(src.get("calls") or extract.get("calls") or {})
+    by = {}
+    for s in src.get("stages") or []:
+        if not s.get("name"):
+            continue
+        by[s["name"]] = s
+        if s.get("call") and s["name"] not in calls:
+            calls[s["name"]] = s["call"]
+    types = {}
+    for g in (src.get("globals_typed") or extract.get("globals_typed")
+              or src.get("globals") or extract.get("globals") or []):
+        if isinstance(g, dict) and g.get("name"):
+            types[g["name"]] = g.get("type") or ""
+    for n in teir.get("nodes") or []:
+        expr = calls.get(n["name"])
+        if expr:
+            n["call"] = expr
+        st = by.get(n["name"]) or {}
+        if st.get("params"):
+            n["params"] = st["params"]
+    teir["calls"] = calls
+    if types:
+        teir["region_types"] = types
+    return teir
+
+
 def describe_migration(allowed, blocked, persistent=None, effects=None):
     """编译器必须能说明「为什么能/不能进内核」，不能只给一个布尔。"""
     allowed = list(allowed or [])
@@ -147,7 +178,7 @@ def build_teir_from_extract(extract, dag, ex, order, stage_rw, data_edges,
             "lag_periods": e.get("lag_periods"),
             "xdom": e.get("xdom"),
         })
-    return {
+    teir = {
         "version": 1,
         "kind": "teir",
         "ir": "TEIR",
@@ -187,6 +218,7 @@ def build_teir_from_extract(extract, dag, ex, order, stage_rw, data_edges,
             },
         },
     }
+    return attach_extract_facts(teir, stages=extract, extract=extract)
 
 
 def norm_region(r):
@@ -568,7 +600,7 @@ def _build_teir_from_dag(dag, summary=None, stages=None, caps=None, kc0=None):
         ),
     }
 
-    return {
+    teir = {
         "version": 1,
         "kind": "teir",
         "task": task,
@@ -584,6 +616,7 @@ def _build_teir_from_dag(dag, summary=None, stages=None, caps=None, kc0=None):
             ],
         },
     }
+    return attach_extract_facts(teir, stages=stages)
 
 
 def may_delete_stage(teir, name):

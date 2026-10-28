@@ -30,6 +30,14 @@ _LAT_RE = re.compile(
 _EXEC_RE = re.compile(
     r"# stat_exec_us: min=([0-9.]+) avg=([0-9.]+) p50=(\d+).*?max=([0-9.]+)"
 )
+_IOCTL_RE = re.compile(
+    r"# stat_ioctl_roundtrip_us: min=([0-9.]+) avg=([0-9.]+) p50=(\d+).*?"
+    r"max=([0-9.]+).*? n=(\d+)"
+)
+_KCOMP_RE = re.compile(
+    r"# stat_kernel_compute_us: min=([0-9.]+) avg=([0-9.]+) p50=(\d+).*?"
+    r"max=([0-9.]+).*? n=(\d+)"
+)
 
 
 def has_provenance(slot):
@@ -109,8 +117,55 @@ def parse_user_stage_log(text, source_log=None):
             "p50_us": int(m.group(3)),
             "max_us": float(m.group(4)),
         }
+    ioctl = None
+    m = _IOCTL_RE.search(text)
+    if m:
+        ioctl = {
+            "value": float(m.group(2)),
+            "evidence": "measured",
+            "statistic": "avg",
+            "min_us": float(m.group(1)),
+            "avg_us": float(m.group(2)),
+            "p50_us": int(m.group(3)),
+            "max_us": float(m.group(4)),
+            "samples": int(m.group(5)),
+            "source_log": source_log,
+            "kind": "ioctl_roundtrip",
+            "note": "用户态包住 ioctl 的往返；含 syscall+copy，不是单阶段 C_K",
+        }
+    kcomp = None
+    m = _KCOMP_RE.search(text)
+    if m:
+        kcomp = {
+            "value": float(m.group(2)),
+            "evidence": "measured",
+            "statistic": "avg",
+            "avg_us": float(m.group(2)),
+            "max_us": float(m.group(4)),
+            "samples": int(m.group(5)),
+            "source_log": source_log,
+            "kind": "kernel_compute",
+        }
+    tax = None
+    if ioctl and kcomp and ioctl["value"] >= kcomp["value"]:
+        tax = {
+            "value": round(ioctl["value"] - kcomp["value"], 6),
+            "evidence": "measured",
+            "statistic": "avg_roundtrip_minus_kcompute",
+            "source_log": source_log,
+            "ioctl_roundtrip_us": ioctl["value"],
+            "kernel_compute_us": kcomp["value"],
+            "samples": ioctl.get("samples"),
+            "kind": "T_ioctl",
+            "note": "T_ioctl=ioctl_roundtrip−kernel_compute；非 WCET",
+        }
+    elif ioctl:
+        tax = dict(ioctl)
+        tax["kind"] = "T_ioctl"
+        tax["note"] = "无 kernel_compute 对照时 T_ioctl 用整段 roundtrip"
     return {"stages": stages, "start_lat": lat, "exec": tot,
-            "source_log": source_log}
+            "ioctl_roundtrip": ioctl, "kernel_compute": kcomp,
+            "T_ioctl": tax, "source_log": source_log}
 
 
 def load_user_stage_log(path):

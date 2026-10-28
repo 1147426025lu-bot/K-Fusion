@@ -132,6 +132,9 @@ fi
 if [ -n "${STAGE_COST:-}" ] && [ -f "${STAGE_COST}" ]; then
   STKP_ARGS+=(--stage-cost "$STAGE_COST")
 fi
+if [ -n "${IOCTL_COST:-}" ] && [ -f "${IOCTL_COST}" ]; then
+  STKP_ARGS+=(--ioctl-cost "$IOCTL_COST")
+fi
 "$PY" "$KF/scripts/ecos_plan_joint.py" "${STKP_ARGS[@]}" \
   || die "STKP 无 deployment_ready 方案" 8
 
