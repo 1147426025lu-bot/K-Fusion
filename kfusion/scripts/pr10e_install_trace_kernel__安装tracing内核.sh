@@ -21,6 +21,7 @@ DRY=0
 ok()   { echo "  ✓ $*"; }
 bad()  { echo "  ✗ $*"; }
 warn() { echo "  ! $*"; }
+info() { echo "    $*"; }
 
 echo "=============================================================="
 echo " PR-10E 阶段 B：tracing 内核安装（$( [ $DRY = 1 ] && echo 演练 || echo 实装 )）"
@@ -50,6 +51,24 @@ if [ $DRY = 0 ] && mountpoint -q "$BOOT"; then
 fi
 if [ ! -f "$BOOT/kernel8.img" ]; then bad "$BOOT/kernel8.img 不存在 —— 没有稳定内核可回落"; rc=1; else
     ok "稳定内核在：kernel8.img（$(stat -c %s "$BOOT/kernel8.img") B），可回落"
+fi
+
+# 空间检查（2026-10-28 补：此前漏查，导致 image 被截断写入、tryboot.txt 为 0 字节）
+if [ -f "$IMG" ] && mountpoint -q "$BOOT"; then
+    need=$(stat -c %s "$IMG")
+    avail=$(df -B1 --output=avail "$BOOT" 2>/dev/null | tail -1 | tr -d ' ')
+    if [ -n "$avail" ] && [ "$avail" -lt "$need" ]; then
+        bad "启动分区空间不足：需要 $((need/1024/1024)) MB，可用 $((avail/1024/1024)) MB"
+        bad "  → 不会尝试写入（否则 image 会被截断、tryboot.txt 变成 0 字节）"
+        info "分区总容量：$(df -h "$BOOT" | tail -1 | awk '{print $2}')"
+        info "现有内核占用：$(stat -c %s "$BOOT/kernel8.img" 2>/dev/null | awk '{printf "%.1f MB", $1/1048576}')"
+        info "候选方案：① 压缩内核（gzip 后约 10.5 MB，但需固件支持 gzip 启动，无法事前验证）"
+        info "          ② 换更大 SD 卡 / 扩容 p1（改分区表，风险高）"
+        info "          ③ 放弃 tracing 内核，改用 CLOCK_THREAD_CPUTIME_ID 做每拍 CPU-time 分解"
+        rc=1
+    else
+        ok "启动分区空间足够：需 $((need/1024/1024)) MB，可用 $((avail/1024/1024)) MB"
+    fi
 fi
 if [ ! -f "$BOOT/config.txt" ]; then bad "$BOOT/config.txt 不存在"; rc=1; fi
 
