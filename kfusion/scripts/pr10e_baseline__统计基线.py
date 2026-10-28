@@ -200,14 +200,27 @@ def measure(cell, mode, sched, cycles, repeat, out_dir):
             # 核心归因：超期那一拍到底是在等 CPU 还是在跑？
             mr = [r for r in rows if r[3] > deadline_ns]
             orr = [r for r in rows if r[3] <= deadline_ns]
+            def _p50(rows, idx):
+                return (pct([r[idx] for r in rows], .5) / 1000.0) if rows else None
             extra["miss_breakdown"] = {
                 "n_miss": len(mr),
-                "miss_resp_p50_us": (pct([r[3] for r in mr], .5) / 1000.0) if mr else None,
-                "miss_preempt_p50_us": (pct([r[5] for r in mr], .5) / 1000.0) if mr else None,
-                "miss_cpu_p50_us": (pct([r[4] for r in mr], .5) / 1000.0) if mr else None,
-                "ok_resp_p50_us": (pct([r[3] for r in orr], .5) / 1000.0) if orr else None,
-                "ok_preempt_p50_us": (pct([r[5] for r in orr], .5) / 1000.0) if orr else None,
-                "ok_cpu_p50_us": (pct([r[4] for r in orr], .5) / 1000.0) if orr else None,
+                # start_lat = 名义释放到真正开始执行（等调度/唤醒延迟）
+                "miss_start_p50_us": _p50(mr, 1),
+                "ok_start_p50_us": _p50(orr, 1),
+                # work = 开始执行到结束（wall）
+                "miss_work_p50_us": _p50(mr, 2),
+                "ok_work_p50_us": _p50(orr, 2),
+                "miss_resp_p50_us": _p50(mr, 3),
+                "ok_resp_p50_us": _p50(orr, 3),
+                # cpu = 这段时间真正在 CPU 上的时间
+                "miss_cpu_p50_us": _p50(mr, 4),
+                "ok_cpu_p50_us": _p50(orr, 4),
+                # preempt = work - cpu（修正顺序后应 >= 0，负值说明测量区间错）
+                "miss_preempt_p50_us": _p50(mr, 5),
+                "ok_preempt_p50_us": _p50(orr, 5),
+                # 最重要的单指标：响应时间里「不在 CPU 上」的部分
+                "miss_offcpu_p50_us": _p50([(0, 0, 0, r[3], r[3] - r[4]) for r in mr], 4),
+                "ok_offcpu_p50_us": _p50([(0, 0, 0, r[3], r[3] - r[4]) for r in orr], 4),
             }
         runs.append({
             "repeat": i, "rc": rc, "n": len(rows),

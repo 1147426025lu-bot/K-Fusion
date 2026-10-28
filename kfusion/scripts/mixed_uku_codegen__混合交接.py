@@ -373,8 +373,10 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     A("		r = (long long)next.tv_sec * 1000000000LL + next.tv_nsec;")
     A("		if (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL) != 0)")
     A("			return 1;")
-    A("		c0 = cpu_ns();")
     A("		s = now_ns();")
+    A("		/* c0 必须在 s 之后、c1 必须在 f 之前：否则 CPU 区间比 work 宽，")
+    A("		 * preempt = work - cpu 会算出负数（2026-10-28 实测踩过）。 */")
+    A("		c0 = cpu_ns();")
     A("		plc_probe_add(&g_start, s - r);")
     si = 0
     for g in groups:
@@ -409,10 +411,10 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
                 A("		%s;" % expr)
                 A("		plc_probe_add(&g_exec_stage[%d], now_ns() - _a);" % si)
                 si += 1
+    A("		c1 = cpu_ns();")
     A("		f = now_ns();")
     A("		plc_probe_add(&g_work, f - s);")
     A("		plc_probe_add(&g_resp, f - r);")
-    A("		c1 = cpu_ns();")
     A("		plc_probe_add(&g_cpu, c1 - c0);")
     A("		plc_probe_add(&g_preempt, (f - s) - (c1 - c0));")
     A("		if (g_csv)")
