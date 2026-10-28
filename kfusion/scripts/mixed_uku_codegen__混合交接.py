@@ -376,7 +376,7 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     A("		s = now_ns();")
     A("		/* c0 必须在 s 之后、c1 必须在 f 之前：否则 CPU 区间比 work 宽，")
     A("		 * preempt = work - cpu 会算出负数（2026-10-28 实测踩过）。 */")
-    A("		c0 = cpu_ns();")
+    A("		if (g_csv == 2) c0 = cpu_ns();")
     A("		plc_probe_add(&g_start, s - r);")
     si = 0
     for g in groups:
@@ -411,13 +411,17 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
                 A("		%s;" % expr)
                 A("		plc_probe_add(&g_exec_stage[%d], now_ns() - _a);" % si)
                 si += 1
-    A("		c1 = cpu_ns();")
+    A("		if (g_csv == 2) c1 = cpu_ns();")
     A("		f = now_ns();")
     A("		plc_probe_add(&g_work, f - s);")
     A("		plc_probe_add(&g_resp, f - r);")
-    A("		plc_probe_add(&g_cpu, c1 - c0);")
-    A("		plc_probe_add(&g_preempt, (f - s) - (c1 - c0));")
+    A("		if (g_csv == 2) {")
+    A("			plc_probe_add(&g_cpu, c1 - c0);")
+    A("			plc_probe_add(&g_preempt, (f - s) - (c1 - c0));")
+    A("		}")
     A("		if (g_csv)")
+    A("			printf(\"%ld,%lld,%lld,%lld\\n\", k, s - r, f - s, f - r);")
+    A("		else if (g_csv == 2)")
     A("			printf(\"%ld,%lld,%lld,%lld,%lld,%lld\\n\", k, s - r, f - s, f - r, c1 - c0, (f - s) - (c1 - c0));")
     for v in digest_vars:
         A("		DIGEST_MIX(%s);" % v)
@@ -477,6 +481,11 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     A("	}")
     A("	if (argc > 3 && !strcmp(argv[3], \"csv\"))")
     A("		g_csv = 1;")
+    A("	/* csvcpu 额外采 CLOCK_THREAD_CPUTIME_ID：实测 2510ns/次，")
+    A("	 * 比 MONOTONIC 贵 19 倍（无 vDSO 快路径），每拍两次约 +5us，")
+    A("	 * 会污染 work。日常基线用 csv，只在做归因时开 csvcpu。 */")
+    A("	if (argc > 3 && !strcmp(argv[3], \"csvcpu\"))")
+    A("		g_csv = 2;")
     A("	return run_mode(mode, cycles);")
     A("}")
     return "\n".join(lines) + "\n"

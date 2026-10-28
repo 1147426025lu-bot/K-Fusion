@@ -197,31 +197,34 @@ def measure(cell, mode, sched, cycles, repeat, out_dir):
                 "p50_us": pct(pre, .5) / 1000.0, "p99_us": pct(pre, .99) / 1000.0,
                 "max_us": max(pre) / 1000.0,
                 "avg_us": round(sum(pre) / float(len(pre)) / 1000.0, 3)}
-            # 核心归因：超期那一拍到底是在等 CPU 还是在跑？
-            mr = [r for r in rows if r[3] > deadline_ns]
-            orr = [r for r in rows if r[3] <= deadline_ns]
-            def _p50(rows, idx):
-                return (pct([r[idx] for r in rows], .5) / 1000.0) if rows else None
-            extra["miss_breakdown"] = {
-                "n_miss": len(mr),
-                # start_lat = 名义释放到真正开始执行（等调度/唤醒延迟）
-                "miss_start_p50_us": _p50(mr, 1),
-                "ok_start_p50_us": _p50(orr, 1),
-                # work = 开始执行到结束（wall）
-                "miss_work_p50_us": _p50(mr, 2),
-                "ok_work_p50_us": _p50(orr, 2),
-                "miss_resp_p50_us": _p50(mr, 3),
-                "ok_resp_p50_us": _p50(orr, 3),
-                # cpu = 这段时间真正在 CPU 上的时间
-                "miss_cpu_p50_us": _p50(mr, 4),
-                "ok_cpu_p50_us": _p50(orr, 4),
-                # preempt = work - cpu（修正顺序后应 >= 0，负值说明测量区间错）
-                "miss_preempt_p50_us": _p50(mr, 5),
-                "ok_preempt_p50_us": _p50(orr, 5),
-                # 最重要的单指标：响应时间里「不在 CPU 上」的部分
-                "miss_offcpu_p50_us": _p50([(0, 0, 0, r[3], r[3] - r[4]) for r in mr], 4),
-                "ok_offcpu_p50_us": _p50([(0, 0, 0, r[3], r[3] - r[4]) for r in orr], 4),
-            }
+            # cpu/preempt 只在 6 列（csvcpu 模式）时存在；4 列时该 key 不出现
+
+        # 核心归因：超期那一拍是在等调度还是在跑？
+        # resp = start_lat + work，其中 start_lat 是等调度、work 是执行 wall。
+        # 这两项 4 列模式就有，零额外开销（cpu/preempt 不是必需）。
+        mr = [r for r in rows if r[3] > deadline_ns]
+        orr = [r for r in rows if r[3] <= deadline_ns]
+
+        def _p50(sel, idx):
+            return (pct([r[idx] for r in sel], .5) / 1000.0) if sel else None
+
+        extra["miss_breakdown"] = {
+            "n_miss": len(mr),
+            "miss_start_p50_us": _p50(mr, 1),
+            "ok_start_p50_us": _p50(orr, 1),
+            "miss_work_p50_us": _p50(mr, 2),
+            "ok_work_p50_us": _p50(orr, 2),
+            "miss_resp_p50_us": _p50(mr, 3),
+            "ok_resp_p50_us": _p50(orr, 3),
+            # 6 列才有
+            "miss_cpu_p50_us": _p50(mr, 4) if len(rows[0]) >= 6 else None,
+            "ok_cpu_p50_us": _p50(orr, 4) if len(rows[0]) >= 6 else None,
+            "miss_preempt_p50_us": _p50(mr, 5) if len(rows[0]) >= 6 else None,
+            "ok_preempt_p50_us": _p50(orr, 5) if len(rows[0]) >= 6 else None,
+            # 超期拍里 start_lat 占 resp 的比例 —— 一个数看出「是否在等调度」
+            "miss_start_frac": (
+                (_p50(mr, 1) / _p50(mr, 3)) if (mr and _p50(mr, 3)) else None),
+        }
         runs.append({
             "repeat": i, "rc": rc, "n": len(rows),
             "start_lat": {"p50_us": pct(start, .5) / 1000.0,
