@@ -26,6 +26,7 @@ Gate 1 的「自动生成」环节：用户不再手写 DAG，而是由编译器
 """
 
 import argparse
+import importlib.util
 import io
 import json
 import os
@@ -36,6 +37,15 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(_HERE)))  # .../kfusion/frontend/stage_extract -> repo
 _PLANNER = os.path.join(_REPO, "kfusion", "scripts", "fusion_plan__融合规划.py")
 _CAPS = os.path.join(_REPO, "kfusion", "contracts", "examples", "platform_caps.json")
+_TEIR_MOD = os.path.join(_REPO, "kfusion", "ir", "temporal_effect_ir.py")
+
+
+def _load_teir_module():
+    """按文件路径加载 TEIR 模块（kfusion/ir/temporal_effect_ir.py），避免依赖包结构。"""
+    spec = importlib.util.spec_from_file_location("kfusion_ir_teir", _TEIR_MOD)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def _load(p):
@@ -75,6 +85,14 @@ def build_dag(extract, period_us, deadline_us, exec_us, default_exec_us,
                          % extract.get("entry"))
 
     order = [s["name"] for s in stages]
+    # IR use-def（Gate 2）：每个阶段的读/写全局，来自 stage_extract 的 IR 级分析
+    stage_rw = {}
+    for s in stages:
+        stage_rw[s["name"]] = {
+            "reads": s.get("reads") or [],
+            "writes": s.get("writes") or [],
+        }
+
     # 执行时间：显式优先，缺省用占位并标记
     ex = dict(exec_us or {})
     placeholders = []
@@ -91,14 +109,44 @@ def build_dag(extract, period_us, deadline_us, exec_us, default_exec_us,
         acc += ex[n]
     span = round(acc, 3)
 
+    # 同周期数据依赖边（Gate 2 IR use-def）：对 B 的每个读 g，找调用序中 B 之前
+    # 最后一个写 g 的阶段 A -> A 在周期 k 写 w_g(k)，B 读 r_g(k)（同一周期版本）。
+    # 这是「功能等价 ≠ 时间正确」要钉死的那条约束：生产者必须在消费者之前（同拍内）。
+    data_edges = []
+    cross_inputs = []
+    seen = set()
+    for idx_b, b in enumerate(order):
+        for g in stage_rw[b]["reads"]:
+            producer = None
+            for idx_a in range(idx_b - 1, -1, -1):
+                a = order[idx_a]
+                if g in stage_rw[a]["writes"]:
+                    producer = a
+                    break
+            if producer is not None:
+                key = (producer, b, g)
+                if key not in seen:
+                    data_edges.append({"from": producer, "to": b,
+                                       "kind": "data", "proven": g,
+                                       "var": g, "version": "same_period"})
+                    seen.add(key)
+            else:
+                # 读但本周期无人写：外部输入 / 上一周期状态（跨周期，不算内部边）
+                cross_inputs.append({"stage": b, "var": g})
+
+    # 每个节点的真实数据入边（用于 declared_deps / 下游验证）
+    in_edges = {}
+    for e in data_edges:
+        in_edges.setdefault(e["to"], []).append(e["from"])
+
     nodes = []
     for i, n in enumerate(order):
         nodes.append({
             "name": n,
             "fns": [n],
             "context": "thread",
-            "declared_deps": ([order[i - 1]] if i > 0 else []),
-            # 保守：控制阶段按读写本域状态处理（Gate 2 的 IR use-def 再精化）
+            "declared_deps": in_edges.get(n, []),
+            # 保守：控制阶段按读写本域状态处理（Gate 2 的 IR use-def 已给出真实读写）
             "effects": ["state_read", "state_write"],
             "contexts": ["thread", "softirq"],
             "phase_us": offsets[n],
@@ -115,15 +163,19 @@ def build_dag(extract, period_us, deadline_us, exec_us, default_exec_us,
                 "deadline_us": deadline_us,
             },
             "note": ("由 ast_to_plan 从 stage_extract 输出自动构造；"
-                     "edges 未恢复数据依赖（v1 仅按调用序），PhaseSpan=%.1f µs" % span),
+                     "edges 来自 IR use-def 同周期数据依赖（%d 条），"
+                     "另有 %d 个跨周期输入；PhaseSpan=%.1f µs"
+                     % (len(data_edges), len(cross_inputs), span)),
             "auto": {
                 "source": extract.get("source"),
                 "globals": [g.get("name") for g in (extract.get("globals") or [])],
                 "placeholder_exec": placeholders,
+                "data_edges": len(data_edges),
+                "cross_period_inputs": cross_inputs,
             },
         },
         "nodes": nodes,
-        "edges": [],
+        "edges": data_edges,
         "candidates": [],
         "phase": {
             "known": True,
@@ -137,7 +189,7 @@ def build_dag(extract, period_us, deadline_us, exec_us, default_exec_us,
         "algebraic_loops": [],
         "cycles": [],
     }
-    return dag, ex, placeholders
+    return dag, ex, placeholders, data_edges, cross_inputs, stage_rw
 
 
 def main():
@@ -169,7 +221,7 @@ def main():
             exec_us = _load(a.exec_us)
 
     extract = _load(a.extract)
-    dag, ex, placeholders = build_dag(
+    (dag, ex, placeholders, data_edges, cross_inputs, stage_rw) = build_dag(
         extract, a.period_us, deadline, exec_us, a.default_exec_us, a.task_name)
 
     os.makedirs(a.out_dir, exist_ok=True)
@@ -179,6 +231,17 @@ def main():
     plan_p = os.path.join(a.out_dir, "plan.json")
     _write(dag_p, dag)
     _write(contract_p, contract)
+
+    # Gate 2：从同一份提取结果产出 TEIR（时序效应中间表示）
+    order = [s["name"] for s in (extract.get("stages") or [])]
+    kc_ok = bool((extract.get("k_c0") or {}).get("ok", True))
+    teir_mod = _load_teir_module()
+    teir = teir_mod.build_teir(extract, dag, ex, order, stage_rw,
+                              data_edges, cross_inputs, kc_ok)
+    teir_p = os.path.join(a.out_dir, "teir.json")
+    teir_mod.write_teir(teir, teir_p)
+    print("teir=%s (数据边 %d，跨周期输入 %d)"
+          % (teir_p, len(data_edges), len(cross_inputs)), file=sys.stderr)
 
     if placeholders:
         print("⚠ 这些阶段没有显式执行时间，用占位 %.1f µs（需实测替换）：%s"

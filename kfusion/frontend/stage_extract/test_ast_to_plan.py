@@ -25,9 +25,12 @@ _EXTRACT = {
     "tool": "stage_extract", "version": 2, "source": "src.c",
     "entry": "plc_cycle",
     "stages": [
-        {"name": "stage_sample", "fn_type": "void ()"},
-        {"name": "stage_pid", "fn_type": "void ()"},
-        {"name": "stage_clamp", "fn_type": "void ()"},
+        {"name": "stage_sample", "fn_type": "void ()",
+         "reads": ["g_target", "g_output"], "writes": ["g_output"]},
+        {"name": "stage_pid", "fn_type": "void ()",
+         "reads": ["g_output", "g_integral"], "writes": ["g_integral", "g_output"]},
+        {"name": "stage_clamp", "fn_type": "void ()",
+         "reads": ["g_output"], "writes": ["g_output"]},
     ],
     "globals": [
         {"name": "g_target", "type": "i32"},
@@ -97,6 +100,31 @@ class Gate1Local(unittest.TestCase):
         plan = _read_json(os.path.join(self.out, "plan.json"))
         self.assertTrue(plan["verification"]["ok"], "plan 必须带真实验证凭据")
 
+        # Gate 2：数据依赖边应来自 IR use-def（不再按调用序近似）
+        dag_edges = dag["edges"]
+        self.assertEqual(len(dag_edges), 2)
+        self.assertEqual(
+            sorted((e["from"], e["to"], e["var"]) for e in dag_edges),
+            sorted([("stage_sample", "stage_pid", "g_output"),
+                    ("stage_pid", "stage_clamp", "g_output")]))
+        byname = {n["name"]: n for n in dag["nodes"]}
+        self.assertEqual(byname["stage_clamp"]["declared_deps"], ["stage_pid"])
+        self.assertEqual(byname["stage_pid"]["declared_deps"], ["stage_sample"])
+        self.assertEqual(byname["stage_sample"]["declared_deps"], [])
+
+        # TEIR 产出：计算/时间/执行三类事实
+        teir = _read_json(os.path.join(self.out, "teir.json"))
+        self.assertEqual(teir["kernelizable"], True)
+        self.assertEqual(len(teir["data_edges"]), 2)
+        self.assertEqual(teir["cross_period_inputs"], [
+            {"stage": "stage_sample", "var": "g_target"},
+            {"stage": "stage_sample", "var": "g_output"},
+            {"stage": "stage_pid", "var": "g_integral"},
+        ])
+        byname_t = {n["name"]: n for n in teir["nodes"]}
+        self.assertEqual(byname_t["stage_pid"]["reads"], ["g_output", "g_integral"])
+        self.assertEqual(byname_t["stage_pid"]["writes"], ["g_integral", "g_output"])
+
     def test_full_chain_emits_source(self):
         # 1) ast_to_plan
         rc = _run_main(ast_to_plan, [
@@ -145,7 +173,8 @@ class Gate1Local(unittest.TestCase):
 
     def test_kc0_ok_proceeds(self):
         good = dict(_EXTRACT, k_c0={"ok": True, "rejections": []})
-        dag, ex, ph = ast_to_plan.build_dag(good, 1000, 1000, {}, 10.0)
+        (dag, ex, ph, data_edges, cross_inputs, stage_rw) = ast_to_plan.build_dag(
+            good, 1000, 1000, {}, 10.0)
         self.assertEqual(len(dag["nodes"]), 3)
 
 

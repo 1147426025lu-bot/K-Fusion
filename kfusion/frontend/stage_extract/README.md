@@ -43,9 +43,12 @@ void plc_cycle(void){ stage_sample(); stage_pid(); stage_clamp(); }
   "tool": "stage_extract", "version": 2,
   "entry": "plc_cycle",
   "stages": [
-    {"name": "stage_sample", "fn_type": "void ()"},
-    {"name": "stage_pid",    "fn_type": "void ()"},
-    {"name": "stage_clamp",  "fn_type": "void ()"}
+    {"name": "stage_sample", "fn_type": "void ()",
+     "reads": ["g_target", "g_output"], "writes": ["g_output"]},
+    {"name": "stage_pid",    "fn_type": "void ()",
+     "reads": ["g_output", "g_integral"], "writes": ["g_integral", "g_output"]},
+    {"name": "stage_clamp",  "fn_type": "void ()",
+     "reads": ["g_output"], "writes": ["g_output"]}
   ],
   "globals": [
     {"name": "g_target", "type": "i32"},
@@ -89,6 +92,38 @@ Pi4 实测：含 `malloc/printf/free` 的阶段 → `k_c0.ok=false`，三条理�
 诚实：v1 只查**直接外部调用**（不递归进本模块内的其它 helper；那种 helper 若也被入口调用
 则会作为阶段一并检查）；循环边界、指针别名等 K-C0 细项尚未覆盖（Gate 2/3 补）。
 
+## Gate 2：IR 级数据依赖（reads/writes）与 TEIR（已实现并验证）
+
+**解决的问题**：Gate 1 的 `ast_to_plan` 只能按**调用序**近似建图，没有真实数据依赖。
+Gate 2 让提取器给出每个阶段的读/写全局（IR 级 use-def），`ast_to_plan` 据此建**真实
+数据依赖边**，并产出 **TEIR**（时序效应中间表示）——把"功能等价 ≠ 时间正确"要钉死的
+那条约束（生产者 A 在周期 k 写 `w_g(k)`，消费者 B 读 `r_g(k)`，A 必须在 B 之前）落到数据上。
+
+**提取器新增 `collect_rw`**：对每个阶段函数遍历 IR 指令，Load 的操作数 0 / Store 的操作数 1
+（支持解一层 GEP）若指向全局变量，记入该阶段的 `reads`/`writes`（去重）。输出进 stage 的
+`reads`/`writes` 数组（见上节 JSON）。
+
+**`ast_to_plan` 据此建边**：对阶段 B 的每个读 `g`，在调用序中 B 之前找**最后一个**写 `g`
+的阶段 A → 边 `A→B`（`kind:"data"`, `proven:g`, `version:"same_period"`）。B 读但本周期无人
+写的 `g` → 记为 `cross_period_inputs`（外部输入 / 上一周期状态），不算内部边。节点
+`declared_deps` 反映真实数据入边。
+
+**新增 TEIR 模块** `kfusion/ir/temporal_effect_ir.py`，表达三类事实：
+- 计算事实：每个节点的 `reads`/`writes`（如实，来自 IR use-def）；
+- 时间事实：周期/相位，以及 `data_edges` 的 `same_period` 版本依赖（r_i(k) 依赖 w_i(k)）；
+- 执行事实：`kernelizable`（来自提取器 K-C0.ok）。
+另附 `state_versions`（每个全局的 written_by/read_by 顺序）与 `cross_period_inputs`。
+
+**验证**：
+- 本机 `test_ast_to_plan.py` 5/5：含断言校验 `dag.edges` 恰为 `sample→pid(g_output)`、
+  `pid→clamp(g_output)`，TEIR 的 `kernelizable/reads/writes/cross_period_inputs` 正确。
+- Pi4 实测（clang/llvm 16.0.6）：`ctl.c` 提取出 `sample[reads g_target,g_output; writes g_output]`
+  等，整链 `verification.ok=true`，`teir.json` 如上；生成的 `.ko` 构建+运行回归
+  `periods≈2010/missed=0`。证据 `results/gate1_stage_extract/GATE2_TEIR.md`。
+
+诚实边界（v1）：单域同周期骨架；exec_us 占位需实测；跨域/多速率版本依赖（r_i(k) 与
+r_j(k-1)）属 Gate 2 后期 + Gate 3，TEIR 暂只给单域同周期。
+
 ## 构建（Pi4）
 
 ```sh
@@ -113,21 +148,25 @@ python3 kfusion/backend/synthesis/emit.py \
     --out-dir build/gate1/gen --target linux-kernel --name demo
 ```
 
-已在本机（Python 3.13，无 clang）端到端验证（`test_ast_to_plan.py` 3/3）：
-提取 JSON → ast_to_plan（`verification.ok=true`，1 组）→ emit.py → 生成
-`ecos_fused_body.c`（阶段按 sample→pid→clamp 顺序）、`ecos_fused_linux.c`、`Kbuild`。
+已在本机（Python 3.13，无 clang）端到端验证（`test_ast_to_plan.py` 5/5）：
+提取 JSON → ast_to_plan（**按 IR use-def 建真实数据边**，plan 经 `plan_verify` 签署
+`verification.ok=true`，1 组）→ emit.py → 生成 `ecos_fused_body.c`（阶段按 sample→pid→clamp
+顺序）、`ecos_fused_linux.c`、`Kbuild`，并产出 `teir.json`（TEIR）。
 
-诚实边界（v1，写在 dag.meta 里）：
+诚实边界（写在 dag.meta 里）：
 - 执行时间未给 `--exec-us` 时按 `--default-exec-us` 占位并标记，**需实测替换**；
-- 数据依赖边未恢复（按调用序建 topo_order），Gate 2（TEIR，IR use-def）再补；
+- 数据依赖边已来自 IR use-def（同周期生产者→消费者，`kind:"data"`），不再是调用序近似；
+  读但本周期无人写的全局记为 `cross_period_inputs`（外部/前周期状态）；
 - 效果按 state_read/state_write 保守假设。
 
 ## 已完成的链路与验证状态
 
 | 环节 | 状态 | 证据 |
 |------|------|------|
-| stage_extract（C→入口/阶段/全局） | ✅ Pi4 编译+运行通过 | `results/gate1_stage_extract/PI_VALIDATION.md` |
-| ast_to_plan（JSON→dag/contract/plan，经验证器签署） | ✅ 本机端到端 | `test_ast_to_plan.py` |
-| emit（plan→用户态/内核态源码） | ✅ 本机生成通过 | 同上 |
-| 目标构建（生成的 .ko 在 Pi4 构建） | ⏳ 下一步 | —— |
-| 「新 C 不手写 DAG 即出双域源码」整链 | ⏳ 待把 extract→plan→emit→build 串起来 | —— |
+| stage_extract（C→入口/阶段/全局/读写） | ✅ Pi4 编译+运行通过 | `results/gate1_stage_extract/PI_VALIDATION.md` |
+| IR use-def 读/写（Gate 2） | ✅ Pi4 实测 | `results/gate1_stage_extract/GATE2_TEIR.md` |
+| ast_to_plan（JSON→dag/contract/plan，真实数据边，经验证器签署） | ✅ 本机端到端 | `test_ast_to_plan.py` |
+| TEIR 产出（计算/时间/执行三类事实） | ✅ 本机+Pi4 | 同上 |
+| emit（plan→用户态/内核态源码） | ✅ 本机生成通过 | `test_ast_to_plan.py` |
+| 一条命令整链 + 目标构建（生成的 .ko 在 Pi4 构建运行） | ✅ Pi4 端到端 | `results/gate1_stage_extract/END2END.md` |
+| K-C0 拒绝（fail-closed） | ✅ Pi4 实测 | `results/gate1_stage_extract/KC0_REJECT.md` |

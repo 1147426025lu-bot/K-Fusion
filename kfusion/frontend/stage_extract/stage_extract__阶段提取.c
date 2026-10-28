@@ -23,10 +23,16 @@
 
 #define MAX_ITEMS 256
 #define CAP 200
+#define MAX_RW 24	/* 每阶段最多记录的全局读/写数 */
 
 typedef struct {
 	char name[CAP];
 	char type[CAP];
+	/* 读/写的全局：存的是 ctx.globals 的下标（-1 无） */
+	int reads[MAX_RW];
+	int nreads;
+	int writes[MAX_RW];
+	int nwrites;
 } Item;
 
 /* K-C0 拒绝项：某函数里出现了不被支持的外部调用 */
@@ -163,8 +169,7 @@ static void type_str(LLVMTypeRef t, char *dst, size_t cap)
 		LLVMDisposeMessage(s);
 }
 
-static void collect_globals(LLVMModuleRef mod, Ctx *ctx)
-{
+static void collect_globals(LLVMModuleRef mod, Ctx *ctx){
 	LLVMValueRef g;
 
 	for (g = LLVMGetFirstGlobal(mod); g; g = LLVMGetNextGlobal(g)) {
@@ -179,6 +184,75 @@ static void collect_globals(LLVMModuleRef mod, Ctx *ctx)
 		type_str(LLVMGlobalGetValueType(g),
 			 ctx->globals[ctx->nglobals].type, CAP);
 		ctx->nglobals++;
+	}
+}
+
+/* 返回全局名在 ctx.globals 中的下标，-1 表示不是被记录的全局 */
+static int global_index(const Ctx *ctx, const char *nm)
+{
+	int i;
+
+	for (i = 0; i < ctx->nglobals; i++)
+		if (strcmp(ctx->globals[i].name, nm) == 0)
+			return i;
+	return -1;
+}
+
+/* 解一层 GEP，返回该指针最终指向的全局变量下标（-1 不是） */
+static int rw_global(LLVMValueRef ptr, const Ctx *ctx)
+{
+	LLVMValueRef base = ptr;
+
+	if (LLVMIsAGetElementPtrInst(base))
+		base = LLVMGetOperand(base, 0);
+	if (LLVMIsAGlobalVariable(base)) {
+		const char *nm = LLVMGetValueName(base);
+
+		return global_index(ctx, nm);
+	}
+	return -1;
+}
+
+/* 对单个阶段函数，收集它 Load 读到的全局、Store 写到的全局（去重）。
+ * 这是 IR 级真实 use-def，用来在 ast_to_plan 里构造带证据的数据依赖边，
+ * 取代"按调用序"的近似。 */
+static void collect_rw(LLVMValueRef fn, int stage_idx, Ctx *ctx)
+{
+	LLVMBasicBlockRef bb;
+	Item *it = &ctx->stages[stage_idx];
+
+	for (bb = LLVMGetFirstBasicBlock(fn); bb;
+	     bb = LLVMGetNextBasicBlock(bb)) {
+		LLVMValueRef ins;
+
+		for (ins = LLVMGetFirstInstruction(bb); ins;
+		     ins = LLVMGetNextInstruction(ins)) {
+			int op = LLVMGetInstructionOpcode(ins);
+
+			if (op == LLVMLoad) {
+				int gi = rw_global(LLVMGetOperand(ins, 0), ctx);
+				int k;
+
+				if (gi < 0 || it->nreads >= MAX_RW)
+					continue;
+				for (k = 0; k < it->nreads; k++)
+					if (it->reads[k] == gi)
+						break;
+				if (k == it->nreads)
+					it->reads[it->nreads++] = gi;
+			} else if (op == LLVMStore) {
+				int gi = rw_global(LLVMGetOperand(ins, 1), ctx);
+				int k;
+
+				if (gi < 0 || it->nwrites >= MAX_RW)
+					continue;
+				for (k = 0; k < it->nwrites; k++)
+					if (it->writes[k] == gi)
+						break;
+				if (k == it->nwrites)
+					it->writes[it->nwrites++] = gi;
+			}
+		}
 	}
 }
 
@@ -304,6 +378,19 @@ int main(int argc, char **argv)
 		}
 	}
 
+	/* 对每个阶段函数收集读/写全局（IR 级 use-def），用于真实数据依赖边 */
+	for (i = 0; i < ctx.nstages; i++) {
+		LLVMValueRef sfn;
+
+		for (sfn = LLVMGetFirstFunction(mod); sfn;
+		     sfn = LLVMGetNextFunction(sfn))
+			if (strcmp(LLVMGetValueName(sfn),
+				   ctx.stages[i].name) == 0)
+				break;
+		if (sfn)
+			collect_rw(sfn, i, &ctx);
+	}
+
 	/* K-C0 检查：对除 main 外的每个本模块函数，检查其外部调用是否可进内核。
 	 * fail-closed：任何未归档外部调用都记一条拒绝理由（不静默放行）。 */
 	for (fn = LLVMGetFirstFunction(mod); fn; fn = LLVMGetNextFunction(fn)) {
@@ -330,11 +417,21 @@ int main(int argc, char **argv)
 	}
 	printf("  \"stages\": [");
 	for (i = 0; i < ctx.nstages; i++) {
+		int j;
+
 		printf("%s\n    {\"name\": \"", i ? "," : "");
 		json_str(ctx.stages[i].name, stdout);
 		printf("\", \"fn_type\": \"");
 		json_str(ctx.stages[i].type, stdout);
-		printf("\"}");
+		printf("\", \"reads\": [");
+		for (j = 0; j < ctx.stages[i].nreads; j++)
+			printf("%s\"%s\"", j ? "," : "",
+			       ctx.globals[ctx.stages[i].reads[j]].name);
+		printf("], \"writes\": [");
+		for (j = 0; j < ctx.stages[i].nwrites; j++)
+			printf("%s\"%s\"", j ? "," : "",
+			       ctx.globals[ctx.stages[i].writes[j]].name);
+		printf("]}");
 	}
 	printf("%s],\n", ctx.nstages ? "\n  " : "");
 	printf("  \"globals\": [");
