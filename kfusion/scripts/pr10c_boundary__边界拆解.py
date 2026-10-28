@@ -258,8 +258,8 @@ def build(out, cycles):
                 "typedef __s64 int64_t;\n")
     with io.open(os.path.join(out, "Makefile"), "w", encoding="utf-8",
                  newline="\n") as f:
-        f.write("KDIR ?= %s\nall:\n\t$(MAKE) -C $(KDIR) M=$(PWD) modules\n"
-                "clean:\n\t$(MAKE) -C $(KDIR) M=$(PWD) clean\n" % KDIR)
+        f.write("KDIR ?= %s\nall:\n\t$(MAKE) -C $(KDIR) M=$(CURDIR) modules\n"
+                "clean:\n\t$(MAKE) -C $(KDIR) M=$(CURDIR) clean\n" % KDIR)
 
     rc, log = run(["make", "-C", out], env=dict(os.environ))
     if rc != 0:
