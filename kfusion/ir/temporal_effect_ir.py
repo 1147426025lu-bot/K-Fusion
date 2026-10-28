@@ -48,6 +48,34 @@ def write_teir(teir, path):
     return path
 
 
+def describe_migration(allowed, blocked, persistent=None, effects=None):
+    """编译器必须能说明「为什么能/不能进内核」，不能只给一个布尔。"""
+    allowed = list(allowed or [])
+    blocked = list(blocked or [])
+    persistent = list(persistent or [])
+    effects = set(effects or [])
+    if "linux_kernel" in allowed:
+        parts = ["状态访问可分析"]
+        unsafe = effects & KERNEL_UNSAFE
+        if not unsafe:
+            parts.append("计算不依赖用户态 API")
+        if persistent:
+            parts.append("持久状态=" + ",".join(persistent))
+        return "，".join(parts)
+    for b in blocked:
+        if str(b).startswith("linux_kernel"):
+            return "禁止进内核：" + str(b).split(":", 1)[-1]
+    return "仅允许用户态"
+
+
+def cost_slot(value, evidence, note=None):
+    rec = {"value": None if value is None else float(value),
+           "evidence": evidence}
+    if note:
+        rec["note"] = note
+    return rec
+
+
 def build_teir_from_extract(extract, dag, ex, order, stage_rw, data_edges,
                             cross_inputs, kernelizable):
     """feat/ecos-temporal-semantics 的 TEIR 构造（抽阶段 JSON + 调用序依赖）。"""
@@ -55,20 +83,36 @@ def build_teir_from_extract(extract, dag, ex, order, stage_rw, data_edges,
     nodes = []
     for n in order:
         rw = stage_rw.get(n) or {}
+        allowed = (["linux_userspace", "linux_kernel", "nuttx"]
+                   if kernelizable else ["linux_userspace"])
+        blocked = ([] if kernelizable
+                   else ["linux_kernel:K-C0 失败闭合"])
+        reads = list(rw.get("reads") or [])
+        writes = list(rw.get("writes") or [])
+        persist = sorted(set(reads) & set(writes))
+        ev = None if ex.get(n) is None else float(ex.get(n))
+        note = "两域共用占位，不是分域实测"
+        cbd = {"linux_userspace": cost_slot(
+            ev, "placeholder" if ev is not None else "missing", note)}
+        if kernelizable:
+            cbd["linux_kernel"] = cost_slot(
+                ev, "placeholder" if ev is not None else "missing", note)
         nodes.append({
             "name": n,
             "fns": [n],
-            "reads": list(rw.get("reads") or []),
-            "writes": list(rw.get("writes") or []),
+            "reads": reads,
+            "writes": writes,
+            "persistent": persist,
             "exec_us": ex.get(n),
             "phase_us": (dag.get("phase") or {}).get("offsets", {}).get(n),
             "kernelizable": bool(kernelizable),
             "must_preserve": True,
             "may_delete": False,
-            "allowed_domains": (
-                ["linux_userspace", "linux_kernel", "nuttx"] if kernelizable
-                else ["linux_userspace"]
-            ),
+            "allowed_domains": allowed,
+            "blocked_domains": blocked,
+            "migration_reason": describe_migration(
+                allowed, blocked, persist, rw.get("effects")),
+            "cost_us_by_domain": cbd,
         })
     state_versions = {}
     for gl in extract.get("globals") or []:
@@ -93,6 +137,7 @@ def build_teir_from_extract(extract, dag, ex, order, stage_rw, data_edges,
             "kind": "data",
             "version": ("same-job" if ver in ("same_period", "same-job")
                         else "previous-job"),
+            "pinned": True,
             "proven": True,
             "regions": [e["var"]] if e.get("var") else [],
             "lag_periods": e.get("lag_periods"),
@@ -306,6 +351,7 @@ def _build_teir_from_dag(dag, summary=None, stages=None, caps=None, kc0=None):
             "to": e.get("to"),
             "kind": e.get("kind") or "data",
             "version": ver,
+            "pinned": True,
             "proven": bool(e.get("proven", True)),
             "regions": [r for r in regions if r],
         }
@@ -421,13 +467,25 @@ def _build_teir_from_dag(dag, summary=None, stages=None, caps=None, kc0=None):
             else:
                 blocked.append("%s:%s" % (plat["name"], why_d))
 
+        persist = sorted(set(persist_here))
+        exec_u = node.get("exec_us")
+        if exec_u is None:
+            exec_u = (dag.get("exec_us") or {}).get(name)
+        note = "节点未分域实测时两域同值，不得当作 WCET"
+        cbd = {}
+        if "linux_userspace" in allowed:
+            cbd["linux_userspace"] = cost_slot(
+                exec_u, "dag_exec" if exec_u is not None else "missing", note)
+        if "linux_kernel" in allowed:
+            cbd["linux_kernel"] = cost_slot(
+                exec_u, "dag_exec" if exec_u is not None else "missing", note)
         rec = {
             "name": name,
             "fns": stage_fns(node),
             "phase_us": phase_of(nodes, name, dag),
             "reads": sorted(rw["reads"]),
             "writes": sorted(rw["writes"]),
-            "persistent": sorted(set(persist_here)),
+            "persistent": persist,
             "unread_this_job": unread,
             "live_same_job": live_same,
             "effects": sorted(rw["effects"]),
@@ -438,6 +496,10 @@ def _build_teir_from_dag(dag, summary=None, stages=None, caps=None, kc0=None):
             "why_preserve": why,
             "allowed_domains": allowed,
             "blocked_domains": blocked,
+            "migration_reason": describe_migration(
+                allowed, blocked, persist, rw["effects"]),
+            "cost_us_by_domain": cbd,
+            "exec_us": exec_u,
         }
         teir_nodes.append(rec)
         for r in sorted(set(persist_here)):

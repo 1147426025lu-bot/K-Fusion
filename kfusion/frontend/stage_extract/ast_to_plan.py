@@ -37,6 +37,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(_HERE)))  # .../kfusion/frontend/stage_extract -> repo
 _PLANNER = os.path.join(_REPO, "kfusion", "scripts", "fusion_plan__融合规划.py")
 _CAND = os.path.join(_REPO, "kfusion", "scripts", "ecos", "candidate_generate.py")
+_STKP = os.path.join(_REPO, "kfusion", "scripts", "ecos_plan_joint.py")
 _CAPS = os.path.join(_REPO, "kfusion", "contracts", "examples", "platform_caps.json")
 _TEIR_MOD = os.path.join(_REPO, "kfusion", "ir", "temporal_effect_ir.py")
 _VER_MOD = os.path.join(_REPO, "kfusion", "ir", "version_deps.py")
@@ -274,6 +275,7 @@ def main():
     ap.add_argument("--c-user-us", type=float, default=21.0)
     ap.add_argument("--c-kernel-us", type=float, default=21.0)
     ap.add_argument("--kernel-extra-us", type=float, default=0.0)
+    ap.add_argument("--handoff-cost-us", type=float, default=0.0)
     a = ap.parse_args()
 
     if a.period_us is None or a.period_us <= 0:
@@ -347,30 +349,48 @@ def main():
 
     if not os.path.isfile(_CAND):
         raise SystemExit("ast_to_plan: 找不到 candidate_generate.py")
-    print("== A/B/C/D 选型（入选方案写入 plan.json） ==", file=sys.stderr)
+    print("== A/B/C/D 对照基线（不驱动生成） ==", file=sys.stderr)
     rc_c = subprocess.call([
         sys.executable, _CAND, "--teir", teir_p,
         "--c-user-us", str(a.c_user_us),
         "--c-kernel-us", str(a.c_kernel_us),
         "--kernel-extra-us", str(a.kernel_extra_us),
-        "-o", cand_p, "--chosen-plan", chosen_p,
+        "-o", cand_p,
     ])
-    if rc_c != 0 or not os.path.isfile(chosen_p):
-        print("ast_to_plan: 选型失败（exit %d）" % rc_c, file=sys.stderr)
-        return rc_c if rc_c else 3
-    cand = _load(cand_p)
-    rec = cand.get("chosen_record") or {}
+    if rc_c != 0:
+        print("ast_to_plan: A–F 基线失败（exit %d）" % rc_c, file=sys.stderr)
+        return rc_c
+
+    if not os.path.isfile(_STKP):
+        raise SystemExit("ast_to_plan: 找不到 ecos_plan_joint.py")
+    stkp_p = os.path.join(a.out_dir, "stkp.json")
+    print("== STKP 穷举求解（入选方案写入 plan.json） ==", file=sys.stderr)
+    rc_s = subprocess.call([
+        sys.executable, _STKP, "--teir", teir_p,
+        "--c-user-us", str(a.c_user_us),
+        "--c-kernel-us", str(a.c_kernel_us),
+        "--kernel-extra-us", str(a.kernel_extra_us),
+        "--handoff-cost-us", str(a.handoff_cost_us),
+        "-o", stkp_p, "--chosen-plan", chosen_p,
+    ])
+    if rc_s != 0 or not os.path.isfile(chosen_p):
+        print("ast_to_plan: STKP 无 deployment_ready 方案（exit %d）" % rc_s,
+              file=sys.stderr)
+        return rc_s if rc_s else 3
+    stkp = _load(stkp_p)
+    rec = stkp.get("chosen_record") or {}
     domain = rec.get("domain") or ""
-    if not rec.get("plan") or not cand.get("chosen"):
-        print("ast_to_plan: 无入选候选", file=sys.stderr)
+    if not rec.get("plan") or not stkp.get("chosen"):
+        print("ast_to_plan: STKP 无入选候选", file=sys.stderr)
         return 3
-    if domain == "mixed":
+    if domain == "mixed" or not rec.get("deployment_ready"):
         print("ast_to_plan: 混合域尚未打通跨域交接，拒绝部署（选型 %s）"
-              % cand.get("chosen"), file=sys.stderr)
+              % stkp.get("chosen"), file=sys.stderr)
         return 8
     _write(plan_p, rec["plan"])
-    print("  入选 %s  域 %s → plan.json" % (cand.get("chosen"), domain),
+    print("  STKP 入选 %s  域 %s → plan.json" % (stkp.get("chosen"), domain),
           file=sys.stderr)
+    cand = stkp
 
     # 本机 fusion_plan 不写 verification；用 temporal PlanVerifier 签署入选方案
     _VERIFY = os.path.join(_REPO, "kfusion", "scripts", "ecos", "plan_verify.py")

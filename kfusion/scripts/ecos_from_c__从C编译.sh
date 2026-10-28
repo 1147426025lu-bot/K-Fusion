@@ -98,18 +98,27 @@ step "7) 单域融合规划（对照基线，不直接驱动生成）"
   --release-cost-us 21 --quiet \
   -o "$OUT/plan.planner.json" || die "fusion_plan 失败" 8
 
-step "7c) 选择性内核化 A/B/C/D（入选方案才是生成输入）"
+step "7c) A–F 对照基线（不驱动生成）"
 "$PY" "$KF/scripts/ecos/candidate_generate.py" \
   --teir "$OUT/task.teir.json" \
   --c-user-us "${C_USER_US:-21}" \
   --c-kernel-us "${C_KERNEL_US:-21}" \
   --kernel-extra-us "${KERNEL_EXTRA_US:-0}" \
-  -o "$OUT/candidates.json" \
-  --chosen-plan "$OUT/chosen.plan.json" || die "A/B/C/D 无合法候选" 8
+  -o "$OUT/candidates.json" || die "A/B/C/D 基线失败" 8
 
-CHOSEN="$("$PY" -c "import json; print(json.load(open('$OUT/candidates.json'))['chosen'] or '')")"
-DOMAIN="$("$PY" -c "import json; print((json.load(open('$OUT/candidates.json')).get('chosen_record') or {}).get('domain') or '')")"
-echo "  入选 $CHOSEN  域 $DOMAIN"
+step "7c2) STKP 穷举求解（入选方案才是生成输入）"
+"$PY" "$KF/scripts/ecos_plan_joint.py" \
+  --teir "$OUT/task.teir.json" \
+  --c-user-us "${C_USER_US:-21}" \
+  --c-kernel-us "${C_KERNEL_US:-21}" \
+  --kernel-extra-us "${KERNEL_EXTRA_US:-0}" \
+  --handoff-cost-us "${HANDOFF_US:-0}" \
+  -o "$OUT/stkp.json" \
+  --chosen-plan "$OUT/chosen.plan.json" || die "STKP 无 deployment_ready 方案" 8
+
+CHOSEN="$("$PY" -c "import json; print(json.load(open('$OUT/stkp.json'))['chosen'] or '')")"
+DOMAIN="$("$PY" -c "import json; print((json.load(open('$OUT/stkp.json')).get('chosen_record') or {}).get('domain') or '')")"
+echo "  STKP 入选 $CHOSEN  域 $DOMAIN"
 if [ -z "$CHOSEN" ]; then
   die "无入选候选" 8
 fi
@@ -129,7 +138,7 @@ step "7b2) DAG 全局验证器（写回 verification，供 emit 门禁）"
   --platforms "$CAPS" --platform "$DOMAIN" \
   --stamp-plan -o "$OUT/verify_dag.json" || die "DAG 验证器拒绝入选方案" 8
 
-"$PY" - "$OUT/candidates.json" "$OUT/deploy.json" <<'PY'
+"$PY" - "$OUT/stkp.json" "$OUT/deploy.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 rec = d.get("chosen_record") or {}
@@ -279,7 +288,8 @@ echo "   入选  $OUT/chosen.plan.json  ($CHOSEN / $DOMAIN)"
 echo "   部署  $OUT/deploy.json"
 echo "   方案  $OUT/plan.json"
 echo "   验证  $OUT/verify.json"
-echo "   选型  $OUT/candidates.json"
+echo "   选型  $OUT/candidates.json  (A–F 基线)"
+echo "   STKP  $OUT/stkp.json"
 if [ -f "$OUT/let.json" ]; then
   echo "   LET   $OUT/let.json"
 fi

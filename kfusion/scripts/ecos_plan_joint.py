@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""ECoS 小图联合规划器：融合边界 + 执行域的 exhaustive oracle。
+"""STKP v1：语义与时间约束驱动的选择性内核化规划。
 
-这是 CP-SAT 之前的可审计基线。它只适合小图（默认最多 8 个阶段），但会
-枚举所有连续分组和每组的平台分配，复用 fusion_plan 的 fail-closed 规则。
-候选的代价是：每组一次释放 + 每条跨域边一次 handoff + 阶段执行时间。
+范围（必须写进论文，不得扩大声称）：
+  固定阶段顺序、连续融合、两个 Linux 执行域（用户态 / 内核态）。
+  原始组合数 N(n)=2·3^{n-1}（5 阶段 162）。最优仅针对该空间与既定成本模型。
+
+层次：
+  1. 静态合法性（TEIR allowed_domains、K-C0、版本边）
+  2. 部署×融合联合枚举 + 安全剪枝
+  3. 独立验证；混合域只记 model_feasible，不可 deployment_ready
+
+A–F（candidate_generate）保留为论文对照基线，不驱动代码生成。
 """
+from __future__ import print_function
+
 import argparse
 import importlib.util
 import io
@@ -14,23 +23,50 @@ import json
 import os
 import sys
 
+HERE = os.path.dirname(os.path.abspath(__file__))
+KF = os.path.abspath(os.path.join(HERE, ".."))
+DOMAINS = ("linux_userspace", "linux_kernel")
+
 
 def load_json(path):
     with io.open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
-def load_fusion_planner():
-    here = os.path.dirname(os.path.abspath(__file__))
-    path = os.path.join(here, "fusion_plan__融合规划.py")
-    spec = importlib.util.spec_from_file_location("fusion_plan", path)
+def dump_json(path, obj):
+    d = os.path.dirname(os.path.abspath(path))
+    if d and not os.path.isdir(d):
+        os.makedirs(d)
+    with io.open(path, "w", encoding="utf-8") as f:
+        json.dump(obj, f, ensure_ascii=False, indent=2)
+        f.write("\n")
+
+
+def load_module(path, name):
+    spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
-    return mod.Planner
+    return mod
+
+
+def load_verifier():
+    return load_module(os.path.join(KF, "verify", "plan_verify.py"),
+                       "plan_verify")
+
+
+def load_baseline():
+    return load_module(
+        os.path.join(HERE, "ecos", "candidate_generate.py"),
+        "candidate_generate")
+
+
+def load_fusion_planner():
+    path = os.path.join(HERE, "fusion_plan__融合规划.py")
+    return load_module(path, "fusion_plan").Planner
 
 
 def partitions(n):
-    """Yield every contiguous partition of n ordered items."""
+    """连续分段：相邻是否切一刀。"""
     for cuts in itertools.product((0, 1), repeat=max(0, n - 1)):
         groups, start = [], 0
         for i, cut in enumerate(cuts, 1):
@@ -39,6 +75,420 @@ def partitions(n):
                 start = i
         groups.append(list(range(start, n)))
         yield groups
+
+
+def raw_space_size(n):
+    """两域、连续融合：2·3^{n-1}。"""
+    if n <= 0:
+        return 0
+    return 2 * (3 ** (n - 1))
+
+
+def stage_order(teir):
+    nodes = list(teir.get("nodes") or [])
+    nodes.sort(key=lambda n: (
+        n.get("phase_us") is None,
+        float(n.get("phase_us") or 0),
+        n["name"],
+    ))
+    return [n["name"] for n in nodes]
+
+
+def node_map(teir):
+    return {n["name"]: n for n in (teir.get("nodes") or [])}
+
+
+def slot_value(slot):
+    if slot is None:
+        return None, "missing"
+    if isinstance(slot, dict):
+        v = slot.get("value")
+        ev = slot.get("evidence") or ("missing" if v is None else "empirical")
+        if v is None:
+            return None, ev
+        return float(v), ev
+    return float(slot), "scalar"
+
+
+def stage_compute_cost(node, domain, override):
+    """缺测不得当 0。override 可补分域实测。"""
+    if override and domain in override and node["name"] in override[domain]:
+        v = override[domain][node["name"]]
+        if v is None:
+            return None, "missing"
+        return float(v), "cli_override"
+    cbd = node.get("cost_us_by_domain") or {}
+    if domain in cbd:
+        return slot_value(cbd[domain])
+    if node.get("exec_us") is not None:
+        return float(node["exec_us"]), "shared_exec"
+    return None, "missing"
+
+
+def batched_handoffs(order, named_groups, domains, teir):
+    """跨域交接按相邻组计一批，不按依赖边数乘固定税。"""
+    channels = []
+    for i in range(len(named_groups) - 1):
+        if domains[i] == domains[i + 1]:
+            continue
+        left, right = named_groups[i], named_groups[i + 1]
+        regions = []
+        for e in teir.get("edges") or []:
+            if e.get("kind") not in ("data", "call"):
+                continue
+            if e.get("from") in left and e.get("to") in right:
+                regions.extend(e.get("regions") or [])
+        channels.append({
+            "from_group": i,
+            "to_group": i + 1,
+            "from_domain": domains[i],
+            "to_domain": domains[i + 1],
+            "from_stage": left[-1],
+            "to_stage": right[0],
+            "regions": sorted(set(regions)),
+        })
+    return channels
+
+
+def plan_platform(domains):
+    uniq = list(dict.fromkeys(domains))
+    if len(uniq) == 1:
+        return uniq[0]
+    return "mixed"
+
+
+def build_plan(order, named_groups, domains):
+    stage_dom = {}
+    groups = []
+    for i, (members, d) in enumerate(zip(named_groups, domains)):
+        groups.append({"id": "g%d" % i, "members": list(members), "domain": d})
+        for m in members:
+            stage_dom[m] = d
+    plat = plan_platform(domains)
+    fused = len(groups) == 1
+    return {
+        "version": 2,
+        "meta": {
+            "platform": plat,
+            "fusion": fused,
+            "generator": "stkp_v1",
+            "model_feasible": True,
+            "deployment_ready": plat in ("linux_userspace", "linux_kernel"),
+        },
+        "order": list(order),
+        "groups": groups,
+        "domains": stage_dom,
+    }
+
+
+def af_label(plan):
+    plat = (plan.get("meta") or {}).get("platform")
+    groups = plan.get("groups") or []
+    n = len(plan.get("order") or [])
+    fused = len(groups) == 1
+    unfused = n > 0 and len(groups) == n
+    if plat == "linux_userspace" and unfused:
+        return "A"
+    if plat == "linux_userspace" and fused:
+        return "B"
+    if plat == "linux_kernel" and unfused:
+        return "C"
+    if plat == "linux_kernel" and fused:
+        return "D"
+    if plat == "mixed" and fused is False:
+        # E = 按可内核化切段并组内融合；无法在此精确对齐时用 STKP 标签
+        return None
+    return None
+
+
+def evaluate_cost(plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
+                  override, deadline_us):
+    nodes = node_map(teir)
+    groups = plan.get("groups") or []
+    compute = 0.0
+    evidence = []
+    missing = []
+    for g in groups:
+        d = g.get("domain")
+        for m in g.get("members") or []:
+            val, ev = stage_compute_cost(nodes.get(m) or {"name": m}, d,
+                                         override)
+            evidence.append("%s@%s:%s" % (m, d, ev))
+            if val is None:
+                missing.append("%s@%s" % (m, d))
+            else:
+                compute += val
+    release = 0.0
+    has_k = False
+    for g in groups:
+        d = g.get("domain")
+        if d == "linux_kernel":
+            release += c_kernel
+            has_k = True
+        else:
+            release += c_user
+    named = [g["members"] for g in groups]
+    domains = [g["domain"] for g in groups]
+    channels = batched_handoffs(plan.get("order") or [], named, domains, teir)
+    h_total = len(channels) * handoff_us
+    sync = extra_kernel if has_k else 0.0
+    comparable = not missing
+    pred = None if not comparable else round(compute + release + h_total + sync, 3)
+    temporal_ok = True
+    temporal_why = None
+    if comparable and deadline_us is not None and pred is not None:
+        if pred > float(deadline_us):
+            temporal_ok = False
+            temporal_why = "R̂=%.3f > deadline %s" % (pred, deadline_us)
+    return {
+        "comparable": comparable,
+        "missing_costs": missing,
+        "evidence": evidence,
+        "compute_us": None if not comparable else round(compute, 3),
+        "release_us": round(release, 3),
+        "handoff_us": round(h_total, 3),
+        "handoff_channels": len(channels),
+        "channels": channels,
+        "sync_us": round(sync, 3),
+        "predicted_R_us": pred,
+        "total_us": pred,
+        "grade": "empirical_model_not_wcet",
+        "temporal_ok": temporal_ok,
+        "temporal_why": temporal_why,
+    }, channels
+
+
+def rank_key(rec):
+    cost = rec.get("cost") or {}
+    pred = cost.get("predicted_R_us")
+    # 不可比的不得赢；然后更小 R̂、更少组、更少交接、用户态优先
+    incomp = 0 if rec.get("comparable") and pred is not None else 1
+    pred_v = pred if pred is not None else 1e18
+    plat = rec.get("domain") or ""
+    pen = {"linux_userspace": 0, "linux_kernel": 1, "mixed": 2}.get(plat, 3)
+    ng = len((rec.get("plan") or {}).get("groups") or [])
+    nh = (cost.get("handoff_channels") or 0)
+    return (incomp, pred_v, ng, nh, pen)
+
+
+def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
+          handoff_us=0.0, override=None, max_stages=8, keep_rejected=40):
+    order = stage_order(teir)
+    n = len(order)
+    if n == 0:
+        raise SystemExit("TEIR 没有阶段")
+    if n > max_stages:
+        raise SystemExit("阶段数 %d 超过 STKP v1 穷举上限 %d" % (n, max_stages))
+    nodes = node_map(teir)
+    deadline = (teir.get("task") or {}).get("deadline_us")
+    prune = {"domain": 0, "semantic": 0, "temporal": 0, "runtime": 0,
+             "incomparable": 0}
+    feasible, rejected = [], []
+    raw = 0
+    for parts in partitions(n):
+        named = [[order[i] for i in g] for g in parts]
+        for domains in itertools.product(DOMAINS, repeat=len(named)):
+            raw += 1
+            blocked = False
+            why_dom = []
+            for members, d in zip(named, domains):
+                for m in members:
+                    allowed = (nodes.get(m) or {}).get("allowed_domains") or []
+                    if allowed and d not in allowed:
+                        blocked = True
+                        why_dom.append("%s∉%s" % (m, d))
+            if blocked:
+                prune["domain"] += 1
+                rejected.append({"reason": "domain", "detail": why_dom[:6]})
+                continue
+            plan = build_plan(order, named, domains)
+            ok, diags = verifier.verify(teir, plan)
+            if not ok:
+                prune["semantic"] += 1
+                rejected.append({
+                    "reason": "semantic",
+                    "codes": [d.get("code") for d in diags[:6]],
+                    "groups": named,
+                    "domains": list(domains),
+                })
+                continue
+            cost, channels = evaluate_cost(
+                plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
+                override, deadline)
+            plan["cost"] = {
+                "predicted_R_us": cost["predicted_R_us"],
+                "grade": cost["grade"],
+            }
+            rec = {
+                "id": None,
+                "domain": plan["meta"]["platform"],
+                "fused": plan["meta"]["fusion"],
+                "legal": True,
+                "model_feasible": True,
+                "deployment_ready": bool(plan["meta"]["deployment_ready"]),
+                "comparable": cost["comparable"],
+                "diagnostics": [],
+                "plan": plan,
+                "cost": cost,
+                "why": None,
+            }
+            rec["id"] = af_label(plan) or ("STKP:%s" % "|".join(
+                "%s[%s]" % (d[0].upper(), "+".join(g))
+                for g, d in zip(named, domains)))
+            if not cost["temporal_ok"]:
+                prune["temporal"] += 1
+                rec["legal"] = False
+                rec["model_feasible"] = False
+                rec["why"] = cost["temporal_why"]
+                rejected.append({"reason": "temporal", "id": rec["id"],
+                                 "detail": cost["temporal_why"]})
+                continue
+            if not rec["deployment_ready"]:
+                prune["runtime"] += 1
+                rec["why"] = "混合域无跨用户态—内核交接适配器，不可部署"
+            if not rec["comparable"]:
+                prune["incomparable"] += 1
+                rec["why"] = (rec["why"] or "") + (
+                    "; 缺测不得当 0: " + ",".join(cost["missing_costs"]))
+            feasible.append(rec)
+
+    deployable = [r for r in feasible
+                  if r["deployment_ready"] and r["comparable"] and r["legal"]]
+    model_ok = [r for r in feasible if r["model_feasible"] and r["comparable"]
+                and r["legal"]]
+    best_deploy = min(deployable, key=rank_key) if deployable else None
+    best_model = min(model_ok, key=rank_key) if model_ok else None
+    if best_deploy:
+        c = best_deploy["cost"]
+        parts = [
+            "STKP Ĉ=ΣC_i,d + ΣL_g + ΣH_q + C_sync = %s" % c.get("total_us"),
+            "groups=%d channels=%d" % (
+                len(best_deploy["plan"]["groups"]),
+                c.get("handoff_channels") or 0),
+            "deployment_ready",
+        ]
+        if best_model and best_model is not best_deploy:
+            if (best_model.get("cost") or {}).get("total_us") is not None:
+                if best_model["cost"]["total_us"] < (c.get("total_us") or 0):
+                    parts.append(
+                        "模型更优 %s Ĉ=%s 但不可部署" % (
+                            best_model["id"], best_model["cost"]["total_us"]))
+        if best_deploy["domain"] == "linux_userspace":
+            parts.append("同分或不优于内核时保留用户态")
+        best_deploy["why"] = "; ".join(parts)
+
+    return {
+        "version": 1,
+        "kind": "stkp",
+        "algorithm": "STKP_v1",
+        "scope": ("fixed-order contiguous fusion; domains="
+                  "linux_userspace|linux_kernel; not arbitrary DAG"),
+        "order": order,
+        "raw_space": raw_space_size(n),
+        "enumerated": raw,
+        "pruned": prune,
+        "n_model_feasible": len(model_ok),
+        "n_deployment_ready": len(deployable),
+        "candidates": deployable,
+        "model_only": [r for r in model_ok if not r["deployment_ready"]][:20],
+        "rejected_sample": rejected[:keep_rejected],
+        "best_model": best_model,
+        "best_deploy": best_deploy,
+        "chosen": None if best_deploy is None else best_deploy["id"],
+        "chosen_record": best_deploy,
+        "note": "经验成本，不是 WCET；不可部署的混合方案可出现在报告中",
+    }
+
+
+def attach_baseline(doc, teir, c_user, c_kernel, extra_kernel, verifier):
+    try:
+        base = load_baseline()
+        af = base.generate(teir, c_user, c_kernel, extra_kernel, 0.0, verifier)
+    except Exception as exc:
+        doc["baseline_af"] = {"error": str(exc)}
+        return doc
+    doc["baseline_af"] = {
+        "chosen": af.get("chosen"),
+        "n_legal": af.get("n_legal"),
+        "candidates": [
+            {"id": c["id"], "legal": c["legal"], "domain": c["domain"],
+             "fused": c["fused"],
+             "total_us": (c.get("cost") or {}).get("total_us")}
+            for c in af.get("candidates") or []
+        ],
+    }
+    stkp_c = (doc.get("chosen_record") or {}).get("cost") or {}
+    af_c = None
+    for c in af.get("candidates") or []:
+        if c.get("id") == af.get("chosen") and c.get("legal"):
+            af_c = (c.get("cost") or {}).get("total_us")
+    doc["vs_baseline"] = {
+        "af_chosen": af.get("chosen"),
+        "stkp_chosen": doc.get("chosen"),
+        "af_total_us": af_c,
+        "stkp_total_us": stkp_c.get("total_us"),
+        "stkp_missed_by_af": (
+            doc.get("chosen") not in (None, "A", "B", "C", "D", "E", "F")
+        ),
+    }
+    return doc
+
+
+def parse_override(text):
+    """{domain: {stage: us}} 或空。"""
+    if not text:
+        return None
+    obj = json.loads(text) if text.lstrip().startswith("{") else load_json(text)
+    return obj
+
+
+def run_stkp(args):
+    teir = load_json(args.teir)
+    v = load_verifier()
+    override = parse_override(args.stage_cost) if args.stage_cost else None
+    doc = solve(
+        teir, v,
+        c_user=args.c_user_us,
+        c_kernel=args.c_kernel_us,
+        extra_kernel=args.kernel_extra_us,
+        handoff_us=args.handoff_cost_us,
+        override=override,
+        max_stages=args.max_stages,
+    )
+    if not args.no_baseline:
+        doc = attach_baseline(doc, teir, args.c_user_us, args.c_kernel_us,
+                              args.kernel_extra_us, v)
+    if args.out:
+        dump_json(args.out, doc)
+    rec = doc.get("chosen_record")
+    if args.chosen_plan:
+        if not rec or not rec.get("plan"):
+            print("无 deployment_ready 方案，不写 %s" % args.chosen_plan,
+                  file=sys.stderr)
+            return 3
+        dump_json(args.chosen_plan, rec["plan"])
+        print("STKP chosen plan → %s  (%s %s Ĉ=%s)" % (
+            args.chosen_plan, doc.get("chosen"), rec.get("domain"),
+            (rec.get("cost") or {}).get("total_us")))
+    print("STKP v1 raw=%d enum=%d deployable=%d model=%d chosen=%s" % (
+        doc["raw_space"], doc["enumerated"], doc["n_deployment_ready"],
+        doc["n_model_feasible"], doc["chosen"]))
+    pr = doc["pruned"]
+    print("  prune domain=%d semantic=%d temporal=%d mixed=%d missing=%d" % (
+        pr["domain"], pr["semantic"], pr["temporal"], pr["runtime"],
+        pr["incomparable"]))
+    if rec:
+        for g in rec["plan"]["groups"]:
+            print("  %-3s %-28s @ %s" % (
+                g["id"], " + ".join(g["members"]), g["domain"]))
+    vs = doc.get("vs_baseline") or {}
+    if vs:
+        print("  vs A–F: baseline=%s STKP=%s missed_by_af=%s" % (
+            vs.get("af_chosen"), vs.get("stkp_chosen"),
+            vs.get("stkp_missed_by_af")))
+    if args.out:
+        print("wrote %s" % args.out)
+    return 0 if rec else 3
 
 
 def edge_handoffs(order, groups, domains):
@@ -56,20 +506,8 @@ def edge_handoffs(order, groups, domains):
     return transitions
 
 
-def main():
-    ap = argparse.ArgumentParser(description="ECoS 小图联合规划 exhaustive oracle")
-    ap.add_argument("dag")
-    ap.add_argument("--platforms", required=True)
-    ap.add_argument("--exec-us", default=None,
-                    help="JSON 文件或内联对象：{阶段名: 执行时间 µs}")
-    ap.add_argument("--release-cost-us", default=None,
-                    help="JSON 文件或内联对象：{平台名: 每次释放 µs}，默认按 20")
-    ap.add_argument("--handoff-cost-us", type=float, default=0.0)
-    ap.add_argument("--max-stages", type=int, default=8)
-    ap.add_argument("--oracle", action="store_true", help="输出所有合法候选")
-    ap.add_argument("-o", "--out")
-    args = ap.parse_args()
-
+def run_dag_oracle(args):
+    """旧接口：DAG + fusion_plan.group_legal。STKP 请走 --teir。"""
     dag = load_json(args.dag)
     caps = load_json(args.platforms)
     platforms = caps.get("platforms") or []
@@ -85,10 +523,9 @@ def main():
         print("!! 检出代数环，拒绝规划", file=sys.stderr)
         return 2
     if len(order) > args.max_stages:
-        print("!! 阶段数 %d 超过 exhaustive 上限 %d；请使用 CP-SAT/搜索器"
-              % (len(order), args.max_stages), file=sys.stderr)
+        print("!! 阶段数 %d 超过 exhaustive 上限 %d" %
+              (len(order), args.max_stages), file=sys.stderr)
         return 2
-
     exec_us = {}
     if args.exec_us:
         exec_us = (json.loads(args.exec_us) if args.exec_us.lstrip().startswith("{")
@@ -96,9 +533,8 @@ def main():
     release = {p["name"]: 20.0 for p in platforms}
     if args.release_cost_us:
         release.update(json.loads(args.release_cost_us)
-                       if args.release_cost_us.lstrip().startswith("{")
+                       if str(args.release_cost_us).lstrip().startswith("{")
                        else load_json(args.release_cost_us))
-
     Planner = load_fusion_planner()
     valid, rejected = [], []
     for groups in partitions(len(order)):
@@ -134,7 +570,6 @@ def main():
                          "predicted_R_us": round(exec_total + release_total +
                                                   handoff_total, 3)},
             })
-
     valid.sort(key=lambda x: (x["cost"]["predicted_R_us"],
                               len(x["groups"]), len(x["handoffs"])))
     result = {"version": 1, "mode": "exhaustive_oracle",
@@ -146,23 +581,48 @@ def main():
               "candidates": valid if args.oracle else valid[:10],
               "rejected": rejected[:50]}
     if args.out:
-        with io.open(args.out, "w", encoding="utf-8", newline="\n") as f:
-            json.dump(result, f, ensure_ascii=False, indent=2)
-            f.write("\n")
+        dump_json(args.out, result)
     if not valid:
-        print("!! 没有合法联合方案（候选 %d，拒绝 %d）" %
-              (len(valid), len(rejected)), file=sys.stderr)
+        print("!! 没有合法联合方案", file=sys.stderr)
         return 3
     b = valid[0]
     print("== exhaustive oracle：合法 %d / 拒绝 %d ==" %
           (len(valid), len(rejected)))
     print("== 最优 R̂ = %.3f µs ==" % b["cost"]["predicted_R_us"])
-    for g in b["groups"]:
-        print("  %-3s %-28s @ %s" % (g["id"], " + ".join(g["members"]),
-                                      g["domain"]))
-    print("  handoffs=%d cost=%.3f µs" %
-          (len(b["handoffs"]), b["cost"]["handoff_us"]))
     return 0
+
+
+def main():
+    ap = argparse.ArgumentParser(description="STKP v1 / DAG exhaustive oracle")
+    ap.add_argument("dag", nargs="?", default=None,
+                    help="旧接口：DAG JSON（无 --teir 时）")
+    ap.add_argument("--teir", default=None, help="STKP 入口：TEIR JSON")
+    ap.add_argument("--dag", dest="dag_opt", default=None)
+    ap.add_argument("--platforms", default=None)
+    ap.add_argument("--exec-us", default=None)
+    ap.add_argument("--release-cost-us", default=None)
+    ap.add_argument("--handoff-cost-us", type=float, default=0.0)
+    ap.add_argument("--c-user-us", type=float, default=21.0)
+    ap.add_argument("--c-kernel-us", type=float, default=21.0)
+    ap.add_argument("--kernel-extra-us", type=float, default=0.0)
+    ap.add_argument("--stage-cost", default=None,
+                    help="分域实测 {linux_userspace:{stage:us}, linux_kernel:{...}}")
+    ap.add_argument("--max-stages", type=int, default=8)
+    ap.add_argument("--oracle", action="store_true")
+    ap.add_argument("--no-baseline", action="store_true")
+    ap.add_argument("--chosen-plan", default=None)
+    ap.add_argument("-o", "--out")
+    args = ap.parse_args()
+    args.dag = args.dag_opt or args.dag
+    if args.teir:
+        return run_stkp(args)
+    if not args.dag or not args.platforms:
+        print("用法: ecos_plan_joint.py --teir t.json -o stkp.json [--chosen-plan p.json]",
+              file=sys.stderr)
+        print("  或: ecos_plan_joint.py dag.json --platforms caps.json",
+              file=sys.stderr)
+        return 2
+    return run_dag_oracle(args)
 
 
 if __name__ == "__main__":

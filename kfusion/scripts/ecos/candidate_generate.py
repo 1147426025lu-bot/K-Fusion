@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""candidate_generate.py — Gate 4：同一 Linux 上的选择性内核化（A/B/C/D）
+"""candidate_generate.py — A–F 固定方案对照基线（不驱动代码生成）。
+
+正式求解入口是 ecos_plan_joint.py（STKP v1）。本文件只枚举预设 A–F，供论文比较。
 
 只比较四个方案，把「内核化」和「融合」拆开（方案原文）：
 

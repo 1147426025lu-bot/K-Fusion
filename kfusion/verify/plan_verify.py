@@ -52,8 +52,14 @@ def assigned_domain(plan, stage):
     doms = plan.get("domains") or {}
     if stage in doms:
         return doms[stage]
+    for g in plan.get("groups") or []:
+        if stage in (g.get("members") or []) and g.get("domain"):
+            return g.get("domain")
     meta = plan.get("meta") or {}
-    return meta.get("platform") or meta.get("domain")
+    plat = meta.get("platform") or meta.get("domain")
+    if plat and plat != "mixed":
+        return plat
+    return None
 
 
 def edge_key(frm, to):
@@ -92,7 +98,24 @@ def verify(teir, plan, claims=None):
         if name not in nodes:
             diags.append(diagnose("E_UNKNOWN_STAGE", name, "TEIR 中无此阶段"))
 
-    # 域
+    # 域 + 同组必须同域（约束 B）
+    for g in plan.get("groups") or []:
+        members = list(g.get("members") or [])
+        seen = []
+        for m in members:
+            d = assigned_domain(plan, m) or g.get("domain")
+            if d and d not in seen:
+                seen.append(d)
+        if len(seen) > 1:
+            diags.append(diagnose(
+                "E_GROUP_DOMAIN", g.get("id") or ",".join(members),
+                "同组必须同一执行域，实际 %s" % seen))
+        gdom = g.get("domain")
+        if gdom and seen and gdom not in seen:
+            diags.append(diagnose(
+                "E_GROUP_DOMAIN", g.get("id") or ",",
+                "组标注域 %s 与成员域 %s 不一致" % (gdom, seen)))
+
     for name in seq:
         n = nodes.get(name)
         if not n:

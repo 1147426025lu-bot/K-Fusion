@@ -95,7 +95,7 @@ import json, sys
 c, p = json.load(open(sys.argv[1])), json.load(open(sys.argv[2]))
 assert c.get("groups") == p.get("groups")
 assert (c.get("meta") or {}).get("platform") == (p.get("meta") or {}).get("platform")
-assert (p.get("meta") or {}).get("generator") == "candidate_generate A/B/C/D"
+assert (p.get("meta") or {}).get("generator") == "stkp_v1"
 PY
     then
       ok "plan.json 就是入选方案（不是 fusion_plan 对照）"
