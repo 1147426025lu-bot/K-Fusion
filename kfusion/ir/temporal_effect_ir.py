@@ -607,9 +607,21 @@ def _build_teir_from_dag(dag, summary=None, stages=None, caps=None, kc0=None):
     for g in ((stages or {}).get("globals_typed") or []):
         if isinstance(g, dict) and g.get("name"):
             _typed[g["name"]] = g
-    session_init = {}
+    # 持久状态有两个来源：节点级 persistent（本阶段 self-carry）与
+    # persistent_state（跨节点汇总）。两处都要看，否则会话状态会漏声明。
+    _regions = []
+    for n in teir_nodes:
+        for r in (n.get("persistent") or []):
+            x = str(r)[1:] if str(r).startswith("@") else str(r)
+            if x and x not in _regions:
+                _regions.append(x)
     for p in persistent:
-        r = p.get("region")
+        x = p.get("region")
+        x = x[1:] if isinstance(x, str) and x.startswith("@") else x
+        if x and x not in _regions:
+            _regions.append(x)
+    session_init = {}
+    for r in _regions:
         g = _typed.get(r)
         if g is not None and not g.get("has_init", True):
             session_init[r] = "zero"

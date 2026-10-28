@@ -143,6 +143,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cycles", type=int, default=40)
     ap.add_argument("--out", default=DEFAULT_OUT)
+    ap.add_argument("--stage-cost", default=None,
+                    help="逐阶段实测成本 JSON（决定 STKP 选型的输入，必须固定）")
+    ap.add_argument("--ioctl-cost", default=None,
+                    help="UKU ioctl 往返实测成本（JSON 或数值）")
+    ap.add_argument("--contract", default=None, help="时间契约（含相位窗口）")
     ap.add_argument("--no-board", action="store_true",
                     help="只做生成与编译，不 insmod（无内核头/无板时用）")
     ap.add_argument("--quiet", action="store_true")
@@ -165,6 +170,10 @@ def main():
         "OUT_DIR": gen,
         "CYCLES": str(a.cycles),
     })
+    for k, v in (("STAGE_COST", a.stage_cost), ("IOCTL_COST", a.ioctl_cost),
+                 ("TIME_CONTRACT", a.contract)):
+        if v:
+            env[k] = v
 
     # ---- 1) 生成 + 编译（一条命令，复用既有流水线；不复制第二份计算体）----
     if not a.quiet:
@@ -221,6 +230,23 @@ def main():
             report["chosen"] = lines[0]
         if len(lines) > 1:
             report["domain"] = lines[1]
+
+    # PR-9B 复现的前提是「选型真的把某组放进了内核」。若成本输入不同导致
+    # STKP 选了全用户态，这次就不是 PR-9B 的复现——必须明说，不许冒充。
+    if not sess_meta:
+        report["verdict"] = "no_session"
+        report["why"] = ("入选方案没有内核会话（domain=%s）。PR-9B 的选型取决于"
+                         "实测成本输入；未提供 --stage-cost/--ioctl-cost 时"
+                         "STKP 通常选全用户态，本次不算 PR-9B 复现。"
+                         % report.get("domain"))
+        report["cost_inputs"] = {"stage_cost": a.stage_cost,
+                                 "ioctl_cost": a.ioctl_cost,
+                                 "contract": a.contract}
+        _write_report(a.out, report)
+        print("!! 选型无内核会话（domain=%s）：本次不是 PR-9B 复现。"
+              "\n   需要把当初的实测成本用 --stage-cost/--ioctl-cost 固定下来。"
+              % report.get("domain"), file=sys.stderr)
+        return 0
 
     if a.no_board:
         report["board"] = {"skipped": True, "why": "--no-board"}
