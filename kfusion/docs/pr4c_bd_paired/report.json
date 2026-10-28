@@ -1,0 +1,223 @@
+{
+  "kind": "bd_paired_long",
+  "claim": "empirical paired B vs D; not WCET",
+  "host": "Linux version 5.15.86 (builder@e3665d6e1a6c) (aarch64-linux-gnu-gcc (Debian 10.2.1-6) 10.2.1 20210110, GNU ld (GNU Binutils for Debian) 2.35.2) #1 SMP PREEMPT Wed Oct 14 10:16:11 UTC 2026",
+  "controls": {
+    "cpu": "0",
+    "fifo": 80,
+    "period_us": 1000,
+    "pairs": 7,
+    "cycles_B": 2000,
+    "hold_s_D": 2.0
+  },
+  "pairs": [
+    {
+      "i": 0,
+      "B": {
+        "min_us": 11.126,
+        "avg_us": 14.687,
+        "p50_us": 13,
+        "p99_us": 35,
+        "max_us": 67.089,
+        "over": 0,
+        "digest": "3c4d9089",
+        "miss": 0,
+        "cycles": 2000,
+        "id": "B",
+        "pair": 0
+      },
+      "D": {
+        "n": 2005,
+        "over": 0,
+        "min_us": 11.104,
+        "p50_us": 12,
+        "p99_us": 47,
+        "max_us": 59.538,
+        "id": "D",
+        "pair": 0,
+        "legal_run": true
+      }
+    },
+    {
+      "i": 1,
+      "B": {
+        "min_us": 11.253,
+        "avg_us": 18.22,
+        "p50_us": 13,
+        "p99_us": 48,
+        "max_us": 124.588,
+        "over": 0,
+        "digest": "3c4d9089",
+        "miss": 0,
+        "cycles": 2000,
+        "id": "B",
+        "pair": 1
+      },
+      "D": {
+        "n": 2004,
+        "over": 0,
+        "min_us": 11.317,
+        "p50_us": 31,
+        "p99_us": 68,
+        "max_us": 199.35,
+        "id": "D",
+        "pair": 1,
+        "legal_run": true
+      }
+    },
+    {
+      "i": 2,
+      "B": {
+        "min_us": 11.006,
+        "avg_us": 24.985,
+        "p50_us": 17,
+        "p99_us": 71,
+        "max_us": 202.405,
+        "over": 0,
+        "digest": "3c4d9089",
+        "miss": 0,
+        "cycles": 2000,
+        "id": "B",
+        "pair": 2
+      },
+      "D": {
+        "n": 2004,
+        "over": 0,
+        "min_us": 11.204,
+        "p50_us": 12,
+        "p99_us": 31,
+        "max_us": 111.782,
+        "id": "D",
+        "pair": 2,
+        "legal_run": true
+      }
+    },
+    {
+      "i": 3,
+      "B": {
+        "min_us": 11.101,
+        "avg_us": 21.533,
+        "p50_us": 15,
+        "p99_us": 69,
+        "max_us": 104.099,
+        "over": 0,
+        "digest": "3c4d9089",
+        "miss": 0,
+        "cycles": 2000,
+        "id": "B",
+        "pair": 3
+      },
+      "D": {
+        "n": 2005,
+        "over": 0,
+        "min_us": 11.163,
+        "p50_us": 14,
+        "p99_us": 53,
+        "max_us": 157.295,
+        "id": "D",
+        "pair": 3,
+        "legal_run": true
+      }
+    },
+    {
+      "i": 4,
+      "B": {
+        "min_us": 10.967,
+        "avg_us": 15.143,
+        "p50_us": 13,
+        "p99_us": 42,
+        "max_us": 73.192,
+        "over": 0,
+        "digest": "3c4d9089",
+        "miss": 0,
+        "cycles": 2000,
+        "id": "B",
+        "pair": 4
+      },
+      "D": {
+        "n": 2005,
+        "over": 0,
+        "min_us": 11.11,
+        "p50_us": 12,
+        "p99_us": 31,
+        "max_us": 99.165,
+        "id": "D",
+        "pair": 4,
+        "legal_run": true
+      }
+    },
+    {
+      "i": 5,
+      "B": {
+        "min_us": 10.957,
+        "avg_us": 21.672,
+        "p50_us": 15,
+        "p99_us": 68,
+        "max_us": 310.429,
+        "over": 0,
+        "digest": "3c4d9089",
+        "miss": 0,
+        "cycles": 2000,
+        "id": "B",
+        "pair": 5
+      },
+      "D": {
+        "n": 2004,
+        "over": 0,
+        "min_us": 11.106,
+        "p50_us": 12,
+        "p99_us": 45,
+        "max_us": 119.974,
+        "id": "D",
+        "pair": 5,
+        "legal_run": true
+      }
+    },
+    {
+      "i": 6,
+      "B": {
+        "min_us": 11.041,
+        "avg_us": 18.687,
+        "p50_us": 13,
+        "p99_us": 58,
+        "max_us": 94.895,
+        "over": 0,
+        "digest": "3c4d9089",
+        "miss": 0,
+        "cycles": 2000,
+        "id": "B",
+        "pair": 6
+      },
+      "D": {
+        "n": 2004,
+        "over": 0,
+        "min_us": 11.133,
+        "p50_us": 12,
+        "p99_us": 26,
+        "max_us": 87.535,
+        "id": "D",
+        "pair": 6,
+        "legal_run": true
+      }
+    }
+  ],
+  "summary": {
+    "B_p50_median": 13,
+    "D_p50_median": 12,
+    "B_p99_median": 58,
+    "D_p99_median": 45,
+    "B_max_obs": 310.429,
+    "D_max_obs": 199.35,
+    "D_minus_B_p50": [
+      -1,
+      18,
+      -5,
+      -1,
+      -1,
+      -3,
+      -1
+    ],
+    "p50_ranges_overlap": true
+  },
+  "conclusion": "p50 范围重叠，不能断言内核融合优于用户态融合"
+}

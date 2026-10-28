@@ -1,0 +1,129 @@
+
+# mode: plan  releases_per_period=1  cycles=2000
+
+# probe: r/s/f v1.2
+# period_ns: 1000000
+# deadline_ns: 1000000
+# samples: 2000
+# release_id: serial 0..1999
+# series_us: start_lat exec response  (1us buckets, cap 1023)
+# stat_start_lat_us: min=9.581 avg=16.189 p50=12 p90=29 p99=43 p99.9=105 p99.99=121 max=121.385 over=0 neg=0 min_signed=9.581 n=2000
+# stat_exec_us: min=1.333 avg=2.032 p50=1 p90=3 p99=5 p99.9=5 p99.99=8 max=8.518 over=0 neg=0 min_signed=1.333 n=2000
+# stat_span_us: min=1.333 avg=2.032 p50=1 p90=3 p99=5 p99.9=5 p99.99=8 max=8.518 over=0 neg=0 min_signed=1.333 n=2000
+# stat_response_us: min=11.253 avg=18.220 p50=13 p90=33 p99=48 p99.9=110 p99.99=124 max=124.588 over=0 neg=0 min_signed=11.253 n=2000
+# deadline_miss: 0/2000 (none)
+# exec_overrun: 0/2000
+# digest: 3c4d9089
+# stat_exec_stage_sample_us: min=0.278 avg=0.498 p50=0 p90=0 p99=1 p99.9=1 p99.99=3 max=3.019 over=0 neg=0 min_signed=0.278 n=2000
+# instant_stage_sample_us: min=9.938 avg=16.687 p50=12 max=122.273
+# stat_exec_stage_fir_us: min=0.296 avg=0.557 p50=0 p90=1 p99=1 p99.9=2 p99.99=5 max=5.482 over=0 neg=0 min_signed=0.296 n=2000
+# instant_stage_fir_us: min=10.352 avg=17.243 p50=12 max=123.273
+# stat_exec_stage_pid_us: min=0.240 avg=0.371 p50=0 p90=0 p99=1 p99.9=1 p99.99=1 max=1.611 over=0 neg=0 min_signed=0.240 n=2000
+# instant_stage_pid_us: min=10.667 avg=17.615 p50=13 max=123.755
+# stat_exec_stage_clamp_us: min=0.222 avg=0.307 p50=0 p90=0 p99=0 p99.9=1 p99.99=1 max=1.056 over=0 neg=0 min_signed=0.222 n=2000
+# instant_stage_clamp_us: min=10.981 avg=17.922 p50=13 max=124.181
+# stat_exec_stage_plant_us: min=0.222 avg=0.299 p50=0 p90=0 p99=0 p99.9=1 p99.99=1 max=1.241 over=0 neg=0 min_signed=0.222 n=2000
+# instant_stage_plant_us: min=11.253 avg=18.220 p50=13 max=124.588
+# hist_start_lat_us: 9 19
+# hist_start_lat_us: 10 52
+# hist_start_lat_us: 11 761
+# hist_start_lat_us: 12 325
+# hist_start_lat_us: 13 180
+# hist_start_lat_us: 14 118
+# hist_start_lat_us: 15 68
+# hist_start_lat_us: 16 37
+# hist_start_lat_us: 17 33
+# hist_start_lat_us: 18 26
+# hist_start_lat_us: 19 22
+# hist_start_lat_us: 20 19
+# hist_start_lat_us: 21 21
+# hist_start_lat_us: 22 15
+# hist_start_lat_us: 23 13
+# hist_start_lat_us: 24 9
+# hist_start_lat_us: 25 19
+# hist_start_lat_us: 26 21
+# hist_start_lat_us: 27 19
+# hist_start_lat_us: 28 15
+# hist_start_lat_us: 29 20
+# hist_start_lat_us: 30 15
+# hist_start_lat_us: 31 14
+# hist_start_lat_us: 32 23
+# hist_start_lat_us: 33 15
+# hist_start_lat_us: 34 12
+# hist_start_lat_us: 35 21
+# hist_start_lat_us: 36 12
+# hist_start_lat_us: 37 19
+# hist_start_lat_us: 38 13
+# hist_start_lat_us: 39 6
+# hist_start_lat_us: 40 6
+# hist_start_lat_us: 41 4
+# hist_start_lat_us: 42 5
+# hist_start_lat_us: 43 3
+# hist_start_lat_us: 44 3
+# hist_start_lat_us: 45 1
+# hist_start_lat_us: 46 1
+# hist_start_lat_us: 47 2
+# hist_start_lat_us: 49 1
+# hist_start_lat_us: 50 1
+# hist_start_lat_us: 51 2
+# hist_start_lat_us: 52 1
+# hist_start_lat_us: 62 1
+# hist_start_lat_us: 68 2
+# hist_start_lat_us: 75 1
+# hist_start_lat_us: 88 1
+# hist_start_lat_us: 105 1
+# hist_start_lat_us: 116 1
+# hist_start_lat_us: 121 1
+# hist_response_us: 11 34
+# hist_response_us: 12 361
+# hist_response_us: 13 674
+# hist_response_us: 14 136
+# hist_response_us: 15 166
+# hist_response_us: 16 82
+# hist_response_us: 17 60
+# hist_response_us: 18 41
+# hist_response_us: 19 28
+# hist_response_us: 20 24
+# hist_response_us: 21 15
+# hist_response_us: 22 20
+# hist_response_us: 23 15
+# hist_response_us: 24 15
+# hist_response_us: 25 22
+# hist_response_us: 26 9
+# hist_response_us: 27 14
+# hist_response_us: 28 9
+# hist_response_us: 29 15
+# hist_response_us: 30 21
+# hist_response_us: 31 14
+# hist_response_us: 32 18
+# hist_response_us: 33 18
+# hist_response_us: 34 20
+# hist_response_us: 35 14
+# hist_response_us: 36 17
+# hist_response_us: 37 19
+# hist_response_us: 38 18
+# hist_response_us: 39 12
+# hist_response_us: 40 11
+# hist_response_us: 41 19
+# hist_response_us: 42 11
+# hist_response_us: 43 6
+# hist_response_us: 44 9
+# hist_response_us: 45 4
+# hist_response_us: 46 4
+# hist_response_us: 47 4
+# hist_response_us: 48 4
+# hist_response_us: 50 2
+# hist_response_us: 51 1
+# hist_response_us: 52 1
+# hist_response_us: 53 1
+# hist_response_us: 55 2
+# hist_response_us: 56 1
+# hist_response_us: 57 1
+# hist_response_us: 66 1
+# hist_response_us: 72 1
+# hist_response_us: 73 1
+# hist_response_us: 77 1
+# hist_response_us: 93 1
+# hist_response_us: 110 1
+# hist_response_us: 120 1
+# hist_response_us: 124 1
