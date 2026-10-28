@@ -400,6 +400,45 @@ class Planner:
         """order[i..j]（连续段）能否并成一个周期体。"""
         return self.group_legal(self.order[i:j + 1])
 
+    def enumerate_partitions(self):
+        """枚举相位序上所有合法分段（A|B|C / A|BC / AB|C / ABC）。
+
+        n 个阶段的切点在相邻两阶段之间，共 2^(n-1) 种划分，每段用
+        segment_legal 过滤。只服务小图（≤12 阶段），作为 DP 的正确性 oracle。
+        返回按 R̂ = G·c + ΣE 升序的列表，每项是下标分组列表。
+        """
+        n = len(self.order)
+        if n == 0:
+            return []
+        if n > 12:
+            raise SystemExit("enumerate 只服务小图（≤12 阶段）；当前 %d" % n)
+        legal = {}
+        out = []
+
+        def rec(start, cur):
+            if start == n:
+                out.append([list(g) for g in cur])
+                return
+            for end in range(start, n):
+                if (start, end) not in legal:
+                    legal[(start, end)] = self.segment_legal(start, end)
+                ok, _why = legal[(start, end)]
+                if not ok:
+                    continue
+                cur.append(list(range(start, end + 1)))
+                rec(end + 1, cur)
+                cur.pop()
+
+        rec(0, [])
+        self.legal = legal
+        total_exec = sum(self.exec_us.get(m, 0.0) for m in self.order)
+
+        def key(groups):
+            return len(groups) * self.c + total_exec
+
+        out.sort(key=key)
+        return out
+
     # -------- DP：最小化端到端响应 R（PR7） --------
     # 串行单资源下，每组在「组内头相位」一次性释放，组内连续执行；
     # 组释放时刻 = max(头相位, 上一组完成时刻)。端到端
@@ -714,6 +753,8 @@ def main():
                     help="有 warning 时非零退出（CI 用）")
     ap.add_argument("-o", "--out", default=None)
     ap.add_argument("--verify", default=None, help="复检已有 plan.json 的合法性")
+    ap.add_argument("--enumerate", action="store_true",
+                    help="穷举全部合法分段（小图正确性 oracle），输出 candidates 列表")
     ap.add_argument("--quiet", action="store_true")
     args = ap.parse_args()
 
@@ -760,6 +801,57 @@ def main():
                       contract=(load_json(args.contract) if args.contract else None))
     if args.max_feedback_delay_us is not None:
         planner.apply_feedback_limit(args.max_feedback_delay_us)
+
+    # 穷举模式：小图正确性 oracle（枚举全部合法分段，按 R̂ 排序）
+    if args.enumerate:
+        parts = planner.enumerate_partitions()
+        total_exec = sum(planner.exec_us.get(m, 0.0) for m in planner.order)
+        cands = []
+        for gi, groups in enumerate(parts):
+            gs = summarize(planner, groups)
+            predicted = len(gs) * planner.c + total_exec
+            # 标签形如 sample+fir|pid+clamp|plant（对应 A|BC / AB|C / ABC）
+            label = "|".join("+".join(
+                n.replace("stage_", "") for n in g["members"]) for g in gs)
+            cands.append({
+                "id": "c%d" % gi,
+                "label": label,
+                "groups": gs,
+                "cost": {
+                    "groups": len(gs),
+                    "exec_total_us": round(total_exec, 3),
+                    "predicted_R_us": round(predicted, 3),
+                    "release_tax_us": round(len(gs) * planner.c, 3),
+                },
+                "recurrences": planner.recurrence_report(groups),
+            })
+        doc = {
+            "version": 2,
+            "meta": {
+                "dag": args.dag,
+                "platform": platform.get("name"),
+                "release_cost_us": planner.c,
+                "mode": "enumerate",
+                "n_candidates": len(cands),
+                "assumption": "串行链上 R̂ = G·c + ΣE；穷举全部合法分段",
+            },
+            "order": planner.order,
+            "candidates": cands,
+            "rejected_segments": [
+                {"segment": [planner.order[x] for x in range(i, j + 1)],
+                 "reason": why}
+                for (i, j), (ok, why) in sorted(planner.legal.items()) if not ok
+            ],
+        }
+        if args.out:
+            with io.open(args.out, "w", encoding="utf-8", newline="\n") as f:
+                json.dump(doc, f, ensure_ascii=False, indent=2)
+                f.write("\n")
+        if not args.quiet:
+            best = cands[0]["label"] if cands else "无合法分段"
+            print("== 穷举 %d 种合法分段 · 最优 %s ==" % (len(cands), best),
+                  file=sys.stderr)
+        return 0
 
     # 复检模式：独立验证器（PR9-A）。不调用 group_legal 的逐组结论当整体结论。
     if args.verify:
