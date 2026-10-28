@@ -123,3 +123,5 @@ kfusion/docs/pr10c_boundary/noop/*.ko
 kfusion/docs/pr10c_boundary/noop/*.o
 kfusion/docs/pr10c_boundary/noop/.*.cmd
 kfusion/docs/pr10c_boundary/noop/bench_noop
+kfusion/docs/pr10c_boundary/autonomous_p*/gen/
+kfusion/docs/pr10c_boundary/autonomous_p*/src_autonomous.c
