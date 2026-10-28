@@ -21,6 +21,10 @@
  */
 #include <stdint.h>
 
+/* kfusion:task name=five_stage_loop entry=loop_main period_us=1000 deadline_us=1000 step_us=200
+ * 相位是设计事实，写在源里给抽取器，不另写 dag.json。step_us 等距铺开：
+ * sample@0 fir@200 pid@400 clamp@600 plant@800。 */
+
 /* 外部链接：static 会让整条链在 -O2 下被当死代码删掉（see four_stage_chain） */
 int32_t g_plant;              /* 被控量（plant 的输出） */
 int32_t g_dist;               /* 扰动 */

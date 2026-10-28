@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "mode": "strict_period",
+  "period_us": 1000,
+  "allow_period_stretch": false,
+  "pins": {
+    "stage_sample": {
+      "kind": "input_snapshot",
+      "phase_us": 0,
+      "pull_forbidden": true,
+      "notes": "采样瞬间不能随融合前拉"
+    },
+    "stage_plant": {
+      "kind": "output_commit",
+      "phase_us": 800,
+      "early_commit_forbidden": true,
+      "notes": "执行器提交必须在 800 µs，算完也不能提前生效"
+    }
+  }
+}

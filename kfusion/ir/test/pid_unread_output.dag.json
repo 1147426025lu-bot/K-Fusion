@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "meta": {
+    "mode": "stages",
+    "task": { "name": "pid_unread", "entry": "loop_main", "period_us": 1000, "step_us": 1000 }
+  },
+  "nodes": [
+    {
+      "name": "stage_pid",
+      "fns": ["stage_pid"],
+      "effects": ["state_read", "state_write"],
+      "phase_us": 0
+    }
+  ],
+  "edges": [],
+  "candidates": [],
+  "phase": { "known": true, "unit": "us", "period_us": 1000, "offsets": { "stage_pid": 0 } },
+  "topo_order": ["stage_pid"],
+  "topo_order_delayed": ["stage_pid"],
+  "recurrences": [],
+  "algebraic_loops": [],
+  "stats": {}
+}

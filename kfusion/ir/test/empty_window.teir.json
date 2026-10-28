@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "kind": "teir",
+  "task": { "name": "empty_window", "period_us": 1000, "deadline_us": 1000 },
+  "nodes": [
+    {
+      "name": "producer",
+      "fns": ["producer"],
+      "phase_us": 100,
+      "reads": [],
+      "writes": ["@g_x"],
+      "persistent": [],
+      "unread_this_job": [],
+      "live_same_job": ["@g_x"],
+      "effects": ["state_write"],
+      "contexts": ["thread"],
+      "unknown_calls": [],
+      "must_preserve": true,
+      "may_delete": false,
+      "why_preserve": ["same_job_live:@g_x"],
+      "allowed_domains": ["linux_userspace", "linux_kernel", "nuttx"],
+      "blocked_domains": []
+    },
+    {
+      "name": "consumer",
+      "fns": ["consumer"],
+      "phase_us": 400,
+      "reads": ["@g_x"],
+      "writes": [],
+      "persistent": [],
+      "unread_this_job": [],
+      "live_same_job": [],
+      "effects": ["state_read"],
+      "contexts": ["thread"],
+      "unknown_calls": [],
+      "must_preserve": true,
+      "may_delete": false,
+      "why_preserve": [],
+      "allowed_domains": ["linux_userspace", "linux_kernel", "nuttx"],
+      "blocked_domains": []
+    }
+  ],
+  "edges": [
+    {
+      "from": "producer",
+      "to": "consumer",
+      "kind": "data",
+      "version": "same-job",
+      "proven": true,
+      "regions": ["@g_x"]
+    }
+  ],
+  "events": [],
+  "persistent_state": [],
+  "transform": { "closed": false, "alias_uncertain": false, "reasons": [], "policy": "ok" }
+}

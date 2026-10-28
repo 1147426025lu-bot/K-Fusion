@@ -1,0 +1,36 @@
+{
+  "version": 2,
+  "meta": { "mode": "stages", "task": { "name": "alias_uncertain", "entry": "loop_main", "period_us": 1000, "step_us": 500 } },
+  "nodes": [
+    {
+      "name": "stage_a",
+      "fns": ["stage_a"],
+      "effects": ["state_write"],
+      "phase_us": 0,
+      "interface_unresolved": ["arg:0"]
+    },
+    {
+      "name": "stage_b",
+      "fns": ["stage_b"],
+      "effects": ["state_write"],
+      "phase_us": 500,
+      "interface_unresolved": ["arg:0"]
+    }
+  ],
+  "edges": [],
+  "candidates": [
+    {
+      "from": "stage_a",
+      "to": "stage_b",
+      "kind": "candidate",
+      "evidence": ["arg:0"],
+      "proven": false
+    }
+  ],
+  "phase": { "known": true, "unit": "us", "period_us": 1000, "offsets": { "stage_a": 0, "stage_b": 500 } },
+  "topo_order": ["stage_a", "stage_b"],
+  "topo_order_delayed": ["stage_a", "stage_b"],
+  "recurrences": [],
+  "algebraic_loops": [],
+  "stats": { "unresolved": 1, "candidates": 1 }
+}

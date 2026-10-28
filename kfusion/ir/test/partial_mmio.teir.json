@@ -1,0 +1,56 @@
+{
+  "version": 1,
+  "kind": "teir",
+  "task": { "name": "partial_mmio", "period_us": 1000, "deadline_us": 1000 },
+  "nodes": [
+    {
+      "name": "sensor_prepare",
+      "fns": ["sensor_prepare"],
+      "phase_us": 0,
+      "reads": [],
+      "writes": ["@g_raw"],
+      "persistent": [],
+      "unread_this_job": [],
+      "live_same_job": ["@g_raw"],
+      "effects": ["mmio", "state_write"],
+      "contexts": ["thread"],
+      "unknown_calls": [],
+      "must_preserve": true,
+      "may_delete": false,
+      "why_preserve": ["same_job_live:@g_raw", "effects:mmio"],
+      "allowed_domains": ["linux_userspace", "nuttx"],
+      "blocked_domains": ["linux_kernel:mmio 不被该域允许"]
+    },
+    {
+      "name": "stage_pid",
+      "fns": ["stage_pid"],
+      "phase_us": 200,
+      "reads": ["@g_raw", "@g_integ"],
+      "writes": ["@g_act", "@g_integ"],
+      "persistent": ["@g_integ"],
+      "unread_this_job": ["@g_act"],
+      "live_same_job": [],
+      "effects": ["state_read", "state_write"],
+      "contexts": ["thread", "softirq"],
+      "unknown_calls": [],
+      "must_preserve": true,
+      "may_delete": false,
+      "why_preserve": ["self_carry:@g_integ", "unobserved_write:@g_act"],
+      "allowed_domains": ["linux_userspace", "linux_kernel", "nuttx"],
+      "blocked_domains": []
+    }
+  ],
+  "edges": [
+    {
+      "from": "sensor_prepare",
+      "to": "stage_pid",
+      "kind": "data",
+      "version": "same-job",
+      "proven": true,
+      "regions": ["@g_raw"]
+    }
+  ],
+  "events": [],
+  "persistent_state": [{"region": "@g_integ", "writer": "stage_pid", "kind": "carry"}],
+  "transform": { "closed": false, "alias_uncertain": false, "reasons": [], "policy": "ok" }
+}
