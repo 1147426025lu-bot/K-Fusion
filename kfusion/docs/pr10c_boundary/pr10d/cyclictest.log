@@ -1,0 +1,3 @@
+WARN: cyclictest was not built with the numa option
+# /dev/cpu_dma_latency set to 0us
+T: 0 (59932) P:99 I:1000 C:   5000 Min:      9 Act:   12 Avg:   12 Max:      52
