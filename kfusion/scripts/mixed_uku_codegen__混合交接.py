@@ -367,7 +367,7 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
         A("	plc_probe_reset(&g_exec_stage[%d], \"exec_stage_%s\");" % (i, name))
     A("	if (clock_gettime(CLOCK_MONOTONIC, &next) != 0) return 1;")
     A("	for (k = 0; k < cycles; k++) {")
-    A("		long long r, s, f, hns = 0, _a, c0, c1;")
+    A("		long long r, s, f, hns = 0, _a, c0 = 0, c1 = 0;")
     A("		int rc;")
     A("		bump_ns(&next, PERIOD_NS);")
     A("		r = (long long)next.tv_sec * 1000000000LL + next.tv_nsec;")
