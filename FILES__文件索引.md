@@ -3,10 +3,7 @@
 > 本文件由根目录 `FILES.md` 指向。K-Fusion 仓库统一采用 `name__中文说明.ext` 自文档化命名约定
 >（双下划线后接中文描述），所有文件名均为合法 UTF-8，在 Linux / macOS / Windows(UTF-8 locale) 下均正常解析。
 >
-> 快照日期：**2026-10-23**（含当日新增：`kfusion/examples/ecos/five_stage_loop__闭环五阶段示例.c`、
-> `kfusion/contracts/examples/five_stage_loop.stages.json`、跨周期回归固件
-> `kfusion/scripts/test/fusion/{five_stage_loop.*, phase_pin.dag.json, algebraic.dag.json}`、
-> `kfusion/scripts/test/dag/true_cycle.stages.json`）。
+> 快照日期：**2026-10-22**（含当日新增：`crtos/results/figures` 两域 vs 单域架构对照 SVG、`crtos/scripts/sync_pi4`、`kfusion/docs/paper` 论文稿与图）。
 
 ## 顶层文件
 
@@ -32,8 +29,8 @@
 ### `crtos/` — cRTOS / Jailhouse 对照实验脚手架（含 upstream Jailhouse 源码与脚本）
 
 - `crtos/docs/` （12 文件）
-- `crtos/jailhouse_overlay_pi4/` （28 文件）— **NuttX-inmate 移植产物**（cell 配置 / defconfig / 补丁 / 部署脚本 / rtlat + xshm app）
-- `crtos/results/` （132 文件，含 `figures/`）— **Pi4 实测数据 + 架构对照图**（对照表 / schema JSON / 2 张「两域 vs 单域」SVG）
+- `crtos/jailhouse_overlay_pi4/` （24 文件）— **NuttX-inmate 移植产物**（cell 配置 / defconfig / 补丁 / 部署脚本 / rtlat + xshm app）
+- `crtos/results/` （109 文件，含 `figures/`）— **Pi4 实测数据 + 架构对照图**（对照表 / schema JSON / 2 张「两域 vs 单域」SVG）
 - `crtos/logs/` （1 文件）
 - `crtos/scripts/` （53 文件，含 `pi4/`）
 - `crtos/upstream/` （526 文件）
@@ -49,16 +46,14 @@
 
 - `kfusion/CMakeLists.txt/` （1 文件）
 - `kfusion/README.md/` （1 文件）
-- `kfusion/analysis/` （3 文件）— 效果摘要 Pass 源码
 - `kfusion/backend/` （23 文件）
-- `kfusion/contracts/` （19 文件，含 `examples/` 阶段骨架与平台能力）
 - `kfusion/diagnostics/` （1 文件）
-- `kfusion/docs/` （105 文件，含 `paper/` 论文稿与 `figures/`）
-- `kfusion/examples/` （27 文件，含 `ecos/` 四阶段链与**闭环五阶段**示例）
+- `kfusion/docs/` （90 文件，含 `paper/` 论文稿与 `figures/`）
+- `kfusion/examples/` （24 文件）
 - `kfusion/frontend/` （2 文件）
 - `kfusion/include/` （5 文件）
 - `kfusion/manifests/` （22 文件）
-- `kfusion/scripts/` （184 文件）
+- `kfusion/scripts/` （157 文件）
 - `kfusion/src/` （13 文件）
 - `kfusion/test/` （27 文件）
 
@@ -79,12 +74,12 @@
 
 ## 统计
 
-- 工作树文件总数：**1241**
+- 工作树文件总数：**1140**
 - `.github/`：3 文件
 - `compare/`：2 文件
-- `crtos/`：771 文件（docs 12 · jailhouse_overlay_pi4 24 · results 112 · logs 1 · scripts 53 · upstream 526）
+- `crtos/`：740 文件（docs 12 · jailhouse_overlay_pi4 24 · results 110 · logs 1 · scripts 53 · upstream 526）
 - `docs/`：4 文件
-- `kfusion/`：437 文件
+- `kfusion/`：367 文件
 - `results/`：3 文件
 - `scripts/`：1 文件
 - `timedc/`：11 文件

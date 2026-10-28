@@ -116,6 +116,39 @@ class LetEmitterUnit(unittest.TestCase):
         with self.assertRaises(ValueError):
             let_em.emit(ir, "demo")
 
+    def test_output_commit_is_separate_job(self):
+        """融合计算可在组头跑；plant 必须等到 output_commit 相位才调用。"""
+        plan = {
+            "version": 2,
+            "verification": {"ok": True},
+            "groups": [{"id": "g0", "members": ["compute", "plant"]}],
+            "let_events": [{
+                "kind": "output_commit",
+                "stage": "plant",
+                "at_us": 800.0,
+                "compute_at_us": 0.0,
+            }],
+        }
+        dag = {
+            "nodes": [
+                {"name": "compute", "phase_us": 0.0, "call": "compute()"},
+                {"name": "plant", "phase_us": 800.0, "call": "plant()"},
+            ],
+            "topo_order": ["compute", "plant"],
+            "phase": {"known": True, "offsets": {"compute": 0.0, "plant": 800.0},
+                      "period_us": 1000.0},
+            "meta": {"task": {"period_us": 1000.0, "name": "demo"}},
+        }
+        ir = fusion_ir.FusionIR.from_plan(plan, dag, source_name="demo")
+        self.assertEqual(len(ir.let_events), 1)
+        c = let_em.emit(ir, "demo")["ecos_let_jobs.c"]
+        self.assertIn("compute();", c)
+        self.assertIn("plant();", c)
+        self.assertIn("ecos_let_fn_output_commit_plant", c)
+        self.assertIn(".phase_ns = 800000,", c)
+        self.assertNotIn("\tecos_body_g0();", c)
+        self.assertIn(".name = \"output_commit_plant\"", c)
+
 
 class EmitLetIntegration(unittest.TestCase):
     """端到端：emit.py --target let 跑过已验证方案门禁并写盘。"""

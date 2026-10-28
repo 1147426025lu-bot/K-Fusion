@@ -1,5 +1,9 @@
 # stage_extract — 同源 C 周期函数阶段提取（Gate 1）
 
+默认流水线入口是同目录 **`stage_extract.py`**（Clang JSON AST + K-C0 fail-closed）和
+`kfusion/scripts/ecos_from_c__从C编译.sh`。本 README 描述的 LLVM-C 抽取器来自
+`feat/ecos-temporal-semantics`，两套产物 JSON 都交给 `ast_to_plan.py` / `emit.py`。
+
 **角色**：Gate 1 的第一块——从**既有 C 周期程序**自动提取周期入口、被调用的阶段函数、
 全局状态与类型，产出机器可消费的 JSON，供下游「AST/IR → plan/dag → emit」自动生成
 用户态/内核态源码，**不再要求人工手写 DAG 或两份 stage 实现**。

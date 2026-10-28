@@ -22,6 +22,7 @@
 #include <linux/fs.h>
 #include <linux/miscdevice.h>
 #include <linux/mm.h>
+#include <linux/math64.h>
 #include <linux/uaccess.h>
 #include <linux/wait.h>
 #include <linux/atomic.h>
@@ -29,7 +30,18 @@
 #include <linux/debugfs.h>
 #include <linux/sched/types.h>
 
+#include <linux/version.h>
+
 #include "../include/plc_shm__共享内存.h"
+#include "../include/plc_abi__运行时ABI.h"
+#include "plc_hrtimer_core__定时核心.h"
+
+/* kthread_complete_and_exit() 是 5.17 才引入的；5.15 及更早只有 complete_and_exit()，
+ * 两者都是 __noreturn、语义相同（都是「结束当前 kthread 并 complete」）。
+ * 加这层宏是为了让同一份源码能在 5.15（Pi4 定制内核）与 6.x 上都能编。 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 17, 0)
+#define kthread_complete_and_exit(comp, code) complete_and_exit(comp, code)
+#endif
 
 MODULE_LICENSE("GPL");
 
@@ -83,16 +95,6 @@ struct thread_param {
 	int msr_fd;
 };
 
-struct plc_timespec {
-	long tv_sec;
-	long tv_nsec;
-};
-
-struct plc_itimerspec {
-	struct plc_timespec it_interval;
-	struct plc_timespec it_value;
-};
-
 struct plc_cyclic_timer {
 	struct hrtimer hr;
 	struct task_struct *task;
@@ -104,6 +106,13 @@ struct plc_cyclic_timer {
 	atomic_t overrun_acc;
 	bool active;
 	u64 comp_warmup;
+	/* 统一探针 r/s/f v1（probe_rsf=1 时才用） */
+	ktime_t probe_r;
+	ktime_t probe_prev_s;
+	ktime_t probe_prev_r;
+	ktime_t probe_f;		/* 上一拍的完成时刻 f_k（进入等待时打点） */
+	bool probe_have_prev;
+	bool probe_have_f;
 };
 
 struct fused_fast {
@@ -148,6 +157,231 @@ static struct completion fused_worker_done;
 static struct plc_cyclic_timer fused_cyclic;
 static struct fused_fast fused_fast;
 
+/* ==========================================================================
+ * 统一探针 r/s/f v1（内核侧）
+ *
+ * 契约：kfusion/docs/PROBE_CONTRACT__统一测量契约.md
+ *   r_k 标称释放 / s_k 实际开始 / f_k 完成
+ *   start_lat = s−r   exec = f−s   response = f−r   miss = f−r > T
+ *
+ * **默认关闭**（probe_rsf=0）：关闭时本文件的行为与加探针之前逐字节相同。
+ * 打开后记录三个序列并用 pr_info 输出与用户态同一块文本（前缀 PLCPROBE）。
+ * ========================================================================== */
+static bool probe_rsf;
+module_param(probe_rsf, bool, 0644);
+MODULE_PARM_DESC(probe_rsf, "记录 r/s/f 三时间戳（统一测量契约 v1，默认 0）");
+
+#define PLC_PROBE_BUCKETS 200
+
+struct plc_probe_series {
+	const char *name;
+	unsigned long hist[PLC_PROBE_BUCKETS];
+	u64 n;
+	u64 sum_ns;
+	u64 min_ns;
+	u64 max_ns;
+	u64 over;
+	/* v1.2：不能对负时间差取绝对值就当没发生（合并唤醒/时钟调整时真实存在） */
+	u64 neg;
+	s64 min_signed_ns;
+	s64 max_signed_ns;
+};
+
+static struct plc_probe_series plc_ps_start = { .name = "start_lat", .min_ns = ~0ULL };
+static struct plc_probe_series plc_ps_exec = { .name = "exec", .min_ns = ~0ULL };
+static struct plc_probe_series plc_ps_resp = { .name = "response", .min_ns = ~0ULL };
+static u64 plc_probe_miss;
+/* 被"合并掉"的释放次数：回调把 pending 加了几次，任务只消费一次，
+ * 中间那些 release 没有人处理。>0 就说明 r_k/s_k 不是一一对应的。 */
+static u64 plc_probe_backlog;
+/* 探针用的相对期限（ns），由 runner_init 依据 cycletest_deadline_us 换算。
+ * 放在这里（而不是参数区）是因为 plc_probe_mark() 在源文件更靠前的位置就要用。 */
+static s64 plc_probe_deadline_ns;
+
+static void plc_probe_reset_one(struct plc_probe_series *s, const char *name)
+{
+	int i;
+
+	for (i = 0; i < PLC_PROBE_BUCKETS; i++)
+		s->hist[i] = 0;
+	s->name = name;
+	s->n = 0;
+	s->sum_ns = 0;
+	s->min_ns = ~0ULL;
+	s->max_ns = 0;
+	s->over = 0;
+	s->neg = 0;
+	s->min_signed_ns = (s64)0x7FFFFFFFFFFFFFFFLL;   /* 不能用 ULLONG_MAX（转 s64 是 -1） */
+	s->max_signed_ns = 0;
+}
+
+static bool plc_probe_dumped;	/* dump 幂等：delete 与 exit 只会输出一次 */
+
+static void plc_probe_reset_all(void)
+{
+	plc_probe_reset_one(&plc_ps_start, "start_lat");
+	plc_probe_reset_one(&plc_ps_exec, "exec");
+	plc_probe_reset_one(&plc_ps_resp, "response");
+	plc_probe_miss = 0;
+	plc_probe_backlog = 0;
+	plc_probe_dumped = false;
+}
+
+static void plc_probe_add(struct plc_probe_series *s, s64 v_ns)
+{
+	u64 a = (u64)(v_ns < 0 ? -v_ns : v_ns);
+	unsigned long us;
+
+	if (v_ns < 0)
+		s->neg++;
+	if (v_ns < s->min_signed_ns)
+		s->min_signed_ns = v_ns;
+	if (v_ns > s->max_signed_ns)
+		s->max_signed_ns = v_ns;
+
+	us = (unsigned long)div_u64(a, 1000);
+	if (us >= PLC_PROBE_BUCKETS) {
+		s->over++;
+		us = PLC_PROBE_BUCKETS - 1;
+	}
+	s->hist[us]++;
+	s->n++;
+	s->sum_ns += a;
+	if (a < s->min_ns)
+		s->min_ns = a;
+	if (a > s->max_ns)
+		s->max_ns = a;
+}
+
+static unsigned long plc_probe_pctl(const struct plc_probe_series *s, u32 ppm)
+{
+	u64 c = 0;
+	unsigned long target;
+	int k;
+
+	if (!s->n)
+		return 0;
+	target = (unsigned long)div_u64(s->n * (u64)ppm + 999999ULL, 1000000ULL);
+	for (k = 0; k < PLC_PROBE_BUCKETS; k++) {
+		c += s->hist[k];
+		if (c >= target)
+			return (unsigned long)k;
+	}
+	return PLC_PROBE_BUCKETS - 1;
+}
+
+/* 任务侧：进入等待前调用一次 —— 此刻本拍的工作已经做完，所以这就是 f_k。
+ *
+ * 重要：不能拿「下一拍的 s_{k+1}」当 f_k。两者差一整个周期（实测 exec 会变成
+ * 978~1022 µs，而不是 1 µs 级），并且会把 miss 算成 100%。 */
+static void plc_probe_mark_finish(struct plc_cyclic_timer *ct)
+{
+	if (!probe_rsf || !ct->probe_have_prev)
+		return;
+	ct->probe_f = ktime_get();
+	ct->probe_have_f = true;
+}
+
+/* 任务侧：从等待中返回时调用一次（s_k；并结算上一拍的 exec / response / miss） */
+static void plc_probe_mark(struct plc_cyclic_timer *ct)
+{
+	ktime_t s;
+
+	if (!probe_rsf)
+		return;
+
+	s = ktime_get();
+	if (!ktime_to_ns(ct->probe_r)) {	/* 首拍只建基线 */
+		ct->probe_prev_s = s;
+		ct->probe_prev_r = ct->probe_r;
+		ct->probe_have_prev = true;
+		ct->probe_have_f = false;
+		return;
+	}
+	plc_probe_add(&plc_ps_start, ktime_to_ns(ktime_sub(s, ct->probe_r)));
+
+	if (ct->probe_have_prev && ct->probe_have_f) {
+		s64 exec_ns = ktime_to_ns(ktime_sub(ct->probe_f, ct->probe_prev_s));
+		s64 resp_ns = ktime_to_ns(ktime_sub(ct->probe_f, ct->probe_prev_r));
+
+		plc_probe_add(&plc_ps_exec, exec_ns);
+		plc_probe_add(&plc_ps_resp, resp_ns);
+		if (resp_ns > (plc_probe_deadline_ns > 0
+				       ? plc_probe_deadline_ns
+				       : ktime_to_ns(ct->interval)))
+			plc_probe_miss++;
+	}
+	ct->probe_prev_s = s;
+	ct->probe_prev_r = ct->probe_r;
+	ct->probe_have_prev = true;
+	ct->probe_have_f = false;	/* 等本拍的 finish 再置 */
+}
+
+/* 输出与用户态同一块文本（probe_report__统一探针报告.py 可直接解析） */
+static void plc_probe_dump(void)
+{
+	struct plc_probe_series *arr[3];
+	int i;
+
+	if (!probe_rsf || !plc_ps_start.n || plc_probe_dumped)
+		return;
+	plc_probe_dumped = true;
+
+	arr[0] = &plc_ps_start;
+	arr[1] = &plc_ps_exec;
+	arr[2] = &plc_ps_resp;
+
+	pr_info("PLCPROBE # probe: r/s/f v1\n");
+	pr_info("PLCPROBE # period_ns: %lld\n", ktime_to_ns(fused_cyclic.interval));
+	pr_info("PLCPROBE # deadline_ns: %lld\n",
+		plc_probe_deadline_ns > 0 ? plc_probe_deadline_ns
+					  : ktime_to_ns(fused_cyclic.interval));
+	pr_info("PLCPROBE # samples: %llu\n", plc_ps_start.n);
+	/* 内核宿主是"回调置位 + 任务醒来消费"，所以这里如实标注配对方式：
+	 * r_k 由回调写下，s_k/f_k 由任务侧写下，两者靠 probe_have_* 配对；
+	 * backlog 统计"回调次数 - 任务消费次数"，>0 说明有过合并唤醒。 */
+	pr_info("PLCPROBE # release_id: callback/consumer paired, backlog=%llu\n",
+		plc_probe_backlog);
+	pr_info("PLCPROBE # series_us: start_lat exec response  (1us buckets, cap %d)\n",
+		PLC_PROBE_BUCKETS - 1);
+	for (i = 0; i < 3; i++) {
+		struct plc_probe_series *s = arr[i];
+		u64 avg = s->n ? div_u64(s->sum_ns, (u32)s->n) : 0;
+
+		pr_info("PLCPROBE # stat_%s_us: min=%llu.%03llu avg=%llu.%03llu "
+			"p50=%lu p90=%lu p99=%lu p99.9=%lu p99.99=%lu max=%llu.%03llu "
+			"over=%llu neg=%llu min_signed=%lld.%03lld n=%llu\n",
+			s->name,
+			s->min_ns / 1000, s->min_ns % 1000,
+			avg / 1000, avg % 1000,
+			plc_probe_pctl(s, 500000), plc_probe_pctl(s, 900000),
+			plc_probe_pctl(s, 990000), plc_probe_pctl(s, 999000),
+			plc_probe_pctl(s, 999900),
+			s->max_ns / 1000, s->max_ns % 1000, s->over, s->neg,
+			s->n ? s->min_signed_ns / 1000 : 0,
+			s->n ? (s->min_signed_ns < 0 ? -(s->min_signed_ns % 1000)
+						     : s->min_signed_ns % 1000) : 0,
+			s->n);
+	}
+	pr_info("PLCPROBE # deadline_miss: %llu/%llu (%s)\n",
+		plc_probe_miss, plc_ps_start.n, plc_probe_miss ? "FAIL" : "none");
+
+	/* 稀疏直方图（画 CDF 用）。一桶一行：pr_info 单行有长度上限，
+	 * 长尾若被截断，CDF 会「看起来更漂亮」——那正是必须避免的失真。 */
+	for (i = 0; i < 3; i++) {
+		struct plc_probe_series *s = arr[i];
+		int k;
+
+		for (k = 0; k < PLC_PROBE_BUCKETS; k++)
+			if (s->hist[k])
+				pr_info("PLCPROBE # hist_%s_us: %d %lu\n",
+					s->name, k, s->hist[k]);
+		if (s->over)
+			pr_info("PLCPROBE # hist_%s_us: over %llu\n",
+				s->name, s->over);
+	}
+}
+
 static struct plc_shm *plc_shm;
 static struct miscdevice plc_misc;
 static bool plc_misc_registered;
@@ -157,6 +391,9 @@ static int jitter_probe_cpu = 3;
 static int timerthread_cpu = -1;
 static bool probe_rt_enable = true;
 static ulong cycletest_interval_us = 1000;
+/* 探针用相对期限（µs）。0 = 沿用周期。
+ * ECoS 契约里 deadline_us 是独立字段，不能默认 D == T。 */
+static ulong cycletest_deadline_us;
 static bool shutdown_request;
 
 static char runner_profile_str[32] = "fused";
@@ -171,18 +408,17 @@ static int clock_abs_enable = 1;
 static bool jitter_compensation_enable = true;
 static int jitter_resync_thresh_ns = 0;
 static int jitter_ewma_ignore_ns = 2000;
+/* 唤醒目标偏置校准（ns，默认 0=旧行为）。详见 struct plc_hr_comp_cfg.bias_ns 注释：
+ * 只平移抖动分布以最小化 abs_max，不改变峰峰值。 */
+static int jitter_comp_bias_ns = 0;
 static bool jitter_spike_log_enable;
 static bool fused_hist_enable = true;
 static bool fused_wake_timertthread = true;
 static bool fused_ringbuf_enable = true;
 
-#define FUSED_EWMA_ALPHA		16
-#define FUSED_EWMA_SHIFT		4
-#define FUSED_MAX_COMPENSATION_NS	500LL
-#define FUSED_COMP_WARMUP_SAMPLES	64
+#define FUSED_COMP_WARMUP_SAMPLES	PLC_HR_COMP_WARMUP
 
-static s64 fused_jitter_ewma_ns;
-static s64 fused_jitter_compensation_ns;
+static struct plc_hr_comp_state fused_comp;
 static u32 fused_spike_resync_count;
 static unsigned int measure_grace_ticks;
 static unsigned int measure_grace_default = 128;
@@ -192,6 +428,9 @@ module_param(jitter_probe_cpu, int, 0644);
 module_param(timerthread_cpu, int, 0644);
 module_param(probe_rt_enable, bool, 0644);
 module_param(cycletest_interval_us, ulong, 0644);
+module_param(cycletest_deadline_us, ulong, 0644);
+MODULE_PARM_DESC(cycletest_deadline_us,
+		 "相对期限 µs（0 = 等于 period）；探针的 miss 判据 f_k > r_k + D");
 module_param_string(runner_profile, runner_profile_str, sizeof(runner_profile_str), 0644);
 module_param_string(ring_export_path, ring_export_path, sizeof(ring_export_path), 0644);
 module_param_string(plc_tdma_periods_us, plc_tdma_periods_str,
@@ -203,12 +442,31 @@ module_param(jitter_compensation_enable, bool, 0644);
 module_param(jitter_resync_thresh_ns, int, 0644);
 module_param(measure_grace_default, uint, 0644);
 module_param(jitter_ewma_ignore_ns, int, 0644);
+module_param(jitter_comp_bias_ns, int, 0644);
 module_param(jitter_spike_log_enable, bool, 0644);
 module_param(fused_hist_enable, bool, 0644);
 module_param(fused_wake_timertthread, bool, 0644);
 module_param(fused_ringbuf_enable, bool, 0644);
 
 extern void *timerthread(void *param);
+
+static bool runner_should_stop(void)
+{
+	return READ_ONCE(shutdown_requested);
+}
+
+static struct plc_hr_comp_cfg runner_comp_cfg(void)
+{
+	struct plc_hr_comp_cfg cfg = {
+		.enabled = true,
+		.ignore_above_ns = jitter_ewma_ignore_ns,
+		.max_comp_ns = PLC_HR_DEFAULT_MAX_COMP_NS,
+		.bias_ns = jitter_comp_bias_ns,
+	};
+
+	cfg.enabled = jitter_compensation_enable;
+	return cfg;
+}
 
 static bool fused_is_spike(s64 jitter_ns)
 {
@@ -265,29 +523,14 @@ static void configure_rt_fifo(int prio, const char *role)
 
 static void fused_comp_reset(void)
 {
-	fused_jitter_ewma_ns = 0;
-	fused_jitter_compensation_ns = 0;
+	plc_hr_comp_reset(&fused_comp);
 	fused_cyclic.comp_warmup = 0;
 }
 
 static inline void fused_update_compensation(s64 jitter_ns)
 {
-	s64 aj = jitter_ns < 0 ? -jitter_ns : jitter_ns;
-
-	if (jitter_ewma_ignore_ns > 0 && aj > jitter_ewma_ignore_ns)
-		return;
-
-	fused_jitter_ewma_ns = ((FUSED_EWMA_ALPHA - 1) * fused_jitter_ewma_ns + jitter_ns)
-		>> FUSED_EWMA_SHIFT;
-
-	if (!jitter_compensation_enable)
-		return;
-
-	fused_jitter_compensation_ns = fused_jitter_ewma_ns;
-	if (fused_jitter_compensation_ns > FUSED_MAX_COMPENSATION_NS)
-		fused_jitter_compensation_ns = FUSED_MAX_COMPENSATION_NS;
-	else if (fused_jitter_compensation_ns < -FUSED_MAX_COMPENSATION_NS)
-		fused_jitter_compensation_ns = -FUSED_MAX_COMPENSATION_NS;
+	struct plc_hr_comp_cfg cfg = runner_comp_cfg();
+	plc_hr_comp_update(&fused_comp, &cfg, jitter_ns);
 }
 
 static void fused_fast_reset(u64 interval_ns)
@@ -329,11 +572,10 @@ static void fused_resync_timer_phase(struct plc_cyclic_timer *ct, ktime_t now)
 
 static void fused_schedule_abs_timer(struct plc_cyclic_timer *ct)
 {
-	ct->next_abs = ct->next_nominal;
-	if (jitter_compensation_enable &&
-	    ct->comp_warmup > FUSED_COMP_WARMUP_SAMPLES)
-		ct->next_abs = ktime_sub_ns(ct->next_abs,
-					    fused_jitter_compensation_ns);
+	struct plc_hr_comp_cfg cfg = runner_comp_cfg();
+
+	ct->next_abs = plc_hr_abs_next(ct->next_nominal, ct->interval,
+				       &fused_comp, &cfg, ct->comp_warmup);
 	hrtimer_start(&ct->hr, ct->next_abs, HRTIMER_MODE_ABS_PINNED_HARD);
 }
 
@@ -445,6 +687,9 @@ static enum hrtimer_restart plc_cyclic_handler(struct hrtimer *timer)
 		}
 	}
 
+	if (probe_rsf)
+		ct->probe_r = ct->next_nominal;	/* r_k：本拍的标称释放时刻 */
+
 	if (ct->task && fused_wake_timertthread) {
 		atomic_inc(&ct->pending);
 		wake_up_process(ct->task);
@@ -529,59 +774,29 @@ static void plc_misc_exit(void)
 
 int plc_ktime_get_ts(int clk_id, struct plc_timespec *ts)
 {
-    u64 ns = ktime_get_ns();
-
-    (void)clk_id;
-    ts->tv_sec = div_u64(ns, NSEC_PER_SEC);
-    ts->tv_nsec = (long)(ns - (u64)ts->tv_sec * NSEC_PER_SEC);
-    return 0;
+	return plc_hr_ktime_get_ts(clk_id, ts);
 }
 
 int plc_sleep(int clockid, int flags, struct plc_timespec *request,
-              struct plc_timespec *remain)
+	      struct plc_timespec *remain)
 {
-    u64 ns;
-    u64 slept;
-    const u64 chunk_ns = 100 * NSEC_PER_USEC;
+	int ret;
 
-    (void)clockid;
-    (void)flags;
-    (void)remain;
+	(void)clockid;
+	(void)flags;
+	if (READ_ONCE(shutdown) || READ_ONCE(shutdown_requested))
+		return 0;
 
-    if (!request)
-        return 0;
-
-    ns = (u64)request->tv_sec * NSEC_PER_SEC + (u64)request->tv_nsec;
-    if (!ns)
-        return 0;
-
-    for (slept = 0; slept < ns; ) {
-        u64 step = ns - slept;
-        ktime_t expire;
-
-        if (READ_ONCE(shutdown) || READ_ONCE(shutdown_requested))
-            return 0;
-        if (fatal_signal_pending(current))
-            return -EINTR;
-
-        if (step > chunk_ns)
-            step = chunk_ns;
-
-        if (step < 50 * NSEC_PER_USEC) {
-            u32 us = div_u64(step + NSEC_PER_USEC - 1, NSEC_PER_USEC);
-
-            usleep_range(us, us + 1);
-        } else {
-            expire = ktime_add_ns(ktime_get(), step);
-            set_current_state(TASK_INTERRUPTIBLE);
-            schedule_hrtimeout(&expire, HRTIMER_MODE_ABS);
-            __set_current_state(TASK_RUNNING);
-        }
-        slept += step;
-		cond_resched();
-	}
-
-	return fatal_signal_pending(current) ? -EINTR : 0;
+	plc_probe_mark_finish(&fused_cyclic);	/* 本拍工作结束 = f_k */
+	ret = plc_hr_timespec_sleep(
+		(const struct plc_timespec *)request,
+		(struct plc_timespec *)remain);
+	if (ret == -EINTR &&
+	    (READ_ONCE(shutdown) || READ_ONCE(shutdown_requested)))
+		return 0;
+	if (ret == 0)
+		plc_probe_mark(&fused_cyclic);	/* 绝对定时睡眠返回 = 本拍开始 */
+	return ret;
 }
 
 int plc_nanosleep(const struct plc_timespec *req, struct plc_timespec *rem)
@@ -655,6 +870,9 @@ int plc_timer_create(int clockid, void *sevp, void **timerid)
 	atomic_set(&ct->pending, 0);
 	atomic_set(&ct->overrun_acc, 0);
 	ct->interval = ns_to_ktime((u64)cycletest_interval_us * 1000ULL);
+	ct->probe_have_prev = false;
+	ct->probe_r = 0;
+	plc_probe_reset_all();	/* 每次 create/settime 都从零开始计数 */
 	ct->next_nominal = ktime_add_ns(ktime_get(), ct->interval);
 	ct->next_abs = ct->next_nominal;
 	ct->comp_warmup = 0;
@@ -682,6 +900,9 @@ int plc_timer_settime(void *timerid, int flags,
 
 	ct->interval = ns_to_ktime(interval_ns);
 	fused_fast_reset(interval_ns);
+	ct->probe_have_prev = false;
+	ct->probe_r = 0;
+	plc_probe_reset_all();	/* 每次 create/settime 都从零开始计数 */
 	ct->next_nominal = ktime_add_ns(ktime_get(), ct->interval);
 	ct->next_abs = ct->next_nominal;
 	hrtimer_start(&ct->hr, ct->next_abs, HRTIMER_MODE_ABS_PINNED_HARD);
@@ -707,6 +928,7 @@ int plc_timer_delete(void *timerid)
 	ct->active = false;
 	ct->task = NULL;
 	fused_fast.active = false;
+	plc_probe_dump();		/* 计时器销毁时输出统一探针块 */
 	return 0;
 }
 
@@ -740,13 +962,22 @@ int plc_sigwait(const unsigned long *set, int *sig)
 	long ret;
 
 	(void)set;
+	plc_probe_mark_finish(ct);	/* 本拍工作结束 = f_k */
 	for (;;) {
 		if (READ_ONCE(shutdown) || READ_ONCE(shutdown_requested))
 			return -EINTR;
 		if (atomic_read(&ct->pending) > 0) {
-			atomic_dec(&ct->pending);
+			/* 先读旧值再减：>1 说明这期间有好几次释放被合并到这一拍 */
+			{
+				int _p = atomic_read(&ct->pending);
+
+				atomic_dec(&ct->pending);
+				if (_p > 1)
+					plc_probe_backlog += (u64)(_p - 1);
+			}
 			if (sig)
 				*sig = FUSED_CYCLIC_SIG;
+			plc_probe_mark(ct);
 			return 0;
 		}
 		ret = wait_event_interruptible(ct->waitq,
@@ -987,6 +1218,7 @@ static int __init runner_init(void)
 	use_nsecs = 1;
 	shutdown = 0;
 	shutdown_requested = false;
+	plc_hr_set_stop_hook(runner_should_stop);
 	init_completion(&fused_worker_done);
 
 	fused_stat = kzalloc(sizeof(*fused_stat), GFP_KERNEL);
@@ -1022,6 +1254,10 @@ static int __init runner_init(void)
 	fused_par->clock = CLOCK_MONOTONIC;
 	fused_par->signal = FUSED_CYCLIC_SIG;
 	fused_par->interval = cycletest_interval_us;
+	/* 探针用的相对期限（ns）。0 = 沿用周期，与旧行为一致 */
+	plc_probe_deadline_ns = (cycletest_deadline_us > 0)
+				    ? (s64)cycletest_deadline_us * 1000
+				    : (s64)cycletest_interval_us * 1000;
 	fused_par->cpu = effective_timerthread_cpu();
 	fused_par->node = -1;
 	fused_par->tnum = 0;
@@ -1076,6 +1312,7 @@ static void __exit runner_exit(void)
 	fused_export_samples_file();
 	fused_dump_samples();
 	fused_print_summary("final");
+	plc_probe_dump();	/* 兜底：用户态没调 delete 时也输出统一探针块 */
 
 	debugfs_remove(fused_stats_reset_dentry);
 	debugfs_remove(fused_stats_dentry);

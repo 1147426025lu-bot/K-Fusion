@@ -71,6 +71,7 @@ _LET_C = """/* ecos_let_jobs.c —— 由 ECoS 融合方案生成的 LET 作业�
  */
 #include "ecos_let_jobs.h"
 
+%(stage_protos)s
 %(job_fns)s
 
 const struct plc_let_job %(name)s_jobs[] = {
@@ -166,6 +167,21 @@ def _ns(us):
     return int(round(float(us) * 1000.0)) if us is not None else 0
 
 
+def _ident(s):
+    out = []
+    for ch in s or "":
+        out.append(ch if (ch.isalnum() or ch == "_") else "_")
+    t = "".join(out)
+    return t if t and not t[:1].isdigit() else ("j_" + t)
+
+
+def _call_stmt(stage):
+    c = (stage.call or ("%s()" % stage.name)).strip()
+    if c.endswith(";"):
+        return c
+    return c + ";"
+
+
 def emit(ir, name, let_frac=0.8, skip_missed=True, loops=0):
     """从 FusionIR 生成 LET 作业表 + 入口。
 
@@ -196,20 +212,73 @@ def emit(ir, name, let_frac=0.8, skip_missed=True, loops=0):
 
     job_fns, entries = [], []
     exec_parts = []
-    for i, g in enumerate(ir.groups):
-        fn_name = "ecos_let_fn_%s" % g.body  # ecos_body_gN
-        phase_us = g.phase_us if g.phase_us is not None else 0.0
-        phase_ns = _ns(phase_us)
-        exec_parts.append("%.2f" % g.exec_us)
+    events = list(getattr(ir, "let_events", None) or [])
+    prio = 1
+
+    def add_job(jname, fn_name, body_lines, phase_us, window_ns, comment):
+        nonlocal prio
         job_fns.append(
-            "static void %s(void *ctx)\n{\n\t(void)ctx;\n\t%s();\t/* 组 %s："
-            "相位 %.0f µs，执行 ≈%.2f µs */\n}"
-            % (fn_name, g.body, g.gid, phase_us, g.exec_us))
+            "static void %s(void *ctx)\n{\n\t(void)ctx;\n%s}\t/* %s */"
+            % (fn_name, body_lines, comment))
         entries.append(
             "\t{ .name = \"%s\", .fn = %s, .ctx = NULL,\n"
             "\t  .period_ns = %d, .phase_ns = %d,\n"
             "\t  .let_ns = %d, .prio = %d, .flags = %s },"
-            % (g.gid, fn_name, period_ns, phase_ns, let_ns, i + 1, flags))
+            % (jname, fn_name, period_ns, _ns(phase_us),
+               max(int(window_ns), 1000), prio, flags))
+        prio += 1
+
+    for i, g in enumerate(ir.groups):
+        phase_us = g.phase_us if g.phase_us is not None else 0.0
+        exec_parts.append("%.2f" % g.exec_us)
+        names = {s.name for s in g.stages}
+        gevents = [e for e in events if e.get("stage") in names]
+        defer = set()
+        pin_us = []
+        for e in gevents:
+            kind = e.get("kind")
+            at = float(e.get("at_us") or 0)
+            pin_us.append(at)
+            if kind == "output_commit":
+                defer.add(e.get("stage"))
+            elif kind == "input_snapshot" and abs(at - phase_us) > 1e-6:
+                defer.add(e.get("stage"))
+
+        compute = [s for s in g.stages if s.name not in defer]
+        if gevents:
+            # 计算 LET 窗口止于本拍最早的提交/快照钉扎
+            later = [u for u in pin_us if u > phase_us + 1e-9]
+            win = _ns(min(later) - phase_us) if later else let_ns
+            if compute:
+                lines = "".join("\t%s\t/* %s */\n" % (_call_stmt(s), s.name)
+                                for s in compute)
+                add_job(g.gid, "ecos_let_fn_%s" % g.body, lines, phase_us, win,
+                        "组 %s 计算 @%.0f µs；钉扎阶段另表提交/采样" % (g.gid, phase_us))
+            by_name = {s.name: s for s in g.stages}
+            for e in sorted(gevents, key=lambda x: float(x.get("at_us") or 0)):
+                st = by_name.get(e.get("stage"))
+                if st is None:
+                    continue
+                at = float(e.get("at_us") or 0)
+                remain = period_us - at
+                win_e = _ns(remain) if remain > 0 else 1000
+                kind = e.get("kind") or "let"
+                fn = "ecos_let_fn_%s_%s" % (kind, _ident(st.name))
+                lines = "\t%s\t/* %s @%.0f µs */\n" % (_call_stmt(st), st.name, at)
+                add_job("%s_%s" % (kind, st.name), fn, lines, at, win_e,
+                        "%s 钉扎 %s" % (kind, st.name))
+        else:
+            fn_name = "ecos_let_fn_%s" % g.body
+            job_fns.append(
+                "static void %s(void *ctx)\n{\n\t(void)ctx;\n\t%s();\t/* 组 %s："
+                "相位 %.0f µs，执行 ≈%.2f µs */\n}"
+                % (fn_name, g.body, g.gid, phase_us, g.exec_us))
+            entries.append(
+                "\t{ .name = \"%s\", .fn = %s, .ctx = NULL,\n"
+                "\t  .period_ns = %d, .phase_ns = %d,\n"
+                "\t  .let_ns = %d, .prio = %d, .flags = %s },"
+                % (g.gid, fn_name, period_ns, _ns(phase_us), let_ns, prio, flags))
+            prio += 1
 
     jobs_h = _LET_H % {
         "ngroups": ngroups,
@@ -219,11 +288,28 @@ def emit(ir, name, let_frac=0.8, skip_missed=True, loops=0):
         "evidence": ir.evidence,
         "name": name,
     }
+    proto_lines, seen_fn = [], set()
+    for g in ir.groups:
+        for s in g.stages:
+            raw = (s.call or ("%s()" % s.name)).strip().rstrip(";")
+            fn = raw.split("(", 1)[0].strip()
+            if not fn or fn in seen_fn:
+                continue
+            seen_fn.add(fn)
+            inside = ""
+            if "(" in raw:
+                inside = raw[raw.find("(") + 1:raw.rfind(")")].strip()
+            if inside:
+                proto_lines.append("void %s();" % fn)
+            else:
+                proto_lines.append("void %s(void);" % fn)
+
     jobs_c = _LET_C % {
         "name": name,
         "let_frac": let_frac_str,
         "exec": "/".join(exec_parts) if exec_parts else "0",
         "flags": flags,
+        "stage_protos": ("\n".join(proto_lines) + "\n") if proto_lines else "",
         "job_fns": "\n\n".join(job_fns),
         "entries": "\n".join(entries),
     }

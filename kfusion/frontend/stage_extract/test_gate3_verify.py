@@ -134,6 +134,35 @@ class VerifyGeneratedUnit(unittest.TestCase):
                                       expected_xdom_subs=1, expected_xdom_pubs=1)
         self.assertTrue(rep["ok"], "跨域桥数量吻合应通过：%s" % rep["errors"])
 
+    def test_multi_group_global_hook_indices(self):
+        """多组方案：钩子索引跨组累加（g0 用 0，g1 接着用 1），不是每组从 0 开始。
+
+        回归 bug：曾按「块内位置」却拿全局 stages 下标配对，导致 g1 的阶段
+        拿到 enter_idx=None 而残留在 [1]，误报「非连续 / 未包裹」，
+        把合法的 LET 多作业产物拦下来（emit --target let 返回 3）。
+        """
+        body = (
+            "void ecos_body_g0(void)\n{\n"
+            "\tecos_stage_enter(0);\n"
+            "\ta();\t/* a，相位 0 µs */\n"
+            "\tecos_stage_exit(0);\n"
+            "}\n"
+            "void ecos_body_g1(void)\n{\n"
+            "\tecos_stage_enter(1);\n"
+            "\tb();\t/* b，相位 500 µs */\n"
+            "\tecos_stage_exit(1);\n"
+            "}\n")
+        plan = {"groups": [{"id": "g0", "members": ["a"]},
+                           {"id": "g1", "members": ["b"]}]}
+        rep = verify_generated.verify(body, plan=plan)
+        self.assertTrue(rep["ok"], "多组累加索引应通过：%s" % rep["errors"])
+        self.assertEqual([s["enter_idx"] for s in rep["parsed"]["stages"]], [0, 1])
+        # 反向：把 g1 的钩子改成 3（跳号）必须被抓出
+        bad = body.replace("ecos_stage_enter(1)", "ecos_stage_enter(3)")
+        rep2 = verify_generated.verify(bad, plan=plan)
+        self.assertFalse(rep2["ok"])
+        self.assertTrue(any("连续" in e for e in rep2["errors"]))
+
 
 class EventInterpreterUnit(unittest.TestCase):
     def _teir(self, edges):

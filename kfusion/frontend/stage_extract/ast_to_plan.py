@@ -331,7 +331,6 @@ def main():
            "--platforms", a.platforms, "--platform", a.domain,
            "--exec-us", json.dumps(ex, ensure_ascii=False),
            "--release-cost-us", str(a.release_cost_us),
-           "--contract", contract_p,
            "-o", plan_p, "--quiet"]
     print("== 调用规划器 ==", file=sys.stderr)
     rc = subprocess.call(cmd)
@@ -341,6 +340,18 @@ def main():
         return rc
     if not os.path.isfile(plan_p):
         raise SystemExit("ast_to_plan: 规划器没有产出 plan.json")
+
+    # 本机 fusion_plan 不写 verification；用 temporal PlanVerifier 签署（不调用规划器）
+    _VERIFY = os.path.join(_REPO, "kfusion", "scripts", "ecos", "plan_verify.py")
+    if os.path.isfile(_VERIFY):
+        rc_v = subprocess.call([
+            sys.executable, _VERIFY, "--dag", dag_p, "--plan", plan_p,
+            "--platforms", a.platforms, "--platform", a.domain, "--stamp-plan",
+        ])
+        if rc_v != 0:
+            print("ast_to_plan: PlanVerifier 拒绝该方案（exit %d）" % rc_v,
+                  file=sys.stderr)
+            return rc_v
 
     plan = _load(plan_p)
     ok = bool((plan.get("verification") or {}).get("ok"))

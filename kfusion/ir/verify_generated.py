@@ -36,20 +36,23 @@ def parse_body(text):
     blocks = re.split(r'(?m)^void\s+ecos_body_\w+\s*\(void\)\s*\{', text)
     stages = []
     for blk in blocks[1:]:
+        # 每个组自己一段：块内阶段数与块内钩子数配对。
+        # 注意钩子索引是**跨组累加**的全局序号（g0 用 0..，g1 接着往下排），
+        # 所以只能按块内位置配对，不能拿全局 stages 的下标去配。
+        blk_stages = []
         for line in blk.splitlines():
             m = _STAGE_RE.match(line)
             if m:
-                stages.append({"name": m.group(2), "call": m.group(1),
-                               "enter_idx": None, "exit_idx": None})
-        # 钩子索引：块内按顺序收集 enter/exit，按顺序与阶段配对
-        # （生成体里每个阶段恰有一对 enter/exit，且顺序一致）。
+                blk_stages.append({"name": m.group(2), "call": m.group(1),
+                                   "enter_idx": None, "exit_idx": None})
         enters = [int(x) for x in _ENTER_RE.findall(blk)]
         exits = [int(x) for x in _EXIT_RE.findall(blk)]
-        for i, st in enumerate(stages):
+        for i, st in enumerate(blk_stages):
             if i < len(enters):
                 st["enter_idx"] = enters[i]
             if i < len(exits):
                 st["exit_idx"] = exits[i]
+        stages.extend(blk_stages)
     n_sub = len(_SUB_RE.findall(text))
     n_pub = len(_PUB_RE.findall(text))
     return {"stages": stages, "xdom_subs": n_sub, "xdom_pubs": n_pub}

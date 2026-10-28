@@ -7,6 +7,6 @@ config BENCHMARK_FIVELOOP
 		Runs the r/s/f probe contract at 1 kHz.  Modes:
 		  fiveloop plan <cycles>   one release per period (fused)
 		  fiveloop flat <cycles>   one release per stage (A/B control)
-		The FNV-1a digest printed at the end must be identical for both
-		modes: that proves fusion changed only the release count, not the
-		sampled data stream.
+		  fiveloop shmwait         poll IVSHMEM for plan/flat commands
+		Init uses ecos_boot_main so shmwait runs even without a serial
+		console.  The FNV-1a digest must be identical for plan and flat.

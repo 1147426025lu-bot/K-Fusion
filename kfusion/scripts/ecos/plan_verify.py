@@ -450,3 +450,53 @@ def print_report(rep, plan=None, out=None):
     for w in rep["warnings"]:
         print("   ⚠ %s" % w, file=out)
     return 0 if rep["ok"] else 3
+
+
+def _load(path):
+    import json
+    with open(path, encoding="utf-8") as f:
+        return json.load(f)
+
+
+def main(argv=None):
+    import argparse
+    import json
+    ap = argparse.ArgumentParser(description="DAG 全局方案验证器（与 fusion_plan 分离）")
+    ap.add_argument("--dag", required=True)
+    ap.add_argument("--plan", required=True)
+    ap.add_argument("--platforms", required=True)
+    ap.add_argument("--platform", default="linux_kernel")
+    ap.add_argument("--stamp-plan", action="store_true",
+                    help="把 verification 写回 plan.json，供 emit.py 门禁")
+    ap.add_argument("-o", "--out", default=None)
+    args = ap.parse_args(argv)
+    dag = _load(args.dag)
+    plan = _load(args.plan)
+    caps = _load(args.platforms)
+    plats = [p for p in (caps.get("platforms") or []) if p.get("name") == args.platform]
+    if not plats:
+        plats = list(caps.get("platforms") or [])
+    if not plats:
+        print("!! 没有平台", file=sys.stderr)
+        return 2
+    rep = verify_plan(dag, plan, plats[0])
+    rc = print_report(rep, plan)
+    plan["verification"] = {
+        "ok": bool(rep.get("ok")),
+        "by": "kfusion/scripts/ecos/plan_verify.py",
+        "errors": rep.get("errors") or [],
+        "stats": rep.get("stats") or {},
+    }
+    if args.stamp_plan:
+        with open(args.plan, "w", encoding="utf-8") as f:
+            json.dump(plan, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as f:
+            json.dump(rep, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+    return rc
+
+
+if __name__ == "__main__":
+    sys.exit(main())

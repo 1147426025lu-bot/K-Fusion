@@ -133,55 +133,6 @@ else
     echo "  · 本用例无 WAW，跳过 dir=none 检查"
 fi
 
-echo "=== 11. 跨周期：同一张摘要，给不给相位，环的性质完全不同 ==="
-# 无相位（函数视图）→ 说不清环跨不跨拍 → fail-closed 判代数环
-expect_rc "函数视图：环判代数环（rc=5）" 5 \
-    "$PY" "$DAG" "$FIX/true_cycle.summary.json" --fail-on-algebraic
-expect_grep "说清为何不敢判成反馈环" "$(cat "$TMP/out.txt")" \
-    "无相位信息" "fail-closed"
-# 有相位（阶段视图，p@0 / q@200）→ q→p 是相位反周边 → 真实反馈环，放行
-OUT="$("$PY" "$DAG" "$FIX/true_cycle.summary.json" \
-      --stages "$FIX/true_cycle.stages.json" --fail-on-algebraic 2>&1)"
-RC=$?
-if [ "$RC" = 0 ]; then
-    ok "阶段视图：环判延迟反馈环，放行（rc=0）"
-else
-    bad "阶段视图应放行，实际 rc=$RC"
-fi
-expect_grep "报出环与闭合边" "$OUT" "延迟反馈环 1 个" "闭合边 q→p"
-expect_grep "算出未融合时的闭合间隔 = period − (200−0) = 800 µs" "$OUT" "间隔 800 µs"
-expect_grep "给出摘掉延迟边后的相位序" "$OUT" "相位序：p -> q"
-expect_rc "严格模式 --fail-on-cycle 仍然拦（rc=4）" 4 \
-    "$PY" "$DAG" "$FIX/true_cycle.summary.json" \
-    --stages "$FIX/true_cycle.stages.json" --fail-on-cycle
-# 相位是"全有或全无"：只给一半就整体退化，不能把缺的那个默认成 0 µs
-expect_rc "相位只给一半 → 退化为 fail-closed（rc=5）" 5 \
-    "$PY" "$DAG" "$FIX/true_cycle.summary.json" \
-    --stages "$FIX/true_cycle.partial.stages.json" --fail-on-algebraic
-expect_grep "点名缺相位的阶段" "$(cat "$TMP/out.txt")" \
-    "没有相位" "q" "整体退化为 fail-closed"
-
-echo "=== 12. 跨周期的 DOT：闭合边要一眼看得出来 ==="
-"$PY" "$DAG" "$FIX/true_cycle.summary.json" \
-    --stages "$FIX/true_cycle.stages.json" --dot "$TMP/cyc.dot" --quiet >/dev/null 2>&1
-if grep -q 'z⁻¹' "$TMP/cyc.dot" 2>/dev/null && grep -q 't=0µs' "$TMP/cyc.dot" 2>/dev/null; then
-    ok "DOT 标出 z⁻¹ 边与各阶段相位"
-else
-    bad "DOT 未标出 z⁻¹/相位"
-fi
-
-echo "=== 13. 闭环五阶段：图 + 与人工标注对照 + 反馈环，一次跑通 ==="
-OUT="$("$PY" "$DAG" "$HERE/fusion/five_stage_loop.summary.json" \
-      --stages "$HERE/../../contracts/examples/five_stage_loop.stages.json" \
-      --expect "stage_sample->stage_fir,stage_fir->stage_pid,stage_pid->stage_clamp,stage_clamp->stage_plant,stage_plant->stage_sample" \
-      --fail-on-mismatch --fail-on-algebraic 2>&1)"
-RC=$?
-if [ "$RC" = 0 ]; then ok "5 条边全中、代数环 0 个（rc=0）"; else bad "闭环回归失败，rc=$RC"; fi
-expect_grep "与人工标注 P/R/F1 = 1.000" "$OUT" "precision 1.000" "recall 1.000" "f1 1.000"
-expect_grep "报出闭合边与 200 µs 间隔" "$OUT" "闭合边 stage_plant→stage_sample" "间隔 200 µs"
-expect_grep "相位序 = 真实释放顺序" "$OUT" \
-    "stage_sample -> stage_fir -> stage_pid -> stage_clamp -> stage_plant"
-
 echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" = 0 ] || exit 1

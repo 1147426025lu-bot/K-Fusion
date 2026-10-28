@@ -132,7 +132,8 @@ ktime_t plc_hr_abs_next(ktime_t next_nominal, ktime_t interval,
 	bool comp_on = !cfg || cfg->enabled;
 
 	if (st && comp_on && comp_warmup > PLC_HR_COMP_WARMUP)
-		next_abs = ktime_sub_ns(next_abs, st->comp_ns);
+		next_abs = ktime_sub_ns(next_abs,
+					st->comp_ns + (cfg ? cfg->bias_ns : 0));
 	if (ktime_before(next_abs, now))
 		next_abs = ktime_add_ns(now, interval);
 	return next_abs;

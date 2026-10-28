@@ -177,6 +177,7 @@ class FusionIR(object):
         ir.complement = complement
         ir.digest_vars = [v for v in (digest_vars or []) if v]
         ir.probe = bool(probe)
+        ir.let_events = list(plan.get("let_events") or [])
 
         # ---- 跨域接线（PR10-C）----
         # xdom 是拆分器写的 per-domain meta：本域要发布/订阅哪些全局。

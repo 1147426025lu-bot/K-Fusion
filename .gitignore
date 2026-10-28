@@ -108,3 +108,6 @@ crtos/results/xlat/**/*.bin
 
 # --- 零散构建残渣 ---
 **/_k.tgz
+
+# 临时审查快照（从 Pi 拉回对比用，不入库）
+.review/

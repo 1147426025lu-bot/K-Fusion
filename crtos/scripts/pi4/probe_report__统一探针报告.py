@@ -32,27 +32,17 @@ PAT = {
     "probe": re.compile(r"^#\s*probe:\s*(.+?)\s*$"),
     "period": re.compile(r"^#\s*period_ns:\s*(\d+)"),
     "samples": re.compile(r"^#\s*samples:\s*(\d+)"),
-    "deadline": re.compile(r"^#\s*deadline_ns:\s*(\d+)"),
-    "release": re.compile(r"^#\s*release_id:\s*(.+?)\s*$"),
     "miss": re.compile(r"^#\s*deadline_miss:\s*(\d+)/(\d+)"),
     "overrun": re.compile(r"^#\s*exec_overrun:\s*(\d+)/(\d+)"),
 }
 SER_PAT = re.compile(r"^#\s*stat_(\w+)_us:\s*(.+)$")
 
-# 内核侧经 printk 输出，dmesg 会加「[ 时间戳] PLCPROBE 」前缀；
-# 这里统一剥掉，让同一台解析器同时吃用户态与内核态两块文本。
-DMESG_PAT = re.compile(r"^\s*(?:\[\s*[\d.]+\]\s*)?(?:PLCPROBE\s+)?")
-
 
 def parse(path):
     txt = io.open(path, encoding="utf-8", errors="replace").read()
     info = {"path": path, "probe": None, "period_ns": None, "samples": None,
-            "deadline_ns": None, "release": None,
             "miss": None, "overrun": None, "series": {}}
-    for raw in txt.splitlines():
-        ln = DMESG_PAT.sub("", raw)
-        if not ln.startswith("#"):
-            continue
+    for ln in txt.splitlines():
         m = PAT["probe"].match(ln)
         if m:
             info["probe"] = m.group(1)
@@ -64,14 +54,6 @@ def parse(path):
         m = PAT["samples"].match(ln)
         if m:
             info["samples"] = int(m.group(1))
-            continue
-        m = PAT["deadline"].match(ln)
-        if m:
-            info["deadline_ns"] = int(m.group(1))
-            continue
-        m = PAT["release"].match(ln)
-        if m:
-            info["release"] = m.group(1)
             continue
         m = PAT["miss"].match(ln)
         if m:
@@ -100,27 +82,18 @@ def fmt(info):
         out.append("   ❌ 旧格式：没有 `# probe:` 块 → 只有 start_lat（且未必是同一指标），"
                    "**没有端到端响应 R，不能进 J(θ)**")
         return out
-    dl = info.get("deadline_ns")
     out.append(f"== {name}   probe={info['probe']}  period={info['period_ns']}ns  "
-               f"deadline={dl if dl else '?'}ns  samples={info['samples']}")
-    if info.get("release"):
-        out.append(f"   release_id: {info['release']}")
-    out.append("   %-11s %9s %9s %6s %6s %6s %7s %8s %9s %6s %5s"
-               % ("series", "min", "avg", "p50", "p90", "p99", "p99.9",
-                  "p99.99", "max", "over", "neg"))
+               f"samples={info['samples']}")
+    out.append("   %-11s %9s %9s %6s %6s %6s %7s %8s %9s %7s"
+               % ("series", "min", "avg", "p50", "p90", "p99", "p99.9", "p99.99", "max", "over"))
     for s in SERIES:
         kv = info["series"].get(s)
         if not kv:
             continue
-        out.append("   %-11s %9s %9s %6s %6s %6s %7s %8s %9s %6s %5s"
+        out.append("   %-11s %9s %9s %6s %6s %6s %7s %8s %9s %7s"
                    % (s, kv.get("min", "?"), kv.get("avg", "?"), kv.get("p50", "?"),
                       kv.get("p90", "?"), kv.get("p99", "?"), kv.get("p99.9", "?"),
-                      kv.get("p99.99", "?"), kv.get("max", "?"),
-                      kv.get("over", "?"), kv.get("neg", "-")))
-        if kv.get("neg") and kv["neg"] not in ("0", "?", "-"):
-            out.append(f"      ⚠️ {s} 有 {kv['neg']} 个负值样本"
-                       f"（min_signed={kv.get('min_signed', '?')} µs）"
-                       "——已计入直方图绝对值，别当成『提前完成』抹掉")
+                      kv.get("p99.99", "?"), kv.get("max", "?"), kv.get("over", "?")))
     if info["miss"]:
         m, n = info["miss"]
         pct = 100.0 * m / n if n else 0.0

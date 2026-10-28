@@ -2,7 +2,7 @@
   "version": 2,
   "meta": {
     "mode": "stages",
-    "summary": "kfusion/scripts/test/fusion/five_stage_loop.summary.json",
+    "summary": "five_stage_loop.summary.json",
     "task": {
       "name": "five_stage_loop",
       "entry": "loop_main",
@@ -11,7 +11,8 @@
       "step_us": 200,
       "notes": "sample@0 → fir@200 → pid@400 → clamp@600 → plant@800 →(z⁻¹) sample"
     },
-    "note": "proven=true 的边可作为约束；candidates 未经证明，不得当作依赖；conflict 无方向（只禁止重排）；recurrences 是相位反向边给出的真实反馈环（延迟 1 拍），algebraic_loops 是拍内闭合的非法环"
+    "note": "proven=true 的边可作为约束；candidates 未经证明，不得当作依赖；conflict 无方向（只禁止重排）；recurrences 是相位反向边给出的真实反馈环（延迟 1 拍），algebraic_loops 是拍内闭合的非法环",
+    "note_fixture": "ECoS PR5 closed-loop DAG; delay edge plant→sample"
   },
   "nodes": [
     {

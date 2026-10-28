@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "functions": {
+    "stage_pid": {
+      "effects": ["state_read", "state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": ["@g_fir_out", "@g_integ"],
+      "writes": ["@g_act", "@g_integ"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    }
+  }
+}
