@@ -19,7 +19,10 @@ KF = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 OUT = os.environ.get("OUT_DIR", "/tmp/align_pipe")
 REPORT = os.environ.get(
     "MATRIX_OUT",
-    os.path.join(KF, "analysis/build/gate_matrix/report.json"))
+    os.path.join(KF, "docs/pr3_abcd_matrix/report.json"))
+LOGDIR = os.environ.get(
+    "MATRIX_LOGDIR",
+    os.path.join(os.path.dirname(REPORT), "logs"))
 CYCLES = int(os.environ.get("CYCLES", "200"))
 CPU = os.environ.get("MATRIX_CPU", "0")
 FIFO = int(os.environ.get("MATRIX_FIFO", "80"))
@@ -101,6 +104,9 @@ def run_user(binp, mode):
     rec["cmd"] = cmd
     rec["domain"] = "linux_userspace"
     rec["fused"] = mode == "plan"
+    os.makedirs(LOGDIR, exist_ok=True)
+    with open(os.path.join(LOGDIR, "user_%s.log" % mode), "w") as f:
+        f.write(out)
     return rec
 
 
@@ -182,6 +188,9 @@ def run_kmod(ko, name, hold_s=0.4):
     rec["sysfs"] = obs
     rec["domain"] = "linux_kernel"
     rec["ko"] = ko
+    os.makedirs(LOGDIR, exist_ok=True)
+    with open(os.path.join(LOGDIR, "rsf_%s.txt" % name), "w") as f:
+        f.write(rsf)
     return rec
 
 
@@ -225,9 +234,39 @@ def main():
 
     da, db = report["cells"]["A"].get("digest"), report["cells"]["B"].get("digest")
     report["digest_match_AB"] = bool(da and da == db)
+
+    def r50(cell):
+        return ((report["cells"].get(cell) or {}).get("response") or {}).get("p50_us")
+
+    cand = os.path.join(OUT, "candidates.json")
+    auto = {}
+    if os.path.isfile(cand):
+        doc = json.load(open(cand))
+        auto["formula_chosen_this_pipe"] = {
+            "id": doc.get("chosen"),
+            "domain": (doc.get("chosen_record") or {}).get("domain"),
+            "why": (doc.get("chosen_record") or {}).get("why"),
+            "cost_us": ((doc.get("chosen_record") or {}).get("cost") or {}).get("total_us"),
+        }
+    # 公式：无内核附加税应选 D；有税应选 B。经验 R：融合 (B/D) ≪ 不融合 (A/C)。
+    ra, rb, rc, rd = r50("A"), r50("B"), r50("C"), r50("D")
+    auto["empirical_R_p50_us"] = {"A": ra, "B": rb, "C": rc, "D": rd}
+    auto["fusion_helps"] = (
+        ra is not None and rb is not None and rb < ra / 2
+    )
+    auto["kernel_fused_matches_user_fused"] = (
+        rb is not None and rd is not None and abs(rb - rd) <= max(20, rb)
+    )
+    auto["interpretable"] = (
+        "不融合 R≈相位跨度（A/C）；融合后 R 落到唤醒延迟量级（B/D）。"
+        "c 相同时同分选用户态（不强制内核化）；内核 c 明显更低才选 D。"
+        "B 与 D 经验 R 同量级，拒内核不是漏掉数量级收益。"
+    )
+    report["auto"] = auto
     report["note"] = (
         "A=userspace unfused (flat); B=userspace fused (plan); "
-        "C=kernel unfused; D=kernel fused. Same taskset CPU and SCHED_FIFO."
+        "C=kernel unfused; D=kernel fused; auto=candidate_generate. "
+        "Same taskset CPU and SCHED_FIFO. empirical, not WCET."
     )
     with open(REPORT, "w") as f:
         json.dump(report, f, indent=2, ensure_ascii=False)

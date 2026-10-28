@@ -2,6 +2,15 @@
   "version": 1,
   "platforms": [
     {
+      "name": "linux_userspace",
+      "contexts": ["thread"],
+      "allow_mmio": true,
+      "allow_sleep": true,
+      "max_rt_priority": 99,
+      "supports_float": true,
+      "notes": "同一 Linux 上的用户态周期任务；不强制进内核"
+    },
+    {
       "name": "linux_kernel",
       "contexts": ["thread", "softirq"],
       "allow_mmio": false,

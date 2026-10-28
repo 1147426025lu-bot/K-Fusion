@@ -46,7 +46,6 @@ step "1) Clang AST → 阶段骨架（替代手写 stages.json / dag.json）"
 "$PY" "$EXTRACT" "$SRC" \
   --clang "$CLANG" \
   --bind "$BIND" \
-  --emit-kmod "$OUT/kmod" \
   -o "$OUT/stages.json" || {
     echo "抽取失败（K-C0 fail-closed 是预期行为之一）"
     exit 2
@@ -85,30 +84,58 @@ step "6b) TEIR（状态版本 + 时间事件 + 允许域）"
   --platforms "$CAPS" \
   -o "$OUT/task.teir.json" || die "TEIR 失败" 7
 
-step "7) 单域融合规划"
+step "7) 单域融合规划（对照基线，不直接驱动生成）"
 "$PY" "$KF/scripts/fusion_plan__融合规划.py" "$OUT/task.dag.json" \
   --platforms "$CAPS" --platform "$PLATFORM" \
   --release-cost-us 21 --quiet \
-  -o "$OUT/plan.json" || die "fusion_plan 失败" 8
+  -o "$OUT/plan.planner.json" || die "fusion_plan 失败" 8
 
-step "7b) 独立验证器（TEIR 事件解释器，不调用规划器）"
-"$PY" "$KF/verify/plan_verify.py" \
-  --teir "$OUT/task.teir.json" --plan "$OUT/plan.json" \
-  -o "$OUT/verify.json" || die "TEIR 验证器拒绝该方案" 8
-
-step "7b2) DAG 全局验证器（temporal 分支 PlanVerifier，写回 verification）"
-"$PY" "$KF/scripts/ecos/plan_verify.py" \
-  --dag "$OUT/task.dag.json" --plan "$OUT/plan.json" \
-  --platforms "$CAPS" --platform "$PLATFORM" \
-  --stamp-plan -o "$OUT/verify_dag.json" || die "DAG 验证器拒绝该方案" 8
-
-step "7c) 选择性内核化 A/B/C/D（同一 Linux）"
+step "7c) 选择性内核化 A/B/C/D（入选方案才是生成输入）"
 "$PY" "$KF/scripts/ecos/candidate_generate.py" \
   --teir "$OUT/task.teir.json" \
   --c-user-us "${C_USER_US:-21}" \
   --c-kernel-us "${C_KERNEL_US:-21}" \
   --kernel-extra-us "${KERNEL_EXTRA_US:-0}" \
-  -o "$OUT/candidates.json" || die "A/B/C/D 无合法候选" 8
+  -o "$OUT/candidates.json" \
+  --chosen-plan "$OUT/chosen.plan.json" || die "A/B/C/D 无合法候选" 8
+
+CHOSEN="$("$PY" -c "import json; print(json.load(open('$OUT/candidates.json'))['chosen'] or '')")"
+DOMAIN="$("$PY" -c "import json; print((json.load(open('$OUT/candidates.json')).get('chosen_record') or {}).get('domain') or '')")"
+echo "  入选 $CHOSEN  域 $DOMAIN"
+if [ -z "$CHOSEN" ]; then
+  die "无入选候选" 8
+fi
+if [ "$DOMAIN" = "mixed" ]; then
+  die "混合部署尚未打通跨域数据交接，拒绝标记为可部署（选型 $CHOSEN）" 8
+fi
+cp "$OUT/chosen.plan.json" "$OUT/plan.json"
+
+step "7b) 独立验证器（验证入选方案，不调用规划器）"
+"$PY" "$KF/verify/plan_verify.py" \
+  --teir "$OUT/task.teir.json" --plan "$OUT/plan.json" \
+  -o "$OUT/verify.json" || die "TEIR 验证器拒绝入选方案" 8
+
+step "7b2) DAG 全局验证器（写回 verification，供 emit 门禁）"
+"$PY" "$KF/scripts/ecos/plan_verify.py" \
+  --dag "$OUT/task.dag.json" --plan "$OUT/plan.json" \
+  --platforms "$CAPS" --platform "$DOMAIN" \
+  --stamp-plan -o "$OUT/verify_dag.json" || die "DAG 验证器拒绝入选方案" 8
+
+"$PY" - "$OUT/candidates.json" "$OUT/deploy.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+rec = d.get("chosen_record") or {}
+doc = {
+    "chosen": d.get("chosen"),
+    "domain": rec.get("domain"),
+    "fused": rec.get("fused"),
+    "cost_us": (rec.get("cost") or {}).get("total_us"),
+    "why": rec.get("why"),
+    "deployable": rec.get("domain") in ("linux_userspace", "linux_kernel"),
+}
+json.dump(doc, open(sys.argv[2], "w"), ensure_ascii=False, indent=2)
+print("  deploy.json chosen=%s domain=%s" % (doc["chosen"], doc["domain"]))
+PY
 
 if [ -n "${TIME_CONTRACT:-}" ] && [ -f "${TIME_CONTRACT}" ]; then
   step "7d) 按需 LET（有时间契约才启用）"
@@ -152,7 +179,6 @@ step "8) 生成用户态驱动（#include 原计算体，不复制）"
   --expect-order "$EXPECT" \
   "${CALLS[@]}" "${DIGEST[@]}" || die "codegen 失败" 9
 
-step "8b) hrtimer 内核宿主（与用户态同一份计算体，PlanVerifier 凭据）"
 EMIT_DIGEST=()
 eval "$("$PY" - "$OUT/stages.json" <<'PY'
 import io, json, sys, re
@@ -162,19 +188,27 @@ for g in d.get("globals") or []:
         print("EMIT_DIGEST+=(--digest-var %s)" % g)
 PY
 )"
-"$PY" "$KF/backend/synthesis/emit.py" \
-  --plan "$OUT/plan.json" --dag "$OUT/task.dag.json" \
-  --source "$STAGE_SRC" \
-  --out-dir "$OUT/kmod_hrtimer" \
-  --target linux-kernel \
-  --name five_stage_loop \
-  "${CALLS[@]}" "${EMIT_DIGEST[@]}" || die "emit linux-kernel 失败" 9
-cp "$STAGE_SRC" "$OUT/kmod_hrtimer/stage_impl.c"
-KDIR="${KERNELDIR:-/root/linux-5.15.86}"
-if [ "${SKIP_KMOD:-0}" != "1" ] && [ -d "$KDIR" ]; then
-  make -C "$KDIR" M="$OUT/kmod_hrtimer" modules || echo "⚠ 内核模块构建失败（源码仍保留）"
+
+if [ "$DOMAIN" = "linux_kernel" ]; then
+  step "8b) hrtimer 内核宿主（入选域=linux_kernel）"
+  "$PY" "$KF/backend/synthesis/emit.py" \
+    --plan "$OUT/plan.json" --dag "$OUT/task.dag.json" \
+    --source "$STAGE_SRC" \
+    --out-dir "$OUT/kmod_hrtimer" \
+    --target linux-kernel \
+    --name five_stage_loop \
+    "${CALLS[@]}" "${EMIT_DIGEST[@]}" || die "emit linux-kernel 失败" 9
+  cp "$STAGE_SRC" "$OUT/kmod_hrtimer/stage_impl.c"
+  KDIR="${KERNELDIR:-/root/linux-5.15.86}"
+  if [ "${SKIP_KMOD:-0}" != "1" ] && [ -d "$KDIR" ]; then
+    make -C "$KDIR" M="$OUT/kmod_hrtimer" modules || echo "⚠ 内核模块构建失败（源码仍保留）"
+  else
+    echo "跳过 .ko 构建（无 KERNELDIR 或 SKIP_KMOD=1）"
+  fi
 else
-  echo "跳过 .ko 构建（无 KERNELDIR 或 SKIP_KMOD=1）"
+  step "8b) 入选用户态：不生成内核部署产物"
+  rm -rf "$OUT/kmod_hrtimer"
+  echo "  skip kmod_hrtimer（chosen=$CHOSEN domain=$DOMAIN）"
 fi
 
 if [ -n "${TIME_CONTRACT:-}" ] && [ -f "${TIME_CONTRACT}" ] && [ -f "$OUT/let.json" ]; then
@@ -233,6 +267,8 @@ echo "✅ 从 C 到 A/B/C/D 流水线完成"
 echo "   骨架  $OUT/stages.json"
 echo "   DAG   $OUT/task.dag.json"
 echo "   TEIR  $OUT/task.teir.json"
+echo "   入选  $OUT/chosen.plan.json  ($CHOSEN / $DOMAIN)"
+echo "   部署  $OUT/deploy.json"
 echo "   方案  $OUT/plan.json"
 echo "   验证  $OUT/verify.json"
 echo "   选型  $OUT/candidates.json"
@@ -240,5 +276,9 @@ if [ -f "$OUT/let.json" ]; then
   echo "   LET   $OUT/let.json"
 fi
 echo "   用户态 $OUT/driver.c"
-echo "   kmod源 $OUT/kmod/  （本机无 kernel headers 时只保留源，不声称已 insmod）"
+if [ "$DOMAIN" = "linux_kernel" ]; then
+  echo "   kmod   $OUT/kmod_hrtimer/"
+else
+  echo "   kmod   （未生成：入选用户态）"
+fi
 echo "   计算体始终是 $SRC ，没有第二份手写阶段函数"

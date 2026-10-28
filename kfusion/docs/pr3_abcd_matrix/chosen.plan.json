@@ -1,0 +1,27 @@
+{
+  "version": 2,
+  "meta": {
+    "platform": "linux_userspace",
+    "fusion": true,
+    "generator": "candidate_generate A/B/C/D"
+  },
+  "order": [
+    "stage_sample",
+    "stage_fir",
+    "stage_pid",
+    "stage_clamp",
+    "stage_plant"
+  ],
+  "groups": [
+    {
+      "id": "g0",
+      "members": [
+        "stage_sample",
+        "stage_fir",
+        "stage_pid",
+        "stage_clamp",
+        "stage_plant"
+      ]
+    }
+  ]
+}

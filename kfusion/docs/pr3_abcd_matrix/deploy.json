@@ -1,0 +1,8 @@
+{
+  "chosen": "B",
+  "domain": "linux_userspace",
+  "fused": true,
+  "cost_us": 21.0,
+  "why": "Cost=G·c + E + extra = 21.0; G=1 c=21.0 extra=0.0; 内核最优 D 的 Cost=21.0 ≥ 用户态，故不迁移",
+  "deployable": true
+}

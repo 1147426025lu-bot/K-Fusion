@@ -1,0 +1,226 @@
+{
+  "kind": "abcd_factor_short",
+  "claim": "empirical r/s/f on this host; not WCET",
+  "controls": {
+    "cpu": "0",
+    "fifo": 80,
+    "period_us": 1000,
+    "cycles_user": 200
+  },
+  "host": "Linux version 5.15.86 (builder@e3665d6e1a6c) (aarch64-linux-gnu-gcc (Debian 10.2.1-6) 10.2.1 20210110, GNU ld (GNU Binutils for Debian) 2.35.2) #1 SMP PREEMPT Wed Oct 14 10:16:11 UTC 2026",
+  "cells": {
+    "A": {
+      "raw_tail": "# hist_start_lat_us: 55 1\n# hist_start_lat_us: 60 1\n# hist_response_us: 809 44\n# hist_response_us: 810 4\n# hist_response_us: 811 143\n# hist_response_us: 812 3\n# hist_response_us: 816 1\n# hist_response_us: 819 1\n# hist_response_us: 821 1\n# hist_response_us: 824 1\n# hist_response_us: 826 1\n# hist_response_us: 855 1",
+      "digest": "5d4cda7d",
+      "miss": 0,
+      "cycles": 200,
+      "start_lat": {
+        "min_us": 9.038,
+        "avg_us": 11.138,
+        "p50_us": 10,
+        "max_us": 60.86,
+        "over": 0
+      },
+      "exec": {
+        "min_us": 1.538,
+        "avg_us": 1.752,
+        "p50_us": 1,
+        "max_us": 5.056,
+        "over": 0
+      },
+      "response": {
+        "min_us": 809.39,
+        "avg_us": 811.477,
+        "p50_us": 811,
+        "max_us": 855.751,
+        "over": 0
+      },
+      "span": {
+        "min_us": 787.784,
+        "avg_us": 800.523,
+        "p50_us": 800,
+        "max_us": 844.579,
+        "over": 0
+      },
+      "cmd": [
+        "taskset",
+        "-c",
+        "0",
+        "chrt",
+        "-f",
+        "80",
+        "/tmp/pr3_pipe/driver",
+        "flat",
+        "200"
+      ],
+      "domain": "linux_userspace",
+      "fused": false,
+      "id": "A"
+    },
+    "B": {
+      "raw_tail": "# hist_response_us: 11 9\n# hist_response_us: 12 120\n# hist_response_us: 13 10\n# hist_response_us: 14 20\n# hist_response_us: 15 7\n# hist_response_us: 16 5\n# hist_response_us: 17 1\n# hist_response_us: 19 1\n# hist_response_us: 21 2\n# hist_response_us: 22 1\n# hist_response_us: 24 4\n# hist_response_us: 57 1",
+      "digest": "5d4cda7d",
+      "miss": 0,
+      "cycles": 200,
+      "start_lat": {
+        "min_us": 9.351,
+        "avg_us": 11.941,
+        "p50_us": 11,
+        "max_us": 53.545,
+        "over": 0
+      },
+      "exec": {
+        "min_us": 1.148,
+        "avg_us": 1.357,
+        "p50_us": 1,
+        "max_us": 4.777,
+        "over": 0
+      },
+      "response": {
+        "min_us": 10.633,
+        "avg_us": 13.298,
+        "p50_us": 12,
+        "max_us": 57.379,
+        "over": 0
+      },
+      "span": {
+        "min_us": 1.148,
+        "avg_us": 1.357,
+        "p50_us": 1,
+        "max_us": 4.777,
+        "over": 0
+      },
+      "cmd": [
+        "taskset",
+        "-c",
+        "0",
+        "chrt",
+        "-f",
+        "80",
+        "/tmp/pr3_pipe/driver",
+        "plan",
+        "200"
+      ],
+      "domain": "linux_userspace",
+      "fused": true,
+      "id": "B"
+    },
+    "D": {
+      "raw": "PLC_PROBE r/s/f v1.2 kernel miss=0 periods=403\n  start_lat n=403 over=0 min=9473ns p50=11us p99=63us avg=15434ns max=126543ns\n  exec n=403 over=0 min=1685ns p50=1us p99=2us avg=1857ns max=5945ns\n  response n=403 over=0 min=11176ns p50=13us p99=65us avg=17291ns max=128857ns",
+      "miss": 0,
+      "n": 403,
+      "start_lat": {
+        "n": 403,
+        "over": 0,
+        "min_ns": 9473,
+        "p50_us": 11,
+        "p99_us": 63,
+        "avg_ns": 15434,
+        "max_ns": 126543
+      },
+      "exec": {
+        "n": 403,
+        "over": 0,
+        "min_ns": 1685,
+        "p50_us": 1,
+        "p99_us": 2,
+        "avg_ns": 1857,
+        "max_ns": 5945
+      },
+      "response": {
+        "n": 403,
+        "over": 0,
+        "min_ns": 11176,
+        "p50_us": 13,
+        "p99_us": 65,
+        "avg_ns": 17291,
+        "max_ns": 128857
+      },
+      "periods": 403,
+      "missed_backlog": 0,
+      "sysfs": {
+        "g_seed": "1605435877",
+        "g_plant": "1179",
+        "g_out": "1330",
+        "g_act": "1330",
+        "g_fir_out": "834",
+        "g_raw": "1566",
+        "g_hist": "1566",
+        "g_integ": "8194",
+        "g_dist": "-161"
+      },
+      "domain": "linux_kernel",
+      "ko": "/tmp/pr3_pipe/kmod_hrtimer/five_stage_loop.ko",
+      "id": "D",
+      "fused": true
+    },
+    "C": {
+      "raw": "PLC_PROBE r/s/f v1.2 kernel miss=0 periods=403\n  start_lat n=402 over=0 min=9504ns p50=10us p99=39us avg=13787ns max=55676ns\n  exec n=402 over=0 min=759229ns p50=800us p99=839us avg=801126ns max=886153ns\n  response n=402 over=0 min=810151ns p50=811us p99=852us avg=814913ns max=903454ns",
+      "miss": 0,
+      "n": 403,
+      "start_lat": {
+        "n": 402,
+        "over": 0,
+        "min_ns": 9504,
+        "p50_us": 10,
+        "p99_us": 39,
+        "avg_ns": 13787,
+        "max_ns": 55676
+      },
+      "exec": {
+        "n": 402,
+        "over": 0,
+        "min_ns": 759229,
+        "p50_us": 800,
+        "p99_us": 839,
+        "avg_ns": 801126,
+        "max_ns": 886153
+      },
+      "response": {
+        "n": 402,
+        "over": 0,
+        "min_ns": 810151,
+        "p50_us": 811,
+        "p99_us": 852,
+        "avg_ns": 814913,
+        "max_ns": 903454
+      },
+      "periods": 404,
+      "missed_backlog": 0,
+      "sysfs": {
+        "g_seed": "1605435877",
+        "g_plant": "1129",
+        "g_out": "1403",
+        "g_act": "1330",
+        "g_fir_out": "834",
+        "g_raw": "1566",
+        "g_hist": "1566",
+        "g_integ": "8194",
+        "g_dist": "-161"
+      },
+      "domain": "linux_kernel",
+      "ko": "/tmp/pr3_pipe/kmod_C/five_stage_c.ko",
+      "id": "C",
+      "fused": false
+    }
+  },
+  "digest_match_AB": true,
+  "auto": {
+    "formula_chosen_this_pipe": {
+      "id": "B",
+      "domain": "linux_userspace",
+      "why": "Cost=G·c + E + extra = 21.0; G=1 c=21.0 extra=0.0; 内核最优 D 的 Cost=21.0 ≥ 用户态，故不迁移",
+      "cost_us": 21.0
+    },
+    "empirical_R_p50_us": {
+      "A": 811,
+      "B": 12,
+      "C": 811,
+      "D": 13
+    },
+    "fusion_helps": true,
+    "kernel_fused_matches_user_fused": true,
+    "interpretable": "不融合 R≈相位跨度（A/C）；融合后 R 落到唤醒延迟量级（B/D）。c 相同时同分选用户态（不强制内核化）；内核 c 明显更低才选 D。B 与 D 经验 R 同量级，拒内核不是漏掉数量级收益。"
+  },
+  "note": "A=userspace unfused (flat); B=userspace fused (plan); C=kernel unfused; D=kernel fused; auto=candidate_generate. Same taskset CPU and SCHED_FIFO. empirical, not WCET."
+}

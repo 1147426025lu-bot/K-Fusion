@@ -271,8 +271,102 @@ def type_is_vla(root):
     return hit
 
 
-def kc0_check(fns, entry, stages):
+CONTROL_COND = ("IfStmt", "SwitchStmt", "ConditionalOperator")
+CONTROL_LOOP = ("ForStmt", "WhileStmt", "DoStmt")
+ASSIGN_OPS = frozenset([
+    "=", "+=", "-=", "*=", "/=", "%=", "<<=", ">>=", "&=", "|=", "^=",
+])
+UNARY_MUTATE = frozenset(["++", "--"])
+
+
+def _is_reset_fn(name):
+    return name == "loop_reset" or (name or "").endswith("_reset")
+
+
+def var_names_in(node):
+    names = []
+
+    def acc(n):
+        if n.get("kind") != "DeclRefExpr":
+            return
+        rd = n.get("referencedDecl") or {}
+        if rd.get("kind") == "VarDecl" and rd.get("name"):
+            names.append(rd["name"])
+
+    walk(node, acc)
+    return names
+
+
+def kc0_entry_shape(fns, entry, glob_names):
+    """入口必须是直线直接调用。条件/重复/循环/入口写全局一律拒绝，不推断。"""
     violations = []
+    info = fns.get(entry)
+    if not info:
+        return violations
+    body = info["body"]
+    glob_set = set(glob_names or [])
+
+    def acc(n):
+        kind = n.get("kind")
+        if kind in CONTROL_COND:
+            violations.append({
+                "code": "E_KC0_CONDITIONAL_CALL",
+                "fn": entry,
+                "detail": "入口含 %s：K-C0 不保留条件调用，拒绝转换" % kind,
+            })
+        elif kind in CONTROL_LOOP:
+            violations.append({
+                "code": "E_KC0_LOOP_CALL",
+                "fn": entry,
+                "detail": "入口含 %s：K-C0 不保留循环调用，拒绝转换" % kind,
+            })
+        elif kind in ("BinaryOperator", "CompoundAssignOperator"):
+            if n.get("opcode") in ASSIGN_OPS:
+                inner = n.get("inner") or []
+                lhs = inner[0] if inner else n
+                hit = [nm for nm in var_names_in(lhs) if nm in glob_set]
+                if hit:
+                    violations.append({
+                        "code": "E_KC0_ENTRY_STORE",
+                        "fn": entry,
+                        "detail": "入口写全局 %s（状态更新必须在阶段函数内）"
+                                  % ",".join(hit),
+                    })
+        elif kind == "UnaryOperator" and n.get("opcode") in UNARY_MUTATE:
+            hit = [nm for nm in var_names_in(n) if nm in glob_set]
+            if hit:
+                violations.append({
+                    "code": "E_KC0_ENTRY_STORE",
+                    "fn": entry,
+                    "detail": "入口写全局 %s（%s）" % (",".join(hit), n.get("opcode")),
+                })
+
+    walk(body, acc)
+
+    seq = []
+    for call in direct_calls_in_order(body):
+        cal = call["callee"]
+        if not cal or cal == entry or _is_reset_fn(cal):
+            continue
+        if cal in fns or call["indirect"]:
+            seq.append(cal if cal else "<indirect>")
+    seen = {}
+    for cal in seq:
+        seen[cal] = seen.get(cal, 0) + 1
+    for cal, n in sorted(seen.items()):
+        if n > 1:
+            violations.append({
+                "code": "E_KC0_REPEAT_CALL",
+                "fn": entry,
+                "detail": "%s 被调用 %d 次：按函数名去重会丢掉程序行为，拒绝转换"
+                          % (cal, n),
+            })
+    return violations
+
+
+def kc0_check(fns, entry, stages, glob_names=None):
+    violations = []
+    violations.extend(kc0_entry_shape(fns, entry, glob_names))
     kinds_bad = ("GotoStmt", "IndirectGotoStmt", "GCCAsmStmt",
                  "CXXTryStmt", "LambdaExpr", "StmtExpr")
     for name in stages + [entry]:
@@ -524,13 +618,10 @@ def main():
             continue
         if cal.endswith("_reset") or cal == "loop_reset":
             continue
+        # 重复调用另行由 E_KC0_REPEAT_CALL 拒绝；这里仍记第一次调用式供排错骨架。
         if cal not in stages:
             stages.append(cal)
             call_map[cal] = format_call(cal, c["args"])
-
-    if not stages:
-        raise SystemExit("入口 %s 没有抽到任何已定义的阶段调用（K-C0 要求直接调用）"
-                         % entry)
 
     reset = None
     for name in fns:
@@ -538,7 +629,8 @@ def main():
             reset = name
             break
 
-    violations = kc0_check(fns, entry, stages)
+    violations = kc0_check(fns, entry, stages,
+                           glob_names=[g["name"] for g in globs])
     # 入口调用了未在本 TU 定义、且不在允许名单外的函数
     defined = set(fns)
     for c in calls:
@@ -555,6 +647,31 @@ def main():
                 "fn": entry,
                 "detail": cal,
             })
+
+    if violations:
+        print("!! K-C0 失败闭合，不生成用户态/内核产物：", file=sys.stderr)
+        for v in violations:
+            print("   [%s] %s: %s" % (v["code"], v["fn"], v["detail"]),
+                  file=sys.stderr)
+        print("骨架已写出（仅供排错）: %s" % args.out, file=sys.stderr)
+        # 仍写骨架方便对照，但绝不 emit-kmod
+        out_dir = os.path.dirname(os.path.abspath(args.out))
+        if out_dir and not os.path.isdir(out_dir):
+            os.makedirs(out_dir)
+        with io.open(args.out, "w", encoding="utf-8") as f:
+            json.dump({
+                "extracted": False,
+                "kc0": {"ok": False, "violations": violations},
+                "source": src,
+                "task": {"entry": entry},
+                "stages": [],
+            }, f, ensure_ascii=False, indent=2)
+            f.write("\n")
+        return 2
+
+    if not stages:
+        raise SystemExit("入口 %s 没有抽到任何已定义的阶段调用（K-C0 要求直接调用）"
+                         % entry)
 
     def as_num(v):
         if v is None:
@@ -626,14 +743,6 @@ def main():
     with io.open(args.out, "w", encoding="utf-8") as f:
         json.dump(doc, f, ensure_ascii=False, indent=2)
         f.write("\n")
-
-    if violations:
-        print("!! K-C0 失败闭合，不生成用户态/内核产物：", file=sys.stderr)
-        for v in violations:
-            print("   [%s] %s: %s" % (v["code"], v["fn"], v["detail"]),
-                  file=sys.stderr)
-        print("骨架已写出（仅供排错）: %s" % args.out, file=sys.stderr)
-        return 2
 
     print("extracted %d stages from %s:" % (len(stages), entry))
     for i, name in enumerate(stages):

@@ -341,6 +341,8 @@ def main():
     ap = argparse.ArgumentParser(description="A/B/C/D 选择性内核化候选")
     ap.add_argument("--teir", required=True)
     ap.add_argument("-o", "--out", required=True)
+    ap.add_argument("--chosen-plan", default=None,
+                    help="把入选方案写成独立 plan.json，供验证器与代码生成使用")
     ap.add_argument("--c-user-us", type=float, default=21.0)
     ap.add_argument("--c-kernel-us", type=float, default=21.0)
     ap.add_argument("--kernel-extra-us", type=float, default=0.0,
@@ -356,6 +358,14 @@ def main():
                    args.kernel_extra_us, args.exec_us, v,
                    boundary_us=args.boundary_us)
     dump_json(args.out, doc)
+    rec = doc.get("chosen_record")
+    if args.chosen_plan:
+        if not rec or not rec.get("plan"):
+            print("无入选 plan，不写 %s" % args.chosen_plan, file=sys.stderr)
+            return 3
+        dump_json(args.chosen_plan, rec["plan"])
+        print("chosen plan → %s  (%s %s)" % (
+            args.chosen_plan, doc.get("chosen"), rec.get("domain")))
     print("A/B/C/D/E/F legal=%d/%d  chosen=%s"
           % (doc["n_legal"], len(doc["candidates"]), doc["chosen"]))
     for c in doc["candidates"]:

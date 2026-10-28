@@ -106,6 +106,35 @@ print("  chosen", d["chosen"], "E.total", by["E"]["cost"]["total_us"],
       "B.legal", by["B"]["legal"])
 PY
 
+echo "=== 5. 入选方案必须改变生成物（用户态 vs 内核宿主） ==="
+PIPE="$KF/scripts/ecos_from_c__从C编译.sh"
+SRC="$KF/examples/ecos/five_stage_loop__闭环五阶段示例.c"
+SO="$KF/analysis/build/PLCEffectSummary.so"
+if [ ! -f "$SO" ]; then
+  echo "  （跳过：无 EffectSummary.so）"
+else
+  SKIP_HOST=1 SKIP_KMOD=1 C_USER_US=21 C_KERNEL_US=21 KERNEL_EXTRA_US=80 \
+    OUT_DIR="$TMP/user" bash "$PIPE" "$SRC" >/dev/null
+  SKIP_HOST=1 SKIP_KMOD=1 C_USER_US=21 C_KERNEL_US=10 KERNEL_EXTRA_US=0 \
+    OUT_DIR="$TMP/kern" bash "$PIPE" "$SRC" >/dev/null
+  "$PY" - "$TMP/user/deploy.json" "$TMP/kern/deploy.json" <<'PY' && ok "成本翻转 → 选型与产物一起变" || bad "选型未驱动生成"
+import json, os, sys
+u = json.load(open(sys.argv[1]))
+k = json.load(open(sys.argv[2]))
+ud = os.path.dirname(sys.argv[1])
+kd = os.path.dirname(sys.argv[2])
+assert u["domain"] == "linux_userspace", u
+assert k["domain"] == "linux_kernel", k
+assert u["chosen"] in ("A", "B"), u
+assert k["chosen"] in ("C", "D"), k
+assert os.path.isfile(os.path.join(ud, "driver.c"))
+assert not os.path.isfile(os.path.join(ud, "kmod_hrtimer", "Kbuild")), "用户态不该有内核宿主"
+assert os.path.isfile(os.path.join(kd, "kmod_hrtimer", "Kbuild")), "内核入选必须有 Kbuild"
+assert os.path.isfile(os.path.join(kd, "kmod_hrtimer", "ecos_fused_linux.c"))
+print("  user", u["chosen"], "kern", k["chosen"])
+PY
+fi
+
 echo
 echo "通过 $PASS / 失败 $FAIL"
 [ "$FAIL" -eq 0 ]
