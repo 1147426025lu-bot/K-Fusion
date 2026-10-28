@@ -1,3 +1,0 @@
-obj-m := kfusion_uku.o
-kfusion_uku-y := kfusion_uku_mod.o stage_impl.o
-ccflags-y := -I$(src) -I$(src)/compat -include $(src)/compat/stdint.h
