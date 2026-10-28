@@ -16,8 +16,8 @@ TEIR 表达三类事实：
   · exec_us 未实测时按 --default-exec-us 占位并标记，不得进论文。
   · 同周期数据边只覆盖「调用序中前置阶段写、本阶段读」的全局；读但无同周期
     生产者的是 cross_period（外部输入 / 上一周期状态），单独列出，不算内部边。
-  · 多速率 / 跨域版本依赖（r_i(k) 与 r_j(k-1)）属于 Gate 2 后期 + Gate 3，这里只
-    给出单域同周期骨架。
+  · 多速率 / 跨域版本依赖（r_i(k) 与 r_j(k-1)）：v2 起已在数据边显式建模
+    （version + lag_periods + xdom），由 version_deps 推导与独立复核；不再默认同拍可见。
 """
 
 import io
@@ -94,8 +94,16 @@ def build_teir(extract, dag, ex, order, stage_rw, data_edges,
         # 执行事实：能否内核化
         "kernelizable": kernelizable,
         "meta": {
-            "note": ("Gate 2 TEIR v1：单域同周期数据依赖骨架；exec_us 占位需实测；"
-                     "跨域/多速率版本依赖见 Gate 2 后期 + Gate 3。"),
+            "note": ("Gate 2 TEIR v2：数据版本依赖已显式建模——每条数据边带 version"
+                     "(same_period/prev_period)+lag_periods+xdom，跨域/多速率边不再默认"
+                     "同拍可见（PlanVerifier 诚实边界已在 IR 层落实）。exec_us 占位由实测"
+                     "机制消除。"),
+            "version_model": {
+                "same_period": "B(k) 读 A(k)：要求 A 在 B 之前（同域相位有序，或跨域有相位证明）",
+                "prev_period": "B(k) 读 A(k-lag)：跨域默认 / 多速率生产者更慢 / 相位冲突",
+                "lag_periods": "prev_period 的必要最小延迟（消费者周期拍），由 version_deps.compute_lag 推导",
+                "overclaim_check": "version_deps.verify 独立复核，声明比必要更乐观即 fail-closed",
+            },
             "placeholder_exec": (dag.get("meta") or {}).get("auto", {}).get("placeholder_exec", []),
         },
     }

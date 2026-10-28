@@ -38,11 +38,20 @@ _REPO = os.path.dirname(os.path.dirname(os.path.dirname(_HERE)))  # .../kfusion/
 _PLANNER = os.path.join(_REPO, "kfusion", "scripts", "fusion_plan__融合规划.py")
 _CAPS = os.path.join(_REPO, "kfusion", "contracts", "examples", "platform_caps.json")
 _TEIR_MOD = os.path.join(_REPO, "kfusion", "ir", "temporal_effect_ir.py")
+_VER_MOD = os.path.join(_REPO, "kfusion", "ir", "version_deps.py")
 
 
 def _load_teir_module():
     """按文件路径加载 TEIR 模块（kfusion/ir/temporal_effect_ir.py），避免依赖包结构。"""
     spec = importlib.util.spec_from_file_location("kfusion_ir_teir", _TEIR_MOD)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def _load_ver_module():
+    """按文件路径加载 version_deps 模块（Gate 2 后期 + Gate 3 准备）。"""
+    spec = importlib.util.spec_from_file_location("kfusion_ir_version_deps", _VER_MOD)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
@@ -63,8 +72,17 @@ def _write(p, obj):
 
 
 def build_dag(extract, period_us, deadline_us, exec_us, default_exec_us,
-              task_name=None):
-    """从提取结果构造 dag dict（调用序 -> 相位/拓扑序）。"""
+              task_name=None, default_domain="linux_kernel", domain_period_us=None):
+    """从提取结果构造 dag dict（调用序 -> 相位/拓扑序 + 数据版本依赖）。
+
+    default_domain / domain_period_us 支持**多域多速率**输入：
+      · 每阶段可带 stage.domain（或 extract.meta.domains 批量声明）；缺省回退
+        default_domain（即 --domain 平台名）。
+      · 每域周期来自 extract.meta.domain_period_us 或 --domain-periods；
+        某阶段还可直接带 stage.period_us 覆盖本阶段周期。
+      · 数据边据此标注 version（same_period / prev_period）+ lag_periods + xdom，
+        公式由 version_deps.compute_lag 提供（与独立复核共用同一来源）。
+    """
     if not extract.get("ok") or not extract.get("entry"):
         raise SystemExit("ast_to_plan: 提取结果没有周期入口（ok/entry 不成立），拒绝构造")
     # K-C0 fail-closed：提取阶段已标出不可内核化的外部调用，这里直接拒绝往下走
@@ -84,14 +102,29 @@ def build_dag(extract, period_us, deadline_us, exec_us, default_exec_us,
         raise SystemExit("ast_to_plan: 入口 %r 没有可识别的阶段函数（stages 为空）"
                          % extract.get("entry"))
 
+    # 域 / 多速率：提取器声明的域映射与域周期，CLI 的 --domain-periods 覆盖
+    emeta = extract.get("meta") or {}
+    domains_map = dict(emeta.get("domains") or {})
+    periods_map = dict(emeta.get("domain_period_us") or {})
+    if domain_period_us:
+        periods_map.update(domain_period_us)
+
     order = [s["name"] for s in stages]
     # IR use-def（Gate 2）：每个阶段的读/写全局，来自 stage_extract 的 IR 级分析
     stage_rw = {}
+    stage_dom = {}
+    stage_period = {}
     for s in stages:
-        stage_rw[s["name"]] = {
+        name = s["name"]
+        stage_rw[name] = {
             "reads": s.get("reads") or [],
             "writes": s.get("writes") or [],
         }
+        dom = s.get("domain") or domains_map.get(name) or default_domain
+        stage_dom[name] = dom
+        # 阶段周期：stage.period_us > 域周期 > 任务周期
+        p = s.get("period_us") or periods_map.get(dom) or period_us
+        stage_period[name] = float(p)
 
     # 执行时间：显式优先，缺省用占位并标记
     ex = dict(exec_us or {})
@@ -109,9 +142,12 @@ def build_dag(extract, period_us, deadline_us, exec_us, default_exec_us,
         acc += ex[n]
     span = round(acc, 3)
 
-    # 同周期数据依赖边（Gate 2 IR use-def）：对 B 的每个读 g，找调用序中 B 之前
-    # 最后一个写 g 的阶段 A -> A 在周期 k 写 w_g(k)，B 读 r_g(k)（同一周期版本）。
-    # 这是「功能等价 ≠ 时间正确」要钉死的那条约束：生产者必须在消费者之前（同拍内）。
+    # 数据版本依赖边（Gate 2 IR use-def + Gate 2 后期跨域/多速率）：
+    # 对 B 的每个读 g，找调用序中 B 之前最后一个写 g 的阶段 A -> A 在周期 k 写
+    # w_g(k)，B 读 r_g(k)（同一周期版本）或 r_g(k-lag)（上一/更早周期，跨域/多速率）。
+    # 这是「功能等价 ≠ 时间正确」要钉死的那条约束——版本必须和 (域/周期/相位) 一致，
+    # 跨域/多速率边不能默认同拍可见（PlanVerifier 诚实边界）。
+    ver_mod = _load_ver_module()
     data_edges = []
     cross_inputs = []
     seen = set()
@@ -126,12 +162,28 @@ def build_dag(extract, period_us, deadline_us, exec_us, default_exec_us,
             if producer is not None:
                 key = (producer, b, g)
                 if key not in seen:
+                    Pa = stage_period[producer]
+                    Pb = stage_period[b]
+                    xdom = stage_dom[producer] != stage_dom[b]
+                    la = offsets[producer]
+                    lb = offsets[b]
+                    # 自动提取的程序无法证明跨域同拍可达 ⇒ proof=False ⇒
+                    # 跨域边一律降级为 prev_period（fail-closed，杜绝 over-claim）。
+                    req, _kind = ver_mod.compute_lag(Pa, Pb, xdom, la, lb, False)
+                    if req == 0:
+                        version = "same_period"
+                        lag = 0
+                    else:
+                        version = "prev_period"
+                        lag = req
                     data_edges.append({"from": producer, "to": b,
                                        "kind": "data", "proven": g,
-                                       "var": g, "version": "same_period"})
+                                       "var": g, "version": version,
+                                       "lag_periods": lag, "xdom": xdom})
                     seen.add(key)
             else:
-                # 读但本周期无人写：外部输入 / 上一周期状态（跨周期，不算内部边）
+                # 读但本周期无人写：外部输入 / 上一周期状态（跨周期，不算内部边，
+                # 本就是 prev_period 读取）
                 cross_inputs.append({"stage": b, "var": g})
 
     # 每个节点的真实数据入边（用于 declared_deps / 下游验证）
@@ -145,6 +197,8 @@ def build_dag(extract, period_us, deadline_us, exec_us, default_exec_us,
             "name": n,
             "fns": [n],
             "context": "thread",
+            "domain": stage_dom[n],
+            "period_us": stage_period[n],
             "declared_deps": in_edges.get(n, []),
             # 保守：控制阶段按读写本域状态处理（Gate 2 的 IR use-def 已给出真实读写）
             "effects": ["state_read", "state_write"],
@@ -152,6 +206,9 @@ def build_dag(extract, period_us, deadline_us, exec_us, default_exec_us,
             "phase_us": offsets[n],
         })
 
+    all_periods = dict(periods_map)
+    all_periods.setdefault(default_domain, period_us)
+    domains_used = sorted(set(stage_dom.values()))
     dag = {
         "version": 2,
         "meta": {
@@ -162,10 +219,14 @@ def build_dag(extract, period_us, deadline_us, exec_us, default_exec_us,
                 "period_us": period_us,
                 "deadline_us": deadline_us,
             },
+            "domains": domains_used,
+            "domain_period_us": all_periods,
             "note": ("由 ast_to_plan 从 stage_extract 输出自动构造；"
-                     "edges 来自 IR use-def 同周期数据依赖（%d 条），"
-                     "另有 %d 个跨周期输入；PhaseSpan=%.1f µs"
-                     % (len(data_edges), len(cross_inputs), span)),
+                     "edges 来自 IR use-def 数据版本依赖（%d 条，其中跨域 %d 条），"
+                     "另有 %d 个跨周期输入；PhaseSpan=%.1f µs；域=%s"
+                     % (len(data_edges),
+                        sum(1 for e in data_edges if e.get("xdom")),
+                        len(cross_inputs), span, ",".join(domains_used))),
             "auto": {
                 "source": extract.get("source"),
                 "globals": [g.get("name") for g in (extract.get("globals") or [])],
@@ -198,6 +259,10 @@ def main():
     ap.add_argument("--period-us", type=float, required=True)
     ap.add_argument("--deadline-us", type=float, default=None)
     ap.add_argument("--domain", default="linux_kernel", help="平台名（platform_caps 里的 name）")
+    ap.add_argument("--default-domain", default="linux_kernel",
+                    help="阶段未声明 domain 时回退的默认域（多域时通常是平台名）")
+    ap.add_argument("--domain-periods", default=None,
+                    help="JSON 或 @file：{域名: 周期µs}，支持多速率/跨域周期")
     ap.add_argument("--exec-us", default=None, help="JSON 或 @file：{阶段名: µs}")
     ap.add_argument("--default-exec-us", type=float, default=10.0)
     ap.add_argument("--task-name", default=None)
@@ -220,9 +285,19 @@ def main():
         else:
             exec_us = _load(a.exec_us)
 
+    domain_period_us = None
+    if a.domain_periods:
+        if a.domain_periods.startswith("@"):
+            domain_period_us = _load(a.domain_periods[1:])
+        elif a.domain_periods.lstrip().startswith("{"):
+            domain_period_us = json.loads(a.domain_periods)
+        else:
+            domain_period_us = _load(a.domain_periods)
+
     extract = _load(a.extract)
     (dag, ex, placeholders, data_edges, cross_inputs, stage_rw) = build_dag(
-        extract, a.period_us, deadline, exec_us, a.default_exec_us, a.task_name)
+        extract, a.period_us, deadline, exec_us, a.default_exec_us,
+        a.task_name, a.default_domain, domain_period_us)
 
     os.makedirs(a.out_dir, exist_ok=True)
     dag_p = os.path.join(a.out_dir, "dag.json")
@@ -269,8 +344,25 @@ def main():
 
     plan = _load(plan_p)
     ok = bool((plan.get("verification") or {}).get("ok"))
-    print("dag=%s\ncontract=%s\nplan=%s\nverification.ok=%s groups=%d"
-          % (dag_p, contract_p, plan_p, ok, len(plan.get("groups") or [])),
+
+    # Gate 3 准备：与规划器**分离**的版本依赖复核（version_deps）。
+    # 规划器只看融合/时序可行性；版本依赖（跨域/多速率边是否 over-claim）由独立模块
+    # 从 (域/周期/相位) 重新推导必要延迟并比对声明——over-claim 即 fail-closed。
+    ver_mod = _load_ver_module()
+    vrep = ver_mod.verify(dag)
+    if not vrep["ok"]:
+        ok = False
+        print("ast_to_plan: 版本依赖复核失败（fail-closed）：", file=sys.stderr)
+        for e in vrep["errors"]:
+            print("  · " + e, file=sys.stderr)
+    for w in vrep.get("warnings") or []:
+        print("  ⚠ " + w, file=sys.stderr)
+
+    print("dag=%s\ncontract=%s\nplan=%s\nverification.ok=%s groups=%d\n"
+          "version_deps.ok=%s (edges=%d, xdom=%d)"
+          % (dag_p, contract_p, plan_p, ok, len(plan.get("groups") or []),
+             vrep["ok"], len(vrep["edges"]),
+             sum(1 for e in vrep["edges"] if e.get("xdom"))),
           file=sys.stderr)
     return 0 if ok else 3
 
