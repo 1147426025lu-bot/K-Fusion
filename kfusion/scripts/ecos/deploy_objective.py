@@ -353,7 +353,7 @@ def decide(candidates, profile, alpha=1.0, beta=0.0, gamma=0.0,
     在报告里无法复核。
     """
     evals = []
-    for cand in candidates:
+    for idx, cand in enumerate(candidates):
         domain = cand.get("domain") or (cand.get("plan") or {}).get("meta", {}).get("platform")
         n_cross = (cand.get("cost") or {}).get("handoff_channels")
         if n_cross is None:
@@ -372,8 +372,10 @@ def decide(candidates, profile, alpha=1.0, beta=0.0, gamma=0.0,
                          miss_bound=miss_bound, deadline_us=deadline_us,
                          cand_shape=cand_shape)
             r["candidate_id"] = cand.get("id")
+            r["cand_index"] = idx
             r["cand_shape"] = cand_shape
             r["deployment_ready"] = bool(cand.get("deployment_ready"))
+            r["label"] = "%s@%s" % (cand.get("id"), domain)
             per_sched[s] = r
             evals.append(r)
         best = None
@@ -383,7 +385,7 @@ def decide(candidates, profile, alpha=1.0, beta=0.0, gamma=0.0,
             if best is None or (r["J_us"], s) < (best["J_us"], best["sched"]):
                 best = r
     rankable = [e for e in evals if e["rankable"] and e.get("deployment_ready")]
-    rankable.sort(key=lambda e: (e["J_us"], e["candidate_id"] or "", e["sched"]))
+    rankable.sort(key=lambda e: (e["J_us"], e["cand_index"]))
     chosen = rankable[0] if rankable else None
     return {
         "kind": "pr11_deploy_objective",
@@ -397,6 +399,8 @@ def decide(candidates, profile, alpha=1.0, beta=0.0, gamma=0.0,
         "n_evals": len(evals),
         "chosen": None if chosen is None else {
             "candidate_id": chosen["candidate_id"],
+            "cand_index": chosen["cand_index"],
+            "label": chosen["label"],
             "deployment": chosen["deployment"],
             "sched": chosen["sched"],
             "J_us": chosen["J_us"],

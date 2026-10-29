@@ -29,6 +29,7 @@ DOMAINS = ("linux_userspace", "linux_kernel")
 sys.path.insert(0, os.path.join(HERE, "ecos"))
 import stage_cost as stage_cost_mod  # noqa: E402
 import uku_interface as uku_mod  # noqa: E402
+import deploy_objective as do_mod  # noqa: E402
 EV_FINAL = stage_cost_mod.EV_FINAL
 EV_EXPLORE = stage_cost_mod.EV_EXPLORE
 EV_WEAK = stage_cost_mod.EV_WEAK
@@ -802,6 +803,93 @@ def parse_override(text):
     return obj
 
 
+def _slim_objective(res):
+    """decision 里 all_evals 很长；stkp.json 只留可排名的 + 每候选一条拒因。"""
+    seen, unrank = set(), []
+    for e in res.get("all_evals") or []:
+        if e.get("rankable"):
+            continue
+        cid = e.get("candidate_id")
+        if cid in seen:
+            continue
+        seen.add(cid)
+        unrank.append({"candidate_id": cid, "deployment": e.get("deployment"),
+                       "sched": e.get("sched"),
+                       "missing": e.get("missing")})
+    out = {k: res.get(k) for k in
+           ("kind", "version", "objective", "weights", "deadline_us",
+            "n_rankable", "n_evals", "chosen", "claim")}
+    out["ranked"] = res.get("ranked") or []
+    out["not_rankable"] = unrank
+    return out
+
+
+def apply_deploy_objective(doc, profile, alpha=1.0, beta=0.0, gamma=0.0,
+                           miss_bound="point", scheds=None, deadline=None):
+    """用实测尾部选部署，调度类一起选。返回 (doc, ok)。
+
+    ok=False 表示没有任何 (部署, 调度类) 同时具备实测 Q99 与 R_miss。
+    此时**必须**把 chosen 清空，让上层 fail-closed 停止生成——
+    退回模型排序等于把「测不出来」悄悄当成「模型说得对」。
+    """
+    cands = doc.get("candidates") or []
+    if deadline is None:
+        deadline = (doc.get("task") or {}).get("deadline_us")
+    res = do_mod.decide(cands, profile, alpha=alpha, beta=beta, gamma=gamma,
+                        miss_bound=miss_bound, deadline_us=deadline,
+                        scheds=tuple(scheds) if scheds else do_mod.SCHED_CLASSES)
+    prev_id = doc.get("chosen")
+    prev_cost = ((doc.get("chosen_record") or {}).get("cost") or {}).get("total_us")
+    doc["model_best_before_objective"] = {"chosen": prev_id,
+                                          "total_us": prev_cost}
+    slim = _slim_objective(res)
+    doc["deploy_objective"] = slim
+
+    # 覆盖度：有多少个 deployment_ready 候选真的进了排名。
+    # 不足 100% 时入选结论只覆盖已测形状——必须显式说出来，
+    # 否则「A 入选」会被误读成「A 最优」，其实是内核候选没画像。
+    # 按**索引**统计：候选 id 会重名（同名分属不同域），按 id 会串。
+    ranked_idx = set()
+    for e in res.get("all_evals") or []:
+        if e.get("rankable"):
+            ranked_idx.add(e.get("cand_index"))
+    all_idx = set(range(len(cands)))
+    slim["coverage"] = {
+        "ranked_candidates": len(ranked_idx),
+        "deployment_ready_candidates": len(cands),
+        "unranked_candidates": [
+            "%s@%s" % (cands[i].get("id"), cands[i].get("domain"))
+            for i in sorted(all_idx - ranked_idx)],
+        "complete": not (all_idx - ranked_idx),
+    }
+
+    if res.get("chosen") is None:
+        doc["chosen"] = None
+        doc["chosen_record"] = None
+        doc["sched_class"] = None
+        doc["claim"] = "objective_fail_closed"
+        return doc, False
+
+    idx = res["chosen"].get("cand_index")
+    if idx is None or not (0 <= idx < len(cands)):
+        doc["chosen"] = None
+        doc["chosen_record"] = None
+        doc["sched_class"] = None
+        doc["claim"] = "objective_candidate_missing"
+        return doc, False
+    rec = cands[idx]
+
+    doc["chosen_record"] = rec
+    doc["chosen"] = rec.get("id")
+    doc["sched_class"] = res["chosen"]["sched"]
+    doc["claim"] = "objective_ranked_measured_tail"
+    rec["why"] = ("%s; J=%s µs（α=%s β=%s γ=%s, miss_bound=%s）；"
+                  "模型原选 %s" % (rec.get("why") or "",
+                                  res["chosen"]["J_us"], alpha, beta, gamma,
+                                  miss_bound, prev_id))
+    return doc, True
+
+
 def run_stkp(args):
     teir = load_json(args.teir)
     v = load_verifier()
@@ -825,6 +913,23 @@ def run_stkp(args):
         dag=dag, contract=contract, platforms=platforms,
         ioctl_cost=ioctl_cost,
     )
+    if args.deploy_objective:
+        prof = do_mod.load_profile(args.deploy_objective)
+        scheds = [s.strip() for s in str(args.objective_scheds).split(",")
+                  if s.strip()]
+        doc, ok = apply_deploy_objective(
+            doc, prof, alpha=args.objective_alpha, beta=args.objective_beta,
+            gamma=args.objective_gamma, miss_bound=args.objective_miss_bound,
+            scheds=scheds,
+            deadline=((teir.get("task") or {}).get("deadline_us")))
+        if args.objective_out:
+            dump_json(args.objective_out, doc["deploy_objective"])
+        if not ok:
+            print("!! 部署目标 fail-closed：没有同时具备实测 Q99 与 R_miss 的"
+                  " (部署, 调度类) 组合，拒绝生成（%d 个候选，%d 条拒因）" % (
+                      doc["deploy_objective"].get("n_evals") or 0,
+                      len(doc["deploy_objective"].get("not_rankable") or [])),
+                  file=sys.stderr)
     if not args.no_baseline:
         doc = attach_baseline(doc, teir, args.c_user_us, args.c_kernel_us,
                               args.kernel_extra_us, v)
@@ -851,6 +956,24 @@ def run_stkp(args):
         for g in rec["plan"]["groups"]:
             print("  %-3s %-28s @ %s" % (
                 g["id"], " + ".join(g["members"]), g["domain"]))
+    obj = doc.get("deploy_objective")
+    if obj:
+        ch = obj.get("chosen")
+        before = (doc.get("model_best_before_objective") or {}).get("chosen")
+        if ch:
+            cov = obj.get("coverage") or {}
+            print("  deploy objective: %s @ %s J=%s µs（模型原选 %s；"
+                  "有画像 %d/%d）" % (
+                      ch.get("label") or ch.get("candidate_id"), ch.get("sched"),
+                      ch.get("J_us"), before,
+                      cov.get("ranked_candidates"),
+                      cov.get("deployment_ready_candidates")))
+            if not cov.get("complete"):
+                print("  ⚠ 覆盖不全：%s 无实测画像，未参与排名——"
+                      "结论只覆盖已测形状" % ", ".join(
+                          cov.get("unranked_candidates") or []))
+        else:
+            print("  deploy objective: fail-closed（模型原选 %s 未被证实）" % before)
     vs = doc.get("vs_baseline") or {}
     if vs:
         print("  vs A–F: baseline=%s STKP=%s missed_by_af=%s" % (
@@ -984,6 +1107,19 @@ def main():
     ap.add_argument("--oracle", action="store_true")
     ap.add_argument("--no-baseline", action="store_true")
     ap.add_argument("--chosen-plan", default=None)
+    ap.add_argument("--deploy-objective", default=None,
+                    help="实测调度画像 sched_profile.json；给了就按 J(d,s) 选，"
+                         "不做任何组合可排名时 fail-closed 不生成")
+    ap.add_argument("--objective-alpha", type=float, default=1.0)
+    ap.add_argument("--objective-beta", type=float, default=0.0,
+                    help="µs / 单位超期率（1e5 表示 1%% 超期折 1000µs）")
+    ap.add_argument("--objective-gamma", type=float, default=0.0,
+                    help="跨界结构代价权重；Q99 已含往返，>0 是策略选择不是时延")
+    ap.add_argument("--objective-miss-bound", dest="objective_miss_bound",
+                    default="point", choices=("point", "upper"))
+    ap.add_argument("--objective-scheds", default="cfs,fifo99")
+    ap.add_argument("--objective-out", default=None,
+                    help="把决策明细单独写出一份 json")
     ap.add_argument("-o", "--out")
     args = ap.parse_args()
     args.dag = args.dag_opt or args.dag

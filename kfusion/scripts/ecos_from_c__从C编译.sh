@@ -13,6 +13,13 @@
 #   CLANG OPT PYTHON  OUT_DIR  BIND (默认 setpoint=1000)
 #   SKIP_HOST=1  只生成不编译用户态
 #   CYCLES      用户态试跑周期数（默认 80，避免自测睡太久）
+#   DEPLOY_OBJECTIVE  实测调度画像 sched_profile.json；给了就按 J(d,s) 选部署，
+#                     并把选中的调度类写进 deploy.json。排不出名则 fail-closed
+#                     拒绝生成（不退回模型排序）。
+#   OBJ_ALPHA/BETA/GAMMA  目标函数权重（默认 1 / 0 / 0）
+#   OBJ_MISS_BOUND        point|upper（默认 point）
+#   OBJ_SCHEDS            参与决策的调度类，默认 cfs,fifo99
+#   APPLY_SCHED=1         试跑时按选中的调度类加 chrt 前缀（默认 0，只记录不改行为）
 set -euo pipefail
 
 KF="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -135,12 +142,27 @@ fi
 if [ -n "${IOCTL_COST:-}" ] && [ -f "${IOCTL_COST}" ]; then
   STKP_ARGS+=(--ioctl-cost "$IOCTL_COST")
 fi
+if [ -n "${DEPLOY_OBJECTIVE:-}" ] && [ -f "${DEPLOY_OBJECTIVE}" ]; then
+  STKP_ARGS+=(--deploy-objective "$DEPLOY_OBJECTIVE"
+              --objective-alpha "${OBJ_ALPHA:-1}"
+              --objective-beta "${OBJ_BETA:-0}"
+              --objective-gamma "${OBJ_GAMMA:-0}"
+              --objective-miss-bound "${OBJ_MISS_BOUND:-point}"
+              --objective-scheds "${OBJ_SCHEDS:-cfs,fifo99}"
+              --objective-out "$OUT/deploy_objective.json")
+fi
 "$PY" "$KF/scripts/ecos_plan_joint.py" "${STKP_ARGS[@]}" \
   || die "STKP 无 deployment_ready 方案" 8
 
+CLAIM="$("$PY" -c "import json; print(json.load(open('$OUT/stkp.json')).get('claim') or '')")"
+if [ "$CLAIM" = "objective_fail_closed" ]; then
+  die "部署目标 fail-closed：没有 (部署, 调度类) 同时具备实测 Q99 与 R_miss，拒绝生成（见 $OUT/deploy_objective.json）" 8
+fi
+
 CHOSEN="$("$PY" -c "import json; print(json.load(open('$OUT/stkp.json'))['chosen'] or '')")"
 DOMAIN="$("$PY" -c "import json; print((json.load(open('$OUT/stkp.json')).get('chosen_record') or {}).get('domain') or '')")"
-echo "  STKP 入选 $CHOSEN  域 $DOMAIN"
+SCHED_CLASS="$("$PY" -c "import json; print(json.load(open('$OUT/stkp.json')).get('sched_class') or '')")"
+echo "  STKP 入选 $CHOSEN  域 $DOMAIN  调度类 ${SCHED_CLASS:-默认为 CFS}"
 if [ -z "$CHOSEN" ]; then
   die "无入选候选" 8
 fi
@@ -175,6 +197,11 @@ fi
 import json, sys
 d = json.load(open(sys.argv[1]))
 rec = d.get("chosen_record") or {}
+obj = d.get("deploy_objective") or {}
+sched = d.get("sched_class")
+# 调度类是部署的一部分：CFS→FIFO99 在同一 binary 上实测差 51µs（PR-11）。
+# 只写进报告不给运行命令，等于决策没落地。
+prefix = ["chrt", "-f", "99"] if sched == "fifo99" else []
 doc = {
     "chosen": d.get("chosen"),
     "domain": rec.get("domain"),
@@ -184,9 +211,26 @@ doc = {
     "adapter": (rec.get("plan") or {}).get("meta", {}).get("xdom_adapter"),
     "deployable": rec.get("domain") in ("linux_userspace", "linux_kernel")
         or (rec.get("plan") or {}).get("meta", {}).get("xdom_adapter") == "uku_ioctl",
+    "sched_class": sched,
+    "run_prefix": prefix,
+    "objective": None if not obj else {
+        "J_us": (obj.get("chosen") or {}).get("J_us"),
+        "terms": (obj.get("chosen") or {}).get("terms"),
+        "weights": obj.get("weights"),
+        "model_best_before_objective": (d.get("model_best_before_objective") or {}).get("chosen"),
+        "coverage": obj.get("coverage"),
+    },
 }
 json.dump(doc, open(sys.argv[2], "w"), ensure_ascii=False, indent=2)
-print("  deploy.json chosen=%s domain=%s" % (doc["chosen"], doc["domain"]))
+print("  deploy.json chosen=%s domain=%s sched=%s"
+      % (doc["chosen"], doc["domain"], sched or "-"))
+if sched:
+    print("  调度类 @%s：%s" % (doc["chosen"], " ".join(prefix) if prefix else sched.upper()))
+    cov = (doc.get("objective") or {}).get("coverage") or {}
+    if cov and not cov.get("complete"):
+        print("  ⚠ 目标覆盖 %d/%d 个可部署候选，未测形状未参与排名"
+              % (cov.get("ranked_candidates") or 0,
+                 cov.get("deployment_ready_candidates") or 0))
 PY
 
 if [ -n "${TIME_CONTRACT:-}" ] && [ -f "${TIME_CONTRACT}" ]; then
@@ -354,17 +398,28 @@ PY
 fi
 
 if [ "${SKIP_HOST:-0}" != "1" ]; then
+  # 选中的调度类要不要真的作用到试跑？默认只记录（APPLY_SCHED=0），
+  # 因为改调度类会改变测量口径；要复现决策就显式开。
+  RUN_PREFIX=()
+  if [ "${APPLY_SCHED:-0}" = "1" ] && [ "${SCHED_CLASS:-}" = "fifo99" ]; then
+    if command -v chrt >/dev/null; then
+      RUN_PREFIX=(chrt -f 99)
+      echo "  ▶ 按部署决策加调度类：chrt -f 99"
+    else
+      echo "  ⚠ 选了 fifo99 但本机无 chrt，按 CFS 跑（报告里不要写成 FIFO）"
+    fi
+  fi
   if [ "$DOMAIN" = "mixed" ]; then
     step "9) UKU 用户态驱动（gold；mixed 需 insmod 后跑）"
     gcc -O2 -std=gnu11 -Wall -Werror -I"$KF/include" -I"$OUT" -I"$OUT/kmod_uku" \
       "$OUT/driver.c" -o "$OUT/driver" -lrt || die "gcc 失败" 10
-    "$OUT/driver" gold "$CYCLES" | tee "$OUT/driver.gold.log"
+    "${RUN_PREFIX[@]}" "$OUT/driver" gold "$CYCLES" | tee "$OUT/driver.gold.log"
   else
   step "9) 宿主编译并短跑 plan/flat（digest 必须相同）"
   gcc -O2 -std=gnu11 -Wall -Werror -I"$KF/include" \
     "$OUT/driver.c" -o "$OUT/driver" -lrt || die "gcc 失败" 10
-  "$OUT/driver" plan "$CYCLES" | tee "$OUT/driver.plan.log"
-  "$OUT/driver" flat "$CYCLES" | tee "$OUT/driver.flat.log"
+  "${RUN_PREFIX[@]}" "$OUT/driver" plan "$CYCLES" | tee "$OUT/driver.plan.log"
+  "${RUN_PREFIX[@]}" "$OUT/driver" flat "$CYCLES" | tee "$OUT/driver.flat.log"
   cat "$OUT/driver.plan.log" "$OUT/driver.flat.log" > "$OUT/driver.log"
   "$PY" - "$OUT/driver.log" <<'PY' || die "digest 对照失败" 12
 import sys, re
@@ -390,6 +445,7 @@ echo "   骨架  $OUT/stages.json"
 echo "   DAG   $OUT/task.dag.json"
 echo "   TEIR  $OUT/task.teir.json"
 echo "   入选  $OUT/chosen.plan.json  ($CHOSEN / $DOMAIN)"
+echo "   调度类 ${SCHED_CLASS:-（未启用部署目标，按 CFS）}"
 echo "   部署  $OUT/deploy.json"
 echo "   方案  $OUT/plan.json"
 echo "   验证  $OUT/verify.json"
