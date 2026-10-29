@@ -370,6 +370,8 @@ def rebuild(cells, out_dir):
             files = sorted(glob.glob(pat))
             if not files:
                 continue
+            # 旧记录里的环境快照是证据，重算只更新统计，不许把它丢掉
+            old = {int(r.get("repeat") or 0): r for r in cond.get("runs") or []}
             runs = []
             for p in files:
                 i = int(os.path.basename(p)[1:3])
@@ -399,6 +401,10 @@ def rebuild(cells, out_dir):
                     "exec_mode": st.get("exec_mode"),
                     "stat_source": "probe_stat_block",
                 })
+                if old.get(i, {}).get("env_before"):
+                    runs[-1]["env_before"] = old[i]["env_before"]
+                if old.get(i, {}).get("env_after"):
+                    runs[-1]["env_after"] = old[i]["env_after"]
                 n += 1
             cond["runs"] = runs
             cond["status"] = "ok"
