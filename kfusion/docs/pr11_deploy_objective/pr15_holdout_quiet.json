@@ -1,0 +1,3101 @@
+{
+  "kind": "pr15_holdout",
+  "version": 1,
+  "load": 0,
+  "deadline_us": 1000.0,
+  "horizon_s": 3600.0,
+  "betas": [
+    0.0,
+    100000.0
+  ],
+  "protocol": "留一轮：9 轮建画像、被留的那一轮检验，共 10 折",
+  "claim": "只回答「换一批轮次，选择是否还成立」；两折不足以给置信度",
+  "scenarios": [
+    "fused_user",
+    "partial_kernel",
+    "split3_user_plan",
+    "split_s_pk_user",
+    "split_sp_k_user",
+    "user_only"
+  ],
+  "folds": {
+    "LOO-r00": {
+      "train_rounds": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "val_rounds": [
+        0
+      ],
+      "by_beta": {
+        "0": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 15,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 30.34,
+            "rounds": 1,
+            "per_round_p99": [
+              15
+            ]
+          },
+          "chosen_J_val": 15.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 15.0,
+            "stats": {
+              "q99_us": 15,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 30.34,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 15.0,
+              "stats": {
+                "q99_us": 15,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 30.34,
+                "rounds": 1,
+                "per_round_p99": [
+                  15
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 65.0,
+              "stats": {
+                "q99_us": 65,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 217.098,
+                "rounds": 1,
+                "per_round_p99": [
+                  65
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 213.0,
+              "stats": {
+                "q99_us": 213,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 233.533,
+                "rounds": 1,
+                "per_round_p99": [
+                  213
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 263.0,
+              "stats": {
+                "q99_us": 263,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 620.005,
+                "rounds": 1,
+                "per_round_p99": [
+                  263
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "A@fifo99",
+              "cand_index": 3,
+              "sched": "fifo99",
+              "J_val": 412.0,
+              "stats": {
+                "q99_us": 412,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 426.553,
+                "rounds": 1,
+                "per_round_p99": [
+                  412
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        },
+        "100000": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 15,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 30.34,
+            "rounds": 1,
+            "per_round_p99": [
+              15
+            ]
+          },
+          "chosen_J_val": 15.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 15.0,
+            "stats": {
+              "q99_us": 15,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 30.34,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 15.0,
+              "stats": {
+                "q99_us": 15,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 30.34,
+                "rounds": 1,
+                "per_round_p99": [
+                  15
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 65.0,
+              "stats": {
+                "q99_us": 65,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 217.098,
+                "rounds": 1,
+                "per_round_p99": [
+                  65
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 213.0,
+              "stats": {
+                "q99_us": 213,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 233.533,
+                "rounds": 1,
+                "per_round_p99": [
+                  213
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 263.0,
+              "stats": {
+                "q99_us": 263,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 620.005,
+                "rounds": 1,
+                "per_round_p99": [
+                  263
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "A@fifo99",
+              "cand_index": 3,
+              "sched": "fifo99",
+              "J_val": 412.0,
+              "stats": {
+                "q99_us": 412,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 426.553,
+                "rounds": 1,
+                "per_round_p99": [
+                  412
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        }
+      }
+    },
+    "LOO-r01": {
+      "train_rounds": [
+        0,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "val_rounds": [
+        1
+      ],
+      "by_beta": {
+        "0": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 15,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 32.518,
+            "rounds": 1,
+            "per_round_p99": [
+              15
+            ]
+          },
+          "chosen_J_val": 15.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 15.0,
+            "stats": {
+              "q99_us": 15,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 32.518,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 15.0,
+              "stats": {
+                "q99_us": 15,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 32.518,
+                "rounds": 1,
+                "per_round_p99": [
+                  15
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 65.0,
+              "stats": {
+                "q99_us": 65,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 102.61,
+                "rounds": 1,
+                "per_round_p99": [
+                  65
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 213.0,
+              "stats": {
+                "q99_us": 213,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 223.927,
+                "rounds": 1,
+                "per_round_p99": [
+                  213
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 263.0,
+              "stats": {
+                "q99_us": 263,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 291.672,
+                "rounds": 1,
+                "per_round_p99": [
+                  263
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample+stage_pid]|L[stage_sink]@fifo99",
+              "cand_index": 1,
+              "sched": "fifo99",
+              "J_val": 412.0,
+              "stats": {
+                "q99_us": 412,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 426.231,
+                "rounds": 1,
+                "per_round_p99": [
+                  412
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        },
+        "100000": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 15,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 32.518,
+            "rounds": 1,
+            "per_round_p99": [
+              15
+            ]
+          },
+          "chosen_J_val": 15.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 15.0,
+            "stats": {
+              "q99_us": 15,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 32.518,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 15.0,
+              "stats": {
+                "q99_us": 15,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 32.518,
+                "rounds": 1,
+                "per_round_p99": [
+                  15
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 65.0,
+              "stats": {
+                "q99_us": 65,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 102.61,
+                "rounds": 1,
+                "per_round_p99": [
+                  65
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 213.0,
+              "stats": {
+                "q99_us": 213,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 223.927,
+                "rounds": 1,
+                "per_round_p99": [
+                  213
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 263.0,
+              "stats": {
+                "q99_us": 263,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 291.672,
+                "rounds": 1,
+                "per_round_p99": [
+                  263
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample+stage_pid]|L[stage_sink]@fifo99",
+              "cand_index": 1,
+              "sched": "fifo99",
+              "J_val": 412.0,
+              "stats": {
+                "q99_us": 412,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 426.231,
+                "rounds": 1,
+                "per_round_p99": [
+                  412
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        }
+      }
+    },
+    "LOO-r02": {
+      "train_rounds": [
+        0,
+        1,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "val_rounds": [
+        2
+      ],
+      "by_beta": {
+        "0": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 16,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 36.088,
+            "rounds": 1,
+            "per_round_p99": [
+              16
+            ]
+          },
+          "chosen_J_val": 16.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 16.0,
+            "stats": {
+              "q99_us": 16,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 36.088,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 16.0,
+              "stats": {
+                "q99_us": 16,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 36.088,
+                "rounds": 1,
+                "per_round_p99": [
+                  16
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 66.0,
+              "stats": {
+                "q99_us": 66,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 194.624,
+                "rounds": 1,
+                "per_round_p99": [
+                  66
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 213.0,
+              "stats": {
+                "q99_us": 213,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 229.581,
+                "rounds": 1,
+                "per_round_p99": [
+                  213
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 263.0,
+              "stats": {
+                "q99_us": 263,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 469.142,
+                "rounds": 1,
+                "per_round_p99": [
+                  263
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "A@fifo99",
+              "cand_index": 3,
+              "sched": "fifo99",
+              "J_val": 412.0,
+              "stats": {
+                "q99_us": 412,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 427.355,
+                "rounds": 1,
+                "per_round_p99": [
+                  412
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        },
+        "100000": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 16,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 36.088,
+            "rounds": 1,
+            "per_round_p99": [
+              16
+            ]
+          },
+          "chosen_J_val": 16.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 16.0,
+            "stats": {
+              "q99_us": 16,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 36.088,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 16.0,
+              "stats": {
+                "q99_us": 16,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 36.088,
+                "rounds": 1,
+                "per_round_p99": [
+                  16
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 66.0,
+              "stats": {
+                "q99_us": 66,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 194.624,
+                "rounds": 1,
+                "per_round_p99": [
+                  66
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 213.0,
+              "stats": {
+                "q99_us": 213,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 229.581,
+                "rounds": 1,
+                "per_round_p99": [
+                  213
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 263.0,
+              "stats": {
+                "q99_us": 263,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 469.142,
+                "rounds": 1,
+                "per_round_p99": [
+                  263
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "A@fifo99",
+              "cand_index": 3,
+              "sched": "fifo99",
+              "J_val": 412.0,
+              "stats": {
+                "q99_us": 412,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 427.355,
+                "rounds": 1,
+                "per_round_p99": [
+                  412
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        }
+      }
+    },
+    "LOO-r03": {
+      "train_rounds": [
+        0,
+        1,
+        2,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "val_rounds": [
+        3
+      ],
+      "by_beta": {
+        "0": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 15,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 33.606,
+            "rounds": 1,
+            "per_round_p99": [
+              15
+            ]
+          },
+          "chosen_J_val": 15.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 15.0,
+            "stats": {
+              "q99_us": 15,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 33.606,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 15.0,
+              "stats": {
+                "q99_us": 15,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 33.606,
+                "rounds": 1,
+                "per_round_p99": [
+                  15
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 66.0,
+              "stats": {
+                "q99_us": 66,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 78.967,
+                "rounds": 1,
+                "per_round_p99": [
+                  66
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 213.0,
+              "stats": {
+                "q99_us": 213,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 227.254,
+                "rounds": 1,
+                "per_round_p99": [
+                  213
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 265.0,
+              "stats": {
+                "q99_us": 265,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 314.315,
+                "rounds": 1,
+                "per_round_p99": [
+                  265
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample+stage_pid]|L[stage_sink]@fifo99",
+              "cand_index": 1,
+              "sched": "fifo99",
+              "J_val": 414.0,
+              "stats": {
+                "q99_us": 414,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 423.304,
+                "rounds": 1,
+                "per_round_p99": [
+                  414
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        },
+        "100000": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 15,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 33.606,
+            "rounds": 1,
+            "per_round_p99": [
+              15
+            ]
+          },
+          "chosen_J_val": 15.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 15.0,
+            "stats": {
+              "q99_us": 15,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 33.606,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 15.0,
+              "stats": {
+                "q99_us": 15,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 33.606,
+                "rounds": 1,
+                "per_round_p99": [
+                  15
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 66.0,
+              "stats": {
+                "q99_us": 66,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 78.967,
+                "rounds": 1,
+                "per_round_p99": [
+                  66
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 213.0,
+              "stats": {
+                "q99_us": 213,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 227.254,
+                "rounds": 1,
+                "per_round_p99": [
+                  213
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 265.0,
+              "stats": {
+                "q99_us": 265,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 314.315,
+                "rounds": 1,
+                "per_round_p99": [
+                  265
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample+stage_pid]|L[stage_sink]@fifo99",
+              "cand_index": 1,
+              "sched": "fifo99",
+              "J_val": 414.0,
+              "stats": {
+                "q99_us": 414,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 423.304,
+                "rounds": 1,
+                "per_round_p99": [
+                  414
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        }
+      }
+    },
+    "LOO-r04": {
+      "train_rounds": [
+        0,
+        1,
+        2,
+        3,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "val_rounds": [
+        4
+      ],
+      "by_beta": {
+        "0": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 16,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 29.613,
+            "rounds": 1,
+            "per_round_p99": [
+              16
+            ]
+          },
+          "chosen_J_val": 16.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 16.0,
+            "stats": {
+              "q99_us": 16,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.613,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 16.0,
+              "stats": {
+                "q99_us": 16,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 29.613,
+                "rounds": 1,
+                "per_round_p99": [
+                  16
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 66.0,
+              "stats": {
+                "q99_us": 66,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 305.233,
+                "rounds": 1,
+                "per_round_p99": [
+                  66
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 213.0,
+              "stats": {
+                "q99_us": 213,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 225.805,
+                "rounds": 1,
+                "per_round_p99": [
+                  213
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 265.0,
+              "stats": {
+                "q99_us": 265,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 791.314,
+                "rounds": 1,
+                "per_round_p99": [
+                  265
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample+stage_pid]|L[stage_sink]@fifo99",
+              "cand_index": 1,
+              "sched": "fifo99",
+              "J_val": 414.0,
+              "stats": {
+                "q99_us": 414,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 468.991,
+                "rounds": 1,
+                "per_round_p99": [
+                  414
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        },
+        "100000": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 16,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 29.613,
+            "rounds": 1,
+            "per_round_p99": [
+              16
+            ]
+          },
+          "chosen_J_val": 16.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 16.0,
+            "stats": {
+              "q99_us": 16,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.613,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 16.0,
+              "stats": {
+                "q99_us": 16,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 29.613,
+                "rounds": 1,
+                "per_round_p99": [
+                  16
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 66.0,
+              "stats": {
+                "q99_us": 66,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 305.233,
+                "rounds": 1,
+                "per_round_p99": [
+                  66
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 213.0,
+              "stats": {
+                "q99_us": 213,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 225.805,
+                "rounds": 1,
+                "per_round_p99": [
+                  213
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 265.0,
+              "stats": {
+                "q99_us": 265,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 791.314,
+                "rounds": 1,
+                "per_round_p99": [
+                  265
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample+stage_pid]|L[stage_sink]@fifo99",
+              "cand_index": 1,
+              "sched": "fifo99",
+              "J_val": 414.0,
+              "stats": {
+                "q99_us": 414,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 468.991,
+                "rounds": 1,
+                "per_round_p99": [
+                  414
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        }
+      }
+    },
+    "LOO-r05": {
+      "train_rounds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        6,
+        7,
+        8,
+        9
+      ],
+      "val_rounds": [
+        5
+      ],
+      "by_beta": {
+        "0": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 15,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 29.204,
+            "rounds": 1,
+            "per_round_p99": [
+              15
+            ]
+          },
+          "chosen_J_val": 15.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 15.0,
+            "stats": {
+              "q99_us": 15,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.204,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 15.0,
+              "stats": {
+                "q99_us": 15,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 29.204,
+                "rounds": 1,
+                "per_round_p99": [
+                  15
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 65.0,
+              "stats": {
+                "q99_us": 65,
+                "n": 5000,
+                "miss": 2,
+                "max_us": 2583.216,
+                "rounds": 1,
+                "per_round_p99": [
+                  65
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 215.0,
+              "stats": {
+                "q99_us": 215,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 223.349,
+                "rounds": 1,
+                "per_round_p99": [
+                  215
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 265.0,
+              "stats": {
+                "q99_us": 265,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 311.653,
+                "rounds": 1,
+                "per_round_p99": [
+                  265
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "A@fifo99",
+              "cand_index": 3,
+              "sched": "fifo99",
+              "J_val": 412.0,
+              "stats": {
+                "q99_us": 412,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 414.146,
+                "rounds": 1,
+                "per_round_p99": [
+                  412
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        },
+        "100000": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 15,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 29.204,
+            "rounds": 1,
+            "per_round_p99": [
+              15
+            ]
+          },
+          "chosen_J_val": 15.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 15.0,
+            "stats": {
+              "q99_us": 15,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.204,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 15.0,
+              "stats": {
+                "q99_us": 15,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 29.204,
+                "rounds": 1,
+                "per_round_p99": [
+                  15
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 105.0,
+              "stats": {
+                "q99_us": 65,
+                "n": 5000,
+                "miss": 2,
+                "max_us": 2583.216,
+                "rounds": 1,
+                "per_round_p99": [
+                  65
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 215.0,
+              "stats": {
+                "q99_us": 215,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 223.349,
+                "rounds": 1,
+                "per_round_p99": [
+                  215
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 265.0,
+              "stats": {
+                "q99_us": 265,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 311.653,
+                "rounds": 1,
+                "per_round_p99": [
+                  265
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "A@fifo99",
+              "cand_index": 3,
+              "sched": "fifo99",
+              "J_val": 412.0,
+              "stats": {
+                "q99_us": 412,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 414.146,
+                "rounds": 1,
+                "per_round_p99": [
+                  412
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        }
+      }
+    },
+    "LOO-r06": {
+      "train_rounds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        7,
+        8,
+        9
+      ],
+      "val_rounds": [
+        6
+      ],
+      "by_beta": {
+        "0": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 16,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 29.602,
+            "rounds": 1,
+            "per_round_p99": [
+              16
+            ]
+          },
+          "chosen_J_val": 16.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 16.0,
+            "stats": {
+              "q99_us": 16,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.602,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 16.0,
+              "stats": {
+                "q99_us": 16,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 29.602,
+                "rounds": 1,
+                "per_round_p99": [
+                  16
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 66.0,
+              "stats": {
+                "q99_us": 66,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 87.971,
+                "rounds": 1,
+                "per_round_p99": [
+                  66
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 213.0,
+              "stats": {
+                "q99_us": 213,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 229.265,
+                "rounds": 1,
+                "per_round_p99": [
+                  213
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 263.0,
+              "stats": {
+                "q99_us": 263,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 310.34,
+                "rounds": 1,
+                "per_round_p99": [
+                  263
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "A@fifo99",
+              "cand_index": 3,
+              "sched": "fifo99",
+              "J_val": 412.0,
+              "stats": {
+                "q99_us": 412,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 425.88,
+                "rounds": 1,
+                "per_round_p99": [
+                  412
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        },
+        "100000": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 16,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 29.602,
+            "rounds": 1,
+            "per_round_p99": [
+              16
+            ]
+          },
+          "chosen_J_val": 16.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 16.0,
+            "stats": {
+              "q99_us": 16,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.602,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 16.0,
+              "stats": {
+                "q99_us": 16,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 29.602,
+                "rounds": 1,
+                "per_round_p99": [
+                  16
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 66.0,
+              "stats": {
+                "q99_us": 66,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 87.971,
+                "rounds": 1,
+                "per_round_p99": [
+                  66
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 213.0,
+              "stats": {
+                "q99_us": 213,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 229.265,
+                "rounds": 1,
+                "per_round_p99": [
+                  213
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 263.0,
+              "stats": {
+                "q99_us": 263,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 310.34,
+                "rounds": 1,
+                "per_round_p99": [
+                  263
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "A@fifo99",
+              "cand_index": 3,
+              "sched": "fifo99",
+              "J_val": 412.0,
+              "stats": {
+                "q99_us": 412,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 425.88,
+                "rounds": 1,
+                "per_round_p99": [
+                  412
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        }
+      }
+    },
+    "LOO-r07": {
+      "train_rounds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        8,
+        9
+      ],
+      "val_rounds": [
+        7
+      ],
+      "by_beta": {
+        "0": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 15,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 38.429,
+            "rounds": 1,
+            "per_round_p99": [
+              15
+            ]
+          },
+          "chosen_J_val": 15.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 15.0,
+            "stats": {
+              "q99_us": 15,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 38.429,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 15.0,
+              "stats": {
+                "q99_us": 15,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 38.429,
+                "rounds": 1,
+                "per_round_p99": [
+                  15
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 66.0,
+              "stats": {
+                "q99_us": 66,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 180.279,
+                "rounds": 1,
+                "per_round_p99": [
+                  66
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 213.0,
+              "stats": {
+                "q99_us": 213,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 253.661,
+                "rounds": 1,
+                "per_round_p99": [
+                  213
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 265.0,
+              "stats": {
+                "q99_us": 265,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 352.44,
+                "rounds": 1,
+                "per_round_p99": [
+                  265
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample+stage_pid]|L[stage_sink]@fifo99",
+              "cand_index": 1,
+              "sched": "fifo99",
+              "J_val": 412.0,
+              "stats": {
+                "q99_us": 412,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 426.51,
+                "rounds": 1,
+                "per_round_p99": [
+                  412
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        },
+        "100000": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 15,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 38.429,
+            "rounds": 1,
+            "per_round_p99": [
+              15
+            ]
+          },
+          "chosen_J_val": 15.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 15.0,
+            "stats": {
+              "q99_us": 15,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 38.429,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 15.0,
+              "stats": {
+                "q99_us": 15,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 38.429,
+                "rounds": 1,
+                "per_round_p99": [
+                  15
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 66.0,
+              "stats": {
+                "q99_us": 66,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 180.279,
+                "rounds": 1,
+                "per_round_p99": [
+                  66
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 213.0,
+              "stats": {
+                "q99_us": 213,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 253.661,
+                "rounds": 1,
+                "per_round_p99": [
+                  213
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 265.0,
+              "stats": {
+                "q99_us": 265,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 352.44,
+                "rounds": 1,
+                "per_round_p99": [
+                  265
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample+stage_pid]|L[stage_sink]@fifo99",
+              "cand_index": 1,
+              "sched": "fifo99",
+              "J_val": 412.0,
+              "stats": {
+                "q99_us": 412,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 426.51,
+                "rounds": 1,
+                "per_round_p99": [
+                  412
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        }
+      }
+    },
+    "LOO-r08": {
+      "train_rounds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9
+      ],
+      "val_rounds": [
+        8
+      ],
+      "by_beta": {
+        "0": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 15,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 45.05,
+            "rounds": 1,
+            "per_round_p99": [
+              15
+            ]
+          },
+          "chosen_J_val": 15.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 15.0,
+            "stats": {
+              "q99_us": 15,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 45.05,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 15.0,
+              "stats": {
+                "q99_us": 15,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 45.05,
+                "rounds": 1,
+                "per_round_p99": [
+                  15
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 66.0,
+              "stats": {
+                "q99_us": 66,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 807.062,
+                "rounds": 1,
+                "per_round_p99": [
+                  66
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 215.0,
+              "stats": {
+                "q99_us": 215,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 229.591,
+                "rounds": 1,
+                "per_round_p99": [
+                  215
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 263.0,
+              "stats": {
+                "q99_us": 263,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 609.688,
+                "rounds": 1,
+                "per_round_p99": [
+                  263
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample+stage_pid]|L[stage_sink]@fifo99",
+              "cand_index": 1,
+              "sched": "fifo99",
+              "J_val": 412.0,
+              "stats": {
+                "q99_us": 412,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 429.18,
+                "rounds": 1,
+                "per_round_p99": [
+                  412
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        },
+        "100000": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 15,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 45.05,
+            "rounds": 1,
+            "per_round_p99": [
+              15
+            ]
+          },
+          "chosen_J_val": 15.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 15.0,
+            "stats": {
+              "q99_us": 15,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 45.05,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 15.0,
+              "stats": {
+                "q99_us": 15,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 45.05,
+                "rounds": 1,
+                "per_round_p99": [
+                  15
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 66.0,
+              "stats": {
+                "q99_us": 66,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 807.062,
+                "rounds": 1,
+                "per_round_p99": [
+                  66
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 215.0,
+              "stats": {
+                "q99_us": 215,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 229.591,
+                "rounds": 1,
+                "per_round_p99": [
+                  215
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 263.0,
+              "stats": {
+                "q99_us": 263,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 609.688,
+                "rounds": 1,
+                "per_round_p99": [
+                  263
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample+stage_pid]|L[stage_sink]@fifo99",
+              "cand_index": 1,
+              "sched": "fifo99",
+              "J_val": 412.0,
+              "stats": {
+                "q99_us": 412,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 429.18,
+                "rounds": 1,
+                "per_round_p99": [
+                  412
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        }
+      }
+    },
+    "LOO-r09": {
+      "train_rounds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "val_rounds": [
+        9
+      ],
+      "by_beta": {
+        "0": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 15,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 38.862,
+            "rounds": 1,
+            "per_round_p99": [
+              15
+            ]
+          },
+          "chosen_J_val": 15.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 15.0,
+            "stats": {
+              "q99_us": 15,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 38.862,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 15.0,
+              "stats": {
+                "q99_us": 15,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 38.862,
+                "rounds": 1,
+                "per_round_p99": [
+                  15
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 65.0,
+              "stats": {
+                "q99_us": 65,
+                "n": 5000,
+                "miss": 3,
+                "max_us": 2000.771,
+                "rounds": 1,
+                "per_round_p99": [
+                  65
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 213.0,
+              "stats": {
+                "q99_us": 213,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 215.901,
+                "rounds": 1,
+                "per_round_p99": [
+                  213
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 263.0,
+              "stats": {
+                "q99_us": 263,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 990.531,
+                "rounds": 1,
+                "per_round_p99": [
+                  263
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "A@fifo99",
+              "cand_index": 3,
+              "sched": "fifo99",
+              "J_val": 412.0,
+              "stats": {
+                "q99_us": 412,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 427.145,
+                "rounds": 1,
+                "per_round_p99": [
+                  412
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        },
+        "100000": {
+          "n_rankable_train": 8,
+          "chosen_train": {
+            "label": "B@linux_userspace",
+            "sched": "fifo99",
+            "J_train": 15.0
+          },
+          "chosen_val": {
+            "q99_us": 15,
+            "n": 5000,
+            "miss": 0,
+            "max_us": 38.862,
+            "rounds": 1,
+            "per_round_p99": [
+              15
+            ]
+          },
+          "chosen_J_val": 15.0,
+          "verdict_val": "cannot_certify",
+          "verdict_val_why": "验证轮 0/5000 超期，但上界 2763.8 次/h",
+          "verdict_train": "cannot_certify",
+          "verdict_flip": false,
+          "verdict_train_why": "验证轮 0/45000 超期，但上界 307.3 次/h",
+          "oracle_val": {
+            "label": "B@fifo99",
+            "cand_index": 0,
+            "sched": "fifo99",
+            "J_val": 15.0,
+            "stats": {
+              "q99_us": 15,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 38.862,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "deployment_ready": true
+          },
+          "agree": true,
+          "regret_us": 0.0,
+          "val_table": [
+            {
+              "label": "B@fifo99",
+              "cand_index": 0,
+              "sched": "fifo99",
+              "J_val": 15.0,
+              "stats": {
+                "q99_us": 15,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 38.862,
+                "rounds": 1,
+                "per_round_p99": [
+                  15
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "B@cfs",
+              "cand_index": 0,
+              "sched": "cfs",
+              "J_val": 125.0,
+              "stats": {
+                "q99_us": 65,
+                "n": 5000,
+                "miss": 3,
+                "max_us": 2000.771,
+                "rounds": 1,
+                "per_round_p99": [
+                  65
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@fifo99",
+              "cand_index": 2,
+              "sched": "fifo99",
+              "J_val": 213.0,
+              "stats": {
+                "q99_us": 213,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 215.901,
+                "rounds": 1,
+                "per_round_p99": [
+                  213
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@cfs",
+              "cand_index": 2,
+              "sched": "cfs",
+              "J_val": 263.0,
+              "stats": {
+                "q99_us": 263,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 990.531,
+                "rounds": 1,
+                "per_round_p99": [
+                  263
+                ]
+              },
+              "deployment_ready": true
+            },
+            {
+              "label": "A@fifo99",
+              "cand_index": 3,
+              "sched": "fifo99",
+              "J_val": 412.0,
+              "stats": {
+                "q99_us": 412,
+                "n": 5000,
+                "miss": 0,
+                "max_us": 427.145,
+                "rounds": 1,
+                "per_round_p99": [
+                  412
+                ]
+              },
+              "deployment_ready": true
+            }
+          ]
+        }
+      }
+    }
+  },
+  "summary": {
+    "0": {
+      "n_folds": 10,
+      "n_with_choice": 10,
+      "n_agree": 10,
+      "max_regret_us": 0.0,
+      "regrets": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "n_verdict_flip": 0,
+      "chosen_labels": [
+        "B@linux_userspace@fifo99"
+      ]
+    },
+    "100000": {
+      "n_folds": 10,
+      "n_with_choice": 10,
+      "n_agree": 10,
+      "max_regret_us": 0.0,
+      "regrets": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "n_verdict_flip": 0,
+      "chosen_labels": [
+        "B@linux_userspace@fifo99"
+      ]
+    }
+  },
+  "resolution": {
+    "by_beta": {
+      "0": {
+        "n_rankable": 8,
+        "best": "B@fifo99",
+        "second": "B@cfs",
+        "margin_us": 51.0,
+        "noise_p99_us": {
+          "min": 15,
+          "max": 16,
+          "spread": 1
+        },
+        "margin_over_noise": 51.0,
+        "note": "margin/noise 越大，留出法越必然通过；≈1 才真正在检验选择"
+      },
+      "100000": {
+        "n_rankable": 8,
+        "best": "B@fifo99",
+        "second": "B@cfs",
+        "margin_us": 61.0,
+        "noise_p99_us": {
+          "min": 15,
+          "max": 16,
+          "spread": 1
+        },
+        "margin_over_noise": 61.0,
+        "note": "margin/noise 越大，留出法越必然通过；≈1 才真正在检验选择"
+      }
+    }
+  },
+  "single_round_stability": {
+    "fused_user@cfs": {
+      "per_round_verdict": [
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "infeasible_observed",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "infeasible_observed"
+      ],
+      "tally": {
+        "cannot_certify": 8,
+        "infeasible_observed": 2
+      },
+      "stable": false
+    },
+    "fused_user@fifo99": {
+      "per_round_verdict": [
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify"
+      ],
+      "tally": {
+        "cannot_certify": 10
+      },
+      "stable": true
+    },
+    "partial_kernel@cfs": {
+      "per_round_verdict": [
+        "infeasible_observed",
+        "infeasible_observed",
+        "infeasible_observed",
+        "infeasible_observed",
+        "infeasible_observed",
+        "infeasible_observed",
+        "infeasible_observed",
+        "infeasible_observed",
+        "infeasible_observed",
+        "infeasible_observed"
+      ],
+      "tally": {
+        "infeasible_observed": 10
+      },
+      "stable": true
+    },
+    "partial_kernel@fifo99": {
+      "per_round_verdict": [
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify"
+      ],
+      "tally": {
+        "cannot_certify": 10
+      },
+      "stable": true
+    },
+    "split3_user_plan@cfs": {
+      "per_round_verdict": [
+        "cannot_certify",
+        "infeasible_observed",
+        "infeasible_observed",
+        "infeasible_observed",
+        "infeasible_observed",
+        "cannot_certify",
+        "infeasible_observed",
+        "cannot_certify",
+        "infeasible_observed",
+        "cannot_certify"
+      ],
+      "tally": {
+        "cannot_certify": 4,
+        "infeasible_observed": 6
+      },
+      "stable": false
+    },
+    "split3_user_plan@fifo99": {
+      "per_round_verdict": [
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify"
+      ],
+      "tally": {
+        "cannot_certify": 10
+      },
+      "stable": true
+    },
+    "split_s_pk_user@cfs": {
+      "per_round_verdict": [
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify"
+      ],
+      "tally": {
+        "cannot_certify": 10
+      },
+      "stable": true
+    },
+    "split_s_pk_user@fifo99": {
+      "per_round_verdict": [
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify"
+      ],
+      "tally": {
+        "cannot_certify": 10
+      },
+      "stable": true
+    },
+    "split_sp_k_user@cfs": {
+      "per_round_verdict": [
+        "cannot_certify",
+        "cannot_certify",
+        "infeasible_observed",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify"
+      ],
+      "tally": {
+        "cannot_certify": 9,
+        "infeasible_observed": 1
+      },
+      "stable": false
+    },
+    "split_sp_k_user@fifo99": {
+      "per_round_verdict": [
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify"
+      ],
+      "tally": {
+        "cannot_certify": 10
+      },
+      "stable": true
+    },
+    "user_only@cfs": {
+      "per_round_verdict": [
+        "cannot_certify",
+        "infeasible_observed",
+        "infeasible_observed",
+        "cannot_certify",
+        "infeasible_observed",
+        "infeasible_observed",
+        "infeasible_observed",
+        "cannot_certify",
+        "infeasible_observed",
+        "infeasible_observed"
+      ],
+      "tally": {
+        "cannot_certify": 3,
+        "infeasible_observed": 7
+      },
+      "stable": false
+    },
+    "user_only@fifo99": {
+      "per_round_verdict": [
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify",
+        "cannot_certify"
+      ],
+      "tally": {
+        "cannot_certify": 10
+      },
+      "stable": true
+    }
+  }
+}
