@@ -29,6 +29,7 @@ DOMAINS = ("linux_userspace", "linux_kernel")
 sys.path.insert(0, os.path.join(HERE, "ecos"))
 import stage_cost as stage_cost_mod  # noqa: E402
 import uku_interface as uku_mod  # noqa: E402
+import uku_backend_caps as uku_caps  # noqa: E402
 import deploy_objective as do_mod  # noqa: E402
 EV_FINAL = stage_cost_mod.EV_FINAL
 EV_EXPLORE = stage_cost_mod.EV_EXPLORE
@@ -148,7 +149,7 @@ def candidate_schedule(plan, teir, override, c_user, c_kernel):
     for g in plan.get("groups") or []:
         d = g.get("domain")
         if uku:
-            # ioctl 路径是单用户态线程，没有内核 hrtimer 周期释放。
+            # ioctl 路径没有内核 hrtimer 周期释放；L_U 是否每组都计，见 kind。
             L = 0.0 if d == "linux_kernel" else float(c_user)
         else:
             L = c_kernel if d == "linux_kernel" else c_user
@@ -186,8 +187,9 @@ def candidate_schedule(plan, teir, override, c_user, c_kernel):
                 missing.append("%s@%s" % (m, d))
             else:
                 exec_us[m] = float(val)
-    if uku:
-        # 只计一次用户态唤醒；第二段 U 已在同一线程，不再加 L_U。
+    kind = uku_caps.uku_release_kind(plan) if uku else "per_group_release"
+    if uku and kind == "uku_single_release":
+        # 一次唤醒后连续执行；第二段 U 已在同一线程，不再加 L_U。
         for i, r in enumerate(release):
             if r["domain"] == "linux_userspace" and i > 0:
                 r["L_us"] = 0.0
@@ -198,12 +200,13 @@ def candidate_schedule(plan, teir, override, c_user, c_kernel):
         "missing": missing,
         "timing_bound": timing_bound,
         "complete": not missing,
-        "model": "uku_ioctl_serial" if uku else "per_group_release",
+        "model": kind if uku else "per_group_release",
+        "uku_release_kind": kind if uku else None,
     }
 
 
 def uku_serial_events(plan, sched, t_ioctl):
-    """一次唤醒后连续执行。采样用开始时刻，输出用提交（完成）时刻。"""
+    """uku_single_release：一次唤醒后连续执行。采样用开始，输出用提交。"""
     exec_us = (sched or {}).get("exec_us") or {}
     L_by = {r.get("group"): float(r.get("L_us") or 0.0)
             for r in (sched or {}).get("release") or []}
@@ -225,8 +228,49 @@ def uku_serial_events(plan, sched, t_ioctl):
     return t, events
 
 
+def uku_multi_release_events(plan, sched, t_ioctl):
+    """uku_multi_release：S_g ≥ max(φ_g, F_{g-1})。不是相对睡 200µs。
+
+    预测完成时刻不是 WCET；启动延迟仍须板上调度画像约束。
+    """
+    exec_us = (sched or {}).get("exec_us") or {}
+    L_by = {r.get("group"): float(r.get("L_us") or 0.0)
+            for r in (sched or {}).get("release") or []}
+    ph_by = {r.get("group"): r.get("phase_us")
+             for r in (sched or {}).get("release") or []}
+    t_prev = 0.0
+    events = {}
+    for g in plan.get("groups") or []:
+        gid = g.get("id")
+        phi = ph_by.get(gid)
+        if phi is None:
+            phi = g.get("release_phase_us")
+        t = max(float(phi or 0.0), t_prev)
+        t += L_by.get(gid, 0.0)
+        if g.get("domain") == "linux_kernel":
+            t += float(t_ioctl or 0.0)
+        for m in g.get("members") or []:
+            start = t
+            t += float(exec_us.get(m) or 0.0)
+            events[m] = {
+                "start_us": start,
+                "read_us": start,
+                "finish_us": t,
+                "commit_us": t,
+            }
+        t_prev = t
+    return t_prev, events
+
+
+def uku_events(plan, sched, t_ioctl):
+    kind = (sched or {}).get("model") or uku_caps.uku_release_kind(plan)
+    if kind == "uku_multi_release":
+        return uku_multi_release_events(plan, sched, t_ioctl)
+    return uku_serial_events(plan, sched, t_ioctl)
+
+
 def uku_serial_finish(plan, sched, t_ioctl):
-    end, events = uku_serial_events(plan, sched, t_ioctl)
+    end, events = uku_events(plan, sched, t_ioctl)
     return end, {k: v["finish_us"] for k, v in events.items()}
 
 
@@ -440,6 +484,13 @@ def evaluate_cost(plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
     explore_rankable = comparable and (not has_ph)
     pred = None if not comparable else round(
         (compute or 0.0) + release + h_total + sync, 3)
+    if comparable and uku:
+        _end, events = uku_events(plan, sched, h_total)
+        sched["events_us"] = events
+        sched["finish_us"] = {k: v["finish_us"] for k, v in events.items()}
+        if sched.get("model") == "uku_multi_release":
+            # 响应 = 末组完成 − 首个名义释放（φ0=0）；含相位等待，不是 ΣL+C。
+            pred = round(float(_end), 3)
     if pred is not None and not _finite_nonneg(pred):
         comparable = False
         pred = None
@@ -452,10 +503,7 @@ def evaluate_cost(plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
             temporal_ok = False
             temporal_why = "R̂=%.3f > deadline %s" % (pred, deadline_us)
     if comparable and uku:
-        _end, events = uku_serial_events(plan, sched, h_total)
-        werr = uku_window_errors(contract, events)
-        sched["events_us"] = events
-        sched["finish_us"] = {k: v["finish_us"] for k, v in events.items()}
+        werr = uku_window_errors(contract, sched.get("events_us"))
         if werr:
             temporal_ok = False
             temporal_why = "; ".join(e["msg"] for e in werr[:4])
@@ -484,7 +532,12 @@ def evaluate_cost(plan, teir, c_user, c_kernel, extra_kernel, handoff_us,
             "C_us": None if compute is None else round(compute, 3),
             "T_ioctl_us": round(h_total, 3),
             "T_ioctl_evidence": h_ev,
-            "note": "Ĉ=L_U+ΣC+T_ioctl；T_ioctl 须实测才可结题；非 WCET",
+            "kind": sched.get("model"),
+            "note": (
+                "uku_multi_release：R̂=末组完成时刻（含 φ 等待）；非 WCET"
+                if sched.get("model") == "uku_multi_release" else
+                "uku_single_release：Ĉ=L_U+ΣC+T_ioctl；T_ioctl 须实测才可结题；非 WCET"
+            ),
         } if uku else None),
         "predicted_R_us": pred,
         "total_us": pred,
@@ -509,7 +562,7 @@ def dag_temporal_ok(plan, dag, contract, platforms, c_user, c_kernel, sched):
         if not is_uku_ioctl(plan):
             return True, []
         t_ioctl = (sched or {}).get("T_ioctl_us") or 0.0
-        _end, events = uku_serial_events(plan, sched, t_ioctl)
+        _end, events = uku_events(plan, sched, t_ioctl)
         werr = uku_window_errors(contract, events)
         return (not werr), werr
     if sched is not None and not sched.get("complete"):
@@ -631,6 +684,14 @@ def solve(teir, verifier, c_user=21.0, c_kernel=21.0, extra_kernel=0.0,
                     sess = (chk.get("interface") or {}).get("session")
                     if sess:
                         plan["meta"]["uku_session"] = sess
+                    cap = uku_caps.check_plan(plan)
+                    plan["meta"]["uku_release_kind"] = cap.get("kind")
+                    plan["meta"]["codegen_check"] = {
+                        "ok": cap["ok"], "codes": cap.get("codes") or [],
+                    }
+                    if not cap["ok"]:
+                        plan["meta"]["deployment_ready"] = False
+                        plan["meta"]["codegen_reject"] = cap.get("codes")
             ok, diags = verifier.verify(teir, plan)
             if not ok:
                 prune["semantic"] += 1

@@ -179,12 +179,21 @@ def build_shape(shape, workdir):
     if not os.path.isfile(driver):
         return {"status": "no_driver", "got": got}
     # 生成器是否真的能让这个驱动执行 plan（按组释放）？
-    # UKU（mixed）驱动只实现 gold|mixed 两种**单释放**模式，没有 plan 分支——
-    # 这种情况下「测不到」不是缺数据，而是产物根本执行不了该形状。
+    # 优先认 backend_capabilities.json；字符串扫描只是回退。
     src_p = os.path.join(gen, "driver.c")
     src = io.open(src_p, encoding="utf-8", errors="replace").read() \
         if os.path.isfile(src_p) else ""
+    caps_p = os.path.join(gen, "backend_capabilities.json")
+    if not os.path.isfile(caps_p):
+        caps_p = os.path.join(gen, "kmod_uku", "backend_capabilities.json")
     supports_plan = '"plan"' in src
+    if os.path.isfile(caps_p):
+        caps = json.load(io.open(caps_p, encoding="utf-8"))
+        supports_plan = "plan" in (caps.get("modes") or [])
+        chk = caps.get("plan_check") or {}
+        if chk and chk.get("ok") is False:
+            return {"status": "codegen_caps_reject", "got": got,
+                    "codes": chk.get("codes"), "caps": caps_p}
     ko = None
     kd = os.path.join(gen, "kmod_uku")
     if os.path.isdir(kd):
@@ -246,6 +255,19 @@ def parse_stats(text):
     m = re.search(r"# digest: ([0-9a-f]+)", text)
     if m:
         out["digest"] = m.group(1)
+    m = re.search(r"# plan_phases_us:([0-9. ]+)", text)
+    if m:
+        out["plan_phases_us"] = [float(x) for x in m.group(1).split() if x]
+    m = re.search(r"# session: (\S+)=(-?\d+) readback=(\d+)", text)
+    if m:
+        out["session"] = {"name": m.group(1), "value": int(m.group(2)),
+                          "readback": int(m.group(3))}
+    m = re.search(r"# uku_ioctl_error: (\d+)/", text)
+    if m:
+        out["ioctl_error"] = int(m.group(1))
+    m = re.search(r"# uku_seq_mismatch: (\d+)/", text)
+    if m:
+        out["seq_mismatch"] = int(m.group(1))
     return out
 
 

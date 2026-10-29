@@ -213,7 +213,9 @@ class StkpV1(unittest.TestCase):
                          ["linux_userspace", "linux_kernel", "linux_userspace"])
         cost = rec.get("cost") or {}
         self.assertEqual(cost.get("handoff_channels"), 1)
-        self.assertAlmostEqual(cost.get("release_us"), 21.0)
+        self.assertEqual((cost.get("schedule") or {}).get("model"),
+                         "uku_multi_release")
+        self.assertAlmostEqual(cost.get("release_us"), 42.0)
         ioctl = cost.get("ioctl_model") or {}
         self.assertAlmostEqual(ioctl.get("T_ioctl_us"), 1.0)
         self.assertAlmostEqual(cost.get("sync_us"), 0.0)
@@ -643,8 +645,11 @@ class StkpV1(unittest.TestCase):
         rec = doc["chosen_record"]
         self.assertEqual(rec["domain"], "mixed")
         self.assertAlmostEqual((rec.get("cost") or {}).get("sync_us"), 0.0)
+        self.assertEqual((rec.get("cost") or {}).get("schedule", {}).get("model"),
+                         "uku_multi_release")
+        # φ = 0/10/20；末组再付一次 L_U。不是单释放 Ĉ=L_U+ΣC+T_ioctl。
         self.assertAlmostEqual((rec.get("cost") or {}).get("predicted_R_us"),
-                               21.0 + 1.0 + 1.0 + 1.0 + 1.0)
+                               46.0)
         override["linux_kernel"]["add"] = -4.0
         doc2 = stkp.solve(teir, self.v, c_user=21, c_kernel=5,
                           extra_kernel=0, handoff_us=1.0, override=override)

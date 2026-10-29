@@ -347,6 +347,9 @@ if [ "$DOMAIN" = "mixed" ]; then
     "${CALLS[@]}" "${DIGEST[@]}" || die "UKU codegen 失败" 9
   cp "$OUT/kmod_uku/driver.c" "$OUT/driver.c"
   cp "$OUT/kmod_uku/kfusion_uku.h" "$OUT/kfusion_uku.h"
+  if [ -f "$OUT/kmod_uku/backend_capabilities.json" ]; then
+    cp "$OUT/kmod_uku/backend_capabilities.json" "$OUT/backend_capabilities.json"
+  fi
 else
 "$PY" "$KF/scripts/fusion_codegen__生成融合代码.py" "$OUT/plan.json" \
   -o "$OUT/driver.c" \

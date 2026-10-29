@@ -267,7 +267,8 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     sess_name = sorted(sess)[0] if sess else None
     lines = []
     A = lines.append
-    A("/* UKU 混合驱动：gold=全用户态；mixed=中间组走 /dev/kfusion_uku */")
+    A("/* UKU 混合驱动：gold=全用户态单释放；mixed=中段 ioctl 单释放；")
+    A(" * plan=按组相位释放（内核组仍走 ioctl）。plan 才是 STKP mixed 候选的形状。 */")
     A("#define _GNU_SOURCE")
     A("#include <errno.h>")
     A("#include <fcntl.h>")
@@ -311,7 +312,8 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     A("}")
     A("")
     A("static int uku_fd = -1;")
-    A("static int sess_val = 0, sess_ok = 0;")
+    if sess_name:
+        A("static int sess_val = 0, sess_ok = 0;")
     A("/* PR-10E：csv 模式逐拍输出原始样本（k,start_lat_ns,exec_ns,resp_ns），")
     A(" * 供统计基线用。默认关闭，避免污染既有聚合日志格式。 */")
     A("static int g_csv = 0;")
@@ -342,17 +344,77 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     for g in groups:
         order.extend(g.get("members") or [])
     nst = len(order) or 1
+    nrel = len(groups) or 1
+    phases_ns = []
+    for i, g in enumerate(groups):
+        v = g.get("release_phase_us")
+        if v is None:
+            v = g.get("phase_us")
+        if v is None:
+            v = float(i) * 200.0
+        phases_ns.append(int(round(float(v) * 1000.0)))
+    A("static const long long kRelPhase[%d] = { %s };" % (
+        max(nrel, 1),
+        ", ".join("%dLL" % p for p in (phases_ns or [0]))))
+    A("static const int kNRel = %d;" % nrel)
+    A("")
+    si_at = []
+    acc = 0
+    for g in groups:
+        si_at.append(acc)
+        acc += len(g.get("members") or [])
+
+    def emit_one_group(ind, g, si0, uku_c):
+        dom = g.get("domain")
+        members = g.get("members") or []
+        si = si0
+        if dom == "linux_kernel":
+            A("%sif (%s) {" % (ind, uku_c))
+            A("%s	long long t0 = now_ns();" % ind)
+            A("%s	rc = do_kernel_group(g_seq, &hns);" % ind)
+            A("%s	plc_probe_add(&g_rt, now_ns() - t0);" % ind)
+            A("%s	if (rc != 0) {" % ind)
+            A("%s		fprintf(stderr," % ind)
+            A('%s		        "# uku_abort: cycle=%%ld seq=%%u rc=%%d errno=%%d\\n",' % ind)
+            A("%s		        k, g_seq, rc, errno);" % ind)
+            A("%s		if (rc == -EILSEQ) bad_seq++;" % ind)
+            A("%s		else bad_ioctl++;" % ind)
+            A("%s		goto uku_fail;" % ind)
+            A("%s	}" % ind)
+            A("%s	plc_probe_add(&g_hand, hns);" % ind)
+            A("%s} else {" % ind)
+            for m in members:
+                expr = calls.get(m) or ("%s()" % m)
+                A("%s	_a = now_ns();" % ind)
+                A("%s	%s;" % (ind, expr))
+                A("%s	plc_probe_add(&g_exec_stage[%d], now_ns() - _a);" % (ind, si))
+                si += 1
+            A("%s}" % ind)
+        else:
+            for m in members:
+                expr = calls.get(m) or ("%s()" % m)
+                A("%s_a = now_ns();" % ind)
+                A("%s%s;" % (ind, expr))
+                A("%splc_probe_add(&g_exec_stage[%d], now_ns() - _a);" % (ind, si))
+                si += 1
+        return si
+
     A("static int run_mode(const char *mode, long cycles)")
     A("{")
     A("	int mixed = (strcmp(mode, \"mixed\") == 0);")
+    A("	int plan = (strcmp(mode, \"plan\") == 0);")
+    A("	int plan_user = (strcmp(mode, \"plan_user\") == 0);")
+    A("	int use_uku = mixed || plan;")
+    A("	int multi = plan || plan_user;")
     A("	long k, miss = 0, bad_seq = 0, bad_ioctl = 0;")
+    A("	int j;")
     A("	struct timespec next;")
     A("	struct plc_probe_series g_start, g_work, g_resp, g_hand, g_rt;")
     A("	struct plc_probe_series g_cpu, g_preempt;")
     A("	struct plc_probe_series g_exec_stage[%d];" % nst)
     A("	loop_reset();")
     A("	g_digest = 2166136261u;")
-    A("	if (mixed) {")
+    A("	if (use_uku) {")
     A("		uku_fd = open(\"/dev/kfusion_uku\", O_RDWR);")
     A("		if (uku_fd < 0) { perror(\"/dev/kfusion_uku\"); return 2; }")
     A("	}")
@@ -368,56 +430,56 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     A("	if (clock_gettime(CLOCK_MONOTONIC, &next) != 0) return 1;")
     A("	for (k = 0; k < cycles; k++) {")
     A("		long long r, s, f, hns = 0, _a, c0 = 0, c1 = 0;")
+    A("		long long r_first = 0, s_first = 0, f_last = 0, work = 0;")
     A("		int rc;")
     A("		bump_ns(&next, PERIOD_NS);")
-    A("		r = (long long)next.tv_sec * 1000000000LL + next.tv_nsec;")
-    A("		if (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL) != 0)")
-    A("			return 1;")
-    A("		s = now_ns();")
-    A("		/* c0 必须在 s 之后、c1 必须在 f 之前：否则 CPU 区间比 work 宽，")
-    A("		 * preempt = work - cpu 会算出负数（2026-10-28 实测踩过）。 */")
-    A("		if (g_csv == 2) c0 = cpu_ns();")
-    A("		plc_probe_add(&g_start, s - r);")
-    si = 0
-    for g in groups:
-        dom = g.get("domain")
-        members = g.get("members") or []
-        if dom == "linux_kernel":
-            A("		if (mixed) {")
-            A("			long long t0 = now_ns();")
-            A("			rc = do_kernel_group(g_seq, &hns);")
-            A("			plc_probe_add(&g_rt, now_ns() - t0);")
-            A("			if (rc != 0) {")
-            A("				fprintf(stderr,")
-            A('				        "# uku_abort: cycle=%ld seq=%u rc=%d errno=%d\\n",')
-            A("				        k, g_seq, rc, errno);")
-            A("				if (rc == -EILSEQ) bad_seq++;")
-            A("				else bad_ioctl++;")
-            A("				goto uku_fail;")
-            A("			}")
-            A("			plc_probe_add(&g_hand, hns);")
-            A("		} else {")
-            for m in members:
-                expr = calls.get(m) or ("%s()" % m)
-                A("			_a = now_ns();")
-                A("			%s;" % expr)
-                A("			plc_probe_add(&g_exec_stage[%d], now_ns() - _a);" % si)
-                si += 1
-            A("		}")
+    A("		if (multi) {")
+    A("			/* t_{k,g}=t0+kP+φ_g；前组超时不得跳过或重排相位。 */")
+    A("			for (j = 0; j < kNRel; j++) {")
+    A("				struct timespec due = next;")
+    A("				bump_ns(&due, kRelPhase[j]);")
+    A("				r = (long long)due.tv_sec * 1000000000LL + due.tv_nsec;")
+    A("				if (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &due, NULL) != 0)")
+    A("					return 1;")
+    A("				s = now_ns();")
+    A("				plc_probe_add(&g_start, s - r);")
+    A("				if (j == 0) { r_first = r; s_first = s; }")
+    for gi, g in enumerate(groups):
+        if gi == 0:
+            A("				if (j == %d) {" % gi)
         else:
-            for m in members:
-                expr = calls.get(m) or ("%s()" % m)
-                A("		_a = now_ns();")
-                A("		%s;" % expr)
-                A("		plc_probe_add(&g_exec_stage[%d], now_ns() - _a);" % si)
-                si += 1
-    A("		if (g_csv == 2) c1 = cpu_ns();")
-    A("		f = now_ns();")
-    A("		plc_probe_add(&g_work, f - s);")
-    A("		plc_probe_add(&g_resp, f - r);")
-    A("		if (g_csv == 2) {")
-    A("			plc_probe_add(&g_cpu, c1 - c0);")
-    A("			plc_probe_add(&g_preempt, (f - s) - (c1 - c0));")
+            A("				} else if (j == %d) {" % gi)
+        emit_one_group("\t\t\t\t", g, si_at[gi], "use_uku")
+    if groups:
+        A("				}")
+    A("				f = now_ns();")
+    A("				work += f - s;")
+    A("				f_last = f;")
+    A("			}")
+    A("			plc_probe_add(&g_work, work);")
+    A("			plc_probe_add(&g_resp, f_last - r_first);")
+    A("			if (f_last - r_first > DEADLINE_NS) miss++;")
+    A("			r = r_first; s = s_first; f = f_last;")
+    A("		} else {")
+    A("			r = (long long)next.tv_sec * 1000000000LL + next.tv_nsec;")
+    A("			if (clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, NULL) != 0)")
+    A("				return 1;")
+    A("			s = now_ns();")
+    A("			/* c0 必须在 s 之后、c1 必须在 f 之前：否则 CPU 区间比 work 宽，")
+    A("			 * preempt = work - cpu 会算出负数（2026-10-28 实测踩过）。 */")
+    A("			if (g_csv == 2) c0 = cpu_ns();")
+    A("			plc_probe_add(&g_start, s - r);")
+    for g, si0 in zip(groups, si_at):
+        emit_one_group("\t\t\t", g, si0, "use_uku")
+    A("			if (g_csv == 2) c1 = cpu_ns();")
+    A("			f = now_ns();")
+    A("			plc_probe_add(&g_work, f - s);")
+    A("			plc_probe_add(&g_resp, f - r);")
+    A("			if (g_csv == 2) {")
+    A("				plc_probe_add(&g_cpu, c1 - c0);")
+    A("				plc_probe_add(&g_preempt, (f - s) - (c1 - c0));")
+    A("			}")
+    A("			if (f - r > DEADLINE_NS) miss++;")
     A("		}")
     A("		if (g_csv)")
     A("			printf(\"%ld,%lld,%lld,%lld\\n\", k, s - r, f - s, f - r);")
@@ -425,10 +487,9 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     A("			printf(\"%ld,%lld,%lld,%lld,%lld,%lld\\n\", k, s - r, f - s, f - r, c1 - c0, (f - s) - (c1 - c0));")
     for v in digest_vars:
         A("		DIGEST_MIX(%s);" % v)
-    A("		if (f - r > DEADLINE_NS) miss++;")
     A("	}")
     if sess_name:
-        A("	if (mixed) {")
+        A("	if (use_uku) {")
         A("		struct kfusion_uku_state st;")
         A("		memset(&st, 0, sizeof(st));")
         A("		if (uku_fd >= 0 &&")
@@ -442,14 +503,22 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
         A("		sess_ok = 1;")
         A("	}")
     A("	if (uku_fd >= 0) { close(uku_fd); uku_fd = -1; }")
-    A("	printf(\"\\n# mode: %s  cycles=%ld\\n\", mode, cycles);")
+    A("	if (multi)")
+    A("		printf(\"\\n# mode: %s  releases_per_period=%d  cycles=%ld\\n\",")
+    A("		       mode, kNRel, cycles);")
+    A("	else")
+    A("		printf(\"\\n# mode: %s  cycles=%ld\\n\", mode, cycles);")
+    A("	printf(\"# plan_phases_us:\");")
+    A("	for (j = 0; j < kNRel; j++)")
+    A("		printf(\" %lld\", kRelPhase[j] / 1000LL);")
+    A("	printf(\"\\n\");")
     A("	plc_probe_head(PERIOD_NS, DEADLINE_NS, (unsigned long long)cycles);")
     A("	plc_probe_line(&g_start);")
     A("	plc_probe_line(&g_work);")
     A("	plc_probe_line(&g_resp);")
     A("	plc_probe_line(&g_cpu);")
     A("	plc_probe_line(&g_preempt);")
-    A("	if (mixed) {")
+    A("	if (use_uku) {")
     A("		plc_probe_line(&g_hand);")
     A("		plc_probe_line(&g_rt);")
     A("	}")
@@ -475,8 +544,9 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     A("{")
     A("	const char *mode = (argc > 1) ? argv[1] : \"gold\";")
     A("	long cycles = (argc > 2) ? strtol(argv[2], NULL, 10) : %d;" % cycles)
-    A("	if (strcmp(mode, \"gold\") && strcmp(mode, \"mixed\")) {")
-    A("		fprintf(stderr, \"usage: %s gold|mixed [cycles] [csv]\\n\", argv[0]);")
+    A("	if (strcmp(mode, \"gold\") && strcmp(mode, \"mixed\") &&")
+    A("	    strcmp(mode, \"plan\") && strcmp(mode, \"plan_user\")) {")
+    A("		fprintf(stderr, \"usage: %s gold|mixed|plan|plan_user [cycles] [csv]\\n\", argv[0]);")
     A("		return 2;")
     A("	}")
     A("	if (argc > 3 && !strcmp(argv[3], \"csv\"))")
@@ -550,6 +620,12 @@ def main():
         a.period_us, a.cycles, digest))
     dump(os.path.join(out, "interface.json"),
          json.dumps(iface, indent=2, ensure_ascii=False) + "\n")
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "ecos"))
+    import uku_backend_caps as uku_caps
+    cap = dict(uku_caps.CAPS)
+    cap["plan_check"] = uku_caps.check_plan(plan)
+    dump(os.path.join(out, "backend_capabilities.json"),
+         json.dumps(cap, indent=2, ensure_ascii=False) + "\n")
     print("UKU 写出 %s  in=%s out=%s stages=%s" % (out, reads, writes, kmem))
     return 0
 
