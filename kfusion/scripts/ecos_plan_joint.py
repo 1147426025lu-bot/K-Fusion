@@ -31,6 +31,7 @@ import stage_cost as stage_cost_mod  # noqa: E402
 import uku_interface as uku_mod  # noqa: E402
 import uku_backend_caps as uku_caps  # noqa: E402
 import deploy_objective as do_mod  # noqa: E402
+import feedback_loop as fb_loop  # noqa: E402
 EV_FINAL = stage_cost_mod.EV_FINAL
 EV_EXPLORE = stage_cost_mod.EV_EXPLORE
 EV_WEAK = stage_cost_mod.EV_WEAK
@@ -1025,6 +1026,48 @@ def run_stkp(args):
             deadline=((teir.get("task") or {}).get("deadline_us")))
         if args.objective_out:
             dump_json(args.objective_out, doc["deploy_objective"])
+        if args.calibration:
+            caldoc = load_json(args.calibration)
+            table = fb_loop.table_from_doc(caldoc)
+            env = (prof.get("env_evidence") or {})
+            hashes = {
+                "src_sha256": ((env.get("code") or {}).get("source_sha256")),
+                "plan_sha256": None,
+            }
+            shadow, after_doc = fb_loop.shadow_reselect(
+                doc.get("candidates") or [], prof, table, env,
+                int(args.calibration_load or 0), hashes,
+                alpha=args.objective_alpha, beta=args.objective_beta,
+                gamma=args.objective_gamma,
+                deadline=((teir.get("task") or {}).get("deadline_us")),
+                fallback=(fb_loop.M3_FALLBACK if args.calibration_fallback
+                          else fb_loop.M2_DROP),
+                scheds=scheds,
+                apply=bool(args.apply_calibration))
+            doc["feedback_loop"] = shadow
+            if args.feedback_out:
+                dump_json(args.feedback_out, shadow)
+            print("  feedback shadow: before=%s@%s after=%s@%s status=%s apply=%s"
+                  % ((shadow.get("chosen_before") or {}).get("candidate_id"),
+                     (shadow.get("chosen_before") or {}).get("sched"),
+                     (shadow.get("chosen_after") or {}).get("candidate_id"),
+                     (shadow.get("chosen_after") or {}).get("sched"),
+                     shadow.get("apply_status"), shadow.get("applied")))
+            if args.apply_calibration:
+                if shadow.get("apply_status") == "rejected" or not shadow.get("chosen_after"):
+                    print("!! 校准重选 fail-closed：不替换 chosen（保持实测入选）",
+                          file=sys.stderr)
+                elif shadow.get("applied"):
+                    idx = shadow["chosen_after"]["cand_index"]
+                    rec = doc["candidates"][idx]
+                    if not rec.get("deployment_ready"):
+                        print("!! 校准入选非 deployment_ready，拒绝替换",
+                              file=sys.stderr)
+                    else:
+                        doc["chosen_record"] = rec
+                        doc["chosen"] = rec.get("id")
+                        doc["sched_class"] = shadow["chosen_after"]["sched"]
+                        doc["claim"] = "objective_calibrated_shadow_applied"
         if not ok:
             print("!! 部署目标 fail-closed：没有同时具备实测 Q99 与 R_miss 的"
                   " (部署, 调度类) 组合，拒绝生成（%d 个候选，%d 条拒因）" % (
@@ -1224,6 +1267,14 @@ def main():
     ap.add_argument("--objective-scheds", default="cfs,fifo99")
     ap.add_argument("--objective-out", default=None,
                     help="把决策明细单独写出一份 json")
+    ap.add_argument("--calibration", default=None,
+                    help="PR-18B calibration json；默认 shadow，不改 chosen")
+    ap.add_argument("--calibration-load", type=int, default=0)
+    ap.add_argument("--calibration-fallback", action="store_true",
+                    help="缺校准格子时回退实测 Q99（M3）；默认丢掉该格子（M2）")
+    ap.add_argument("--apply-calibration", action="store_true",
+                    help="仅当 shadow accepted 且 ready 时改写 chosen")
+    ap.add_argument("--feedback-out", default=None)
     ap.add_argument("-o", "--out")
     args = ap.parse_args()
     args.dag = args.dag_opt or args.dag

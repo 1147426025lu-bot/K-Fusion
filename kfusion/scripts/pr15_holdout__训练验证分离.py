@@ -57,9 +57,7 @@ def dump_json(p, obj):
         f.write("\n")
 
 
-def collect_cells(shapes_path, baseline_path, load=0):
-    """把两个数据源汇成 (scenario → 元信息 + 每调度类的逐轮记录)。"""
-    out = {}
+def _ingest_shapes(out, shapes_path, load=0, source="shapes"):
     sh = load_json(shapes_path)
     for c in sh.get("cells") or []:
         if c.get("status") != "ok" or int(c.get("load") or 0) != load:
@@ -71,12 +69,24 @@ def collect_cells(shapes_path, baseline_path, load=0):
             "domain": "mixed" if len(set(doms)) > 1 else (doms[0] if doms else None),
             "shape": {"n_groups": s.get("n_groups"), "fused": s.get("fused"),
                       "n_releases": s.get("n_releases"),
-                      "members": s.get("members")},
+                      "members": s.get("members"),
+                      "phases_us": s.get("phases_us"),
+                      "exec_mode": s.get("exec_mode")},
             "sched": {cond["sched"]: cond.get("runs") or []
                       for cond in c.get("conditions") or []},
-            "source": "shapes",
+            "source": source,
             "load": load,
         }
+
+
+def collect_cells(shapes_path, baseline_path, load=0, extra_shapes=None):
+    """把数据源汇成 (scenario → 元信息 + 每调度类的逐轮记录)。
+
+    extra_shapes 后写入：mixed_plan 等新格子并进来，不得覆盖同名旧格子
+    （同名视为冲突，直接报错）。
+    """
+    out = {}
+    _ingest_shapes(out, shapes_path, load=load, source="shapes")
     if load == 0:  # PR-10E 基线只有静默条件
         b = load_json(baseline_path)
         for c in b.get("cells") or []:
@@ -91,6 +101,14 @@ def collect_cells(shapes_path, baseline_path, load=0):
                           for cond in c.get("conditions") or []},
                 "source": "baseline", "load": 0,
             }
+    for extra in extra_shapes or []:
+        before = set(out)
+        tmp = {}
+        _ingest_shapes(tmp, extra, load=load, source="extra:" + extra)
+        clash = set(tmp) & before
+        if clash:
+            raise SystemExit("extra-shapes 与已有 scenario 重名：%s" % sorted(clash))
+        out.update(tmp)
     return out
 
 
@@ -106,7 +124,7 @@ def profile_from(cells, rounds, env, boundary, meta):
         scheds = {}
         for sched, runs in c["sched"].items():
             sub = [r for r in runs if int(r.get("repeat") or 0) in rounds
-                   and r.get("n")]
+                   and r.get("n") and r.get("valid") is not False]
             if not sub:
                 continue
             try:
@@ -124,16 +142,17 @@ def profile_from(cells, rounds, env, boundary, meta):
 def stats_on(cells, scenario, sched, rounds):
     """在指定轮次上算 Q99（各轮 p99 的中位数）与超期数。"""
     runs = [r for r in (cells[scenario]["sched"].get(sched) or [])
-            if int(r.get("repeat") or 0) in rounds and r.get("n")]
+            if int(r.get("repeat") or 0) in rounds and r.get("n")
+            and r.get("valid") is not False]
     if not runs:
         return None
-    p99 = sorted(r["response"]["p99_us"] for r in runs)
-    q99 = p99[len(p99) // 2]
+    p99 = [r["response"]["p99_us"] for r in runs]
+    q99 = do._median(p99)
     n = sum(int(r.get("n") or 0) for r in runs)
     miss = sum(int(r.get("miss") or 0) for r in runs)
     mx = max(r["response"]["max_us"] for r in runs)
     return {"q99_us": q99, "n": n, "miss": miss, "max_us": mx,
-            "rounds": len(runs), "per_round_p99": p99}
+            "rounds": len(runs), "per_round_p99": sorted(p99)}
 
 
 def j_of(stats, beta, boundary_us=0.0, alpha=1.0):
@@ -243,23 +262,30 @@ def main():
     ap.add_argument("--horizon-s", dest="horizon_s", type=float, default=3600.0)
     ap.add_argument("--betas", nargs="+", default=["0", "1e5"])
     ap.add_argument("--load", type=int, default=0)
+    ap.add_argument("--extra-shapes", action="append", default=[],
+                    help="追加形状 json（如 pr17 mixed_plan）；scenario 不得与主表重名")
+    ap.add_argument("--boundary",
+                    default=os.path.join(KF, "docs", "pr10c_boundary",
+                                         "boundary.json"),
+                    help="PR-10C 边界实测；禁止在脚本里写死 t_ioctl")
     ap.add_argument("--protocol", default="loo", choices=("half", "loo"),
                     help="half=对半两折；loo=留一轮（10 折，样本量更大）")
     ap.add_argument("-o", "--out", required=True)
     a = ap.parse_args()
 
-    cells = collect_cells(a.shapes, a.baseline, load=a.load)
+    cells = collect_cells(a.shapes, a.baseline, load=a.load,
+                          extra_shapes=a.extra_shapes)
     if not cells:
         print("没有可用 cell", file=sys.stderr)
         return 2
     stkp = load_json(a.stkp)
     cands = [c for c in (stkp.get("candidates") or []) if c.get("plan")]
     env = load_json(a.env)
-    # 边界单价：从全量画像里取实测值
-    boundary = {"t_ioctl_us": {"value": 2.0, "evidence": "measured",
-                               "samples": 15000, "rounds": 3,
-                               "source_log": "docs/pr10c_boundary/boundary.json",
-                               "note": "noop ioctl p50"}}
+    try:
+        boundary = do.boundary_from_file(a.boundary)
+    except do.TermMissing as exc:
+        print("边界文件不可用：%s" % exc, file=sys.stderr)
+        return 2
     meta = {"period_us": a.period, "deadline_us": a.deadline,
             "pin_cpu": 3, "cycles_per_round": 5000, "repeat": 5,
             "scheds": list(do.SCHED_CLASSES), "load": a.load}
@@ -281,6 +307,12 @@ def main():
         "protocol": proto,
         "claim": "只回答「换一批轮次，选择是否还成立」；两折不足以给置信度",
         "scenarios": sorted(cells),
+        "extra_shapes": a.extra_shapes,
+        "boundary": {
+            "source_log": boundary["t_ioctl_us"].get("source_log"),
+            "source_sha256": boundary["t_ioctl_us"].get("source_sha256"),
+            "value_us": boundary["t_ioctl_us"].get("value"),
+        },
         "folds": {},
     }
     for name, (tr, va) in folds.items():
@@ -330,7 +362,7 @@ def main():
             if scen:
                 pr = sorted(r["response"]["p99_us"] for r in
                             (cells[scen]["sched"].get(ch["sched"]) or [])
-                            if r.get("n"))
+                            if r.get("n") and r.get("valid") is not False)
                 if pr:
                     noise = {"min": pr[0], "max": pr[-1], "spread": pr[-1] - pr[0]}
             margin = round(rk[1]["J_us"] - rk[0]["J_us"], 3)

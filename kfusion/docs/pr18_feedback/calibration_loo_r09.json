@@ -1,0 +1,3852 @@
+{
+  "kind": "pr18_calibration",
+  "version": 1,
+  "model": "residual_add_v1",
+  "calibration_id": "pr18b-residual-add-v1",
+  "claim": "Δ̂ 只用训练轮；应用到留出轮的 measurement，不覆盖 static。经验预测，不是 WCET。",
+  "hashes": {
+    "stkp": "kfusion/docs/pr17_uku_plan/stkp.json",
+    "stkp_sha256": "a7ff5aca51609fde243e07bd5c8f15deb1b0087b1a258845e5f63bc53cc06da5",
+    "plan": "kfusion/docs/pr17_uku_plan/plan.json",
+    "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+    "src": "kfusion/examples/ecos/mixed_pid_stateful__积分混合.c",
+    "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+    "env": "kfusion/docs/pr11_deploy_objective/env_evidence.json",
+    "env_sha256": "5dc45217ed4ab915484eaa8ee7f2af868be62a456b8cc9ba97e895931a86cde6",
+    "train_rounds": [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "holdout_rounds": [
+      9
+    ]
+  },
+  "n_table": 20,
+  "n_fitted": 20,
+  "table": [
+    {
+      "key_id": "{\"domain\":\"linux_userspace\",\"fused\":false,\"load\":0,\"members\":[[\"stage_pid\",\"stage_sample\"],[\"stage_sink\"]],\"n_groups\":2,\"n_releases\":2,\"phases_us\":[0.0,400.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"cfs\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "13f9bd5b7fb0cc74",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 462.0,
+        "rhat_static_us": 57.0,
+        "delta_hat_us": 405.0,
+        "q99_cal_us": 462.0,
+        "p99_across_us": [
+          462.0,
+          465.0
+        ],
+        "uncertainty_span_us": 3.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_pid",
+              "stage_sample"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            400.0
+          ],
+          "n_releases": 2,
+          "n_groups": 2,
+          "fused": false,
+          "sched": "cfs",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"linux_userspace\",\"fused\":false,\"load\":0,\"members\":[[\"stage_pid\",\"stage_sample\"],[\"stage_sink\"]],\"n_groups\":2,\"n_releases\":2,\"phases_us\":[0.0,400.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"fifo99\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "bdc762c19a5519f7",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 414.0,
+        "rhat_static_us": 57.0,
+        "delta_hat_us": 357.0,
+        "q99_cal_us": 414.0,
+        "p99_across_us": [
+          412.0,
+          414.0
+        ],
+        "uncertainty_span_us": 2.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_pid",
+              "stage_sample"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            400.0
+          ],
+          "n_releases": 2,
+          "n_groups": 2,
+          "fused": false,
+          "sched": "fifo99",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"linux_userspace\",\"fused\":false,\"load\":0,\"members\":[[\"stage_sample\"],[\"stage_pid\",\"stage_sink\"]],\"n_groups\":2,\"n_releases\":2,\"phases_us\":[0.0,200.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"cfs\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "5cf9a9385d04d91a",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 263.0,
+        "rhat_static_us": 57.0,
+        "delta_hat_us": 206.0,
+        "q99_cal_us": 263.0,
+        "p99_across_us": [
+          263.0,
+          265.0
+        ],
+        "uncertainty_span_us": 2.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid",
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0
+          ],
+          "n_releases": 2,
+          "n_groups": 2,
+          "fused": false,
+          "sched": "cfs",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"linux_userspace\",\"fused\":false,\"load\":0,\"members\":[[\"stage_sample\"],[\"stage_pid\",\"stage_sink\"]],\"n_groups\":2,\"n_releases\":2,\"phases_us\":[0.0,200.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"fifo99\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "b7051ae792f8a8a0",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 213.0,
+        "rhat_static_us": 57.0,
+        "delta_hat_us": 156.0,
+        "q99_cal_us": 213.0,
+        "p99_across_us": [
+          213.0,
+          215.0
+        ],
+        "uncertainty_span_us": 2.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid",
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0
+          ],
+          "n_releases": 2,
+          "n_groups": 2,
+          "fused": false,
+          "sched": "fifo99",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"linux_userspace\",\"fused\":false,\"load\":0,\"members\":[[\"stage_sample\"],[\"stage_pid\"],[\"stage_sink\"]],\"n_groups\":3,\"n_releases\":3,\"phases_us\":[0.0,200.0,400.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"cfs\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "8f59a34e320e3d2b",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 462.0,
+        "rhat_static_us": 78.0,
+        "delta_hat_us": 384.0,
+        "q99_cal_us": 462.0,
+        "p99_across_us": [
+          462.0,
+          464.0
+        ],
+        "uncertainty_span_us": 2.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0,
+            400.0
+          ],
+          "n_releases": 3,
+          "n_groups": 3,
+          "fused": false,
+          "sched": "cfs",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"linux_userspace\",\"fused\":false,\"load\":0,\"members\":[[\"stage_sample\"],[\"stage_pid\"],[\"stage_sink\"]],\"n_groups\":3,\"n_releases\":3,\"phases_us\":[0.0,200.0,400.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"fifo99\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "f4f85002e329773f",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 412.0,
+        "rhat_static_us": 78.0,
+        "delta_hat_us": 334.0,
+        "q99_cal_us": 412.0,
+        "p99_across_us": [
+          412.0,
+          414.0
+        ],
+        "uncertainty_span_us": 2.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0,
+            400.0
+          ],
+          "n_releases": 3,
+          "n_groups": 3,
+          "fused": false,
+          "sched": "fifo99",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"linux_userspace\",\"fused\":false,\"load\":4,\"members\":[[\"stage_pid\",\"stage_sample\"],[\"stage_sink\"]],\"n_groups\":2,\"n_releases\":2,\"phases_us\":[0.0,400.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"cfs\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "6878a19e11768fc7",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 1023.0,
+        "rhat_static_us": 57.0,
+        "delta_hat_us": 966.0,
+        "q99_cal_us": 1023.0,
+        "p99_across_us": [
+          1023.0,
+          1023.0
+        ],
+        "uncertainty_span_us": 0.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_pid",
+              "stage_sample"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            400.0
+          ],
+          "n_releases": 2,
+          "n_groups": 2,
+          "fused": false,
+          "sched": "cfs",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"linux_userspace\",\"fused\":false,\"load\":4,\"members\":[[\"stage_pid\",\"stage_sample\"],[\"stage_sink\"]],\"n_groups\":2,\"n_releases\":2,\"phases_us\":[0.0,400.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"fifo99\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "c2f6797451562bfd",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 423.0,
+        "rhat_static_us": 57.0,
+        "delta_hat_us": 366.0,
+        "q99_cal_us": 423.0,
+        "p99_across_us": [
+          422.0,
+          425.0
+        ],
+        "uncertainty_span_us": 3.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_pid",
+              "stage_sample"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            400.0
+          ],
+          "n_releases": 2,
+          "n_groups": 2,
+          "fused": false,
+          "sched": "fifo99",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"linux_userspace\",\"fused\":false,\"load\":4,\"members\":[[\"stage_sample\"],[\"stage_pid\",\"stage_sink\"]],\"n_groups\":2,\"n_releases\":2,\"phases_us\":[0.0,200.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"cfs\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "35f2c505bedbd329",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 274.0,
+        "rhat_static_us": 57.0,
+        "delta_hat_us": 217.0,
+        "q99_cal_us": 274.0,
+        "p99_across_us": [
+          274.0,
+          297.0
+        ],
+        "uncertainty_span_us": 23.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid",
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0
+          ],
+          "n_releases": 2,
+          "n_groups": 2,
+          "fused": false,
+          "sched": "cfs",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"linux_userspace\",\"fused\":false,\"load\":4,\"members\":[[\"stage_sample\"],[\"stage_pid\",\"stage_sink\"]],\"n_groups\":2,\"n_releases\":2,\"phases_us\":[0.0,200.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"fifo99\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "baf73d49c9c3b0d4",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 223.0,
+        "rhat_static_us": 57.0,
+        "delta_hat_us": 166.0,
+        "q99_cal_us": 223.0,
+        "p99_across_us": [
+          223.0,
+          223.0
+        ],
+        "uncertainty_span_us": 0.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid",
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0
+          ],
+          "n_releases": 2,
+          "n_groups": 2,
+          "fused": false,
+          "sched": "fifo99",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"linux_userspace\",\"fused\":false,\"load\":4,\"members\":[[\"stage_sample\"],[\"stage_pid\"],[\"stage_sink\"]],\"n_groups\":3,\"n_releases\":3,\"phases_us\":[0.0,200.0,400.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"cfs\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "47d1f548fef8981b",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 473.0,
+        "rhat_static_us": 78.0,
+        "delta_hat_us": 395.0,
+        "q99_cal_us": 473.0,
+        "p99_across_us": [
+          472.0,
+          492.0
+        ],
+        "uncertainty_span_us": 20.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0,
+            400.0
+          ],
+          "n_releases": 3,
+          "n_groups": 3,
+          "fused": false,
+          "sched": "cfs",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"linux_userspace\",\"fused\":false,\"load\":4,\"members\":[[\"stage_sample\"],[\"stage_pid\"],[\"stage_sink\"]],\"n_groups\":3,\"n_releases\":3,\"phases_us\":[0.0,200.0,400.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"fifo99\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "3a0762feaf37e2c6",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 422.0,
+        "rhat_static_us": 78.0,
+        "delta_hat_us": 344.0,
+        "q99_cal_us": 422.0,
+        "p99_across_us": [
+          422.0,
+          423.0
+        ],
+        "uncertainty_span_us": 1.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0,
+            400.0
+          ],
+          "n_releases": 3,
+          "n_groups": 3,
+          "fused": false,
+          "sched": "fifo99",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"linux_userspace\",\"fused\":true,\"load\":0,\"members\":[[\"stage_pid\",\"stage_sample\",\"stage_sink\"]],\"n_groups\":1,\"n_releases\":1,\"phases_us\":[0.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"cfs\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "e2324b026a6b3cff",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 66.0,
+        "rhat_static_us": 36.0,
+        "delta_hat_us": 30.0,
+        "q99_cal_us": 66.0,
+        "p99_across_us": [
+          65.0,
+          66.0
+        ],
+        "uncertainty_span_us": 1.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_pid",
+              "stage_sample",
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0
+          ],
+          "n_releases": 1,
+          "n_groups": 1,
+          "fused": true,
+          "sched": "cfs",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"linux_userspace\",\"fused\":true,\"load\":0,\"members\":[[\"stage_pid\",\"stage_sample\",\"stage_sink\"]],\"n_groups\":1,\"n_releases\":1,\"phases_us\":[0.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"fifo99\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "d9744f70709be2f5",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 15.0,
+        "rhat_static_us": 36.0,
+        "delta_hat_us": -21.0,
+        "q99_cal_us": 15.0,
+        "p99_across_us": [
+          15.0,
+          16.0
+        ],
+        "uncertainty_span_us": 1.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_pid",
+              "stage_sample",
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0
+          ],
+          "n_releases": 1,
+          "n_groups": 1,
+          "fused": true,
+          "sched": "fifo99",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"linux_userspace\",\"fused\":true,\"load\":4,\"members\":[[\"stage_pid\",\"stage_sample\",\"stage_sink\"]],\"n_groups\":1,\"n_releases\":1,\"phases_us\":[0.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"cfs\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "91883479dc6b3261",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 74.0,
+        "rhat_static_us": 36.0,
+        "delta_hat_us": 38.0,
+        "q99_cal_us": 74.0,
+        "p99_across_us": [
+          74.0,
+          74.0
+        ],
+        "uncertainty_span_us": 0.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_pid",
+              "stage_sample",
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0
+          ],
+          "n_releases": 1,
+          "n_groups": 1,
+          "fused": true,
+          "sched": "cfs",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"linux_userspace\",\"fused\":true,\"load\":4,\"members\":[[\"stage_pid\",\"stage_sample\",\"stage_sink\"]],\"n_groups\":1,\"n_releases\":1,\"phases_us\":[0.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"fifo99\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "9899a6b1ad1a58de",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 24.0,
+        "rhat_static_us": 36.0,
+        "delta_hat_us": -12.0,
+        "q99_cal_us": 24.0,
+        "p99_across_us": [
+          24.0,
+          45.0
+        ],
+        "uncertainty_span_us": 21.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_pid",
+              "stage_sample",
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0
+          ],
+          "n_releases": 1,
+          "n_groups": 1,
+          "fused": true,
+          "sched": "fifo99",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"mixed\",\"fused\":false,\"load\":0,\"members\":[[\"stage_sample\"],[\"stage_pid\"],[\"stage_sink\"]],\"n_groups\":3,\"n_releases\":3,\"phases_us\":[0.0,200.0,400.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"cfs\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "2c25c44268f82084",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 482.0,
+        "rhat_static_us": 426.0,
+        "delta_hat_us": 56.0,
+        "q99_cal_us": 482.0,
+        "p99_across_us": [
+          473.0,
+          690.0
+        ],
+        "uncertainty_span_us": 217.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "mixed",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0,
+            400.0
+          ],
+          "n_releases": 3,
+          "n_groups": 3,
+          "fused": false,
+          "sched": "cfs",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"mixed\",\"fused\":false,\"load\":0,\"members\":[[\"stage_sample\"],[\"stage_pid\"],[\"stage_sink\"]],\"n_groups\":3,\"n_releases\":3,\"phases_us\":[0.0,200.0,400.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"fifo99\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "ccf856d86e152193",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 427.0,
+        "rhat_static_us": 426.0,
+        "delta_hat_us": 1.0,
+        "q99_cal_us": 427.0,
+        "p99_across_us": [
+          424.0,
+          448.0
+        ],
+        "uncertainty_span_us": 24.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "mixed",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0,
+            400.0
+          ],
+          "n_releases": 3,
+          "n_groups": 3,
+          "fused": false,
+          "sched": "fifo99",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"mixed\",\"fused\":false,\"load\":4,\"members\":[[\"stage_sample\"],[\"stage_pid\"],[\"stage_sink\"]],\"n_groups\":3,\"n_releases\":3,\"phases_us\":[0.0,200.0,400.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"cfs\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "b5ccce4f36ab642f",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 478.0,
+        "rhat_static_us": 426.0,
+        "delta_hat_us": 52.0,
+        "q99_cal_us": 478.0,
+        "p99_across_us": [
+          477.0,
+          484.0
+        ],
+        "uncertainty_span_us": 7.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "mixed",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0,
+            400.0
+          ],
+          "n_releases": 3,
+          "n_groups": 3,
+          "fused": false,
+          "sched": "cfs",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    },
+    {
+      "key_id": "{\"domain\":\"mixed\",\"fused\":false,\"load\":4,\"members\":[[\"stage_sample\"],[\"stage_pid\"],[\"stage_sink\"]],\"n_groups\":3,\"n_releases\":3,\"phases_us\":[0.0,200.0,400.0],\"platform\":\"Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT\",\"sched\":\"fifo99\"}",
+      "calibration": {
+        "status": "fitted",
+        "model": "residual_add_v1",
+        "calibration_id": "pr18b-residual-add-v1",
+        "instance_sha256": "ab8c1cd52d3d66af",
+        "train_rounds": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8
+        ],
+        "n_train": 2,
+        "q99_train_us": 428.0,
+        "rhat_static_us": 426.0,
+        "delta_hat_us": 2.0,
+        "q99_cal_us": 428.0,
+        "p99_across_us": [
+          427.0,
+          430.0
+        ],
+        "uncertainty_span_us": 3.0,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "mixed",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0,
+            400.0
+          ],
+          "n_releases": 3,
+          "n_groups": 3,
+          "fused": false,
+          "sched": "fifo99",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+      }
+    }
+  ],
+  "applied": {
+    "kind": "feedback_profile",
+    "version": 1,
+    "claim": "calibration 由训练轮残差得到；未覆盖 static_prediction/measurement；非 WCET",
+    "hashes": {
+      "stkp": "kfusion/docs/pr17_uku_plan/stkp.json",
+      "stkp_sha256": "a7ff5aca51609fde243e07bd5c8f15deb1b0087b1a258845e5f63bc53cc06da5",
+      "plan": "kfusion/docs/pr17_uku_plan/plan.json",
+      "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+      "src": "kfusion/examples/ecos/mixed_pid_stateful__积分混合.c",
+      "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+      "env": "kfusion/docs/pr11_deploy_objective/env_evidence.json",
+      "env_sha256": "5dc45217ed4ab915484eaa8ee7f2af868be62a456b8cc9ba97e895931a86cde6",
+      "train_rounds": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ],
+      "holdout_rounds": [
+        9
+      ]
+    },
+    "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT",
+    "loads": [
+      0,
+      4
+    ],
+    "n_rows": 20,
+    "n_measured": 20,
+    "n_insufficient": 0,
+    "rows": [
+      {
+        "cand_index": 0,
+        "candidate_id": "B",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_pid",
+              "stage_sample",
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0
+          ],
+          "n_releases": 1,
+          "n_groups": 1,
+          "fused": true,
+          "sched": "cfs",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 36.0,
+          "compute_us": 15.0,
+          "release_us": 21.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 0,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "ioctl_model": null,
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "fused_user",
+          "q99_resp_us": 65.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            65.0,
+            65.0
+          ],
+          "miss_rate": 0.0006,
+          "n_miss": 3,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 2000.771,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "e2324b026a6b3cff",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 66.0,
+          "rhat_static_us": 36.0,
+          "delta_hat_us": 30.0,
+          "q99_cal_us": 66.0,
+          "p99_across_us": [
+            65.0,
+            66.0
+          ],
+          "uncertainty_span_us": 1.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "linux_userspace",
+            "members": [
+              [
+                "stage_pid",
+                "stage_sample",
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0
+            ],
+            "n_releases": 1,
+            "n_groups": 1,
+            "fused": true,
+            "sched": "cfs",
+            "load": 0,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": 29.0,
+          "ratio_q99_over_Rhat": 1.8056,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 66.0,
+          "holdout_minus_cal_us": -1.0
+        }
+      },
+      {
+        "cand_index": 0,
+        "candidate_id": "B",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_pid",
+              "stage_sample",
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0
+          ],
+          "n_releases": 1,
+          "n_groups": 1,
+          "fused": true,
+          "sched": "fifo99",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 36.0,
+          "compute_us": 15.0,
+          "release_us": 21.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 0,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "ioctl_model": null,
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "fused_user",
+          "q99_resp_us": 15.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            15.0,
+            15.0
+          ],
+          "miss_rate": 0.0,
+          "n_miss": 0,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 38.862,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "d9744f70709be2f5",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 15.0,
+          "rhat_static_us": 36.0,
+          "delta_hat_us": -21.0,
+          "q99_cal_us": 15.0,
+          "p99_across_us": [
+            15.0,
+            16.0
+          ],
+          "uncertainty_span_us": 1.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "linux_userspace",
+            "members": [
+              [
+                "stage_pid",
+                "stage_sample",
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0
+            ],
+            "n_releases": 1,
+            "n_groups": 1,
+            "fused": true,
+            "sched": "fifo99",
+            "load": 0,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": -21.0,
+          "ratio_q99_over_Rhat": 0.4167,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 15.0,
+          "holdout_minus_cal_us": 0.0
+        }
+      },
+      {
+        "cand_index": 1,
+        "candidate_id": "STKP:L[stage_sample+stage_pid]|L[stage_sink]",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_pid",
+              "stage_sample"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            400.0
+          ],
+          "n_releases": 2,
+          "n_groups": 2,
+          "fused": false,
+          "sched": "cfs",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 57.0,
+          "compute_us": 15.0,
+          "release_us": 42.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 0,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "ioctl_model": null,
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "split_sp_k_user",
+          "q99_resp_us": 462.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            462.0,
+            462.0
+          ],
+          "miss_rate": 0.0,
+          "n_miss": 0,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 625.442,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "13f9bd5b7fb0cc74",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 462.0,
+          "rhat_static_us": 57.0,
+          "delta_hat_us": 405.0,
+          "q99_cal_us": 462.0,
+          "p99_across_us": [
+            462.0,
+            465.0
+          ],
+          "uncertainty_span_us": 3.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "linux_userspace",
+            "members": [
+              [
+                "stage_pid",
+                "stage_sample"
+              ],
+              [
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0,
+              400.0
+            ],
+            "n_releases": 2,
+            "n_groups": 2,
+            "fused": false,
+            "sched": "cfs",
+            "load": 0,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": 405.0,
+          "ratio_q99_over_Rhat": 8.1053,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 462.0,
+          "holdout_minus_cal_us": 0.0
+        }
+      },
+      {
+        "cand_index": 1,
+        "candidate_id": "STKP:L[stage_sample+stage_pid]|L[stage_sink]",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_pid",
+              "stage_sample"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            400.0
+          ],
+          "n_releases": 2,
+          "n_groups": 2,
+          "fused": false,
+          "sched": "fifo99",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 57.0,
+          "compute_us": 15.0,
+          "release_us": 42.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 0,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "ioctl_model": null,
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "split_sp_k_user",
+          "q99_resp_us": 414.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            414.0,
+            414.0
+          ],
+          "miss_rate": 0.0,
+          "n_miss": 0,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 427.223,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "bdc762c19a5519f7",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 414.0,
+          "rhat_static_us": 57.0,
+          "delta_hat_us": 357.0,
+          "q99_cal_us": 414.0,
+          "p99_across_us": [
+            412.0,
+            414.0
+          ],
+          "uncertainty_span_us": 2.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "linux_userspace",
+            "members": [
+              [
+                "stage_pid",
+                "stage_sample"
+              ],
+              [
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0,
+              400.0
+            ],
+            "n_releases": 2,
+            "n_groups": 2,
+            "fused": false,
+            "sched": "fifo99",
+            "load": 0,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": 357.0,
+          "ratio_q99_over_Rhat": 7.2632,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 414.0,
+          "holdout_minus_cal_us": 0.0
+        }
+      },
+      {
+        "cand_index": 2,
+        "candidate_id": "STKP:L[stage_sample]|L[stage_pid+stage_sink]",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid",
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0
+          ],
+          "n_releases": 2,
+          "n_groups": 2,
+          "fused": false,
+          "sched": "cfs",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 57.0,
+          "compute_us": 15.0,
+          "release_us": 42.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 0,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "ioctl_model": null,
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "split_s_pk_user",
+          "q99_resp_us": 263.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            263.0,
+            263.0
+          ],
+          "miss_rate": 0.0,
+          "n_miss": 0,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 990.531,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "5cf9a9385d04d91a",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 263.0,
+          "rhat_static_us": 57.0,
+          "delta_hat_us": 206.0,
+          "q99_cal_us": 263.0,
+          "p99_across_us": [
+            263.0,
+            265.0
+          ],
+          "uncertainty_span_us": 2.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "linux_userspace",
+            "members": [
+              [
+                "stage_sample"
+              ],
+              [
+                "stage_pid",
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0,
+              200.0
+            ],
+            "n_releases": 2,
+            "n_groups": 2,
+            "fused": false,
+            "sched": "cfs",
+            "load": 0,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": 206.0,
+          "ratio_q99_over_Rhat": 4.614,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 263.0,
+          "holdout_minus_cal_us": 0.0
+        }
+      },
+      {
+        "cand_index": 2,
+        "candidate_id": "STKP:L[stage_sample]|L[stage_pid+stage_sink]",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid",
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0
+          ],
+          "n_releases": 2,
+          "n_groups": 2,
+          "fused": false,
+          "sched": "fifo99",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 57.0,
+          "compute_us": 15.0,
+          "release_us": 42.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 0,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "ioctl_model": null,
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "split_s_pk_user",
+          "q99_resp_us": 213.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            213.0,
+            213.0
+          ],
+          "miss_rate": 0.0,
+          "n_miss": 0,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 215.901,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "b7051ae792f8a8a0",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 213.0,
+          "rhat_static_us": 57.0,
+          "delta_hat_us": 156.0,
+          "q99_cal_us": 213.0,
+          "p99_across_us": [
+            213.0,
+            215.0
+          ],
+          "uncertainty_span_us": 2.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "linux_userspace",
+            "members": [
+              [
+                "stage_sample"
+              ],
+              [
+                "stage_pid",
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0,
+              200.0
+            ],
+            "n_releases": 2,
+            "n_groups": 2,
+            "fused": false,
+            "sched": "fifo99",
+            "load": 0,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": 156.0,
+          "ratio_q99_over_Rhat": 3.7368,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 213.0,
+          "holdout_minus_cal_us": 0.0
+        }
+      },
+      {
+        "cand_index": 3,
+        "candidate_id": "A",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0,
+            400.0
+          ],
+          "n_releases": 3,
+          "n_groups": 3,
+          "fused": false,
+          "sched": "cfs",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 78.0,
+          "compute_us": 15.0,
+          "release_us": 63.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 0,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "ioctl_model": null,
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "split3_user_plan",
+          "q99_resp_us": 462.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            462.0,
+            462.0
+          ],
+          "miss_rate": 0.0,
+          "n_miss": 0,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 476.181,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "8f59a34e320e3d2b",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 462.0,
+          "rhat_static_us": 78.0,
+          "delta_hat_us": 384.0,
+          "q99_cal_us": 462.0,
+          "p99_across_us": [
+            462.0,
+            464.0
+          ],
+          "uncertainty_span_us": 2.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "linux_userspace",
+            "members": [
+              [
+                "stage_sample"
+              ],
+              [
+                "stage_pid"
+              ],
+              [
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0,
+              200.0,
+              400.0
+            ],
+            "n_releases": 3,
+            "n_groups": 3,
+            "fused": false,
+            "sched": "cfs",
+            "load": 0,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": 384.0,
+          "ratio_q99_over_Rhat": 5.9231,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 462.0,
+          "holdout_minus_cal_us": 0.0
+        }
+      },
+      {
+        "cand_index": 3,
+        "candidate_id": "A",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0,
+            400.0
+          ],
+          "n_releases": 3,
+          "n_groups": 3,
+          "fused": false,
+          "sched": "fifo99",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 78.0,
+          "compute_us": 15.0,
+          "release_us": 63.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 0,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "ioctl_model": null,
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "split3_user_plan",
+          "q99_resp_us": 412.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            412.0,
+            412.0
+          ],
+          "miss_rate": 0.0,
+          "n_miss": 0,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 427.145,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "f4f85002e329773f",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 412.0,
+          "rhat_static_us": 78.0,
+          "delta_hat_us": 334.0,
+          "q99_cal_us": 412.0,
+          "p99_across_us": [
+            412.0,
+            414.0
+          ],
+          "uncertainty_span_us": 2.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "linux_userspace",
+            "members": [
+              [
+                "stage_sample"
+              ],
+              [
+                "stage_pid"
+              ],
+              [
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0,
+              200.0,
+              400.0
+            ],
+            "n_releases": 3,
+            "n_groups": 3,
+            "fused": false,
+            "sched": "fifo99",
+            "load": 0,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": 334.0,
+          "ratio_q99_over_Rhat": 5.2821,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 412.0,
+          "holdout_minus_cal_us": 0.0
+        }
+      },
+      {
+        "cand_index": 4,
+        "candidate_id": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "mixed",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0,
+            400.0
+          ],
+          "n_releases": 3,
+          "n_groups": 3,
+          "fused": false,
+          "sched": "cfs",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 426.0,
+          "compute_us": 10.05,
+          "release_us": 42.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 1,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_kernel:scenario",
+            "stage_sink@linux_userspace:scenario",
+            "T_ioctl:cli_override"
+          ],
+          "ioctl_model": {
+            "L_user_us": 42.0,
+            "C_us": 10.05,
+            "T_ioctl_us": 0.0,
+            "T_ioctl_evidence": "cli_override",
+            "kind": "uku_multi_release",
+            "note": "uku_multi_release：R̂=末组完成时刻（含 φ 等待）；非 WCET"
+          },
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "mixed_plan",
+          "q99_resp_us": 482.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            482.0,
+            482.0
+          ],
+          "miss_rate": 0.0016,
+          "n_miss": 8,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 5418.448,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "2c25c44268f82084",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 482.0,
+          "rhat_static_us": 426.0,
+          "delta_hat_us": 56.0,
+          "q99_cal_us": 482.0,
+          "p99_across_us": [
+            473.0,
+            690.0
+          ],
+          "uncertainty_span_us": 217.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "mixed",
+            "members": [
+              [
+                "stage_sample"
+              ],
+              [
+                "stage_pid"
+              ],
+              [
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0,
+              200.0,
+              400.0
+            ],
+            "n_releases": 3,
+            "n_groups": 3,
+            "fused": false,
+            "sched": "cfs",
+            "load": 0,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": 56.0,
+          "ratio_q99_over_Rhat": 1.1315,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 482.0,
+          "holdout_minus_cal_us": 0.0
+        }
+      },
+      {
+        "cand_index": 4,
+        "candidate_id": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "mixed",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0,
+            400.0
+          ],
+          "n_releases": 3,
+          "n_groups": 3,
+          "fused": false,
+          "sched": "fifo99",
+          "load": 0,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 426.0,
+          "compute_us": 10.05,
+          "release_us": 42.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 1,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_kernel:scenario",
+            "stage_sink@linux_userspace:scenario",
+            "T_ioctl:cli_override"
+          ],
+          "ioctl_model": {
+            "L_user_us": 42.0,
+            "C_us": 10.05,
+            "T_ioctl_us": 0.0,
+            "T_ioctl_evidence": "cli_override",
+            "kind": "uku_multi_release",
+            "note": "uku_multi_release：R̂=末组完成时刻（含 φ 等待）；非 WCET"
+          },
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "mixed_plan",
+          "q99_resp_us": 423.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            423.0,
+            423.0
+          ],
+          "miss_rate": 0.0,
+          "n_miss": 0,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 435.935,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "ccf856d86e152193",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 427.0,
+          "rhat_static_us": 426.0,
+          "delta_hat_us": 1.0,
+          "q99_cal_us": 427.0,
+          "p99_across_us": [
+            424.0,
+            448.0
+          ],
+          "uncertainty_span_us": 24.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "mixed",
+            "members": [
+              [
+                "stage_sample"
+              ],
+              [
+                "stage_pid"
+              ],
+              [
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0,
+              200.0,
+              400.0
+            ],
+            "n_releases": 3,
+            "n_groups": 3,
+            "fused": false,
+            "sched": "fifo99",
+            "load": 0,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": -3.0,
+          "ratio_q99_over_Rhat": 0.993,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 427.0,
+          "holdout_minus_cal_us": -4.0
+        }
+      },
+      {
+        "cand_index": 0,
+        "candidate_id": "B",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_pid",
+              "stage_sample",
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0
+          ],
+          "n_releases": 1,
+          "n_groups": 1,
+          "fused": true,
+          "sched": "cfs",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 36.0,
+          "compute_us": 15.0,
+          "release_us": 21.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 0,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "ioctl_model": null,
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "fused_user_load4",
+          "q99_resp_us": 74.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            74.0,
+            74.0
+          ],
+          "miss_rate": 0.001,
+          "n_miss": 5,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 5498.823,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "91883479dc6b3261",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 74.0,
+          "rhat_static_us": 36.0,
+          "delta_hat_us": 38.0,
+          "q99_cal_us": 74.0,
+          "p99_across_us": [
+            74.0,
+            74.0
+          ],
+          "uncertainty_span_us": 0.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "linux_userspace",
+            "members": [
+              [
+                "stage_pid",
+                "stage_sample",
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0
+            ],
+            "n_releases": 1,
+            "n_groups": 1,
+            "fused": true,
+            "sched": "cfs",
+            "load": 4,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": 38.0,
+          "ratio_q99_over_Rhat": 2.0556,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 74.0,
+          "holdout_minus_cal_us": 0.0
+        }
+      },
+      {
+        "cand_index": 0,
+        "candidate_id": "B",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_pid",
+              "stage_sample",
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0
+          ],
+          "n_releases": 1,
+          "n_groups": 1,
+          "fused": true,
+          "sched": "fifo99",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 36.0,
+          "compute_us": 15.0,
+          "release_us": 21.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 0,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "ioctl_model": null,
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "fused_user_load4",
+          "q99_resp_us": 24.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            24.0,
+            24.0
+          ],
+          "miss_rate": 0.0,
+          "n_miss": 0,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 37.359,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "9899a6b1ad1a58de",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 24.0,
+          "rhat_static_us": 36.0,
+          "delta_hat_us": -12.0,
+          "q99_cal_us": 24.0,
+          "p99_across_us": [
+            24.0,
+            45.0
+          ],
+          "uncertainty_span_us": 21.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "linux_userspace",
+            "members": [
+              [
+                "stage_pid",
+                "stage_sample",
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0
+            ],
+            "n_releases": 1,
+            "n_groups": 1,
+            "fused": true,
+            "sched": "fifo99",
+            "load": 4,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": -12.0,
+          "ratio_q99_over_Rhat": 0.6667,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 24.0,
+          "holdout_minus_cal_us": 0.0
+        }
+      },
+      {
+        "cand_index": 1,
+        "candidate_id": "STKP:L[stage_sample+stage_pid]|L[stage_sink]",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_pid",
+              "stage_sample"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            400.0
+          ],
+          "n_releases": 2,
+          "n_groups": 2,
+          "fused": false,
+          "sched": "cfs",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 57.0,
+          "compute_us": 15.0,
+          "release_us": 42.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 0,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "ioctl_model": null,
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "split_sp_k_user_load4",
+          "q99_resp_us": 1023.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            1023.0,
+            1023.0
+          ],
+          "miss_rate": 0.2522,
+          "n_miss": 1261,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 12878.696,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "6878a19e11768fc7",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 1023.0,
+          "rhat_static_us": 57.0,
+          "delta_hat_us": 966.0,
+          "q99_cal_us": 1023.0,
+          "p99_across_us": [
+            1023.0,
+            1023.0
+          ],
+          "uncertainty_span_us": 0.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "linux_userspace",
+            "members": [
+              [
+                "stage_pid",
+                "stage_sample"
+              ],
+              [
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0,
+              400.0
+            ],
+            "n_releases": 2,
+            "n_groups": 2,
+            "fused": false,
+            "sched": "cfs",
+            "load": 4,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": 966.0,
+          "ratio_q99_over_Rhat": 17.9474,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 1023.0,
+          "holdout_minus_cal_us": 0.0
+        }
+      },
+      {
+        "cand_index": 1,
+        "candidate_id": "STKP:L[stage_sample+stage_pid]|L[stage_sink]",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_pid",
+              "stage_sample"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            400.0
+          ],
+          "n_releases": 2,
+          "n_groups": 2,
+          "fused": false,
+          "sched": "fifo99",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 57.0,
+          "compute_us": 15.0,
+          "release_us": 42.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 0,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "ioctl_model": null,
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "split_sp_k_user_load4",
+          "q99_resp_us": 422.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            422.0,
+            422.0
+          ],
+          "miss_rate": 0.0,
+          "n_miss": 0,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 425.343,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "c2f6797451562bfd",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 423.0,
+          "rhat_static_us": 57.0,
+          "delta_hat_us": 366.0,
+          "q99_cal_us": 423.0,
+          "p99_across_us": [
+            422.0,
+            425.0
+          ],
+          "uncertainty_span_us": 3.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "linux_userspace",
+            "members": [
+              [
+                "stage_pid",
+                "stage_sample"
+              ],
+              [
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0,
+              400.0
+            ],
+            "n_releases": 2,
+            "n_groups": 2,
+            "fused": false,
+            "sched": "fifo99",
+            "load": 4,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": 365.0,
+          "ratio_q99_over_Rhat": 7.4035,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 423.0,
+          "holdout_minus_cal_us": -1.0
+        }
+      },
+      {
+        "cand_index": 2,
+        "candidate_id": "STKP:L[stage_sample]|L[stage_pid+stage_sink]",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid",
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0
+          ],
+          "n_releases": 2,
+          "n_groups": 2,
+          "fused": false,
+          "sched": "cfs",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 57.0,
+          "compute_us": 15.0,
+          "release_us": 42.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 0,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "ioctl_model": null,
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "split_s_pk_user_load4",
+          "q99_resp_us": 274.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            274.0,
+            274.0
+          ],
+          "miss_rate": 0.0014,
+          "n_miss": 7,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 7068.706,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "35f2c505bedbd329",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 274.0,
+          "rhat_static_us": 57.0,
+          "delta_hat_us": 217.0,
+          "q99_cal_us": 274.0,
+          "p99_across_us": [
+            274.0,
+            297.0
+          ],
+          "uncertainty_span_us": 23.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "linux_userspace",
+            "members": [
+              [
+                "stage_sample"
+              ],
+              [
+                "stage_pid",
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0,
+              200.0
+            ],
+            "n_releases": 2,
+            "n_groups": 2,
+            "fused": false,
+            "sched": "cfs",
+            "load": 4,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": 217.0,
+          "ratio_q99_over_Rhat": 4.807,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 274.0,
+          "holdout_minus_cal_us": 0.0
+        }
+      },
+      {
+        "cand_index": 2,
+        "candidate_id": "STKP:L[stage_sample]|L[stage_pid+stage_sink]",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid",
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0
+          ],
+          "n_releases": 2,
+          "n_groups": 2,
+          "fused": false,
+          "sched": "fifo99",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 57.0,
+          "compute_us": 15.0,
+          "release_us": 42.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 0,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "ioctl_model": null,
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "split_s_pk_user_load4",
+          "q99_resp_us": 223.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            223.0,
+            223.0
+          ],
+          "miss_rate": 0.0,
+          "n_miss": 0,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 228.303,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "baf73d49c9c3b0d4",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 223.0,
+          "rhat_static_us": 57.0,
+          "delta_hat_us": 166.0,
+          "q99_cal_us": 223.0,
+          "p99_across_us": [
+            223.0,
+            223.0
+          ],
+          "uncertainty_span_us": 0.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "linux_userspace",
+            "members": [
+              [
+                "stage_sample"
+              ],
+              [
+                "stage_pid",
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0,
+              200.0
+            ],
+            "n_releases": 2,
+            "n_groups": 2,
+            "fused": false,
+            "sched": "fifo99",
+            "load": 4,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": 166.0,
+          "ratio_q99_over_Rhat": 3.9123,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 223.0,
+          "holdout_minus_cal_us": 0.0
+        }
+      },
+      {
+        "cand_index": 3,
+        "candidate_id": "A",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0,
+            400.0
+          ],
+          "n_releases": 3,
+          "n_groups": 3,
+          "fused": false,
+          "sched": "cfs",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 78.0,
+          "compute_us": 15.0,
+          "release_us": 63.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 0,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "ioctl_model": null,
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "split3_user_plan_load4",
+          "q99_resp_us": 473.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            473.0,
+            473.0
+          ],
+          "miss_rate": 0.0,
+          "n_miss": 0,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 597.948,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "47d1f548fef8981b",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 473.0,
+          "rhat_static_us": 78.0,
+          "delta_hat_us": 395.0,
+          "q99_cal_us": 473.0,
+          "p99_across_us": [
+            472.0,
+            492.0
+          ],
+          "uncertainty_span_us": 20.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "linux_userspace",
+            "members": [
+              [
+                "stage_sample"
+              ],
+              [
+                "stage_pid"
+              ],
+              [
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0,
+              200.0,
+              400.0
+            ],
+            "n_releases": 3,
+            "n_groups": 3,
+            "fused": false,
+            "sched": "cfs",
+            "load": 4,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": 395.0,
+          "ratio_q99_over_Rhat": 6.0641,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 473.0,
+          "holdout_minus_cal_us": 0.0
+        }
+      },
+      {
+        "cand_index": 3,
+        "candidate_id": "A",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "linux_userspace",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0,
+            400.0
+          ],
+          "n_releases": 3,
+          "n_groups": 3,
+          "fused": false,
+          "sched": "fifo99",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 78.0,
+          "compute_us": 15.0,
+          "release_us": 63.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 0,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "ioctl_model": null,
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "split3_user_plan_load4",
+          "q99_resp_us": 422.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            422.0,
+            422.0
+          ],
+          "miss_rate": 0.0,
+          "n_miss": 0,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 425.117,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "3a0762feaf37e2c6",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 422.0,
+          "rhat_static_us": 78.0,
+          "delta_hat_us": 344.0,
+          "q99_cal_us": 422.0,
+          "p99_across_us": [
+            422.0,
+            423.0
+          ],
+          "uncertainty_span_us": 1.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "linux_userspace",
+            "members": [
+              [
+                "stage_sample"
+              ],
+              [
+                "stage_pid"
+              ],
+              [
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0,
+              200.0,
+              400.0
+            ],
+            "n_releases": 3,
+            "n_groups": 3,
+            "fused": false,
+            "sched": "fifo99",
+            "load": 4,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": 344.0,
+          "ratio_q99_over_Rhat": 5.4103,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 422.0,
+          "holdout_minus_cal_us": 0.0
+        }
+      },
+      {
+        "cand_index": 4,
+        "candidate_id": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "mixed",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0,
+            400.0
+          ],
+          "n_releases": 3,
+          "n_groups": 3,
+          "fused": false,
+          "sched": "cfs",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 426.0,
+          "compute_us": 10.05,
+          "release_us": 42.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 1,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_kernel:scenario",
+            "stage_sink@linux_userspace:scenario",
+            "T_ioctl:cli_override"
+          ],
+          "ioctl_model": {
+            "L_user_us": 42.0,
+            "C_us": 10.05,
+            "T_ioctl_us": 0.0,
+            "T_ioctl_evidence": "cli_override",
+            "kind": "uku_multi_release",
+            "note": "uku_multi_release：R̂=末组完成时刻（含 φ 等待）；非 WCET"
+          },
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "mixed_plan_load4",
+          "q99_resp_us": 479.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            479.0,
+            479.0
+          ],
+          "miss_rate": 0.0036,
+          "n_miss": 18,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 15699.216,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "b5ccce4f36ab642f",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 478.0,
+          "rhat_static_us": 426.0,
+          "delta_hat_us": 52.0,
+          "q99_cal_us": 478.0,
+          "p99_across_us": [
+            477.0,
+            484.0
+          ],
+          "uncertainty_span_us": 7.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "mixed",
+            "members": [
+              [
+                "stage_sample"
+              ],
+              [
+                "stage_pid"
+              ],
+              [
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0,
+              200.0,
+              400.0
+            ],
+            "n_releases": 3,
+            "n_groups": 3,
+            "fused": false,
+            "sched": "cfs",
+            "load": 4,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": 53.0,
+          "ratio_q99_over_Rhat": 1.1244,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 478.0,
+          "holdout_minus_cal_us": 1.0
+        }
+      },
+      {
+        "cand_index": 4,
+        "candidate_id": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
+        "deployment_ready": true,
+        "match_key": {
+          "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+          "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+          "domain": "mixed",
+          "members": [
+            [
+              "stage_sample"
+            ],
+            [
+              "stage_pid"
+            ],
+            [
+              "stage_sink"
+            ]
+          ],
+          "phases_us": [
+            0.0,
+            200.0,
+            400.0
+          ],
+          "n_releases": 3,
+          "n_groups": 3,
+          "fused": false,
+          "sched": "fifo99",
+          "load": 4,
+          "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+        },
+        "static_prediction": {
+          "predicted_R_us": 426.0,
+          "compute_us": 10.05,
+          "release_us": 42.0,
+          "handoff_us": 0.0,
+          "handoff_channels": 1,
+          "grade": "explore_uncertain",
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_kernel:scenario",
+            "stage_sink@linux_userspace:scenario",
+            "T_ioctl:cli_override"
+          ],
+          "ioctl_model": {
+            "L_user_us": 42.0,
+            "C_us": 10.05,
+            "T_ioctl_us": 0.0,
+            "T_ioctl_evidence": "cli_override",
+            "kind": "uku_multi_release",
+            "note": "uku_multi_release：R̂=末组完成时刻（含 φ 等待）；非 WCET"
+          },
+          "note": "scenario/cli 钳定可出现在 evidence 里；那种 R̂ 不是实测"
+        },
+        "measurement": {
+          "status": "measured",
+          "deployment": "mixed_plan_load4",
+          "q99_resp_us": 428.0,
+          "q99_rounds": 1,
+          "q99_statistic": "median_of_round_p99",
+          "q99_across_rounds": [
+            428.0,
+            428.0
+          ],
+          "miss_rate": 0.0,
+          "n_miss": 0,
+          "n_cycles": 5000,
+          "rounds": 1,
+          "resp_max_worst_us": 439.029,
+          "exec_mode": "plan"
+        },
+        "calibration": {
+          "status": "fitted",
+          "model": "residual_add_v1",
+          "calibration_id": "pr18b-residual-add-v1",
+          "instance_sha256": "ab8c1cd52d3d66af",
+          "train_rounds": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8
+          ],
+          "n_train": 2,
+          "q99_train_us": 428.0,
+          "rhat_static_us": 426.0,
+          "delta_hat_us": 2.0,
+          "q99_cal_us": 428.0,
+          "p99_across_us": [
+            427.0,
+            430.0
+          ],
+          "uncertainty_span_us": 3.0,
+          "match_key": {
+            "src_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+            "plan_sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+            "domain": "mixed",
+            "members": [
+              [
+                "stage_sample"
+              ],
+              [
+                "stage_pid"
+              ],
+              [
+                "stage_sink"
+              ]
+            ],
+            "phases_us": [
+              0.0,
+              200.0,
+              400.0
+            ],
+            "n_releases": 3,
+            "n_groups": 3,
+            "fused": false,
+            "sched": "fifo99",
+            "load": 4,
+            "platform": "Raspberry Pi 4 Model B Rev 1.5|5.15.86|PREEMPT"
+          },
+          "claim": "经验残差；不是 WCET；不可跨匹配键迁移"
+        },
+        "error": {
+          "delta_q99_minus_Rhat_us": 2.0,
+          "ratio_q99_over_Rhat": 1.0047,
+          "note": "经验残差；不得当作 WCET 裕量，也不得跨负载套用"
+        },
+        "calibrated": {
+          "q99_cal_us": 428.0,
+          "holdout_minus_cal_us": 0.0
+        }
+      }
+    ],
+    "summary": [
+      {
+        "load": 0,
+        "sched": "cfs",
+        "n_releases": 1,
+        "cross_domain": false,
+        "n": 1,
+        "delta_min_us": 29.0,
+        "delta_max_us": 29.0,
+        "delta_median_us": 29.0
+      },
+      {
+        "load": 0,
+        "sched": "cfs",
+        "n_releases": 2,
+        "cross_domain": false,
+        "n": 2,
+        "delta_min_us": 206.0,
+        "delta_max_us": 405.0,
+        "delta_median_us": 305.5
+      },
+      {
+        "load": 0,
+        "sched": "cfs",
+        "n_releases": 3,
+        "cross_domain": false,
+        "n": 1,
+        "delta_min_us": 384.0,
+        "delta_max_us": 384.0,
+        "delta_median_us": 384.0
+      },
+      {
+        "load": 0,
+        "sched": "cfs",
+        "n_releases": 3,
+        "cross_domain": true,
+        "n": 1,
+        "delta_min_us": 56.0,
+        "delta_max_us": 56.0,
+        "delta_median_us": 56.0
+      },
+      {
+        "load": 0,
+        "sched": "fifo99",
+        "n_releases": 1,
+        "cross_domain": false,
+        "n": 1,
+        "delta_min_us": -21.0,
+        "delta_max_us": -21.0,
+        "delta_median_us": -21.0
+      },
+      {
+        "load": 0,
+        "sched": "fifo99",
+        "n_releases": 2,
+        "cross_domain": false,
+        "n": 2,
+        "delta_min_us": 156.0,
+        "delta_max_us": 357.0,
+        "delta_median_us": 256.5
+      },
+      {
+        "load": 0,
+        "sched": "fifo99",
+        "n_releases": 3,
+        "cross_domain": false,
+        "n": 1,
+        "delta_min_us": 334.0,
+        "delta_max_us": 334.0,
+        "delta_median_us": 334.0
+      },
+      {
+        "load": 0,
+        "sched": "fifo99",
+        "n_releases": 3,
+        "cross_domain": true,
+        "n": 1,
+        "delta_min_us": -3.0,
+        "delta_max_us": -3.0,
+        "delta_median_us": -3.0
+      },
+      {
+        "load": 4,
+        "sched": "cfs",
+        "n_releases": 1,
+        "cross_domain": false,
+        "n": 1,
+        "delta_min_us": 38.0,
+        "delta_max_us": 38.0,
+        "delta_median_us": 38.0
+      },
+      {
+        "load": 4,
+        "sched": "cfs",
+        "n_releases": 2,
+        "cross_domain": false,
+        "n": 2,
+        "delta_min_us": 217.0,
+        "delta_max_us": 966.0,
+        "delta_median_us": 591.5
+      },
+      {
+        "load": 4,
+        "sched": "cfs",
+        "n_releases": 3,
+        "cross_domain": false,
+        "n": 1,
+        "delta_min_us": 395.0,
+        "delta_max_us": 395.0,
+        "delta_median_us": 395.0
+      },
+      {
+        "load": 4,
+        "sched": "cfs",
+        "n_releases": 3,
+        "cross_domain": true,
+        "n": 1,
+        "delta_min_us": 53.0,
+        "delta_max_us": 53.0,
+        "delta_median_us": 53.0
+      },
+      {
+        "load": 4,
+        "sched": "fifo99",
+        "n_releases": 1,
+        "cross_domain": false,
+        "n": 1,
+        "delta_min_us": -12.0,
+        "delta_max_us": -12.0,
+        "delta_median_us": -12.0
+      },
+      {
+        "load": 4,
+        "sched": "fifo99",
+        "n_releases": 2,
+        "cross_domain": false,
+        "n": 2,
+        "delta_min_us": 166.0,
+        "delta_max_us": 365.0,
+        "delta_median_us": 265.5
+      },
+      {
+        "load": 4,
+        "sched": "fifo99",
+        "n_releases": 3,
+        "cross_domain": false,
+        "n": 1,
+        "delta_min_us": 344.0,
+        "delta_max_us": 344.0,
+        "delta_median_us": 344.0
+      },
+      {
+        "load": 4,
+        "sched": "fifo99",
+        "n_releases": 3,
+        "cross_domain": true,
+        "n": 1,
+        "delta_min_us": 2.0,
+        "delta_max_us": 2.0,
+        "delta_median_us": 2.0
+      }
+    ],
+    "calibration_model": "residual_add_v1",
+    "calibration_id": "pr18b-residual-add-v1"
+  },
+  "holdout_summary": {
+    "n": 20,
+    "mae_us": 0.35,
+    "max_abs_us": 4.0,
+    "note": "holdout Q99 − (R̂+Δ̂_train)；同键才有值，跨键不会出现在这里"
+  }
+}

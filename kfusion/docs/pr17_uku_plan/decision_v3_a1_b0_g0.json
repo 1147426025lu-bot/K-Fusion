@@ -1568,7 +1568,7 @@
   "sources": {
     "profile": "kfusion/docs/pr11_deploy_objective/sched_profile_v3.json",
     "profile_sha256": "8b92ba1796895319659febc8dc730237736cccfff6fdb6b1a7a16f69f2ade330",
-    "stkp": "kfusion/docs/pr17_uku_plan/build/gen/stkp.json",
+    "stkp": "kfusion/docs/pr17_uku_plan/stkp.json",
     "stkp_sha256": "a7ff5aca51609fde243e07bd5c8f15deb1b0087b1a258845e5f63bc53cc06da5",
     "stkp_chosen_as_generated": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]"
   }

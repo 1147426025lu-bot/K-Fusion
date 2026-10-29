@@ -22,6 +22,7 @@ J 是加权标量化，权重是**策略输入**，量纲不齐（µs 与无量�
 """
 from __future__ import print_function
 
+import hashlib
 import io
 import json
 import math
@@ -64,6 +65,43 @@ def wilson_interval(k, n, z=1.96):
     lo = max(0.0, centre - half)
     hi = min(1.0, centre + half)
     return [lo, hi]
+
+
+def sha256_file(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 16), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def boundary_from_file(path):
+    """从 PR-10C 边界 json 读 T_ioctl。不许在评估脚本里写死 2.0。"""
+    if not path or not os.path.isfile(path):
+        raise TermMissing("无边界文件：%s" % path)
+    with io.open(path, encoding="utf-8") as f:
+        doc = json.load(f)
+    noop = doc.get("noop_ioctl") or {}
+    p50 = noop.get("roundtrip_p50_med")
+    p99 = noop.get("roundtrip_p99_med")
+    runs = noop.get("runs") or []
+    if p50 is None:
+        raise TermMissing("边界文件无 noop_ioctl.roundtrip_p50_med：%s" % path)
+    samples = sum(int(r.get("cycles") or 0) for r in runs)
+    return {
+        "t_ioctl_us": {
+            "value": float(p50),
+            "evidence": "measured",
+            "p50_us": float(p50),
+            "p99_us": None if p99 is None else float(p99),
+            "samples": samples,
+            "rounds": len(runs),
+            "source_log": path,
+            "source_sha256": sha256_file(path),
+            "statistic": "p50_of_noop_roundtrip",
+            "note": "空模块 copy_in/out+时间戳+互斥，是同步边界地板价；非 WCET。",
+        }
+    }
 
 
 def _evidence_ok(slot, need=("value",)):

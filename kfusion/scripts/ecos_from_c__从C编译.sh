@@ -20,6 +20,9 @@
 #   OBJ_MISS_BOUND        point|upper（默认 point）
 #   OBJ_SCHEDS            参与决策的调度类，默认 cfs,fifo99
 #   APPLY_SCHED=1         试跑时按选中的调度类加 chrt 前缀（默认 0，只记录不改行为）
+#   CALIBRATION           PR-18B calibration json；给了只做 shadow 记账
+#   APPLY_CALIBRATION=1   校准重选 accepted 才改 chosen（默认 0）
+#   CALIBRATION_LOAD      校准匹配的负载（默认 0；不得用静默残差套加压）
 set -euo pipefail
 
 KF="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -150,6 +153,17 @@ if [ -n "${DEPLOY_OBJECTIVE:-}" ] && [ -f "${DEPLOY_OBJECTIVE}" ]; then
               --objective-miss-bound "${OBJ_MISS_BOUND:-point}"
               --objective-scheds "${OBJ_SCHEDS:-cfs,fifo99}"
               --objective-out "$OUT/deploy_objective.json")
+fi
+if [ -n "${CALIBRATION:-}" ] && [ -f "${CALIBRATION}" ]; then
+  STKP_ARGS+=(--calibration "$CALIBRATION"
+              --calibration-load "${CALIBRATION_LOAD:-0}"
+              --feedback-out "$OUT/feedback_shadow.json")
+  if [ "${APPLY_CALIBRATION:-0}" = "1" ]; then
+    STKP_ARGS+=(--apply-calibration)
+  fi
+  if [ "${CALIBRATION_FALLBACK:-0}" = "1" ]; then
+    STKP_ARGS+=(--calibration-fallback)
+  fi
 fi
 if [ -n "${FORCE_CHOSEN:-}" ]; then
   STKP_ARGS+=(--force-chosen "$FORCE_CHOSEN")

@@ -284,7 +284,7 @@ DEPLOY_OBJECTIVE=...sched_profile_v2.json APPLY_SCHED=1 \
   kfusion/examples/ecos/mixed_pid_stateful__积分混合.c
 ```
 
-回归：`python3 -m unittest discover -s kfusion/scripts/test -p "test_*.py"`（57 项）；
+回归：`python3 -m unittest discover -s kfusion/scripts/test -p "test_*.py"`（83 项）；
 `python3 .../pr11_deploy_objective__部署目标.py selftest`（11 项）。
 
 ---
@@ -298,6 +298,10 @@ DEPLOY_OBJECTIVE=...sched_profile_v2.json APPLY_SCHED=1 \
 | `docs/pr11_deploy_objective/sched_profile_v3.json` | v2 + mixed_plan(load=0, n_releases=3)；排名用这份 |
 | `docs/pr17_uku_plan/sched_profile_mixed_plan.json` | mixed 三释放静默格子（Q99 482/427） |
 | `docs/pr17_uku_plan/decision_v3_a1_b0_g0.json` | 上述 STKP × v3 的 J(d,s) |
+| `docs/pr17_uku_plan/stkp.json` | 决策用的候选快照（不依赖 gitignore 的 `build/gen`） |
+| `docs/pr17_uku_plan/input_hashes.json` | 上述快照 sha256 |
+| `docs/pr17_uku_plan/holdout_v3_quiet.json` | PR-15 留一 + mixed_plan（离线，未重测） |
+| `docs/pr17_uku_plan/ablation_v3_quiet.json` | PR-16 消融 + mixed_plan（离线） |
 | `docs/pr11_deploy_objective/sched_profile_load4.json` | 加压画像（4 形状 × 2 调度类；不含 mixed_plan_load4） |
 | `docs/pr11_deploy_objective/decision_*.json` | 决策与权重敏感性 |
 | `docs/pr11_deploy_objective/pr14_report*.json` | 三列可行性报告 |
@@ -310,17 +314,23 @@ DEPLOY_OBJECTIVE=...sched_profile_v2.json APPLY_SCHED=1 \
 | `scripts/pr11_env_evidence__环境证据.py` | 环境取证 |
 | `scripts/pr14_sched_aware_verify__调度感知验证.py` | 可行性报告 CLI |
 | `scripts/ecos_plan_joint.py` | STKP、`--deploy-objective`、`--force-chosen` |
+| `scripts/ecos/feedback_profile.py` | PR-18A 三层反馈画像（校准层空） |
+| `scripts/pr18_feedback__反馈校准.py` | `errors` / `calibrate` / `shadow` / `ablate` |
+| `scripts/ecos/calibrate_cost.py` | PR-18B 残差 Δ̂；跨键 fail-closed |
+| `scripts/ecos/feedback_loop.py` | PR-18C shadow 重选 |
+| `docs/pr18_feedback/` | 误差表、校准表、shadow、M0–M3 留出消融 |
+| `docs/pr19_generalize/status.json` | 无新负载画像 → insufficient_evidence |
+| `docs/pr20_rt/status.json` | 平台是 PREEMPT 非 RT → insufficient_evidence |
 
 ---
 
 ## 10. 未完成（按优先级）
 
-1. **PR-17B 板上测量已 5/5**（`docs/pr17_uku_plan/report.json`）。编译成功不算覆盖；
-   语义 digest + 有效 Q99 矩阵才算。排名已用 v3，**不是**旧单释放 mixed。
-   加压 mixed_plan 与 v2 加压表仍分文件，未混表。
-2. **PR-15 / PR-16 已实现**：不要重复开发。用 mixed_plan 新格子重跑留一/消融
-   属于后续，不是缺脚本。
-3. **下一步是 PR-18（测量→校准→再选择→holdout）**。scenario 钳定值
-   （BUILD u/k/ioctl）不是实测成本，不得写进校准后的 C(G,d)。
+1. **PR-17B–18D 代码与离线实验已落地**（17C 起尚未提交远端）。shadow 默认不改
+   chosen；本 PID 任务上 M1≡M2≡M3（B@fifo99），校准没有改变选择。
+2. **PR-19 泛化：insufficient_evidence**。更长阶段链示例没有对齐画像，
+   禁止借用 mixed_pid 的 Δ̂。需要 margin≈噪声的新负载板上数据。
+3. **PR-20 PREEMPT_RT：insufficient_evidence**。现平台是 PREEMPT。不得把
+   已有格子写成 RT 结论。
 4. **谁抢了 CPU 的机制归因**：受 p1 32 MB 限制，需换分区或外部 trace。
-5. **构造 margin ≈ 噪声的候选对**：否则「选择正确率」永远满分，PR-16 只能证判定、不能证选择。
+5. **构造 margin ≈ 噪声的候选对**：否则选择正确率永远满分。

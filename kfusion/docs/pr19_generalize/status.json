@@ -1,0 +1,13 @@
+{
+  "kind": "pr19_generalize_status",
+  "claim": "当前 PID 任务 margin/noise≫1，选择正确率没有区分力。泛化需要新负载的板上画像，不能用本任务的 Q99 外推。",
+  "current_workload": "kfusion/examples/ecos/mixed_pid_stateful__积分混合.c",
+  "candidates_unmeasured": [
+    "five_stage_loop__闭环五阶段示例.c",
+    "chain_window__四段窗口示例.c",
+    "four_stage_chain__四阶段示例.c"
+  ],
+  "verdict": "insufficient_evidence",
+  "reason": "仓库里有更长阶段链示例，但没有与 STKP 形状对齐的 sched_profile，不得借用 mixed_pid 的 Δ̂。",
+  "next": "选一个数据交互成本不同、候选 Q99 接近的周期程序，重做语义+矩阵+反馈，禁止为证明方法而构造内核化必胜实例。"
+}

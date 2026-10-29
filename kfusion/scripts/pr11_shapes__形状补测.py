@@ -235,6 +235,81 @@ def build_shape(shape, workdir):
 STAT_RE = r"# stat_%s: min=([0-9.]+) avg=([0-9.]+) p50=(\d+).*?p99=(\d+).*?p99\.9=(\d+).*?p99\.99=(\d+) max=([0-9.]+) over=(\d+).*? n=(\d+)"
 
 
+def _phases_key(xs):
+    return tuple(int(round(float(x))) for x in (xs or []))
+
+
+def round_stats_why(st, expect):
+    """一轮统计相对期望形状：失败原因或 None。
+
+    expect 可含 cycles / want_start / n_releases / n_groups / phases_us /
+    digest / exec_mode。缺字段的旧 gold 日志不要求 groups/phases。
+    """
+    expect = expect or {}
+    if not st.get("response") or not st.get("start_lat"):
+        return "统计块缺失"
+    rp, sl = st["response"], st["start_lat"]
+    cycles = expect.get("cycles")
+    if cycles is not None and rp.get("n") != cycles:
+        return "拍数 %s != %s" % (rp.get("n"), cycles)
+    want_start = expect.get("want_start")
+    if want_start is not None and sl.get("n") != want_start:
+        return "start_lat 样本 %s != %s（cycles×releases）" % (
+            sl.get("n"), want_start)
+    want_rel = expect.get("n_releases")
+    if want_rel is not None and st.get("n_releases") != want_rel:
+        return "释放数 %s != %s" % (st.get("n_releases"), want_rel)
+    want_grp = expect.get("n_groups")
+    if want_grp is not None:
+        got_grp = st.get("n_groups")
+        if got_grp is None:
+            return "缺 groups_per_period"
+        if int(got_grp) != int(want_grp):
+            return "组数 %s != %s" % (got_grp, want_grp)
+    phases = expect.get("phases_us")
+    if phases is not None:
+        got_ph = st.get("plan_phases_us")
+        if not got_ph:
+            return "缺 plan_phases_us"
+        if _phases_key(got_ph) != _phases_key(phases):
+            return "phases %s != %s" % (got_ph, phases)
+    mode = expect.get("exec_mode")
+    if mode and st.get("exec_mode") not in (None, mode):
+        return "exec_mode %s != %s" % (st.get("exec_mode"), mode)
+    if not st.get("digest"):
+        return "缺 digest"
+    want_d = expect.get("digest")
+    if want_d and st.get("digest") != want_d:
+        return "digest %s != %s" % (st.get("digest"), want_d)
+    if (st.get("ioctl_error") or 0) != 0:
+        return "ioctl_error=%s" % st.get("ioctl_error")
+    if (st.get("seq_mismatch") or 0) != 0:
+        return "seq_mismatch=%s" % st.get("seq_mismatch")
+    if (rp.get("min_us") is not None and rp.get("p99_us") is not None
+            and float(rp["min_us"]) > float(rp["p99_us"]) + 0.5):
+        return ("response 分位数被桶顶夹住 min=%.3f p99=%s over=%s"
+                % (rp["min_us"], rp["p99_us"], rp.get("over")))
+    return None
+
+
+def log_agrees_with_run(text, rec):
+    """原始日志重解析后须与该轮记录一致（digest / 拍数 / p99 / 释放结构）。"""
+    st = parse_stats(text)
+    why = []
+    if rec.get("digest") and st.get("digest") != rec.get("digest"):
+        why.append("digest")
+    rp = st.get("response") or {}
+    if rec.get("n") and rp.get("n") != rec.get("n"):
+        why.append("n")
+    want_p99 = ((rec.get("response") or {}).get("p99_us")
+                if isinstance(rec.get("response"), dict) else None)
+    if want_p99 is not None and rp.get("p99_us") != want_p99:
+        why.append("p99")
+    if rec.get("n_releases") is not None and st.get("n_releases") != rec.get("n_releases"):
+        why.append("n_releases")
+    return (not why), why
+
+
 def parse_stats(text):
     """从统一探针的统计块取分位数。
 
@@ -387,28 +462,22 @@ def measure_shape(cell, sched, cycles, repeat, out_dir, load=0, mode="plan"):
                     {"log_tail": txt.splitlines()[-5:], "rmmod_rc": rc_rm})
             continue
         sl, rp, wk = st["start_lat"], st["response"], st.get("exec") or {}
-        why = None
-        if rp.get("n") != cycles:
-            why = "拍数 %s != %s" % (rp.get("n"), cycles)
-        elif sl.get("n") != want_start:
-            why = "start_lat 样本 %s != %s（cycles×releases）" % (
-                sl.get("n"), want_start)
-        elif want_rel is not None and st.get("n_releases") != want_rel:
-            why = "释放数 %s != %s" % (st.get("n_releases"), want_rel)
-        elif not st.get("digest"):
-            why = "缺 digest"
-        elif (st.get("ioctl_error") or 0) != 0:
-            why = "ioctl_error=%s" % st.get("ioctl_error")
-        elif (st.get("seq_mismatch") or 0) != 0:
-            why = "seq_mismatch=%s" % st.get("seq_mismatch")
-        elif (rp.get("min_us") is not None and rp.get("p99_us") is not None
-              and float(rp["min_us"]) > float(rp["p99_us"]) + 0.5):
-            why = ("response 分位数被桶顶夹住 min=%.3f p99=%s over=%s"
-                   % (rp["min_us"], rp["p99_us"], rp.get("over")))
-        elif (rp.get("min_us") is not None and rp.get("p99_us") is not None
-              and float(rp["min_us"]) > float(rp["p99_us"]) + 0.5):
-            why = ("response 分位数被桶顶夹住 min=%s p99=%s over=%s"
-                   % (rp.get("min_us"), rp.get("p99_us"), rp.get("over")))
+        sh = cell.get("shape") or {}
+        expect = {
+            "cycles": cycles,
+            "want_start": want_start,
+            "n_releases": want_rel,
+            "exec_mode": mode if multi else None,
+        }
+        if multi and sh.get("n_groups") is not None:
+            expect["n_groups"] = sh["n_groups"]
+        if multi and sh.get("phases_us"):
+            expect["phases_us"] = sh["phases_us"]
+        seen = next((r.get("digest") for r in runs if r.get("valid") and r.get("digest")),
+                    None)
+        if seen:
+            expect["digest"] = seen
+        why = round_stats_why(st, expect)
         if why:
             invalid(i, rc, why, before, after, {"rmmod_rc": rc_rm, "stats": st})
             continue

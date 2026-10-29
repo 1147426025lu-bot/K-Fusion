@@ -12,6 +12,7 @@ import hashlib
 import io
 import json
 import os
+import shutil
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -30,6 +31,35 @@ def sha256(path):
         for chunk in iter(lambda: f.read(1 << 16), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+SNAPSHOT_NAMES = ("stkp.json", "candidates.json", "chosen.plan.json")
+
+
+def snapshot_inputs(gen_dir, out_dir):
+    """把 STKP 候选快照拷出 gitignore 的 build/，决策报告才能复现。"""
+    rec = {"kind": "pr17_input_snapshot", "files": {}}
+    for name in SNAPSHOT_NAMES:
+        src = os.path.join(gen_dir, name)
+        if not os.path.isfile(src):
+            rec["files"][name] = {"missing": True}
+            continue
+        dst = os.path.join(out_dir, name)
+        shutil.copy2(src, dst)
+        rec["files"][name] = {
+            "path": os.path.relpath(dst, os.path.dirname(KF)).replace(os.sep, "/"),
+            "sha256": sha256(dst),
+            "bytes": os.path.getsize(dst),
+        }
+    plan_p = os.path.join(out_dir, "plan.json")
+    if os.path.isfile(plan_p):
+        rec["files"]["plan.json"] = {
+            "path": os.path.relpath(plan_p, os.path.dirname(KF)).replace(os.sep, "/"),
+            "sha256": sha256(plan_p),
+            "bytes": os.path.getsize(plan_p),
+        }
+    write_json(os.path.join(out_dir, "input_hashes.json"), rec)
+    return rec
 
 
 def write_json(path, obj):
@@ -123,6 +153,7 @@ def main():
     })
     if b.get("plan"):
         write_json(os.path.join(a.out, "plan.json"), b["plan"])
+    snap = snapshot_inputs(os.path.join(wd, "gen"), a.out)
     if b.get("status") != "ok":
         print("构建失败 %s" % b.get("status"), file=sys.stderr)
         write_json(os.path.join(a.out, "report.json"), {
@@ -150,6 +181,7 @@ def main():
         "semantic_ok": bool(sem.get("ok")),
         "semantic": sem,
         "matrix": None,
+        "inputs": snap,
         "note": "mixed 单释放画像不得当作 mixed_plan",
     }
     if not sem.get("ok"):
@@ -187,7 +219,7 @@ def main():
     if matrix_ok and q99_ok:
         report["coverage"] = "5/5"
         report["note"] = ("mixed_plan 实测完整；勿与 PR-10E mixed 单释放混表。"
-                          "非 WCET。尚未并入 PR-11 J(d,s) 排序。")
+                          "非 WCET。J(d,s) 用 sched_profile_v3.json。")
     elif matrix_ok and not q99_ok:
         report["coverage"] = "4/5"
         report["note"] = "轮次有效但 response 分位数被桶顶夹住，不得当 Q99"

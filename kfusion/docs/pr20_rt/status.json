@@ -1,0 +1,11 @@
+{
+  "kind": "pr20_rt_status",
+  "claim": "本仓库正式画像来自 PREEMPT 非 RT；不得把 PREEMPT 数据写成 PREEMPT_RT 结论。",
+  "platform_required": "PREEMPT_RT",
+  "platform_measured": "PREEMPT",
+  "kernel_release": "5.15.86",
+  "host": "Raspberry Pi 4 Model B Rev 1.5",
+  "rt_evidence": "insufficient_evidence",
+  "reason": "env_evidence.kernel.preempt_class=PREEMPT 且 CONFIG_PREEMPT_RT=null。未在 RT 内核上采集。",
+  "next": "换真正启用 PREEMPT_RT 的内核与独立矩阵后再写 RT 表，禁止与现有格子混表。"
+}

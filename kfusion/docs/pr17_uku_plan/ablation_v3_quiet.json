@@ -1,0 +1,1820 @@
+{
+  "kind": "pr16_ablation",
+  "version": 1,
+  "load": 0,
+  "deadline_us": 1000.0,
+  "horizon_s": 3600.0,
+  "extra_shapes": [
+    "kfusion/docs/pr17_uku_plan/shapes.json"
+  ],
+  "boundary": {
+    "source_log": "/root/K-Fusion/kfusion/docs/pr10c_boundary/boundary.json",
+    "source_sha256": "b7dc35fad5d833765475366a6420c50d22d9a557f7a3a33d673196c5152293fe",
+    "value_us": 2.0
+  },
+  "protocol": "留一法 10 折；训练轮决策、留出轮验证",
+  "methods": [
+    {
+      "id": "M0",
+      "name": "静态模型",
+      "def": "R̂ 最小，调度类固定 CFS"
+    },
+    {
+      "id": "M1",
+      "name": "+调度类维度",
+      "def": "部署按 R̂，调度类固定 FIFO99"
+    },
+    {
+      "id": "M2",
+      "name": "+实测尾部",
+      "def": "按实测 Q99 选，β=0"
+    },
+    {
+      "id": "M3",
+      "name": "+违约风险",
+      "def": "J=Q99+β·R_miss，β=1e5"
+    },
+    {
+      "id": "M4",
+      "name": "+边界成本",
+      "def": "M3 + γ·C_boundary（γ=1）"
+    }
+  ],
+  "claim": "消融只在本任务与本平台上成立；本任务 margin/noise=2.4–9.5，所有方法都能选对，差别体现在期限判定的假可行率",
+  "folds": {
+    "r00": {
+      "held_out_round": 0,
+      "methods": {
+        "M0": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "cfs",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 65.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 217.098,
+              "rounds": 1,
+              "per_round_p99": [
+                65
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 65.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": false,
+          "regret_us": 50.0
+        },
+        "M1": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 30.34,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M2": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 0.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 30.34,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M3": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 30.34,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M4": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 1.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 30.34,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        }
+      }
+    },
+    "r01": {
+      "held_out_round": 1,
+      "methods": {
+        "M0": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "cfs",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 65.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 102.61,
+              "rounds": 1,
+              "per_round_p99": [
+                65
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 65.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": false,
+          "regret_us": 50.0
+        },
+        "M1": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 32.518,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M2": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 0.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 32.518,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M3": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 32.518,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M4": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 1.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 32.518,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        }
+      }
+    },
+    "r02": {
+      "held_out_round": 2,
+      "methods": {
+        "M0": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "cfs",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 66.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 194.624,
+              "rounds": 1,
+              "per_round_p99": [
+                66
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 66.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": false,
+          "regret_us": 50.0
+        },
+        "M1": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 16.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 36.088,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 16.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M2": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 0.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 16.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 36.088,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 16.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M3": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 16.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 36.088,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 16.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M4": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 1.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 16.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 36.088,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 16.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        }
+      }
+    },
+    "r03": {
+      "held_out_round": 3,
+      "methods": {
+        "M0": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "cfs",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 66.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 78.967,
+              "rounds": 1,
+              "per_round_p99": [
+                66
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 66.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": false,
+          "regret_us": 51.0
+        },
+        "M1": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 33.606,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M2": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 0.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 33.606,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M3": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 33.606,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M4": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 1.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 33.606,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        }
+      }
+    },
+    "r04": {
+      "held_out_round": 4,
+      "methods": {
+        "M0": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "cfs",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 66.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 305.233,
+              "rounds": 1,
+              "per_round_p99": [
+                66
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 66.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": false,
+          "regret_us": 50.0
+        },
+        "M1": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 16.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.613,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 16.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M2": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 0.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 16.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.613,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 16.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M3": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 16.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.613,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 16.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M4": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 1.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 16.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.613,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 16.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        }
+      }
+    },
+    "r05": {
+      "held_out_round": 5,
+      "methods": {
+        "M0": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "cfs",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 65.0,
+              "n": 5000,
+              "miss": 2,
+              "max_us": 2583.216,
+              "rounds": 1,
+              "per_round_p99": [
+                65
+              ]
+            },
+            "verdict": "infeasible_observed",
+            "J_val": 105.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": false,
+          "regret_us": 90.0,
+          "false_feasible": true
+        },
+        "M1": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.204,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M2": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 0.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.204,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M3": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.204,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M4": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 1.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.204,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        }
+      }
+    },
+    "r06": {
+      "held_out_round": 6,
+      "methods": {
+        "M0": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "cfs",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 66.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 87.971,
+              "rounds": 1,
+              "per_round_p99": [
+                66
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 66.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": false,
+          "regret_us": 50.0
+        },
+        "M1": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 16.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.602,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 16.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M2": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 0.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 16.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.602,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 16.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M3": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 16.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.602,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 16.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M4": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 1.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 16.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 29.602,
+              "rounds": 1,
+              "per_round_p99": [
+                16
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 16.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        }
+      }
+    },
+    "r07": {
+      "held_out_round": 7,
+      "methods": {
+        "M0": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "cfs",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 66.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 180.279,
+              "rounds": 1,
+              "per_round_p99": [
+                66
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 66.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": false,
+          "regret_us": 51.0
+        },
+        "M1": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 38.429,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M2": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 0.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 38.429,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M3": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 38.429,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M4": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 1.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 38.429,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        }
+      }
+    },
+    "r08": {
+      "held_out_round": 8,
+      "methods": {
+        "M0": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "cfs",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 66.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 807.062,
+              "rounds": 1,
+              "per_round_p99": [
+                66
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 66.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": false,
+          "regret_us": 51.0
+        },
+        "M1": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 45.05,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M2": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 0.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 45.05,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M3": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 45.05,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M4": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 1.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 45.05,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        }
+      }
+    },
+    "r09": {
+      "held_out_round": 9,
+      "methods": {
+        "M0": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "cfs",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 65.0,
+              "n": 5000,
+              "miss": 3,
+              "max_us": 2000.771,
+              "rounds": 1,
+              "per_round_p99": [
+                65
+              ]
+            },
+            "verdict": "infeasible_observed",
+            "J_val": 125.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": false,
+          "regret_us": 110.0,
+          "false_feasible": true
+        },
+        "M1": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "R_hat_us": 36.0,
+              "note": "静态模型，无实测分布"
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 38.862,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M2": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "empirically_feasible",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 0.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 38.862,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "empirically_feasible",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M3": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 0.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 38.862,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        },
+        "M4": {
+          "pick": {
+            "cand_index": 0,
+            "sched": "fifo99",
+            "verdict": "cannot_certify",
+            "basis": {
+              "J_us": 15.0,
+              "terms": {
+                "Q99_resp_us": 15.0,
+                "R_miss": 0.0,
+                "C_boundary_us": 0.0
+              },
+              "beta": 100000.0,
+              "gamma": 1.0
+            }
+          },
+          "val": {
+            "stats": {
+              "q99_us": 15.0,
+              "n": 5000,
+              "miss": 0,
+              "max_us": 38.862,
+              "rounds": 1,
+              "per_round_p99": [
+                15
+              ]
+            },
+            "verdict": "cannot_certify",
+            "J_val": 15.0
+          },
+          "verdict_pred": "cannot_certify",
+          "correct": true,
+          "regret_us": 0.0
+        }
+      }
+    }
+  },
+  "summary": {
+    "M0": {
+      "name": "静态模型",
+      "def": "R̂ 最小，调度类固定 CFS",
+      "n_folds": 10,
+      "choice_accuracy": 0.0,
+      "mean_regret_us": 60.3,
+      "max_regret_us": 110.0,
+      "chosen_miss_rate": 0.0001,
+      "false_feasible_rate": 0.2,
+      "unverifiable_rate": 0.0,
+      "verdicts": {
+        "empirically_feasible": 10
+      },
+      "picked": [
+        "B@cfs"
+      ],
+      "verdict_matrix": {
+        "n": 100,
+        "false_feasible": 19,
+        "miss_detected": 0,
+        "miss_total": 19,
+        "false_alarm": 0,
+        "ok_total": 81,
+        "false_feasible_rate": 1.0,
+        "detect_rate": 0.0,
+        "false_alarm_rate": 0.0
+      }
+    },
+    "M1": {
+      "name": "+调度类维度",
+      "def": "部署按 R̂，调度类固定 FIFO99",
+      "n_folds": 10,
+      "choice_accuracy": 1.0,
+      "mean_regret_us": 0.0,
+      "max_regret_us": 0.0,
+      "chosen_miss_rate": 0.0,
+      "false_feasible_rate": 0.0,
+      "unverifiable_rate": 0.0,
+      "verdicts": {
+        "empirically_feasible": 10
+      },
+      "picked": [
+        "B@fifo99"
+      ],
+      "verdict_matrix": {
+        "n": 100,
+        "false_feasible": 19,
+        "miss_detected": 0,
+        "miss_total": 19,
+        "false_alarm": 0,
+        "ok_total": 81,
+        "false_feasible_rate": 1.0,
+        "detect_rate": 0.0,
+        "false_alarm_rate": 0.0
+      }
+    },
+    "M2": {
+      "name": "+实测尾部",
+      "def": "按实测 Q99 选，β=0",
+      "n_folds": 10,
+      "choice_accuracy": 1.0,
+      "mean_regret_us": 0.0,
+      "max_regret_us": 0.0,
+      "chosen_miss_rate": 0.0,
+      "false_feasible_rate": 0.0,
+      "unverifiable_rate": 0.0,
+      "verdicts": {
+        "empirically_feasible": 10
+      },
+      "picked": [
+        "B@fifo99"
+      ],
+      "verdict_matrix": {
+        "n": 100,
+        "false_feasible": 19,
+        "miss_detected": 0,
+        "miss_total": 19,
+        "false_alarm": 0,
+        "ok_total": 81,
+        "false_feasible_rate": 1.0,
+        "detect_rate": 0.0,
+        "false_alarm_rate": 0.0
+      }
+    },
+    "M3": {
+      "name": "+违约风险",
+      "def": "J=Q99+β·R_miss，β=1e5",
+      "n_folds": 10,
+      "choice_accuracy": 1.0,
+      "mean_regret_us": 0.0,
+      "max_regret_us": 0.0,
+      "chosen_miss_rate": 0.0,
+      "false_feasible_rate": 0.0,
+      "unverifiable_rate": 0.0,
+      "verdicts": {
+        "cannot_certify": 10
+      },
+      "picked": [
+        "B@fifo99"
+      ],
+      "verdict_matrix": {
+        "n": 100,
+        "false_feasible": 1,
+        "miss_detected": 18,
+        "miss_total": 19,
+        "false_alarm": 21,
+        "ok_total": 81,
+        "false_feasible_rate": 0.053,
+        "detect_rate": 0.947,
+        "false_alarm_rate": 0.259
+      }
+    },
+    "M4": {
+      "name": "+边界成本",
+      "def": "M3 + γ·C_boundary（γ=1）",
+      "n_folds": 10,
+      "choice_accuracy": 1.0,
+      "mean_regret_us": 0.0,
+      "max_regret_us": 0.0,
+      "chosen_miss_rate": 0.0,
+      "false_feasible_rate": 0.0,
+      "unverifiable_rate": 0.0,
+      "verdicts": {
+        "cannot_certify": 10
+      },
+      "picked": [
+        "B@fifo99"
+      ],
+      "verdict_matrix": {
+        "n": 100,
+        "false_feasible": 1,
+        "miss_detected": 18,
+        "miss_total": 19,
+        "false_alarm": 21,
+        "ok_total": 81,
+        "false_feasible_rate": 0.053,
+        "detect_rate": 0.947,
+        "false_alarm_rate": 0.259
+      }
+    }
+  }
+}

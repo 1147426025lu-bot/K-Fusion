@@ -2683,5 +2683,30 @@
     "n_need": 40,
     "ok": true
   },
-  "note": "mixed_plan 实测完整；勿与 PR-10E mixed 单释放混表。非 WCET。尚未并入 PR-11 J(d,s) 排序。"
+  "note": "mixed_plan 实测完整；勿与 PR-10E mixed 单释放混表。非 WCET。J(d,s) 用 sched_profile_v3.json。",
+  "inputs": {
+    "kind": "pr17_input_snapshot",
+    "files": {
+      "stkp.json": {
+        "path": "kfusion/docs/pr17_uku_plan/stkp.json",
+        "sha256": "a7ff5aca51609fde243e07bd5c8f15deb1b0087b1a258845e5f63bc53cc06da5",
+        "bytes": 42686
+      },
+      "candidates.json": {
+        "path": "kfusion/docs/pr17_uku_plan/candidates.json",
+        "sha256": "3ecf296f94d29cbfca4d23b5198b1e5f3add3ba438ada6e4d377773414d3d55b",
+        "bytes": 9576
+      },
+      "chosen.plan.json": {
+        "path": "kfusion/docs/pr17_uku_plan/chosen.plan.json",
+        "sha256": "4ee60de34bd5b7f97b1a121e320420201c708fe66c50d6ac5a959efe67a19079",
+        "bytes": 1742
+      },
+      "plan.json": {
+        "path": "kfusion/docs/pr17_uku_plan/plan.json",
+        "sha256": "226fa562b9e1f35dbec3b3a120d0f2104e9ab945cebdf8170e3d2ee7c2cf9f4c",
+        "bytes": 2345
+      }
+    }
+  }
 }

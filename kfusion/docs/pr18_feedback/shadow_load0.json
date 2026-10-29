@@ -1,0 +1,29 @@
+{
+  "kind": "pr18_shadow",
+  "calibration_id": "pr18b-residual-add-v1",
+  "load": 0,
+  "fallback": "drop",
+  "chosen_before": {
+    "candidate_id": "B",
+    "cand_index": 0,
+    "sched": "fifo99",
+    "label": "B@linux_userspace",
+    "J_us": 15.0,
+    "deployment": "fused_user"
+  },
+  "chosen_after": {
+    "candidate_id": "B",
+    "cand_index": 0,
+    "sched": "fifo99",
+    "label": "B@linux_userspace",
+    "J_us": 15.0,
+    "deployment": "fused_user",
+    "q99_source": "calibrated"
+  },
+  "apply_status": "unchanged",
+  "apply": false,
+  "applied": false,
+  "n_rankable_before": 10,
+  "n_rankable_after": 10,
+  "claim": "shadow 默认不替换 chosen；apply 仅在 accepted 且 ready 时改。非 WCET。"
+}

@@ -126,15 +126,24 @@ def main():
     ap.add_argument("--period", type=float, default=1000.0)
     ap.add_argument("--horizon-s", dest="horizon_s", type=float, default=3600.0)
     ap.add_argument("--load", type=int, default=0)
+    ap.add_argument("--extra-shapes", action="append", default=[],
+                    help="追加形状 json（如 pr17 mixed_plan）")
+    ap.add_argument("--boundary",
+                    default=os.path.join(KF, "docs", "pr10c_boundary",
+                                         "boundary.json"))
     ap.add_argument("-o", "--out", required=True)
     a = ap.parse_args()
 
-    cells = pr15.collect_cells(a.shapes, a.baseline, load=a.load)
+    cells = pr15.collect_cells(a.shapes, a.baseline, load=a.load,
+                               extra_shapes=a.extra_shapes)
     stkp = json.load(io.open(a.stkp, encoding="utf-8"))
     cands = [c for c in (stkp.get("candidates") or []) if c.get("plan")]
     env = json.load(io.open(a.env, encoding="utf-8"))
-    boundary = {"t_ioctl_us": {"value": 2.0, "evidence": "measured",
-                              "samples": 15000, "rounds": 3}}
+    try:
+        boundary = do.boundary_from_file(a.boundary)
+    except do.TermMissing as exc:
+        print("边界文件不可用：%s" % exc, file=sys.stderr)
+        return 2
     meta = {"period_us": a.period, "deadline_us": a.deadline, "pin_cpu": 3,
             "cycles_per_round": 5000, "repeat": 9, "load": a.load}
     allr = set(range(10))
@@ -148,6 +157,12 @@ def main():
 
     doc = {"kind": "pr16_ablation", "version": 1, "load": a.load,
            "deadline_us": a.deadline, "horizon_s": a.horizon_s,
+           "extra_shapes": a.extra_shapes,
+           "boundary": {
+               "source_log": boundary["t_ioctl_us"].get("source_log"),
+               "source_sha256": boundary["t_ioctl_us"].get("source_sha256"),
+               "value_us": boundary["t_ioctl_us"].get("value"),
+           },
            "protocol": "留一法 10 折；训练轮决策、留出轮验证",
            "methods": [{"id": m, "name": n, "def": d} for m, n, d in METHODS],
            "claim": ("消融只在本任务与本平台上成立；本任务 margin/noise=2.4–9.5，"

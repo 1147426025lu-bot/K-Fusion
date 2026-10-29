@@ -1,0 +1,114 @@
+{
+  "kind": "pr18d_ablation",
+  "claim": "训练轮决策、留出轮评价；本任务 margin 大时 M1≡M2 不证明校准无用，只证明当前负载分不开。非 WCET。",
+  "load": 0,
+  "train_rounds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "holdout_rounds": [
+    9
+  ],
+  "n_fitted": 10,
+  "methods": [
+    {
+      "id": "M0",
+      "basis": "min predicted_R, sched=cfs",
+      "chosen": {
+        "cand_index": 0,
+        "id": "B",
+        "sched": "cfs"
+      },
+      "holdout": {
+        "q99_us": 65.0,
+        "n": 5000,
+        "miss": 3,
+        "max_us": 2000.771,
+        "rounds": 1,
+        "per_round_p99": [
+          65
+        ]
+      },
+      "J_hold_us": 125.0,
+      "agree_oracle": false,
+      "regret_us": 110.0,
+      "holdout_miss": 3
+    },
+    {
+      "id": "M1",
+      "basis": "J=Q99 measured train",
+      "chosen": {
+        "cand_index": 0,
+        "id": "B",
+        "sched": "fifo99"
+      },
+      "holdout": {
+        "q99_us": 15.0,
+        "n": 5000,
+        "miss": 0,
+        "max_us": 38.862,
+        "rounds": 1,
+        "per_round_p99": [
+          15
+        ]
+      },
+      "J_hold_us": 15.0,
+      "agree_oracle": true,
+      "regret_us": 0.0,
+      "holdout_miss": 0
+    },
+    {
+      "id": "M2",
+      "basis": "J=Q99_cal drop-missing",
+      "chosen": {
+        "cand_index": 0,
+        "id": "B",
+        "sched": "fifo99"
+      },
+      "holdout": {
+        "q99_us": 15.0,
+        "n": 5000,
+        "miss": 0,
+        "max_us": 38.862,
+        "rounds": 1,
+        "per_round_p99": [
+          15
+        ]
+      },
+      "J_hold_us": 15.0,
+      "agree_oracle": true,
+      "regret_us": 0.0,
+      "holdout_miss": 0
+    },
+    {
+      "id": "M3",
+      "basis": "J=Q99_cal|measured + β R_miss",
+      "chosen": {
+        "cand_index": 0,
+        "id": "B",
+        "sched": "fifo99"
+      },
+      "holdout": {
+        "q99_us": 15.0,
+        "n": 5000,
+        "miss": 0,
+        "max_us": 38.862,
+        "rounds": 1,
+        "per_round_p99": [
+          15
+        ]
+      },
+      "J_hold_us": 15.0,
+      "agree_oracle": true,
+      "regret_us": 0.0,
+      "holdout_miss": 0
+    }
+  ]
+}

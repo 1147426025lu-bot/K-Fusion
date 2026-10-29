@@ -103,27 +103,11 @@ def cmd_profile(args):
         prof = do.merge_profiles(prof, extra)
         print("合并形状画像：%s" % ", ".join(sorted(extra["deployments"])))
     if args.boundary:
-        bdoc = load_json(args.boundary)
-        noop = bdoc.get("noop_ioctl") or {}
-        p50 = noop.get("roundtrip_p50_med")
-        p99 = noop.get("roundtrip_p99_med")
-        runs = noop.get("runs") or []
-        if p50 is None:
-            raise SystemExit("边界文件里没有 noop_ioctl.roundtrip_p50_med")
-        prof["boundary"] = {
-            "t_ioctl_us": {
-                "value": float(p50),
-                "evidence": "measured",
-                "p50_us": float(p50),
-                "p99_us": None if p99 is None else float(p99),
-                "samples": sum(int(r.get("cycles") or 0) for r in runs),
-                "rounds": len(runs),
-                "source_log": rel(args.boundary),
-                "statistic": "p50_of_noop_roundtrip",
-                "note": "空模块只做 copy_in/out+时间戳+互斥，是同步边界的地板价；"
-                        "含内核计算时为上界。非 WCET。",
-            }
-        }
+        try:
+            prof["boundary"] = do.boundary_from_file(args.boundary)
+        except do.TermMissing as exc:
+            raise SystemExit(str(exc))
+        prof["boundary"]["t_ioctl_us"]["source_log"] = rel(args.boundary)
     else:
         print("[warn] 未给 --boundary：C_boundary 项将不可用（γ>0 时无候选可排名）")
     dump_json(args.out, prof)

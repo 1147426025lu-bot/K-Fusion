@@ -130,6 +130,43 @@ class UkuPlan(unittest.TestCase):
         self.assertEqual(st["n_groups"], 3)
         self.assertEqual(st["plan_phases_us"], [0.0, 200.0, 400.0])
 
+    def test_round_stats_why_digest_phase_groups(self):
+        from importlib.util import spec_from_file_location, module_from_spec
+        p = os.path.join(KF, "scripts", "pr11_shapes__形状补测.py")
+        spec = spec_from_file_location("pr11s2", p)
+        sh = module_from_spec(spec)
+        spec.loader.exec_module(sh)
+        text = (
+            "# stat_start_lat_us: min=1 avg=2 p50=2 p90=3 p99=4 p99.9=5 p99.99=5 "
+            "max=6 over=0 (0.0%) n=24\n"
+            "# stat_response_us: min=10 avg=11 p50=11 p90=12 p99=12 p99.9=12 "
+            "p99.99=12 max=13 over=0 (0.0%) n=8\n"
+            "# mode: plan  releases_per_period=3  groups_per_period=3  cycles=8\n"
+            "# plan_phases_us: 0 200 400\n"
+            "# digest: abcd1234\n"
+            "# uku_ioctl_error: 0/8\n"
+            "# uku_seq_mismatch: 0/8\n"
+        )
+        st = sh.parse_stats(text)
+        expect = {"cycles": 8, "want_start": 24, "n_releases": 3,
+                  "n_groups": 3, "phases_us": [0, 200, 400],
+                  "digest": "abcd1234", "exec_mode": "plan"}
+        self.assertIsNone(sh.round_stats_why(st, expect))
+        bad = dict(expect, digest="ffff")
+        self.assertIn("digest", sh.round_stats_why(st, bad))
+        bad = dict(expect, phases_us=[0, 0, 0])
+        self.assertIn("phases", sh.round_stats_why(st, bad))
+        bad = dict(expect, n_groups=1)
+        self.assertIn("组数", sh.round_stats_why(st, bad))
+        rec = {"digest": "abcd1234", "n": 8, "n_releases": 3,
+               "response": {"p99_us": 12}}
+        ok, why = sh.log_agrees_with_run(text, rec)
+        self.assertTrue(ok, why)
+        rec["response"] = {"p99_us": 199}
+        ok, why = sh.log_agrees_with_run(text, rec)
+        self.assertFalse(ok)
+        self.assertIn("p99", why)
+
     def test_codegen_reject_clears_ready(self):
         teir_nodes = []
         for i, n in enumerate(["a", "b", "c", "d"]):
