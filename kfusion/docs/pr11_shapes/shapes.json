@@ -73,27 +73,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.26 0.12 0.04 1/118 2252",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.24 0.12 0.04 1/118 2253",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 1,
@@ -119,27 +101,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.24 0.12 0.04 1/118 2253",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.22 0.12 0.04 1/119 2256",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 2,
@@ -165,27 +129,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.22 0.12 0.04 1/119 2256",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.20 0.12 0.04 1/119 2257",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 3,
@@ -211,27 +157,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.20 0.12 0.04 1/119 2257",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.19 0.11 0.04 1/119 2258",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 4,
@@ -257,27 +185,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.19 0.11 0.04 1/119 2258",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.17 0.11 0.04 1/119 2259",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 5,
@@ -303,27 +213,9 @@
                 "p99_us": 1
               },
               "miss": 2,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.17 0.11 0.04 1/119 2259",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.16 0.11 0.04 1/119 2260",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 6,
@@ -349,27 +241,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.16 0.11 0.04 1/119 2260",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.15 0.11 0.04 1/119 2261",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 7,
@@ -395,27 +269,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.15 0.11 0.04 1/119 2261",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.13 0.11 0.04 1/119 2262",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 8,
@@ -441,27 +297,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.13 0.11 0.04 1/119 2262",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.12 0.10 0.04 1/119 2263",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 9,
@@ -487,27 +325,9 @@
                 "p99_us": 1
               },
               "miss": 3,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.12 0.10 0.04 1/119 2263",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.11 0.10 0.04 1/119 2267",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             }
           ]
         },
@@ -539,27 +359,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.11 0.10 0.04 1/119 2267",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.10 0.10 0.04 1/119 2268",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 1,
@@ -585,27 +387,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.10 0.10 0.04 1/119 2268",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.10 0.10 0.04 1/119 2269",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 2,
@@ -631,27 +415,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.10 0.10 0.04 1/119 2269",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.09 0.10 0.04 1/118 2270",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 3,
@@ -677,27 +443,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.09 0.10 0.04 1/118 2270",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.08 0.10 0.04 1/118 2271",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 4,
@@ -723,27 +471,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.08 0.10 0.04 1/118 2271",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.07 0.09 0.04 1/119 2273",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 5,
@@ -769,27 +499,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.07 0.09 0.04 1/119 2273",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.07 0.09 0.04 1/119 2274",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 6,
@@ -815,27 +527,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.07 0.09 0.04 1/119 2274",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.06 0.09 0.03 1/119 2275",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 7,
@@ -861,27 +555,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.06 0.09 0.03 1/119 2275",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.06 0.09 0.03 1/119 2276",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 8,
@@ -907,27 +583,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.06 0.09 0.03 1/119 2276",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.05 0.09 0.03 1/119 2277",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 9,
@@ -953,27 +611,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.05 0.09 0.03 1/119 2277",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.05 0.08 0.03 2/118 2278",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 1,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             }
           ]
         }
@@ -1042,27 +682,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.25 0.13 0.05 1/120 2384",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.23 0.12 0.05 1/120 2385",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 1,
@@ -1088,27 +710,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.23 0.12 0.05 1/120 2385",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.21 0.12 0.05 1/120 2386",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 2,
@@ -1134,27 +738,9 @@
                 "p99_us": 1
               },
               "miss": 1,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.21 0.12 0.05 1/120 2386",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.20 0.12 0.05 1/120 2387",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 3,
@@ -1180,27 +766,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.20 0.12 0.05 1/120 2387",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.18 0.12 0.05 1/120 2388",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 4,
@@ -1226,27 +794,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.18 0.12 0.05 1/120 2388",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.16 0.12 0.05 1/120 2389",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 5,
@@ -1272,27 +822,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.16 0.12 0.05 1/120 2389",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.15 0.11 0.05 1/120 2390",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 6,
@@ -1318,27 +850,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.15 0.11 0.05 1/120 2390",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.14 0.11 0.04 1/120 2391",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 7,
@@ -1364,27 +878,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.14 0.11 0.04 1/120 2391",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.13 0.11 0.04 1/120 2392",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 8,
@@ -1410,27 +906,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.13 0.11 0.04 1/120 2392",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.12 0.11 0.04 1/120 2393",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 9,
@@ -1456,27 +934,9 @@
                 "p99_us": 0
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.12 0.11 0.04 1/120 2393",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.11 0.11 0.04 1/120 2394",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             }
           ]
         },
@@ -1508,27 +968,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.11 0.11 0.04 2/120 2394",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.10 0.10 0.04 1/120 2395",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 1,
@@ -1554,27 +996,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.10 0.10 0.04 1/120 2395",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.09 0.10 0.04 1/120 2396",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 2,
@@ -1600,27 +1024,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.09 0.10 0.04 1/120 2396",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.08 0.10 0.04 1/120 2397",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 3,
@@ -1646,27 +1052,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.08 0.10 0.04 1/120 2397",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.08 0.10 0.04 1/120 2398",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 4,
@@ -1692,27 +1080,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.08 0.10 0.04 1/120 2398",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.07 0.10 0.04 1/120 2399",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 5,
@@ -1738,27 +1108,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.07 0.10 0.04 1/120 2399",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.06 0.09 0.04 1/120 2400",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 6,
@@ -1784,27 +1136,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.06 0.09 0.04 1/120 2400",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.06 0.09 0.04 1/120 2401",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 7,
@@ -1830,27 +1164,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.06 0.09 0.04 1/120 2401",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.05 0.09 0.04 1/120 2402",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 8,
@@ -1876,27 +1192,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.05 0.09 0.04 1/120 2402",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.05 0.09 0.04 1/120 2403",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 9,
@@ -1922,27 +1220,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.05 0.09 0.04 1/120 2403",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.05 0.09 0.04 1/120 2404",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             }
           ]
         }
@@ -2011,27 +1291,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.18 0.11 0.05 1/117 2508",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.17 0.11 0.05 1/117 2509",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 1,
@@ -2057,27 +1319,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.17 0.11 0.05 1/117 2509",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.15 0.11 0.05 1/117 2510",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 2,
@@ -2103,27 +1347,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.15 0.11 0.05 1/117 2510",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.14 0.11 0.05 1/117 2511",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 3,
@@ -2149,27 +1375,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.14 0.11 0.05 1/117 2511",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.13 0.10 0.05 1/117 2512",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 4,
@@ -2195,27 +1403,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.13 0.10 0.05 1/117 2512",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.12 0.10 0.05 1/117 2513",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 5,
@@ -2241,27 +1431,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.12 0.10 0.05 1/117 2513",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.11 0.10 0.04 1/117 2514",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 6,
@@ -2287,27 +1459,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.11 0.10 0.04 1/117 2514",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.10 0.10 0.04 1/117 2515",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 7,
@@ -2333,27 +1487,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.10 0.10 0.04 1/117 2515",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.09 0.10 0.04 1/117 2516",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 8,
@@ -2379,27 +1515,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.09 0.10 0.04 1/117 2516",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.08 0.10 0.04 1/117 2517",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 9,
@@ -2425,27 +1543,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.08 0.10 0.04 1/117 2517",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.08 0.09 0.04 1/117 2518",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             }
           ]
         },
@@ -2477,27 +1577,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.08 0.09 0.04 1/117 2518",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.07 0.09 0.04 1/117 2522",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 1,
@@ -2523,27 +1605,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.07 0.09 0.04 1/117 2522",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.07 0.09 0.04 1/118 2525",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 2,
@@ -2569,27 +1633,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.07 0.09 0.04 1/118 2525",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.06 0.09 0.04 1/117 2526",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 3,
@@ -2615,27 +1661,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.06 0.09 0.04 1/117 2526",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.06 0.09 0.04 1/117 2527",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 4,
@@ -2661,27 +1689,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.06 0.09 0.04 1/117 2527",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.05 0.08 0.04 2/117 2528",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 5,
@@ -2707,27 +1717,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.05 0.08 0.04 1/118 2529",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.05 0.08 0.04 1/118 2530",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 6,
@@ -2753,27 +1745,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.05 0.08 0.04 1/118 2530",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.04 0.08 0.04 1/118 2531",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 7,
@@ -2799,27 +1773,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.04 0.08 0.04 1/118 2531",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.04 0.08 0.04 1/118 2532",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 8,
@@ -2845,27 +1801,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.04 0.08 0.04 1/118 2532",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.04 0.08 0.04 1/118 2533",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 9,
@@ -2891,27 +1829,9 @@
                 "p99_us": 1
               },
               "miss": 0,
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.04 0.08 0.04 1/118 2533",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.03 0.08 0.04 1/118 2534",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
               "n_releases": 2,
-              "exec_mode": "plan"
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             }
           ]
         }
@@ -2966,45 +1886,27 @@
               "n": 5000,
               "digest": "68445021",
               "start_lat": {
-                "p50_us": 62,
+                "p50_us": 61,
                 "p99_us": 64,
-                "p999_us": 73,
-                "max_us": 185.317,
-                "avg_us": 62.371
+                "p999_us": 98,
+                "max_us": 1513.022,
+                "avg_us": 62.481
               },
               "response": {
                 "p50_us": 462,
                 "p99_us": 462,
-                "p999_us": 471,
-                "max_us": 585.873,
-                "avg_us": 462.407
+                "p999_us": 500,
+                "max_us": 1560.021,
+                "avg_us": 462.422
               },
               "work": {
-                "p50_us": 0,
+                "p50_us": 1,
                 "p99_us": 1
               },
-              "miss": 0,
+              "miss": 1,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.25 0.07 0.02 1/118 3223",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.23 0.07 0.02 1/118 3224",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 1,
@@ -3012,45 +1914,27 @@
               "n": 5000,
               "digest": "68445021",
               "start_lat": {
-                "p50_us": 62,
+                "p50_us": 61,
                 "p99_us": 64,
-                "p999_us": 65,
-                "max_us": 239.786,
-                "avg_us": 62.332
+                "p999_us": 75,
+                "max_us": 715.297,
+                "avg_us": 62.094
               },
               "response": {
-                "p50_us": 462,
+                "p50_us": 461,
                 "p99_us": 462,
-                "p999_us": 463,
-                "max_us": 467.291,
-                "avg_us": 462.387
+                "p999_us": 462,
+                "max_us": 1115.964,
+                "avg_us": 462.133
               },
               "work": {
-                "p50_us": 1,
+                "p50_us": 0,
                 "p99_us": 1
               },
-              "miss": 0,
+              "miss": 1,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.23 0.07 0.02 1/118 3224",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.21 0.07 0.02 1/118 3225",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 2,
@@ -3058,45 +1942,27 @@
               "n": 5000,
               "digest": "68445021",
               "start_lat": {
-                "p50_us": 62,
+                "p50_us": 61,
                 "p99_us": 64,
-                "p999_us": 70,
-                "max_us": 121.748,
-                "avg_us": 62.269
+                "p999_us": 64,
+                "max_us": 86.479,
+                "avg_us": 62.015
               },
               "response": {
                 "p50_us": 462,
                 "p99_us": 462,
                 "p999_us": 462,
-                "max_us": 472.89,
-                "avg_us": 462.206
+                "max_us": 475.303,
+                "avg_us": 462.077
               },
               "work": {
-                "p50_us": 0,
+                "p50_us": 1,
                 "p99_us": 1
               },
               "miss": 0,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.21 0.07 0.02 1/118 3225",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.19 0.07 0.01 1/118 3226",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 3,
@@ -3104,45 +1970,27 @@
               "n": 5000,
               "digest": "68445021",
               "start_lat": {
-                "p50_us": 62,
+                "p50_us": 61,
                 "p99_us": 64,
                 "p999_us": 66,
-                "max_us": 303.314,
-                "avg_us": 62.336
+                "max_us": 420.482,
+                "avg_us": 62.134
               },
               "response": {
                 "p50_us": 462,
                 "p99_us": 462,
                 "p999_us": 463,
-                "max_us": 494.16,
-                "avg_us": 462.258
+                "max_us": 648.537,
+                "avg_us": 462.221
               },
               "work": {
-                "p50_us": 0,
+                "p50_us": 1,
                 "p99_us": 1
               },
               "miss": 0,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.19 0.07 0.01 1/118 3226",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.17 0.07 0.01 1/118 3227",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 4,
@@ -3150,45 +1998,27 @@
               "n": 5000,
               "digest": "68445021",
               "start_lat": {
-                "p50_us": 62,
+                "p50_us": 61,
                 "p99_us": 64,
-                "p999_us": 67,
-                "max_us": 81.944,
-                "avg_us": 62.242
+                "p999_us": 82,
+                "max_us": 924.029,
+                "avg_us": 62.299
               },
               "response": {
                 "p50_us": 462,
                 "p99_us": 462,
-                "p999_us": 463,
-                "max_us": 476.966,
-                "avg_us": 462.305
+                "p999_us": 470,
+                "max_us": 1159.899,
+                "avg_us": 462.321
               },
               "work": {
-                "p50_us": 1,
+                "p50_us": 0,
                 "p99_us": 1
               },
-              "miss": 0,
+              "miss": 1,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.17 0.07 0.01 1/118 3227",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.16 0.07 0.01 1/118 3228",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 5,
@@ -3196,18 +2026,18 @@
               "n": 5000,
               "digest": "68445021",
               "start_lat": {
-                "p50_us": 62,
+                "p50_us": 61,
                 "p99_us": 64,
-                "p999_us": 66,
-                "max_us": 175.673,
-                "avg_us": 62.282
+                "p999_us": 72,
+                "max_us": 295.865,
+                "avg_us": 62.16
               },
               "response": {
                 "p50_us": 462,
                 "p99_us": 462,
-                "p999_us": 463,
-                "max_us": 576.173,
-                "avg_us": 462.273
+                "p999_us": 467,
+                "max_us": 525.938,
+                "avg_us": 462.11
               },
               "work": {
                 "p50_us": 0,
@@ -3216,25 +2046,7 @@
               "miss": 0,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.16 0.07 0.01 1/118 3228",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.15 0.06 0.01 1/119 3230",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 6,
@@ -3242,18 +2054,18 @@
               "n": 5000,
               "digest": "68445021",
               "start_lat": {
-                "p50_us": 62,
+                "p50_us": 61,
                 "p99_us": 64,
-                "p999_us": 65,
-                "max_us": 241.948,
-                "avg_us": 62.249
+                "p999_us": 66,
+                "max_us": 353.894,
+                "avg_us": 62.13
               },
               "response": {
                 "p50_us": 462,
                 "p99_us": 462,
-                "p999_us": 463,
-                "max_us": 468.086,
-                "avg_us": 462.206
+                "p999_us": 466,
+                "max_us": 581.227,
+                "avg_us": 462.064
               },
               "work": {
                 "p50_us": 0,
@@ -3262,25 +2074,7 @@
               "miss": 0,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.15 0.06 0.01 1/119 3230",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.14 0.06 0.01 1/119 3231",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 7,
@@ -3288,18 +2082,46 @@
               "n": 5000,
               "digest": "68445021",
               "start_lat": {
-                "p50_us": 62,
+                "p50_us": 61,
                 "p99_us": 64,
-                "p999_us": 65,
-                "max_us": 227.477,
-                "avg_us": 62.244
+                "p999_us": 64,
+                "max_us": 1923.631,
+                "avg_us": 62.416
               },
               "response": {
                 "p50_us": 462,
+                "p99_us": 462,
+                "p999_us": 462,
+                "max_us": 2156.334,
+                "avg_us": 462.524
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 2,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
+            },
+            {
+              "repeat": 8,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 61,
+                "p99_us": 64,
+                "p999_us": 68,
+                "max_us": 147.025,
+                "avg_us": 61.933
+              },
+              "response": {
+                "p50_us": 461,
                 "p99_us": 464,
-                "p999_us": 466,
-                "max_us": 484.251,
-                "avg_us": 462.69
+                "p999_us": 468,
+                "max_us": 547.599,
+                "avg_us": 462.406
               },
               "work": {
                 "p50_us": 0,
@@ -3308,71 +2130,7 @@
               "miss": 0,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.14 0.06 0.01 1/119 3231",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.12 0.06 0.01 1/119 3232",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
-            },
-            {
-              "repeat": 8,
-              "rc": 0,
-              "n": 5000,
-              "digest": "68445021",
-              "start_lat": {
-                "p50_us": 62,
-                "p99_us": 64,
-                "p999_us": 65,
-                "max_us": 504.138,
-                "avg_us": 62.269
-              },
-              "response": {
-                "p50_us": 462,
-                "p99_us": 465,
-                "p999_us": 465,
-                "max_us": 553.304,
-                "avg_us": 462.755
-              },
-              "work": {
-                "p50_us": 1,
-                "p99_us": 1
-              },
-              "miss": 0,
-              "n_releases": 3,
-              "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.12 0.06 0.01 2/119 3232",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.11 0.06 0.01 1/119 3237",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 9,
@@ -3380,18 +2138,18 @@
               "n": 5000,
               "digest": "68445021",
               "start_lat": {
-                "p50_us": 62,
+                "p50_us": 61,
                 "p99_us": 64,
-                "p999_us": 70,
-                "max_us": 419.093,
-                "avg_us": 62.22
+                "p999_us": 76,
+                "max_us": 273.56,
+                "avg_us": 62.017
               },
               "response": {
                 "p50_us": 462,
                 "p99_us": 462,
-                "p999_us": 467,
-                "max_us": 509.86,
-                "avg_us": 462.212
+                "p999_us": 478,
+                "max_us": 538.104,
+                "avg_us": 462.037
               },
               "work": {
                 "p50_us": 1,
@@ -3400,25 +2158,7 @@
               "miss": 0,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.11 0.06 0.01 1/119 3237",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.10 0.06 0.01 1/119 3238",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "stat_source": "probe_stat_block"
             }
           ]
         },
@@ -3433,17 +2173,17 @@
               "digest": "68445021",
               "start_lat": {
                 "p50_us": 11,
-                "p99_us": 13,
-                "p999_us": 13,
-                "max_us": 44.51,
-                "avg_us": 11.564
+                "p99_us": 14,
+                "p999_us": 20,
+                "max_us": 30.192,
+                "avg_us": 11.777
               },
               "response": {
                 "p50_us": 411,
                 "p99_us": 412,
-                "p999_us": 412,
-                "max_us": 415.467,
-                "avg_us": 411.755
+                "p999_us": 422,
+                "max_us": 431.173,
+                "avg_us": 411.853
               },
               "work": {
                 "p50_us": 0,
@@ -3452,25 +2192,7 @@
               "miss": 0,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.10 0.06 0.01 1/119 3238",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.10 0.06 0.01 1/119 3239",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 1,
@@ -3480,43 +2202,25 @@
               "start_lat": {
                 "p50_us": 11,
                 "p99_us": 14,
-                "p999_us": 23,
-                "max_us": 36.649,
-                "avg_us": 11.78
+                "p999_us": 22,
+                "max_us": 98.658,
+                "avg_us": 11.832
               },
               "response": {
                 "p50_us": 411,
                 "p99_us": 412,
-                "p999_us": 420,
-                "max_us": 428.763,
-                "avg_us": 411.848
+                "p999_us": 412,
+                "max_us": 424.822,
+                "avg_us": 411.935
               },
               "work": {
-                "p50_us": 0,
+                "p50_us": 1,
                 "p99_us": 1
               },
               "miss": 0,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.10 0.06 0.01 1/119 3239",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.09 0.06 0.01 1/119 3247",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 2,
@@ -3526,16 +2230,16 @@
               "start_lat": {
                 "p50_us": 11,
                 "p99_us": 13,
-                "p999_us": 14,
-                "max_us": 30.821,
-                "avg_us": 11.83
+                "p999_us": 20,
+                "max_us": 24.128,
+                "avg_us": 11.489
               },
               "response": {
-                "p50_us": 412,
+                "p50_us": 411,
                 "p99_us": 414,
-                "p999_us": 416,
-                "max_us": 418.374,
-                "avg_us": 412.423
+                "p999_us": 419,
+                "max_us": 424.236,
+                "avg_us": 412.117
               },
               "work": {
                 "p50_us": 0,
@@ -3544,25 +2248,7 @@
               "miss": 0,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.09 0.06 0.01 1/119 3247",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.08 0.06 0.01 1/118 3248",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 3,
@@ -3572,16 +2258,16 @@
               "start_lat": {
                 "p50_us": 11,
                 "p99_us": 14,
-                "p999_us": 19,
-                "max_us": 27.29,
-                "avg_us": 11.563
+                "p999_us": 20,
+                "max_us": 74.44,
+                "avg_us": 11.595
               },
               "response": {
                 "p50_us": 411,
                 "p99_us": 412,
-                "p999_us": 418,
-                "max_us": 427.55,
-                "avg_us": 411.658
+                "p999_us": 412,
+                "max_us": 475.421,
+                "avg_us": 411.67
               },
               "work": {
                 "p50_us": 0,
@@ -3590,25 +2276,7 @@
               "miss": 0,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.08 0.06 0.01 1/118 3248",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.07 0.05 0.01 1/118 3249",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 4,
@@ -3617,17 +2285,17 @@
               "digest": "68445021",
               "start_lat": {
                 "p50_us": 11,
-                "p99_us": 13,
-                "p999_us": 14,
-                "max_us": 35.852,
-                "avg_us": 11.598
+                "p99_us": 24,
+                "p999_us": 29,
+                "max_us": 78.754,
+                "avg_us": 12.537
               },
               "response": {
                 "p50_us": 411,
-                "p99_us": 412,
-                "p999_us": 412,
-                "max_us": 416.627,
-                "avg_us": 411.733
+                "p99_us": 427,
+                "p999_us": 462,
+                "max_us": 698.258,
+                "avg_us": 414.843
               },
               "work": {
                 "p50_us": 1,
@@ -3636,25 +2304,7 @@
               "miss": 0,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.07 0.05 0.01 1/118 3249",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.07 0.05 0.01 1/118 3250",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 5,
@@ -3663,17 +2313,17 @@
               "digest": "68445021",
               "start_lat": {
                 "p50_us": 11,
-                "p99_us": 13,
+                "p99_us": 14,
                 "p999_us": 23,
-                "max_us": 35.331,
-                "avg_us": 11.498
+                "max_us": 96.127,
+                "avg_us": 11.755
               },
               "response": {
                 "p50_us": 411,
                 "p99_us": 412,
-                "p999_us": 424,
-                "max_us": 429.433,
-                "avg_us": 411.58
+                "p999_us": 415,
+                "max_us": 429.957,
+                "avg_us": 411.825
               },
               "work": {
                 "p50_us": 0,
@@ -3682,25 +2332,7 @@
               "miss": 0,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.07 0.05 0.01 1/118 3250",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.06 0.05 0.01 1/118 3251",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 6,
@@ -3710,16 +2342,16 @@
               "start_lat": {
                 "p50_us": 11,
                 "p99_us": 14,
-                "p999_us": 15,
-                "max_us": 27.83,
-                "avg_us": 11.742
+                "p999_us": 21,
+                "max_us": 51.292,
+                "avg_us": 11.547
               },
               "response": {
                 "p50_us": 411,
                 "p99_us": 412,
-                "p999_us": 412,
-                "max_us": 425.345,
-                "avg_us": 411.819
+                "p999_us": 416,
+                "max_us": 424.814,
+                "avg_us": 411.62
               },
               "work": {
                 "p50_us": 0,
@@ -3728,25 +2360,7 @@
               "miss": 0,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.06 0.05 0.01 1/118 3251",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.06 0.05 0.01 1/118 3252",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 7,
@@ -3755,44 +2369,26 @@
               "digest": "68445021",
               "start_lat": {
                 "p50_us": 11,
-                "p99_us": 13,
-                "p999_us": 16,
-                "max_us": 28.9,
-                "avg_us": 11.642
+                "p99_us": 14,
+                "p999_us": 21,
+                "max_us": 29.253,
+                "avg_us": 11.645
               },
               "response": {
                 "p50_us": 411,
                 "p99_us": 412,
-                "p999_us": 413,
-                "max_us": 427.687,
-                "avg_us": 411.769
+                "p999_us": 418,
+                "max_us": 425.287,
+                "avg_us": 411.696
               },
               "work": {
-                "p50_us": 1,
+                "p50_us": 0,
                 "p99_us": 1
               },
               "miss": 0,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.06 0.05 0.01 1/118 3252",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.05 0.05 0.01 1/118 3253",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "stat_source": "probe_stat_block"
             },
             {
               "repeat": 8,
@@ -3802,62 +2398,16 @@
               "start_lat": {
                 "p50_us": 11,
                 "p99_us": 14,
-                "p999_us": 20,
-                "max_us": 28.985,
-                "avg_us": 11.81
-              },
-              "response": {
-                "p50_us": 412,
-                "p99_us": 414,
-                "p999_us": 422,
-                "max_us": 430.189,
-                "avg_us": 412.444
-              },
-              "work": {
-                "p50_us": 1,
-                "p99_us": 1
-              },
-              "miss": 0,
-              "n_releases": 3,
-              "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.05 0.05 0.01 1/118 3253",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.05 0.05 0.01 1/118 3254",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
-            },
-            {
-              "repeat": 9,
-              "rc": 0,
-              "n": 5000,
-              "digest": "68445021",
-              "start_lat": {
-                "p50_us": 11,
-                "p99_us": 13,
-                "p999_us": 16,
-                "max_us": 47.172,
-                "avg_us": 11.768
+                "p999_us": 23,
+                "max_us": 32.373,
+                "avg_us": 11.689
               },
               "response": {
                 "p50_us": 411,
                 "p99_us": 412,
-                "p999_us": 415,
-                "max_us": 422.839,
-                "avg_us": 411.889
+                "p999_us": 425,
+                "max_us": 433.058,
+                "avg_us": 411.799
               },
               "work": {
                 "p50_us": 0,
@@ -3866,25 +2416,35 @@
               "miss": 0,
               "n_releases": 3,
               "exec_mode": "plan",
-              "stat_source": "probe_stat_block",
-              "env_before": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.05 0.05 0.01 1/118 3254",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
+              "stat_source": "probe_stat_block"
+            },
+            {
+              "repeat": 9,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 11,
+                "p99_us": 14,
+                "p999_us": 15,
+                "max_us": 67.295,
+                "avg_us": 11.794
               },
-              "env_after": {
-                "governor": null,
-                "cur_freq_khz": null,
-                "temp_mc": null,
-                "loadavg": "0.04 0.05 0.01 1/119 3256",
-                "rt_runtime_us": "950000",
-                "nproc": 4,
-                "pin_cpu": 3
-              }
+              "response": {
+                "p50_us": 411,
+                "p99_us": 412,
+                "p999_us": 413,
+                "max_us": 425.956,
+                "avg_us": 411.873
+              },
+              "work": {
+                "p50_us": 0,
+                "p99_us": 1
+              },
+              "miss": 0,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block"
             }
           ]
         }

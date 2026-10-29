@@ -71,7 +71,7 @@
 | mixed（中段 ioctl） | 3 / — | 83.37 | 34.64 | 33 | 0 |
 | 两组 `[s][pk]` | 2 / 2 | 263.00 | 213.00 | 0 | 0 |
 | 两组 `[sp][k]` | 2 / 2 | 462.00 | 414.00 | 1 | 0 |
-| 三组 plan（A） | 3 / 3 | 462.00 | 412.00 | 0 | 0 |
+| 三组 plan（A） | 3 / 3 | 462.00 | 412.00 | 5 | 0 |
 
 ### 4.2 加压（4 个忙循环**钉在 CPU3**，与测量同核）
 
@@ -138,7 +138,7 @@
 Wilson 上界 × horizon 拍数 ≥1）/ `empirically_feasible`（只在给定 horizon 内）/
 `insufficient_evidence`（缺证据）。
 
-静默 1 小时：4 个候选里 2 个 CFS `infeasible_observed`，其余 `cannot_certify`。
+静默 1 小时：4 个候选里 **3 个 CFS `infeasible_observed`**、1 个 `cannot_certify`。
 **加压 1 小时：4/4 候选 CFS 全部 `infeasible_observed`**，FIFO 仍 `cannot_certify`
 （5 万拍 0 超期，上界 7.68e-5 → 1 小时上界 276 次；要 `empirically_feasible`
 得把 horizon 缩到 ~13 s 内）。
@@ -167,6 +167,8 @@ python3 kfusion/scripts/pr11_env_evidence__环境证据.py \
 # ② 形状 + 载荷采集（可断点续采；--backfill 从留档补释放结构，不重测）
 python3 kfusion/scripts/pr11_shapes__形状补测.py --repeat 10 --cycles 5000
 python3 kfusion/scripts/pr11_shapes__形状补测.py --only fused_user --load 4
+# 统计只认原始日志：json 被覆盖/回退后用它重算
+python3 kfusion/scripts/pr11_shapes__形状补测.py --rebuild
 
 # ③ 画像（静默 / 加压各一份，不许混）
 python3 kfusion/scripts/pr11_deploy_objective__部署目标.py profile \
@@ -201,7 +203,7 @@ DEPLOY_OBJECTIVE=...sched_profile_v2.json APPLY_SCHED=1 \
 | `docs/pr11_deploy_objective/sched_profile_load4.json` | 加压画像（4 形状 × 2 调度类） |
 | `docs/pr11_deploy_objective/decision_*.json` | 决策与权重敏感性 |
 | `docs/pr11_deploy_objective/pr14_report*.json` | 三列可行性报告 |
-| `docs/pr11_shapes/shapes.json` + `*/runs_*/r*.log.gz` | 形状/载荷原始输出（含 1 µs 直方图） |
+| `docs/pr11_shapes/shapes.json` + `*/runs_*_loadN/r*.log.gz` | 形状/载荷原始输出（含 1 µs 直方图）；统计可由 `--rebuild` 从原始日志重算 |
 | `docs/pr10e_baseline/baseline.json` + `runs_*/` | gold / mixed 逐拍基线 |
 | `docs/pr10b_matrix/`、`docs/pr10c_boundary/` | 历史矩阵与边界/调度归因的原始 json |
 | `scripts/ecos/deploy_objective.py` | J(d,s)、形状匹配、环境门禁 |

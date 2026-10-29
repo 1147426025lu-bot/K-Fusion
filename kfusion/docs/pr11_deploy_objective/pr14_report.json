@@ -5,8 +5,8 @@
   "deadline_us": 1000.0,
   "horizon_s": 3600.0,
   "counts": {
-    "infeasible_observed": 2,
-    "cannot_certify": 2,
+    "infeasible_observed": 3,
+    "cannot_certify": 1,
     "insufficient_evidence": 1
   },
   "rows": [
@@ -341,12 +341,12 @@
           "measured": {
             "q99_resp_us": 462.0,
             "start_lat_p99_us": 64.0,
-            "start_lat_p50_us": 62.0,
-            "resp_max_us": 585.873,
-            "misses": 0,
+            "start_lat_p50_us": 61.0,
+            "resp_max_us": 2156.334,
+            "misses": 5,
             "n_cycles": 50000,
             "rounds": 10,
-            "miss_rate_upper": 7.683e-05,
+            "miss_rate_upper": 0.0002341,
             "sched": "cfs"
           },
           "reconstruction": {
@@ -356,22 +356,18 @@
             "gap_vs_q99_us": -397.0,
             "note": "分解自同一批实测；差值应≈0，明显非 0 说明两项不同源"
           },
-          "horizon": {
-            "period_us": 1000.0,
-            "cycles": 3600000.0,
-            "expected_misses_upper": 276.58799999999997
-          },
-          "deadline_verdict": "cannot_certify",
-          "why": "已观测 0 超期，但 1.0h 内上界 276.59 次超期（率上界 7.68e-05）",
+          "deadline_verdict": "infeasible_observed",
+          "why": "实测 5/50000 拍超期 1000.0 µs（最差 2156.3 µs）",
+          "over_deadline_max_us": 2156.334,
           "boundary_unit_us": 2.0
         },
         {
           "sched": "fifo99",
           "measured": {
             "q99_resp_us": 412.0,
-            "start_lat_p99_us": 13.0,
+            "start_lat_p99_us": 14.0,
             "start_lat_p50_us": 11.0,
-            "resp_max_us": 430.189,
+            "resp_max_us": 698.258,
             "misses": 0,
             "n_cycles": 50000,
             "rounds": 10,
@@ -379,10 +375,10 @@
             "sched": "fifo99"
           },
           "reconstruction": {
-            "R_hat_us": 14.0,
-            "start_lat_p99_us": 13.0,
+            "R_hat_us": 15.0,
+            "start_lat_p99_us": 14.0,
             "exec_p99_us": 1.0,
-            "gap_vs_q99_us": -398.0,
+            "gap_vs_q99_us": -397.0,
             "note": "分解自同一批实测；差值应≈0，明显非 0 说明两项不同源"
           },
           "horizon": {
@@ -398,9 +394,9 @@
       "missing": [],
       "claim": "基于实测画像的可行性筛查：只回答「在已观测的 N 拍里有没有超期、残余风险上界多大」，不宣称硬实时可调度性，也不是 WCET",
       "deployment": "split3_user_plan",
-      "deadline_verdict": "cannot_certify",
+      "deadline_verdict": "infeasible_observed",
       "worst_sched": "cfs",
-      "why": "已观测 0 超期，但 1.0h 内上界 276.59 次超期（率上界 7.68e-05）"
+      "why": "实测 5/50000 拍超期 1000.0 µs（最差 2156.3 µs）"
     },
     {
       "candidate_id": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",

@@ -341,6 +341,64 @@ def backfill(cells, out_dir):
     return fixed
 
 
+def rebuild(cells, out_dir):
+    """从留档的原始输出重算每轮统计，替换 json 里的旧数。
+
+    为什么要这一步：统计量一旦只存在 json 里，任何一次 `git reset` 或覆盖
+    都会让它和原始日志脱钩。原始日志才是证据，统计应当是可重算的派生量。
+    """
+    import glob
+    n = 0
+    for c in cells:
+        ld = int(c.get("load") or 0)
+        for cond in c.get("conditions") or []:
+            pat = os.path.join(out_dir, c["scenario"],
+                               "runs_%s%s" % (cond["sched"],
+                                              "" if not ld else "_load%d" % ld),
+                               "r*.log.gz")
+            files = sorted(glob.glob(pat))
+            if not files:
+                continue
+            runs = []
+            for p in files:
+                i = int(os.path.basename(p)[1:3])
+                with gzip.open(p, "rt", encoding="utf-8", errors="replace") as f:
+                    txt = f.read()
+                st = parse_stats(txt)
+                if not st.get("response"):
+                    runs.append({"repeat": i, "rc": 1, "n": 0,
+                                 "reason": "统计块缺失"})
+                    continue
+                sl, rp, wk = st["start_lat"], st["response"], st.get("exec") or {}
+                runs.append({
+                    "repeat": i, "rc": 0, "n": rp["n"],
+                    "digest": st.get("digest"),
+                    "start_lat": {"p50_us": sl["p50_us"], "p99_us": sl["p99_us"],
+                                  "p999_us": sl["p999_us"],
+                                  "max_us": sl["max_us"],
+                                  "avg_us": sl["avg_us"]},
+                    "response": {"p50_us": rp["p50_us"], "p99_us": rp["p99_us"],
+                                 "p999_us": rp["p999_us"],
+                                 "max_us": rp["max_us"],
+                                 "avg_us": rp["avg_us"]},
+                    "work": {"p50_us": wk.get("p50_us"),
+                             "p99_us": wk.get("p99_us")},
+                    "miss": (st.get("deadline") or {}).get("miss"),
+                    "n_releases": st.get("n_releases"),
+                    "exec_mode": st.get("exec_mode"),
+                    "stat_source": "probe_stat_block",
+                })
+                n += 1
+            cond["runs"] = runs
+            cond["status"] = "ok"
+        ok = [r for r in ((c.get("conditions") or [{}])[0].get("runs") or [])
+              if r.get("n")]
+        if ok and c.get("shape") is not None:
+            c["shape"]["n_releases"] = ok[0].get("n_releases")
+            c["shape"]["exec_mode"] = ok[0].get("exec_mode")
+    return n
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--repeat", type=int, default=10)
@@ -349,6 +407,8 @@ def main():
     ap.add_argument("--only", default=None, help="只测某个形状名")
     ap.add_argument("--load", type=int, default=0,
                     help="同核背景忙循环个数；>0 时结果存为 <形状>_load<n>")
+    ap.add_argument("--rebuild", action="store_true",
+                    help="从留档原始输出重算统计（不测量）")
     ap.add_argument("--backfill", action="store_true",
                     help="不测量：从已留档的原始输出回填释放结构")
     ap.add_argument("--fresh", action="store_true", help="不合并旧结果")
@@ -375,6 +435,14 @@ def main():
             prev = {}
     if a.fresh and not a.backfill:
         prev = {}
+
+    if a.rebuild:
+        n = rebuild(list(prev.values()), a.out)
+        doc0 = json.load(io.open(out_p, encoding="utf-8"))
+        doc0["cells"] = _merged(prev, [])
+        write_json(out_p, doc0)
+        print("重算 %d 轮统计，wrote %s" % (n, out_p), file=sys.stderr)
+        return 0
 
     if a.backfill:
         n = backfill(list(prev.values()), a.out)
