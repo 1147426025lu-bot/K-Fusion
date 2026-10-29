@@ -252,11 +252,16 @@ def merge_profiles(base, extra):
 
 
 def aggregate_baseline(doc, source=None, sha256=None, env=None):
-    """baseline.json → sched_profile。没测过的部署不编造，写进 unmeasured。"""
+    """baseline.json → sched_profile。没测过的部署不编造，写进 unmeasured。
+
+    `env` 是**环境证据**（哪台机器/哪个内核），与 baseline 自带的逐轮快照
+    （governor/loadavg）不是一回事：后者叫 doc_env，只进 measure_env 作旁证。
+    这两个别混用——混了就会出现「画像是哪台机器测的」被一个 loadavg 顶掉。
+    """
     cells = doc.get("cells") or []
     if not cells:
         raise TermMissing("baseline 无 cells")
-    env = doc.get("env") or {}
+    doc_env = doc.get("env") or {}
     profile = {
         "kind": PROFILE_KIND,
         "version": PROFILE_VERSION,
@@ -267,8 +272,9 @@ def aggregate_baseline(doc, source=None, sha256=None, env=None):
             "cycles_per_round": doc.get("cycles"),
             "repeat": doc.get("repeat"),
             "scheds": list(doc.get("scheds") or []),
-            "kernel": env.get("kernel") or env.get("uname"),
-            "note": "非 PREEMPT_RT；跨轮极差是复现对象，不是噪声",
+            "snapshot_keys": sorted(doc_env.keys()),
+            "note": "逐轮环境快照见各 run 的 env_before/after；"
+                    "平台身份见 env_evidence（缺则不得决策）",
         },
         "deployments": {},
         "unmeasured": [],

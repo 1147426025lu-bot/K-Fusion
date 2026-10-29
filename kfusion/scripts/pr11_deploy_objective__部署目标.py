@@ -141,7 +141,8 @@ def cmd_profile(args):
                   % (name, s, q, mr.get("value") or 0.0, cell.get("rounds"),
                      cell.get("n_cycles"),
                      tail.get("start_lat_p50_median_us"),
-                     "" if sh.get("n_groups") == 3 else "  [形状异常]"))
+                     "" if (sh.get("members") or sh.get("n_groups"))
+                     else "  [形状键缺失]"))
     for u in prof.get("unmeasured") or []:
         print("  [未测] %s：%s" % (u.get("scenario") or u.get("domain"),
                                    u.get("reason")))
