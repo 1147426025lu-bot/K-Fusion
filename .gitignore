@@ -126,3 +126,4 @@ kfusion/docs/pr10c_boundary/noop/bench_noop
 kfusion/docs/pr10c_boundary/autonomous_p*/gen/
 kfusion/docs/pr10c_boundary/autonomous_p*/src_autonomous.c
 kfusion/docs/pr10e_baseline/gen_*/
+kfusion/docs/pr11_shapes/*/gen/
