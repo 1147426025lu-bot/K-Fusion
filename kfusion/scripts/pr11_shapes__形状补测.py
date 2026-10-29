@@ -83,6 +83,15 @@ SHAPES = [
         "note": "两组：sample 独立，pid+sink 融合",
     },
     {
+        "name": "mixed_plan",
+        "label": ("STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]@mixed"),
+        "expect": {"n_groups": 3, "fused": False,
+                   "domains": ["linux_userspace", "linux_kernel",
+                               "linux_userspace"]},
+        "note": ("中段走 UKU ioctl，plan 模式三组各释放一次。PR-10E 的 mixed "
+                 "是 driver 的 mixed 模式（口径不同），不能当这个形状"),
+    },
+    {
         "name": "split3_user_plan",
         "label": "A@linux_userspace",
         "expect": {"n_groups": 3, "fused": False,
@@ -169,6 +178,20 @@ def build_shape(shape, workdir):
     driver = os.path.join(gen, "driver")
     if not os.path.isfile(driver):
         return {"status": "no_driver", "got": got}
+    # 生成器是否真的能让这个驱动执行 plan（按组释放）？
+    # UKU（mixed）驱动只实现 gold|mixed 两种**单释放**模式，没有 plan 分支——
+    # 这种情况下「测不到」不是缺数据，而是产物根本执行不了该形状。
+    src_p = os.path.join(gen, "driver.c")
+    src = io.open(src_p, encoding="utf-8", errors="replace").read() \
+        if os.path.isfile(src_p) else ""
+    supports_plan = '"plan"' in src
+    ko = None
+    kd = os.path.join(gen, "kmod_uku")
+    if os.path.isdir(kd):
+        for fn in sorted(os.listdir(kd)):
+            if fn.endswith(".ko"):
+                ko = os.path.join(kd, fn)
+                break
     forced = None
     if os.path.isfile(stkp_p):
         d = json.load(io.open(stkp_p, encoding="utf-8"))
@@ -177,8 +200,13 @@ def build_shape(shape, workdir):
             # 强制选择没生效（例如被目标函数覆盖），这种数不能用
             return {"status": "force_not_applied",
                     "claim": d.get("claim"), "got": got}
+    if not supports_plan:
+        return {"status": "driver_no_plan_mode", "got": got, "ko": ko,
+                "driver_c": src_p,
+                "reason": "驱动没有 plan 模式（只有 %s）——该形状无法执行"
+                          % ("gold|mixed" if ko else "未知")}
     return {"status": "ok", "driver": driver, "plan": plan, "shape": got,
-            "forced": forced, "stkp": stkp_p}
+            "forced": forced, "stkp": stkp_p, "ko": ko}
 
 
 STAT_RE = r"# stat_%s: min=([0-9.]+) avg=([0-9.]+) p50=(\d+).*?p99=(\d+).*?p99\.9=(\d+).*?p99\.99=(\d+) max=([0-9.]+) over=(\d+).*? n=(\d+)"
@@ -253,8 +281,18 @@ def measure_shape(cell, sched, cycles, repeat, out_dir, load=0):
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir)
     runs = []
+    ko = cell.get("ko")
+    mod = os.path.basename(ko)[:-3] if ko else None
     for i in range(repeat):
         before = base.env_snapshot()
+        if ko:
+            rc_i, out_i = run(["insmod", ko])
+            if rc_i != 0:
+                # 明确失败，不许退化成「没加载内核模块也照跑」——那测的是别的部署
+                runs.append({"repeat": i, "rc": rc_i, "n": 0,
+                             "reason": "insmod 失败：%s" % out_i.strip()[:120],
+                             "env_before": before})
+                continue
         cmd = ["taskset", "-c", str(PIN_CPU)]
         if sched == "fifo99":
             cmd += ["chrt", "-f", "99"]
@@ -264,6 +302,8 @@ def measure_shape(cell, sched, cycles, repeat, out_dir, load=0):
             rc, txt = run(cmd)
         finally:
             stop_load(procs)
+            if mod:
+                run(["rmmod", mod])
         after = base.env_snapshot()
         with gzip.open(os.path.join(out_dir, "r%02d.log.gz" % i), "wt",
                        encoding="utf-8", newline="\n") as f:
@@ -509,7 +549,8 @@ def main():
             "scenario": scen, "status": "ok", "load": a.load,
             "label": sh["label"], "note": sh["note"],
             "shape": b["shape"], "domains": b["shape"]["domains"],
-            "driver": b["driver"], "forced": b.get("forced"),
+            "driver": b["driver"], "ko": b.get("ko"),
+            "forced": b.get("forced"),
             "conditions": conds,
         })
         write_json(out_p, {
@@ -521,6 +562,15 @@ def main():
                     "每轮原始输出在各自 runs_*/r*.log.gz（含 1µs 直方图）",
         })
 
+    # 成功失败都要落盘：构建/执行失败本身是证据，不能因为全失败就没有文件
+    write_json(out_p, {
+        "kind": "pr11_shapes", "repeat": a.repeat, "cycles": a.cycles,
+        "pin_cpu": PIN_CPU, "deadline_us": DEADLINE_US,
+        "scheds": a.scheds, "build_pins": BUILD, "load": a.load,
+        "cells": _merged(prev, cells),
+        "note": "形状补测：同一源码/同一生成器，只改组结构与调度类；"
+                "每轮原始输出在各自 runs_*/r*.log.gz（含 1µs 直方图）",
+    })
     ok = [c for c in cells if c.get("status") == "ok"]
     print("\n完成 %d/%d 形状 → %s/shapes.json" % (
         len(ok), len(cells), a.out), file=sys.stderr)

@@ -130,7 +130,17 @@
 **部署目标**（`ecos/deploy_objective.py`）：J 最小者入选；缺形状/缺调度类/缺边界单价
 → 该组合不可排名，**不许退而求其次**；全部不可排名 → `chosen=None` +
 `objective_fail_closed`，上层拒绝生成。覆盖率不足时控制台与 `deploy.json` 都标
-`⚠ 覆盖不全 x/y`（当前 4/5，mixed 缺 plan 口径测量）。
+`⚠ 覆盖不全 x/y`（当前 4/5，缺的是 mixed 的 plan 口径——原因见下）。
+
+**混合候选为什么测不到（已查实，不是没测）**：STKP 给 mixed 选的 plan 是
+三组在 0/200/400 µs 各释放一次（`releases_per_period=3`），而生成的 UKU 驱动
+只实现 `gold|mixed` 两种**单释放**模式（`usage: ./driver gold|mixed`），
+没有 plan 分支。构建能成、`.ko` 能 insmod、单释放能跑（34.64 µs），但**该候选的
+plan 形状执行不了**，所以它的 Q99 未知。证据存档
+`docs/pr11_shapes/mixed_plan_blocked.json`。
+两条修法：给 UKU 驱动加 plan 模式（按组相位释放在用户态做），或让 STKP 对
+mixed 域只枚举单释放方案。**在修好之前，mixed 只能按单释放口径报告，
+不许把它当成 plan 形状参与排名。**
 
 **可行性 v2**（`ecos/sched_aware_cost.py`）三列、四档，**没有「可调度」档**：
 
@@ -296,7 +306,10 @@ DEPLOY_OBJECTIVE=...sched_profile_v2.json APPLY_SCHED=1 \
 
 ## 10. 未完成（按优先级）
 
-1. **mixed 的 plan 口径测量**（需带 insmod 的 harness）→ 覆盖率 4/5 → 5/5。
+1. **mixed 的多释放执行能力**：采集侧已支持 insmod（`pr11_shapes` 会 insmod/rmmod，
+   失败不退化），缺的是驱动本身没有 `plan` 模式。给 UKU 驱动加按组相位释放，
+   或让 STKP 对 mixed 只枚举单释放——两条都能把覆盖率推到 5/5，但改的是生成器，
+   不是测量。
 2. **PR-15 训练/验证分离**：用一部分轮次建画像，独立轮次检验所选部署。
 3. **PR-16 论文级消融**：静态模型 / +调度类 / +实测尾部 / +边界成本 四套对照，
    报错误选择率、违约率、p99、最差轮次最大值、候选覆盖率。
