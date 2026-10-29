@@ -1,7 +1,0 @@
-second_open_ebusy_ok
-bad_magic_einval_ok
-traj_match_ok n=40 last_out=-581
-replay_eilseq_ok
-post_replay_traj_ok
-reopen_resets_ok out=516
-all_ok

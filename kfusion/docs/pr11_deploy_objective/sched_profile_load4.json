@@ -1,0 +1,631 @@
+{
+  "kind": "sched_profile",
+  "version": 2,
+  "source": "kfusion/docs/pr10e_baseline/baseline.json",
+  "source_sha256": "b6982bc47eb4a731791140d4ade148690c41b21b97d786fb89e3532c054ea1aa",
+  "measure_env": {
+    "pin_cpu": 3,
+    "cycles_per_round": 5000,
+    "repeat": 10,
+    "scheds": [
+      "cfs",
+      "fifo99"
+    ],
+    "snapshot_keys": [
+      "cur_freq_khz",
+      "governor",
+      "loadavg",
+      "nproc",
+      "pin_cpu",
+      "rt_runtime_us",
+      "temp_mc"
+    ],
+    "note": "逐轮环境快照见各 run 的 env_before/after；平台身份见 env_evidence（缺则不得决策）"
+  },
+  "deployments": {
+    "fused_user_load4": {
+      "maps_to_domain": "linux_userspace",
+      "shape": {
+        "n_groups": 1,
+        "fused": true,
+        "n_releases": 1,
+        "exec_mode": "plan",
+        "members": [
+          [
+            "stage_sample",
+            "stage_pid",
+            "stage_sink"
+          ]
+        ],
+        "note": "全融合 1 组，全用户态（模型最爱的形状，从没测过）"
+      },
+      "sched": {
+        "cfs": {
+          "rounds": 10,
+          "n_cycles": 50000,
+          "n_miss": 69,
+          "q99_resp_us": {
+            "value": 74.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "n_cycles": 50000,
+            "across_rounds": [
+              74.0,
+              74.0
+            ],
+            "statistic": "median_of_round_p99",
+            "note": "跨轮极差一并保留；混池 p99 会掩盖单轮劣化"
+          },
+          "miss_rate": {
+            "value": 0.00138,
+            "evidence": "measured",
+            "n_cycles": 50000,
+            "rounds": 10,
+            "count": 69,
+            "ci95_wilson": [
+              0.00109068,
+              0.00174594
+            ],
+            "statistic": "pooled_over_rounds",
+            "note": "事件数少时点估计不稳，可用 --miss-bound upper"
+          },
+          "tail": {
+            "start_lat_p50_median_us": 72.0,
+            "start_lat_p50_range_us": [
+              71.0,
+              72.0
+            ],
+            "start_lat_p99_median_us": 72.0,
+            "start_lat_p99_range_us": [
+              72.0,
+              73.0
+            ],
+            "start_lat_max_worst_us": 14282.843,
+            "resp_max_worst_us": 14284.584,
+            "rounds_with_miss": 10
+          },
+          "work_p99_us": {
+            "value": 1.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              1.0,
+              1.0
+            ],
+            "statistic": "median_of_round_p99"
+          }
+        },
+        "fifo99": {
+          "rounds": 10,
+          "n_cycles": 50000,
+          "n_miss": 0,
+          "q99_resp_us": {
+            "value": 24.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "n_cycles": 50000,
+            "across_rounds": [
+              23.0,
+              24.0
+            ],
+            "statistic": "median_of_round_p99",
+            "note": "跨轮极差一并保留；混池 p99 会掩盖单轮劣化"
+          },
+          "miss_rate": {
+            "value": 0.0,
+            "evidence": "measured",
+            "n_cycles": 50000,
+            "rounds": 10,
+            "count": 0,
+            "ci95_wilson": [
+              0.0,
+              7.683e-05
+            ],
+            "statistic": "pooled_over_rounds",
+            "note": "事件数少时点估计不稳，可用 --miss-bound upper"
+          },
+          "tail": {
+            "start_lat_p50_median_us": 21.0,
+            "start_lat_p50_range_us": [
+              21.0,
+              21.0
+            ],
+            "start_lat_p99_median_us": 22.0,
+            "start_lat_p99_range_us": [
+              22.0,
+              22.0
+            ],
+            "start_lat_max_worst_us": 73.548,
+            "resp_max_worst_us": 75.4,
+            "rounds_with_miss": 0
+          },
+          "work_p99_us": {
+            "value": 1.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              1.0,
+              2.0
+            ],
+            "statistic": "median_of_round_p99"
+          }
+        }
+      }
+    },
+    "split3_user_plan_load4": {
+      "maps_to_domain": "linux_userspace",
+      "shape": {
+        "n_groups": 3,
+        "fused": false,
+        "n_releases": 3,
+        "exec_mode": "plan",
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ],
+        "note": "三组各释放一次（plan 模式）。PR-13 首版误把 gold（单释放）当成它，Q99 78.27 实际属于 gold，不属于本形状"
+      },
+      "sched": {
+        "cfs": {
+          "rounds": 10,
+          "n_cycles": 50000,
+          "n_miss": 81,
+          "q99_resp_us": {
+            "value": 473.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "n_cycles": 50000,
+            "across_rounds": [
+              473.0,
+              481.0
+            ],
+            "statistic": "median_of_round_p99",
+            "note": "跨轮极差一并保留；混池 p99 会掩盖单轮劣化"
+          },
+          "miss_rate": {
+            "value": 0.00162,
+            "evidence": "measured",
+            "n_cycles": 50000,
+            "rounds": 10,
+            "count": 81,
+            "ci95_wilson": [
+              0.00130371,
+              0.00201286
+            ],
+            "statistic": "pooled_over_rounds",
+            "note": "事件数少时点估计不稳，可用 --miss-bound upper"
+          },
+          "tail": {
+            "start_lat_p50_median_us": 71.0,
+            "start_lat_p50_range_us": [
+              71.0,
+              71.0
+            ],
+            "start_lat_p99_median_us": 72.0,
+            "start_lat_p99_range_us": [
+              72.0,
+              73.0
+            ],
+            "start_lat_max_worst_us": 16420.527,
+            "resp_max_worst_us": 16484.303,
+            "rounds_with_miss": 10
+          },
+          "work_p99_us": {
+            "value": 2.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              1.0,
+              2.0
+            ],
+            "statistic": "median_of_round_p99"
+          }
+        },
+        "fifo99": {
+          "rounds": 10,
+          "n_cycles": 50000,
+          "n_miss": 0,
+          "q99_resp_us": {
+            "value": 422.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "n_cycles": 50000,
+            "across_rounds": [
+              422.0,
+              422.0
+            ],
+            "statistic": "median_of_round_p99",
+            "note": "跨轮极差一并保留；混池 p99 会掩盖单轮劣化"
+          },
+          "miss_rate": {
+            "value": 0.0,
+            "evidence": "measured",
+            "n_cycles": 50000,
+            "rounds": 10,
+            "count": 0,
+            "ci95_wilson": [
+              0.0,
+              7.683e-05
+            ],
+            "statistic": "pooled_over_rounds",
+            "note": "事件数少时点估计不稳，可用 --miss-bound upper"
+          },
+          "tail": {
+            "start_lat_p50_median_us": 21.0,
+            "start_lat_p50_range_us": [
+              20.0,
+              21.0
+            ],
+            "start_lat_p99_median_us": 22.0,
+            "start_lat_p99_range_us": [
+              22.0,
+              22.0
+            ],
+            "start_lat_max_worst_us": 55.106,
+            "resp_max_worst_us": 450.041,
+            "rounds_with_miss": 0
+          },
+          "work_p99_us": {
+            "value": 1.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              1.0,
+              2.0
+            ],
+            "statistic": "median_of_round_p99"
+          }
+        }
+      }
+    },
+    "split_s_pk_user_load4": {
+      "maps_to_domain": "linux_userspace",
+      "shape": {
+        "n_groups": 2,
+        "fused": false,
+        "n_releases": 2,
+        "exec_mode": "plan",
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid",
+            "stage_sink"
+          ]
+        ],
+        "note": "两组：sample 独立，pid+sink 融合"
+      },
+      "sched": {
+        "cfs": {
+          "rounds": 10,
+          "n_cycles": 50000,
+          "n_miss": 115,
+          "q99_resp_us": {
+            "value": 274.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "n_cycles": 50000,
+            "across_rounds": [
+              273.0,
+              274.0
+            ],
+            "statistic": "median_of_round_p99",
+            "note": "跨轮极差一并保留；混池 p99 会掩盖单轮劣化"
+          },
+          "miss_rate": {
+            "value": 0.0023,
+            "evidence": "measured",
+            "n_cycles": 50000,
+            "rounds": 10,
+            "count": 115,
+            "ci95_wilson": [
+              0.00191663,
+              0.00275985
+            ],
+            "statistic": "pooled_over_rounds",
+            "note": "事件数少时点估计不稳，可用 --miss-bound upper"
+          },
+          "tail": {
+            "start_lat_p50_median_us": 71.0,
+            "start_lat_p50_range_us": [
+              71.0,
+              71.0
+            ],
+            "start_lat_p99_median_us": 72.0,
+            "start_lat_p99_range_us": [
+              72.0,
+              89.0
+            ],
+            "start_lat_max_worst_us": 16281.673,
+            "resp_max_worst_us": 16483.321,
+            "rounds_with_miss": 10
+          },
+          "work_p99_us": {
+            "value": 2.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              2.0,
+              2.0
+            ],
+            "statistic": "median_of_round_p99"
+          }
+        },
+        "fifo99": {
+          "rounds": 10,
+          "n_cycles": 50000,
+          "n_miss": 0,
+          "q99_resp_us": {
+            "value": 223.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "n_cycles": 50000,
+            "across_rounds": [
+              223.0,
+              224.0
+            ],
+            "statistic": "median_of_round_p99",
+            "note": "跨轮极差一并保留；混池 p99 会掩盖单轮劣化"
+          },
+          "miss_rate": {
+            "value": 0.0,
+            "evidence": "measured",
+            "n_cycles": 50000,
+            "rounds": 10,
+            "count": 0,
+            "ci95_wilson": [
+              0.0,
+              7.683e-05
+            ],
+            "statistic": "pooled_over_rounds",
+            "note": "事件数少时点估计不稳，可用 --miss-bound upper"
+          },
+          "tail": {
+            "start_lat_p50_median_us": 21.0,
+            "start_lat_p50_range_us": [
+              20.0,
+              21.0
+            ],
+            "start_lat_p99_median_us": 22.0,
+            "start_lat_p99_range_us": [
+              21.0,
+              38.0
+            ],
+            "start_lat_max_worst_us": 155.793,
+            "resp_max_worst_us": 233.437,
+            "rounds_with_miss": 0
+          },
+          "work_p99_us": {
+            "value": 2.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              2.0,
+              2.0
+            ],
+            "statistic": "median_of_round_p99"
+          }
+        }
+      }
+    },
+    "split_sp_k_user_load4": {
+      "maps_to_domain": "linux_userspace",
+      "shape": {
+        "n_groups": 2,
+        "fused": false,
+        "n_releases": 2,
+        "exec_mode": "plan",
+        "members": [
+          [
+            "stage_sample",
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ],
+        "note": "两组：sample+pid 融合，sink 独立"
+      },
+      "sched": {
+        "cfs": {
+          "rounds": 10,
+          "n_cycles": 50000,
+          "n_miss": 78,
+          "q99_resp_us": {
+            "value": 473.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "n_cycles": 50000,
+            "across_rounds": [
+              473.0,
+              473.0
+            ],
+            "statistic": "median_of_round_p99",
+            "note": "跨轮极差一并保留；混池 p99 会掩盖单轮劣化"
+          },
+          "miss_rate": {
+            "value": 0.00156,
+            "evidence": "measured",
+            "n_cycles": 50000,
+            "rounds": 10,
+            "count": 78,
+            "ci95_wilson": [
+              0.00125026,
+              0.00194633
+            ],
+            "statistic": "pooled_over_rounds",
+            "note": "事件数少时点估计不稳，可用 --miss-bound upper"
+          },
+          "tail": {
+            "start_lat_p50_median_us": 71.0,
+            "start_lat_p50_range_us": [
+              71.0,
+              71.0
+            ],
+            "start_lat_p99_median_us": 72.0,
+            "start_lat_p99_range_us": [
+              72.0,
+              72.0
+            ],
+            "start_lat_max_worst_us": 14534.856,
+            "resp_max_worst_us": 14570.762,
+            "rounds_with_miss": 10
+          },
+          "work_p99_us": {
+            "value": 2.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              2.0,
+              2.0
+            ],
+            "statistic": "median_of_round_p99"
+          }
+        },
+        "fifo99": {
+          "rounds": 10,
+          "n_cycles": 50000,
+          "n_miss": 0,
+          "q99_resp_us": {
+            "value": 422.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "n_cycles": 50000,
+            "across_rounds": [
+              422.0,
+              423.0
+            ],
+            "statistic": "median_of_round_p99",
+            "note": "跨轮极差一并保留；混池 p99 会掩盖单轮劣化"
+          },
+          "miss_rate": {
+            "value": 0.0,
+            "evidence": "measured",
+            "n_cycles": 50000,
+            "rounds": 10,
+            "count": 0,
+            "ci95_wilson": [
+              0.0,
+              7.683e-05
+            ],
+            "statistic": "pooled_over_rounds",
+            "note": "事件数少时点估计不稳，可用 --miss-bound upper"
+          },
+          "tail": {
+            "start_lat_p50_median_us": 21.0,
+            "start_lat_p50_range_us": [
+              20.0,
+              21.0
+            ],
+            "start_lat_p99_median_us": 22.0,
+            "start_lat_p99_range_us": [
+              21.0,
+              38.0
+            ],
+            "start_lat_max_worst_us": 220.321,
+            "resp_max_worst_us": 436.352,
+            "rounds_with_miss": 0
+          },
+          "work_p99_us": {
+            "value": 2.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              2.0,
+              2.0
+            ],
+            "statistic": "median_of_round_p99"
+          }
+        }
+      }
+    }
+  },
+  "unmeasured": [
+    {
+      "reason": "PR-10E 基线仅静默条件（load=0），不并入 load=4 画像"
+    },
+    {
+      "domain": "linux_kernel",
+      "reason": "PR-10E-A 基线网格未含内核自主部署（PR-10C2 是另一份构建/口径，按「同一二进制只改一个变量」原则不得混用）"
+    }
+  ],
+  "env_evidence": {
+    "kind": "env_evidence",
+    "version": 1,
+    "host": {
+      "hostname": "demo",
+      "model": "Raspberry Pi 4 Model B Rev 1.5",
+      "compatible": "raspberrypi,4-model-bbrcm,bcm2711",
+      "nproc": 4,
+      "machine": "aarch64"
+    },
+    "kernel": {
+      "release": "5.15.86",
+      "version_line": "Linux version 5.15.86 (builder@e3665d6e1a6c) (aarch64-linux-gnu-gcc (Debian 10.2.1-6) 10.2.1 20210110, GNU ld (GNU Binutils for Debian) 2.35.2) #1 SMP PREEMPT Wed Oct 14 10:16:11 UTC 2026",
+      "preempt_class": "PREEMPT",
+      "config_source": "/boot/config-5.15.86",
+      "config": {
+        "CONFIG_PREEMPT": "y",
+        "CONFIG_PREEMPT_RT": null,
+        "CONFIG_PREEMPT_VOLUNTARY": null,
+        "CONFIG_PREEMPT_NONE": null,
+        "CONFIG_HZ": "250",
+        "CONFIG_HZ_250": "y",
+        "CONFIG_NO_HZ_IDLE": "y",
+        "CONFIG_NO_HZ_FULL": null,
+        "CONFIG_FTRACE": null
+      }
+    },
+    "boot": {
+      "cmdline": "dma.dmachans=0x37f5 bcm2709.boardrev=0xc03115 bcm2709.serial=0xee6a48ab bcm2709.uart_clock=48000000 bcm2709.disk_led_gpio=42 bcm2709.disk_led_active_low=0 smsc95xx.macaddr=E4:5F:01:B1:07:55 vc_mem.mem_base=0x3ec00000 vc_mem.mem_size=0x40000000  console=ttyS1,115200 root=PARTUUID=def068db-02 rootfstype=ext4 rootwait net.ifnames=0",
+      "isolcpus": false,
+      "nohz_full": false,
+      "console": "ttyS1,115200"
+    },
+    "sched": {
+      "pin_cpu": 3,
+      "rt_runtime_us": "950000",
+      "rt_period_us": "1000000",
+      "governor": null,
+      "freq_control_present": false
+    },
+    "code": {
+      "git_rev": "d7bedfa",
+      "git_dirty": true,
+      "source": "kfusion/examples/ecos/mixed_pid_stateful__积分混合.c",
+      "source_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+      "dirty_files": [
+        "kfusion/docs/pr11_deploy_objective/decision_v2_a1_b0_g0.json",
+        "kfusion/docs/pr11_deploy_objective/env_evidence.json",
+        "kfusion/docs/pr11_deploy_objective/sched_profile_v2.json"
+      ],
+      "dirty_source": [],
+      "dirty_means": "dirty_source 非空 = 被测代码与 git_rev 不一致，该次结果不可复现；只有产物/文档脏不算"
+    },
+    "uptime_s": "27035.75 107744.22",
+    "note": "配置取自 /boot/config-<release>；抢占类别以配置为准，版本串只在无配置时作旁证并标注。缺失即 complete=False。",
+    "complete": true,
+    "missing": []
+  },
+  "boundary": {
+    "t_ioctl_us": {
+      "value": 2.0,
+      "evidence": "measured",
+      "p50_us": 2.0,
+      "p99_us": 5.0,
+      "samples": 15000,
+      "rounds": 3,
+      "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+      "statistic": "p50_of_noop_roundtrip",
+      "note": "空模块只做 copy_in/out+时间戳+互斥，是同步边界的地板价；含内核计算时为上界。非 WCET。"
+    }
+  }
+}

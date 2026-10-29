@@ -1,0 +1,453 @@
+{
+  "kind": "pr14_sched_aware_verify",
+  "version": 2,
+  "claim": "基于实测画像的可行性筛查：只回答「在已观测的 N 拍里有没有超期、残余风险上界多大」，不宣称硬实时可调度性，也不是 WCET",
+  "deadline_us": 1000.0,
+  "horizon_s": 3600.0,
+  "counts": {
+    "infeasible_observed": 4,
+    "insufficient_evidence": 1
+  },
+  "rows": [
+    {
+      "candidate_id": "B",
+      "domain": "linux_userspace",
+      "shape": {
+        "n_groups": 1,
+        "fused": true,
+        "n_releases": 1,
+        "members": [
+          [
+            "stage_sample",
+            "stage_pid",
+            "stage_sink"
+          ]
+        ]
+      },
+      "compile_legal": true,
+      "deadline_us": 1000.0,
+      "horizon_s": 3600.0,
+      "model": {
+        "R_hat_us": 36.0,
+        "compute_us": 15.0,
+        "release_us": 21.0,
+        "boundary_us": 0.0,
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_userspace:scenario",
+          "stage_sink@linux_userspace:scenario"
+        ],
+        "feasible": true,
+        "note": "旧成本模型：R̂=ΣC+ΣL+ΣH，单标量，不含调度等待的实测分布"
+      },
+      "measured": [
+        {
+          "sched": "cfs",
+          "measured": {
+            "q99_resp_us": 74.0,
+            "start_lat_p99_us": 72.0,
+            "start_lat_p50_us": 72.0,
+            "resp_max_us": 14284.584,
+            "misses": 69,
+            "n_cycles": 50000,
+            "rounds": 10,
+            "miss_rate_upper": 0.00174594,
+            "sched": "cfs"
+          },
+          "reconstruction": {
+            "R_hat_us": 73.0,
+            "start_lat_p99_us": 72.0,
+            "exec_p99_us": 1.0,
+            "gap_vs_q99_us": -1.0,
+            "note": "分解自同一批实测；差值应≈0，明显非 0 说明两项不同源"
+          },
+          "deadline_verdict": "infeasible_observed",
+          "why": "实测 69/50000 拍超期 1000.0 µs（最差 14284.6 µs）",
+          "over_deadline_max_us": 14284.584,
+          "boundary_unit_us": 2.0
+        },
+        {
+          "sched": "fifo99",
+          "measured": {
+            "q99_resp_us": 24.0,
+            "start_lat_p99_us": 22.0,
+            "start_lat_p50_us": 21.0,
+            "resp_max_us": 75.4,
+            "misses": 0,
+            "n_cycles": 50000,
+            "rounds": 10,
+            "miss_rate_upper": 7.683e-05,
+            "sched": "fifo99"
+          },
+          "reconstruction": {
+            "R_hat_us": 23.0,
+            "start_lat_p99_us": 22.0,
+            "exec_p99_us": 1.0,
+            "gap_vs_q99_us": -1.0,
+            "note": "分解自同一批实测；差值应≈0，明显非 0 说明两项不同源"
+          },
+          "horizon": {
+            "period_us": 1000.0,
+            "cycles": 3600000.0,
+            "expected_misses_upper": 276.58799999999997
+          },
+          "deadline_verdict": "cannot_certify",
+          "why": "已观测 0 超期，但 1.0h 内上界 276.59 次超期（率上界 7.68e-05）",
+          "boundary_unit_us": 2.0
+        }
+      ],
+      "missing": [],
+      "claim": "基于实测画像的可行性筛查：只回答「在已观测的 N 拍里有没有超期、残余风险上界多大」，不宣称硬实时可调度性，也不是 WCET",
+      "deployment": "fused_user_load4",
+      "deadline_verdict": "infeasible_observed",
+      "worst_sched": "cfs",
+      "why": "实测 69/50000 拍超期 1000.0 µs（最差 14284.6 µs）"
+    },
+    {
+      "candidate_id": "STKP:L[stage_sample+stage_pid]|L[stage_sink]",
+      "domain": "linux_userspace",
+      "shape": {
+        "n_groups": 2,
+        "fused": false,
+        "n_releases": 2,
+        "members": [
+          [
+            "stage_sample",
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ]
+      },
+      "compile_legal": true,
+      "deadline_us": 1000.0,
+      "horizon_s": 3600.0,
+      "model": {
+        "R_hat_us": 57.0,
+        "compute_us": 15.0,
+        "release_us": 42.0,
+        "boundary_us": 0.0,
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_userspace:scenario",
+          "stage_sink@linux_userspace:scenario"
+        ],
+        "feasible": true,
+        "note": "旧成本模型：R̂=ΣC+ΣL+ΣH，单标量，不含调度等待的实测分布"
+      },
+      "measured": [
+        {
+          "sched": "cfs",
+          "measured": {
+            "q99_resp_us": 473.0,
+            "start_lat_p99_us": 72.0,
+            "start_lat_p50_us": 71.0,
+            "resp_max_us": 14570.762,
+            "misses": 78,
+            "n_cycles": 50000,
+            "rounds": 10,
+            "miss_rate_upper": 0.00194633,
+            "sched": "cfs"
+          },
+          "reconstruction": {
+            "R_hat_us": 74.0,
+            "start_lat_p99_us": 72.0,
+            "exec_p99_us": 2.0,
+            "gap_vs_q99_us": -399.0,
+            "note": "分解自同一批实测；差值应≈0，明显非 0 说明两项不同源"
+          },
+          "deadline_verdict": "infeasible_observed",
+          "why": "实测 78/50000 拍超期 1000.0 µs（最差 14570.8 µs）",
+          "over_deadline_max_us": 14570.762,
+          "boundary_unit_us": 2.0
+        },
+        {
+          "sched": "fifo99",
+          "measured": {
+            "q99_resp_us": 422.0,
+            "start_lat_p99_us": 22.0,
+            "start_lat_p50_us": 21.0,
+            "resp_max_us": 436.352,
+            "misses": 0,
+            "n_cycles": 50000,
+            "rounds": 10,
+            "miss_rate_upper": 7.683e-05,
+            "sched": "fifo99"
+          },
+          "reconstruction": {
+            "R_hat_us": 24.0,
+            "start_lat_p99_us": 22.0,
+            "exec_p99_us": 2.0,
+            "gap_vs_q99_us": -398.0,
+            "note": "分解自同一批实测；差值应≈0，明显非 0 说明两项不同源"
+          },
+          "horizon": {
+            "period_us": 1000.0,
+            "cycles": 3600000.0,
+            "expected_misses_upper": 276.58799999999997
+          },
+          "deadline_verdict": "cannot_certify",
+          "why": "已观测 0 超期，但 1.0h 内上界 276.59 次超期（率上界 7.68e-05）",
+          "boundary_unit_us": 2.0
+        }
+      ],
+      "missing": [],
+      "claim": "基于实测画像的可行性筛查：只回答「在已观测的 N 拍里有没有超期、残余风险上界多大」，不宣称硬实时可调度性，也不是 WCET",
+      "deployment": "split_sp_k_user_load4",
+      "deadline_verdict": "infeasible_observed",
+      "worst_sched": "cfs",
+      "why": "实测 78/50000 拍超期 1000.0 µs（最差 14570.8 µs）"
+    },
+    {
+      "candidate_id": "STKP:L[stage_sample]|L[stage_pid+stage_sink]",
+      "domain": "linux_userspace",
+      "shape": {
+        "n_groups": 2,
+        "fused": false,
+        "n_releases": 2,
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid",
+            "stage_sink"
+          ]
+        ]
+      },
+      "compile_legal": true,
+      "deadline_us": 1000.0,
+      "horizon_s": 3600.0,
+      "model": {
+        "R_hat_us": 57.0,
+        "compute_us": 15.0,
+        "release_us": 42.0,
+        "boundary_us": 0.0,
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_userspace:scenario",
+          "stage_sink@linux_userspace:scenario"
+        ],
+        "feasible": true,
+        "note": "旧成本模型：R̂=ΣC+ΣL+ΣH，单标量，不含调度等待的实测分布"
+      },
+      "measured": [
+        {
+          "sched": "cfs",
+          "measured": {
+            "q99_resp_us": 274.0,
+            "start_lat_p99_us": 72.0,
+            "start_lat_p50_us": 71.0,
+            "resp_max_us": 16483.321,
+            "misses": 115,
+            "n_cycles": 50000,
+            "rounds": 10,
+            "miss_rate_upper": 0.00275985,
+            "sched": "cfs"
+          },
+          "reconstruction": {
+            "R_hat_us": 74.0,
+            "start_lat_p99_us": 72.0,
+            "exec_p99_us": 2.0,
+            "gap_vs_q99_us": -200.0,
+            "note": "分解自同一批实测；差值应≈0，明显非 0 说明两项不同源"
+          },
+          "deadline_verdict": "infeasible_observed",
+          "why": "实测 115/50000 拍超期 1000.0 µs（最差 16483.3 µs）",
+          "over_deadline_max_us": 16483.321,
+          "boundary_unit_us": 2.0
+        },
+        {
+          "sched": "fifo99",
+          "measured": {
+            "q99_resp_us": 223.0,
+            "start_lat_p99_us": 22.0,
+            "start_lat_p50_us": 21.0,
+            "resp_max_us": 233.437,
+            "misses": 0,
+            "n_cycles": 50000,
+            "rounds": 10,
+            "miss_rate_upper": 7.683e-05,
+            "sched": "fifo99"
+          },
+          "reconstruction": {
+            "R_hat_us": 24.0,
+            "start_lat_p99_us": 22.0,
+            "exec_p99_us": 2.0,
+            "gap_vs_q99_us": -199.0,
+            "note": "分解自同一批实测；差值应≈0，明显非 0 说明两项不同源"
+          },
+          "horizon": {
+            "period_us": 1000.0,
+            "cycles": 3600000.0,
+            "expected_misses_upper": 276.58799999999997
+          },
+          "deadline_verdict": "cannot_certify",
+          "why": "已观测 0 超期，但 1.0h 内上界 276.59 次超期（率上界 7.68e-05）",
+          "boundary_unit_us": 2.0
+        }
+      ],
+      "missing": [],
+      "claim": "基于实测画像的可行性筛查：只回答「在已观测的 N 拍里有没有超期、残余风险上界多大」，不宣称硬实时可调度性，也不是 WCET",
+      "deployment": "split_s_pk_user_load4",
+      "deadline_verdict": "infeasible_observed",
+      "worst_sched": "cfs",
+      "why": "实测 115/50000 拍超期 1000.0 µs（最差 16483.3 µs）"
+    },
+    {
+      "candidate_id": "A",
+      "domain": "linux_userspace",
+      "shape": {
+        "n_groups": 3,
+        "fused": false,
+        "n_releases": 3,
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ]
+      },
+      "compile_legal": true,
+      "deadline_us": 1000.0,
+      "horizon_s": 3600.0,
+      "model": {
+        "R_hat_us": 78.0,
+        "compute_us": 15.0,
+        "release_us": 63.0,
+        "boundary_us": 0.0,
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_userspace:scenario",
+          "stage_sink@linux_userspace:scenario"
+        ],
+        "feasible": true,
+        "note": "旧成本模型：R̂=ΣC+ΣL+ΣH，单标量，不含调度等待的实测分布"
+      },
+      "measured": [
+        {
+          "sched": "cfs",
+          "measured": {
+            "q99_resp_us": 473.0,
+            "start_lat_p99_us": 72.0,
+            "start_lat_p50_us": 71.0,
+            "resp_max_us": 16484.303,
+            "misses": 81,
+            "n_cycles": 50000,
+            "rounds": 10,
+            "miss_rate_upper": 0.00201286,
+            "sched": "cfs"
+          },
+          "reconstruction": {
+            "R_hat_us": 74.0,
+            "start_lat_p99_us": 72.0,
+            "exec_p99_us": 2.0,
+            "gap_vs_q99_us": -399.0,
+            "note": "分解自同一批实测；差值应≈0，明显非 0 说明两项不同源"
+          },
+          "deadline_verdict": "infeasible_observed",
+          "why": "实测 81/50000 拍超期 1000.0 µs（最差 16484.3 µs）",
+          "over_deadline_max_us": 16484.303,
+          "boundary_unit_us": 2.0
+        },
+        {
+          "sched": "fifo99",
+          "measured": {
+            "q99_resp_us": 422.0,
+            "start_lat_p99_us": 22.0,
+            "start_lat_p50_us": 21.0,
+            "resp_max_us": 450.041,
+            "misses": 0,
+            "n_cycles": 50000,
+            "rounds": 10,
+            "miss_rate_upper": 7.683e-05,
+            "sched": "fifo99"
+          },
+          "reconstruction": {
+            "R_hat_us": 23.0,
+            "start_lat_p99_us": 22.0,
+            "exec_p99_us": 1.0,
+            "gap_vs_q99_us": -399.0,
+            "note": "分解自同一批实测；差值应≈0，明显非 0 说明两项不同源"
+          },
+          "horizon": {
+            "period_us": 1000.0,
+            "cycles": 3600000.0,
+            "expected_misses_upper": 276.58799999999997
+          },
+          "deadline_verdict": "cannot_certify",
+          "why": "已观测 0 超期，但 1.0h 内上界 276.59 次超期（率上界 7.68e-05）",
+          "boundary_unit_us": 2.0
+        }
+      ],
+      "missing": [],
+      "claim": "基于实测画像的可行性筛查：只回答「在已观测的 N 拍里有没有超期、残余风险上界多大」，不宣称硬实时可调度性，也不是 WCET",
+      "deployment": "split3_user_plan_load4",
+      "deadline_verdict": "infeasible_observed",
+      "worst_sched": "cfs",
+      "why": "实测 81/50000 拍超期 1000.0 µs（最差 16484.3 µs）"
+    },
+    {
+      "candidate_id": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
+      "domain": "mixed",
+      "shape": {
+        "n_groups": 3,
+        "fused": false,
+        "n_releases": 3,
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ]
+      },
+      "compile_legal": true,
+      "deadline_us": 1000.0,
+      "horizon_s": 3600.0,
+      "model": {
+        "R_hat_us": 31.05,
+        "compute_us": 10.05,
+        "release_us": 21.0,
+        "boundary_us": 0.0,
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_kernel:scenario",
+          "stage_sink@linux_userspace:scenario",
+          "T_ioctl:cli_override"
+        ],
+        "feasible": true,
+        "note": "旧成本模型：R̂=ΣC+ΣL+ΣH，单标量，不含调度等待的实测分布"
+      },
+      "measured": [],
+      "missing": [
+        "该形状未测（mixed, 3 组, 融合=False）"
+      ],
+      "claim": "基于实测画像的可行性筛查：只回答「在已观测的 N 拍里有没有超期、残余风险上界多大」，不宣称硬实时可调度性，也不是 WCET",
+      "deadline_verdict": "insufficient_evidence"
+    }
+  ],
+  "columns_note": "compile_legal=语义合法；model.feasible=旧成本模型判断；deadline_verdict=只认实测，四档见模块 docstring",
+  "sources": {
+    "stkp": "kfusion/docs/pr11_deploy_objective/candidates_pr10e_stkp.json",
+    "profile": "kfusion/docs/pr11_deploy_objective/sched_profile_load4.json"
+  },
+  "env": {
+    "complete": true,
+    "release": "5.15.86",
+    "preempt": "PREEMPT",
+    "host": "Raspberry Pi 4 Model B Rev 1.5",
+    "rev": "d7bedfa",
+    "note": "四档结论只在这台机器/这个内核上成立"
+  }
+}

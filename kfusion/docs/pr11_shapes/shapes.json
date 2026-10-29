@@ -3889,6 +3889,3886 @@
           ]
         }
       ]
+    },
+    {
+      "scenario": "fused_user_load4",
+      "status": "ok",
+      "load": 4,
+      "label": "B@linux_userspace",
+      "note": "全融合 1 组，全用户态（模型最爱的形状，从没测过）",
+      "shape": {
+        "n_groups": 1,
+        "fused": true,
+        "domains": [
+          "linux_userspace"
+        ],
+        "members": [
+          [
+            "stage_sample",
+            "stage_pid",
+            "stage_sink"
+          ]
+        ],
+        "n_releases": 1,
+        "exec_mode": "plan"
+      },
+      "domains": [
+        "linux_userspace"
+      ],
+      "driver": "/root/K-Fusion/kfusion/docs/pr11_shapes/fused_user/gen/driver",
+      "forced": {
+        "label": "B@linux_userspace",
+        "cand_index": 0,
+        "model_would_pick": null
+      },
+      "conditions": [
+        {
+          "sched": "cfs",
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 72,
+                "p99_us": 73,
+                "p999_us": 1023,
+                "max_us": 6164.798,
+                "avg_us": 76.858
+              },
+              "response": {
+                "p50_us": 73,
+                "p99_us": 74,
+                "p999_us": 1023,
+                "max_us": 6167.038,
+                "avg_us": 78.618
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 7,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.22 0.05 0.02 1/116 3692",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.52 0.12 0.04 1/118 3699",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 1,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 795,
+                "max_us": 5629.211,
+                "avg_us": 75.193
+              },
+              "response": {
+                "p50_us": 73,
+                "p99_us": 74,
+                "p999_us": 796,
+                "max_us": 5631.877,
+                "avg_us": 76.933
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 5,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.52 0.12 0.04 1/118 3699",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.80 0.18 0.06 1/118 3705",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 2,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 72,
+                "p99_us": 73,
+                "p999_us": 1023,
+                "max_us": 6527.644,
+                "avg_us": 77.435
+              },
+              "response": {
+                "p50_us": 73,
+                "p99_us": 74,
+                "p999_us": 1023,
+                "max_us": 6529.514,
+                "avg_us": 79.172
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 7,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "0.80 0.18 0.06 1/118 3705",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "1.06 0.24 0.08 1/118 3710",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 3,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 72,
+                "p99_us": 72,
+                "p999_us": 799,
+                "max_us": 5631.47,
+                "avg_us": 75.52
+              },
+              "response": {
+                "p50_us": 74,
+                "p99_us": 74,
+                "p999_us": 800,
+                "max_us": 5633.822,
+                "avg_us": 77.283
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 5,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "1.06 0.24 0.08 1/118 3710",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "1.29 0.31 0.10 1/118 3715",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 4,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 72,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 7639.476,
+                "avg_us": 78.297
+              },
+              "response": {
+                "p50_us": 73,
+                "p99_us": 74,
+                "p999_us": 1023,
+                "max_us": 7641.902,
+                "avg_us": 80.039
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 7,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "1.29 0.31 0.10 1/118 3715",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "1.51 0.37 0.12 1/118 3720",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 5,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 72,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 5992.131,
+                "avg_us": 75.853
+              },
+              "response": {
+                "p50_us": 73,
+                "p99_us": 74,
+                "p999_us": 1023,
+                "max_us": 5994.465,
+                "avg_us": 77.597
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 6,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "1.51 0.37 0.12 1/118 3720",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "1.71 0.43 0.14 1/118 3725",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 6,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 72,
+                "p99_us": 73,
+                "p999_us": 1023,
+                "max_us": 14282.843,
+                "avg_us": 98.759
+              },
+              "response": {
+                "p50_us": 73,
+                "p99_us": 74,
+                "p999_us": 1023,
+                "max_us": 14284.584,
+                "avg_us": 100.529
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 17,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "1.71 0.43 0.14 1/118 3725",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "1.89 0.49 0.16 1/118 3730",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 7,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 76,
+                "max_us": 3978.773,
+                "avg_us": 73.277
+              },
+              "response": {
+                "p50_us": 73,
+                "p99_us": 74,
+                "p999_us": 79,
+                "max_us": 3981.014,
+                "avg_us": 75.056
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 4,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "1.89 0.49 0.16 1/118 3730",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.06 0.55 0.19 1/118 3735",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 8,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 72,
+                "p99_us": 72,
+                "p999_us": 520,
+                "max_us": 4389.622,
+                "avg_us": 74.336
+              },
+              "response": {
+                "p50_us": 73,
+                "p99_us": 74,
+                "p999_us": 522,
+                "max_us": 4391.53,
+                "avg_us": 76.114
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 5,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.06 0.55 0.19 1/118 3735",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.22 0.60 0.21 1/118 3740",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 9,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 72,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 5920.28,
+                "avg_us": 75.548
+              },
+              "response": {
+                "p50_us": 73,
+                "p99_us": 74,
+                "p999_us": 1023,
+                "max_us": 5923.336,
+                "avg_us": 77.277
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 6,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.22 0.60 0.21 2/118 3740",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.36 0.66 0.23 1/118 3745",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            }
+          ]
+        },
+        {
+          "sched": "fifo99",
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 25,
+                "max_us": 60.94,
+                "avg_us": 21.186
+              },
+              "response": {
+                "p50_us": 23,
+                "p99_us": 24,
+                "p999_us": 27,
+                "max_us": 62.681,
+                "avg_us": 22.91
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 0,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.36 0.66 0.23 1/118 3745",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.49 0.72 0.25 1/118 3751",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 1,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 28,
+                "max_us": 36.483,
+                "avg_us": 21.25
+              },
+              "response": {
+                "p50_us": 23,
+                "p99_us": 24,
+                "p999_us": 31,
+                "max_us": 38.576,
+                "avg_us": 23.033
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.49 0.72 0.25 2/118 3751",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.61 0.77 0.27 1/118 3756",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 2,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 26,
+                "max_us": 36.304,
+                "avg_us": 21.208
+              },
+              "response": {
+                "p50_us": 23,
+                "p99_us": 24,
+                "p999_us": 28,
+                "max_us": 38.73,
+                "avg_us": 22.991
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 0,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.61 0.77 0.27 2/118 3756",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.73 0.82 0.29 1/118 3761",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 3,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 29,
+                "max_us": 36.28,
+                "avg_us": 21.106
+              },
+              "response": {
+                "p50_us": 23,
+                "p99_us": 23,
+                "p999_us": 31,
+                "max_us": 38.447,
+                "avg_us": 22.849
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 0,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.73 0.82 0.29 1/118 3761",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.83 0.88 0.31 1/118 3766",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 4,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 28,
+                "max_us": 36.23,
+                "avg_us": 21.292
+              },
+              "response": {
+                "p50_us": 23,
+                "p99_us": 24,
+                "p999_us": 32,
+                "max_us": 38.804,
+                "avg_us": 23.091
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 0,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.83 0.88 0.31 1/118 3766",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.92 0.93 0.33 1/118 3771",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 5,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 27,
+                "max_us": 47.873,
+                "avg_us": 21.221
+              },
+              "response": {
+                "p50_us": 23,
+                "p99_us": 24,
+                "p999_us": 30,
+                "max_us": 50.299,
+                "avg_us": 22.97
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 0,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.92 0.93 0.33 1/118 3771",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.01 0.98 0.35 1/118 3776",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 6,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 27,
+                "max_us": 73.548,
+                "avg_us": 21.139
+              },
+              "response": {
+                "p50_us": 23,
+                "p99_us": 24,
+                "p999_us": 29,
+                "max_us": 75.4,
+                "avg_us": 22.95
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 0,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.01 0.98 0.35 1/118 3776",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.09 1.03 0.37 1/118 3781",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 7,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 28,
+                "max_us": 37.299,
+                "avg_us": 21.107
+              },
+              "response": {
+                "p50_us": 23,
+                "p99_us": 24,
+                "p999_us": 30,
+                "max_us": 39.595,
+                "avg_us": 22.86
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 0,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.09 1.03 0.37 1/118 3781",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.16 1.08 0.39 1/118 3786",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 8,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 26,
+                "max_us": 48.615,
+                "avg_us": 21.248
+              },
+              "response": {
+                "p50_us": 23,
+                "p99_us": 24,
+                "p999_us": 28,
+                "max_us": 50.448,
+                "avg_us": 23.023
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 0,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.16 1.08 0.39 1/118 3786",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.23 1.13 0.41 1/118 3791",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 9,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 28,
+                "max_us": 36.804,
+                "avg_us": 21.183
+              },
+              "response": {
+                "p50_us": 23,
+                "p99_us": 24,
+                "p999_us": 30,
+                "max_us": 38.86,
+                "avg_us": 22.969
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 1,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.23 1.13 0.41 1/118 3791",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.29 1.18 0.43 1/117 3796",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": "split3_user_plan_load4",
+      "status": "ok",
+      "load": 4,
+      "label": "A@linux_userspace",
+      "note": "三组各释放一次（plan 模式）。PR-13 首版误把 gold（单释放）当成它，Q99 78.27 实际属于 gold，不属于本形状",
+      "shape": {
+        "n_groups": 3,
+        "fused": false,
+        "domains": [
+          "linux_userspace",
+          "linux_userspace",
+          "linux_userspace"
+        ],
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ],
+        "n_releases": 3,
+        "exec_mode": "plan"
+      },
+      "domains": [
+        "linux_userspace",
+        "linux_userspace",
+        "linux_userspace"
+      ],
+      "driver": "/root/K-Fusion/kfusion/docs/pr11_shapes/split3_user_plan/gen/driver",
+      "forced": {
+        "label": "A@linux_userspace",
+        "cand_index": 3,
+        "model_would_pick": null
+      },
+      "conditions": [
+        {
+          "sched": "cfs",
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 16420.527,
+                "avg_us": 103.613
+              },
+              "response": {
+                "p50_us": 472,
+                "p99_us": 473,
+                "p999_us": 1023,
+                "max_us": 16484.303,
+                "avg_us": 503.994
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 2
+              },
+              "miss": 18,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.32 1.11 0.43 1/117 3908",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.46 1.16 0.45 1/117 3913",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 1,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 74,
+                "max_us": 3815.184,
+                "avg_us": 73.091
+              },
+              "response": {
+                "p50_us": 471,
+                "p99_us": 473,
+                "p999_us": 475,
+                "max_us": 3883.905,
+                "avg_us": 473.653
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 2
+              },
+              "miss": 4,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.46 1.16 0.45 1/117 3913",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.58 1.21 0.47 1/118 3919",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 2,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 5665.821,
+                "avg_us": 75.179
+              },
+              "response": {
+                "p50_us": 471,
+                "p99_us": 473,
+                "p999_us": 1023,
+                "max_us": 5738.58,
+                "avg_us": 475.634
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 6,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.58 1.21 0.47 1/118 3919",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.69 1.26 0.48 1/118 3924",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 3,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 6552.011,
+                "avg_us": 76.424
+              },
+              "response": {
+                "p50_us": 471,
+                "p99_us": 473,
+                "p999_us": 1023,
+                "max_us": 6624.955,
+                "avg_us": 476.85
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 2
+              },
+              "miss": 7,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.69 1.26 0.48 1/118 3924",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.80 1.30 0.50 1/117 3929",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 4,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 9632.024,
+                "avg_us": 84.723
+              },
+              "response": {
+                "p50_us": 471,
+                "p99_us": 473,
+                "p999_us": 1023,
+                "max_us": 9695.246,
+                "avg_us": 484.965
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 12,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.80 1.30 0.50 1/117 3929",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.89 1.35 0.52 1/117 3934",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 5,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 6552.623,
+                "avg_us": 76.401
+              },
+              "response": {
+                "p50_us": 472,
+                "p99_us": 473,
+                "p999_us": 1023,
+                "max_us": 6622.529,
+                "avg_us": 476.891
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 2
+              },
+              "miss": 7,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.89 1.35 0.52 1/117 3934",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.98 1.39 0.54 1/117 3939",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 6,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 73,
+                "p999_us": 1023,
+                "max_us": 7309.941,
+                "avg_us": 77.675
+              },
+              "response": {
+                "p50_us": 471,
+                "p99_us": 481,
+                "p999_us": 1023,
+                "max_us": 7547.829,
+                "avg_us": 478.28
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 2
+              },
+              "miss": 8,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "2.98 1.39 0.54 1/117 3939",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.07 1.43 0.56 1/117 3944",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 7,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 6552.363,
+                "avg_us": 76.459
+              },
+              "response": {
+                "p50_us": 472,
+                "p99_us": 473,
+                "p999_us": 1023,
+                "max_us": 6623.232,
+                "avg_us": 476.911
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 2
+              },
+              "miss": 7,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.07 1.43 0.56 1/117 3944",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.14 1.48 0.58 1/117 3949",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 8,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 6235.35,
+                "avg_us": 73.604
+              },
+              "response": {
+                "p50_us": 471,
+                "p99_us": 473,
+                "p999_us": 1023,
+                "max_us": 6306.293,
+                "avg_us": 476.33
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 6,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.14 1.48 0.58 1/117 3949",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.21 1.52 0.60 1/117 3954",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 9,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 5936.206,
+                "avg_us": 75.456
+              },
+              "response": {
+                "p50_us": 471,
+                "p99_us": 473,
+                "p999_us": 1023,
+                "max_us": 6007.76,
+                "avg_us": 475.921
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 2
+              },
+              "miss": 6,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.21 1.52 0.60 1/117 3954",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.27 1.56 0.62 1/117 3959",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            }
+          ]
+        },
+        {
+          "sched": "fifo99",
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 22,
+                "max_us": 45.309,
+                "avg_us": 21.046
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 423,
+                "max_us": 426.169,
+                "avg_us": 421.706
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.27 1.56 0.62 2/117 3959",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.41 1.62 0.64 1/117 3964",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 1,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 20,
+                "p99_us": 22,
+                "p999_us": 25,
+                "max_us": 37.593,
+                "avg_us": 21.03
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 423,
+                "max_us": 430.645,
+                "avg_us": 421.685
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 0,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.41 1.62 0.64 1/117 3964",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.43 1.68 0.67 1/117 3969",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 2,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 25,
+                "max_us": 48.224,
+                "avg_us": 21.12
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 424,
+                "max_us": 429.255,
+                "avg_us": 421.805
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 0,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.43 1.68 0.67 1/117 3969",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.47 1.72 0.69 1/117 3974",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 3,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 20,
+                "p99_us": 22,
+                "p999_us": 24,
+                "max_us": 49.522,
+                "avg_us": 21.067
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 425,
+                "max_us": 450.041,
+                "avg_us": 421.345
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.47 1.72 0.69 1/117 3974",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.52 1.76 0.71 1/117 3979",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 4,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 24,
+                "max_us": 35.825,
+                "avg_us": 21.145
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 424,
+                "max_us": 426.446,
+                "avg_us": 421.821
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 0,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.52 1.76 0.71 1/117 3979",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.56 1.80 0.73 1/117 3984",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 5,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 20,
+                "p99_us": 22,
+                "p999_us": 25,
+                "max_us": 55.106,
+                "avg_us": 20.988
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 425,
+                "max_us": 428.2,
+                "avg_us": 421.665
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 0,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.56 1.80 0.73 1/117 3984",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.59 1.83 0.74 1/117 3989",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 6,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 23,
+                "max_us": 29.191,
+                "avg_us": 21.115
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 423,
+                "max_us": 425.632,
+                "avg_us": 421.714
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 0,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.59 1.83 0.74 2/117 3989",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.62 1.87 0.76 1/116 3994",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 7,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 24,
+                "max_us": 41.197,
+                "avg_us": 21.251
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 424,
+                "max_us": 441.808,
+                "avg_us": 421.444
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.62 1.87 0.76 1/116 3994",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.65 1.90 0.78 1/116 3999",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 8,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 20,
+                "p99_us": 22,
+                "p999_us": 24,
+                "max_us": 37.743,
+                "avg_us": 21.085
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 424,
+                "max_us": 435.008,
+                "avg_us": 421.645
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.65 1.90 0.78 1/116 3999",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.68 1.94 0.80 1/117 4005",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 9,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 23,
+                "max_us": 33.854,
+                "avg_us": 21.091
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 423,
+                "max_us": 424.543,
+                "avg_us": 421.765
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 1
+              },
+              "miss": 0,
+              "n_releases": 3,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.68 1.94 0.80 1/117 4005",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.71 1.97 0.81 1/117 4010",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": "split_s_pk_user_load4",
+      "status": "ok",
+      "load": 4,
+      "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@linux_userspace",
+      "note": "两组：sample 独立，pid+sink 融合",
+      "shape": {
+        "n_groups": 2,
+        "fused": false,
+        "domains": [
+          "linux_userspace",
+          "linux_userspace"
+        ],
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid",
+            "stage_sink"
+          ]
+        ],
+        "n_releases": 2,
+        "exec_mode": "plan"
+      },
+      "domains": [
+        "linux_userspace",
+        "linux_userspace"
+      ],
+      "driver": "/root/K-Fusion/kfusion/docs/pr11_shapes/split_s_pk_user/gen/driver",
+      "forced": {
+        "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@linux_userspace",
+        "cand_index": 2,
+        "model_would_pick": null
+      },
+      "conditions": [
+        {
+          "sched": "cfs",
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 16105.677,
+                "avg_us": 101.878
+              },
+              "response": {
+                "p50_us": 273,
+                "p99_us": 274,
+                "p999_us": 1023,
+                "max_us": 16307.028,
+                "avg_us": 303.868
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 18,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.29 1.94 0.82 1/117 4106",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.35 1.98 0.83 1/117 4111",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 1,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 6487.824,
+                "avg_us": 76.091
+              },
+              "response": {
+                "p50_us": 272,
+                "p99_us": 273,
+                "p999_us": 1023,
+                "max_us": 6689.38,
+                "avg_us": 277.932
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 7,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.35 1.98 0.83 1/117 4111",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.40 2.01 0.85 1/117 4116",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 2,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 16121.972,
+                "avg_us": 101.937
+              },
+              "response": {
+                "p50_us": 273,
+                "p99_us": 274,
+                "p999_us": 1023,
+                "max_us": 16323.158,
+                "avg_us": 303.943
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 18,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.40 2.01 0.85 1/117 4116",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.45 2.04 0.87 2/117 4121",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 3,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 89,
+                "p999_us": 1023,
+                "max_us": 6122.796,
+                "avg_us": 78.01
+              },
+              "response": {
+                "p50_us": 272,
+                "p99_us": 274,
+                "p999_us": 1023,
+                "max_us": 6165.536,
+                "avg_us": 277.221
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 6,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.45 2.04 0.87 1/117 4121",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.57 2.09 0.89 1/116 4126",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 4,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 7270.922,
+                "avg_us": 77.424
+              },
+              "response": {
+                "p50_us": 272,
+                "p99_us": 274,
+                "p999_us": 1023,
+                "max_us": 7472.793,
+                "avg_us": 279.227
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 7,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.57 2.09 0.89 1/116 4126",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.61 2.12 0.91 1/116 4131",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 5,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 6144.74,
+                "avg_us": 75.854
+              },
+              "response": {
+                "p50_us": 272,
+                "p99_us": 274,
+                "p999_us": 1023,
+                "max_us": 6187.276,
+                "avg_us": 277.314
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 6,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.61 2.12 0.91 1/116 4131",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.64 2.15 0.93 1/116 4136",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 6,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 16281.673,
+                "avg_us": 98.953
+              },
+              "response": {
+                "p50_us": 272,
+                "p99_us": 274,
+                "p999_us": 1023,
+                "max_us": 16483.321,
+                "avg_us": 297.291
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 18,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.64 2.15 0.93 1/116 4136",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.67 2.19 0.94 1/116 4141",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 7,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 12345.793,
+                "avg_us": 92.872
+              },
+              "response": {
+                "p50_us": 273,
+                "p99_us": 274,
+                "p999_us": 1023,
+                "max_us": 12383.404,
+                "avg_us": 294.584
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 17,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.67 2.19 0.94 1/116 4141",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.70 2.22 0.96 1/116 4146",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 8,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 10647.58,
+                "avg_us": 85.792
+              },
+              "response": {
+                "p50_us": 272,
+                "p99_us": 274,
+                "p999_us": 1023,
+                "max_us": 10683.857,
+                "avg_us": 287.164
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 12,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.70 2.22 0.96 1/116 4146",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.72 2.25 0.97 1/116 4151",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 9,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 989,
+                "max_us": 5684.062,
+                "avg_us": 75.218
+              },
+              "response": {
+                "p50_us": 272,
+                "p99_us": 274,
+                "p999_us": 1019,
+                "max_us": 5726.505,
+                "avg_us": 276.732
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 6,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.72 2.25 0.97 1/116 4151",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.74 2.27 0.99 1/116 4156",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            }
+          ]
+        },
+        {
+          "sched": "fifo99",
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 25,
+                "max_us": 34.892,
+                "avg_us": 20.947
+              },
+              "response": {
+                "p50_us": 222,
+                "p99_us": 223,
+                "p999_us": 225,
+                "max_us": 233.437,
+                "avg_us": 221.993
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.74 2.27 0.99 1/117 4157",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.76 2.30 1.01 1/117 4162",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 1,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 25,
+                "max_us": 40.73,
+                "avg_us": 21.095
+              },
+              "response": {
+                "p50_us": 222,
+                "p99_us": 223,
+                "p999_us": 225,
+                "max_us": 229.295,
+                "avg_us": 222.652
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.76 2.30 1.01 1/117 4162",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.78 2.33 1.02 1/117 4167",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 2,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 25,
+                "max_us": 52.907,
+                "avg_us": 20.975
+              },
+              "response": {
+                "p50_us": 222,
+                "p99_us": 223,
+                "p999_us": 225,
+                "max_us": 227.777,
+                "avg_us": 222.502
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.78 2.33 1.02 1/117 4167",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.80 2.36 1.04 1/117 4173",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 3,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 20,
+                "p99_us": 21,
+                "p999_us": 25,
+                "max_us": 32.471,
+                "avg_us": 21.011
+              },
+              "response": {
+                "p50_us": 222,
+                "p99_us": 223,
+                "p999_us": 225,
+                "max_us": 228.425,
+                "avg_us": 222.751
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.80 2.36 1.04 1/117 4173",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.90 2.40 1.06 1/115 4178",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 4,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 25,
+                "max_us": 49.735,
+                "avg_us": 21.038
+              },
+              "response": {
+                "p50_us": 222,
+                "p99_us": 223,
+                "p999_us": 226,
+                "max_us": 228.555,
+                "avg_us": 222.686
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.90 2.40 1.06 1/115 4178",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.99 2.47 1.10 1/116 4184",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 5,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 38,
+                "p999_us": 46,
+                "max_us": 155.793,
+                "avg_us": 23.459
+              },
+              "response": {
+                "p50_us": 222,
+                "p99_us": 224,
+                "p999_us": 224,
+                "max_us": 228.06,
+                "avg_us": 222.89
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.99 2.47 1.10 1/116 4184",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "4.15 2.53 1.13 1/116 4189",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 6,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 23,
+                "max_us": 29.338,
+                "avg_us": 20.981
+              },
+              "response": {
+                "p50_us": 222,
+                "p99_us": 223,
+                "p999_us": 224,
+                "max_us": 226.295,
+                "avg_us": 222.532
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "4.15 2.53 1.13 1/116 4189",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "4.14 2.56 1.14 1/116 4194",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 7,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 23,
+                "max_us": 36.057,
+                "avg_us": 21.332
+              },
+              "response": {
+                "p50_us": 222,
+                "p99_us": 224,
+                "p999_us": 225,
+                "max_us": 226.668,
+                "avg_us": 222.91
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "4.14 2.56 1.14 1/116 4194",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "4.12 2.58 1.16 1/116 4199",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 8,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 24,
+                "max_us": 50.225,
+                "avg_us": 21.109
+              },
+              "response": {
+                "p50_us": 222,
+                "p99_us": 223,
+                "p999_us": 224,
+                "max_us": 227.471,
+                "avg_us": 222.715
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "4.12 2.58 1.16 1/116 4199",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "4.11 2.60 1.17 1/116 4204",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 9,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 20,
+                "p99_us": 21,
+                "p999_us": 22,
+                "max_us": 34.65,
+                "avg_us": 20.884
+              },
+              "response": {
+                "p50_us": 222,
+                "p99_us": 223,
+                "p999_us": 223,
+                "max_us": 224.647,
+                "avg_us": 222.384
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "4.11 2.60 1.17 1/116 4204",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "4.10 2.63 1.19 1/116 4209",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": "split_sp_k_user_load4",
+      "status": "ok",
+      "load": 4,
+      "label": "STKP:L[stage_sample+stage_pid]|L[stage_sink]@linux_userspace",
+      "note": "两组：sample+pid 融合，sink 独立",
+      "shape": {
+        "n_groups": 2,
+        "fused": false,
+        "domains": [
+          "linux_userspace",
+          "linux_userspace"
+        ],
+        "members": [
+          [
+            "stage_sample",
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ],
+        "n_releases": 2,
+        "exec_mode": "plan"
+      },
+      "domains": [
+        "linux_userspace",
+        "linux_userspace"
+      ],
+      "driver": "/root/K-Fusion/kfusion/docs/pr11_shapes/split_sp_k_user/gen/driver",
+      "forced": {
+        "label": "STKP:L[stage_sample+stage_pid]|L[stage_sink]@linux_userspace",
+        "cand_index": 1,
+        "model_would_pick": null
+      },
+      "conditions": [
+        {
+          "sched": "cfs",
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 9719.225,
+                "avg_us": 84.67
+              },
+              "response": {
+                "p50_us": 472,
+                "p99_us": 473,
+                "p999_us": 1023,
+                "max_us": 9754.78,
+                "avg_us": 485.028
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 12,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.16 2.51 1.18 1/116 4313",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.23 2.53 1.19 1/116 4318",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 1,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 610,
+                "max_us": 4937.326,
+                "avg_us": 74.264
+              },
+              "response": {
+                "p50_us": 471,
+                "p99_us": 473,
+                "p999_us": 640,
+                "max_us": 5337.919,
+                "avg_us": 474.654
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 5,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.23 2.53 1.19 1/116 4318",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.29 2.56 1.21 1/116 4323",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 2,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 6774.062,
+                "avg_us": 76.821
+              },
+              "response": {
+                "p50_us": 472,
+                "p99_us": 473,
+                "p999_us": 1023,
+                "max_us": 6816.951,
+                "avg_us": 477.379
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 7,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.29 2.56 1.21 1/116 4323",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.35 2.58 1.22 1/116 4328",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 3,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 6316.341,
+                "avg_us": 76.206
+              },
+              "response": {
+                "p50_us": 472,
+                "p99_us": 473,
+                "p999_us": 1023,
+                "max_us": 6717.137,
+                "avg_us": 477.17
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 7,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.35 2.58 1.22 1/116 4328",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.40 2.60 1.24 1/116 4333",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 4,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 14534.856,
+                "avg_us": 100.661
+              },
+              "response": {
+                "p50_us": 471,
+                "p99_us": 473,
+                "p999_us": 1023,
+                "max_us": 14570.762,
+                "avg_us": 500.609
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 18,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.40 2.60 1.24 1/116 4333",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.45 2.63 1.25 1/117 4339",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 5,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 6365.951,
+                "avg_us": 76.293
+              },
+              "response": {
+                "p50_us": 472,
+                "p99_us": 473,
+                "p999_us": 1023,
+                "max_us": 6766.803,
+                "avg_us": 477.22
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 2
+              },
+              "miss": 7,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.45 2.63 1.25 1/117 4339",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.49 2.65 1.27 1/117 4344",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 6,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 911,
+                "max_us": 5604.322,
+                "avg_us": 75.131
+              },
+              "response": {
+                "p50_us": 472,
+                "p99_us": 473,
+                "p999_us": 941,
+                "max_us": 5647.673,
+                "avg_us": 475.771
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 5,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.49 2.65 1.27 2/117 4344",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.53 2.67 1.29 1/117 4349",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 7,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 619,
+                "max_us": 4944.048,
+                "avg_us": 74.276
+              },
+              "response": {
+                "p50_us": 471,
+                "p99_us": 473,
+                "p999_us": 649,
+                "max_us": 5344.714,
+                "avg_us": 474.675
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 5,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.53 2.67 1.29 1/117 4349",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.57 2.69 1.30 1/117 4354",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 8,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 882,
+                "max_us": 5571.341,
+                "avg_us": 75.157
+              },
+              "response": {
+                "p50_us": 472,
+                "p99_us": 473,
+                "p999_us": 913,
+                "max_us": 5616.396,
+                "avg_us": 475.769
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 5,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.57 2.69 1.30 1/117 4354",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.61 2.72 1.31 1/117 4359",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 9,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 71,
+                "p99_us": 72,
+                "p999_us": 1023,
+                "max_us": 7142.124,
+                "avg_us": 77.426
+              },
+              "response": {
+                "p50_us": 471,
+                "p99_us": 473,
+                "p999_us": 1023,
+                "max_us": 7542.661,
+                "avg_us": 477.803
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 7,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.61 2.72 1.31 1/117 4359",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.64 2.74 1.33 1/117 4364",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            }
+          ]
+        },
+        {
+          "sched": "fifo99",
+          "status": "ok",
+          "runs": [
+            {
+              "repeat": 0,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 23,
+                "max_us": 44.511,
+                "avg_us": 21.389
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 424,
+                "max_us": 426.153,
+                "avg_us": 421.927
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.64 2.74 1.33 1/117 4364",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.67 2.76 1.34 1/117 4369",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 1,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 25,
+                "max_us": 30.801,
+                "avg_us": 21.084
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 426,
+                "max_us": 428.798,
+                "avg_us": 421.907
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.67 2.76 1.34 1/117 4369",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.69 2.78 1.36 1/117 4374",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 2,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 38,
+                "p999_us": 46,
+                "max_us": 220.321,
+                "avg_us": 23.387
+              },
+              "response": {
+                "p50_us": 422,
+                "p99_us": 423,
+                "p999_us": 424,
+                "max_us": 425.026,
+                "avg_us": 422.146
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.69 2.78 1.36 2/117 4374",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.80 2.82 1.38 1/117 4379",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 3,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 23,
+                "max_us": 39.784,
+                "avg_us": 21.117
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 424,
+                "max_us": 427.774,
+                "avg_us": 421.947
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.80 2.82 1.38 2/117 4379",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.81 2.84 1.39 1/115 4384",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 4,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 26,
+                "max_us": 60.289,
+                "avg_us": 21.02
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 424,
+                "max_us": 431.924,
+                "avg_us": 421.783
+              },
+              "work": {
+                "p50_us": 1,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.81 2.84 1.39 1/115 4384",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.83 2.86 1.41 1/115 4389",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 5,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 27,
+                "max_us": 38.817,
+                "avg_us": 21.215
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 427,
+                "max_us": 429.538,
+                "avg_us": 421.478
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.83 2.86 1.41 1/115 4389",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.84 2.88 1.42 1/115 4404",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 6,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 25,
+                "max_us": 35.796,
+                "avg_us": 21.111
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 424,
+                "max_us": 436.352,
+                "avg_us": 421.379
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.84 2.88 1.42 1/115 4404",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.86 2.89 1.43 1/116 4410",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 7,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 23,
+                "max_us": 34.354,
+                "avg_us": 21.072
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 424,
+                "max_us": 426.177,
+                "avg_us": 421.929
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.86 2.89 1.43 2/116 4410",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.87 2.91 1.45 1/116 4415",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 8,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 21,
+                "p99_us": 22,
+                "p999_us": 25,
+                "max_us": 35.298,
+                "avg_us": 21.034
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 425,
+                "max_us": 435.872,
+                "avg_us": 421.311
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.87 2.91 1.45 1/116 4415",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.88 2.93 1.46 1/116 4420",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            },
+            {
+              "repeat": 9,
+              "rc": 0,
+              "n": 5000,
+              "digest": "68445021",
+              "start_lat": {
+                "p50_us": 20,
+                "p99_us": 21,
+                "p999_us": 24,
+                "max_us": 54.361,
+                "avg_us": 20.876
+              },
+              "response": {
+                "p50_us": 421,
+                "p99_us": 422,
+                "p999_us": 423,
+                "max_us": 426.669,
+                "avg_us": 421.683
+              },
+              "work": {
+                "p50_us": 2,
+                "p99_us": 2
+              },
+              "miss": 0,
+              "n_releases": 2,
+              "exec_mode": "plan",
+              "stat_source": "probe_stat_block",
+              "env_before": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.88 2.93 1.46 2/116 4420",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              },
+              "env_after": {
+                "governor": null,
+                "cur_freq_khz": null,
+                "temp_mc": null,
+                "loadavg": "3.89 2.95 1.48 1/116 4425",
+                "rt_runtime_us": "950000",
+                "nproc": 4,
+                "pin_cpu": 3
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "note": "形状补测：同一源码/同一生成器，只改组结构与调度类；每轮原始输出在各自 runs_*/r*.log.gz（含 1µs 直方图）"
