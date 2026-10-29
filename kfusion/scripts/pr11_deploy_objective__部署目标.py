@@ -235,7 +235,7 @@ def _synth_profile(q99, miss=None, scheds=("cfs", "fifo99"), n_groups=3):
             }
         prof["deployments"][scen] = {
             "maps_to_domain": dom,
-            "shape": dict(do.DEPLOYMENT_SHAPE[scen]),
+            "shape": dict(do.DEPLOYMENT_SHAPE[scen], n_releases=1),
             "sched": blocks,
         }
     prof["boundary"] = {"t_ioctl_us": {"value": 2.0, "evidence": "test",

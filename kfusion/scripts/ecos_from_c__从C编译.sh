@@ -241,6 +241,63 @@ if sched:
                  cov.get("deployment_ready_candidates") or 0))
 PY
 
+step "7c3) 调度感知可行性（只认实测，不认模型）"
+if [ -n "${DEPLOY_OBJECTIVE:-}" ] && [ -f "$OUT/stkp.json" ]; then
+  DEADLINE_US="$("$PY" -c "import json;print(int((json.load(open('$OUT/task.teir.json')).get('task') or {}).get('deadline_us') or 0))")"
+  if [ "${DEADLINE_US:-0}" != "0" ]; then
+    "$PY" "$KF/scripts/pr14_sched_aware_verify__调度感知验证.py" \
+      --stkp "$OUT/stkp.json" --profile "$DEPLOY_OBJECTIVE" \
+      --deadline "$DEADLINE_US" --horizon-s "${OBJ_HORIZON_S:-3600}" \
+      -o "$OUT/pr14.json" || echo "  ⚠ 有候选证据不足（见 pr14.json），继续但报告须标注"
+    "$PY" - "$OUT/stkp.json" "$OUT/pr14.json" "$OUT/deploy.json" \
+            "${REQUIRE_DEADLINE_EVIDENCE:-0}" <<'PY' || die "实测期限不满足（REQUIRE_DEADLINE_EVIDENCE=1）" 9
+import json, sys
+stkp = json.load(open(sys.argv[1]))
+rep = json.load(open(sys.argv[2]))
+dep_p = sys.argv[3]
+gate = sys.argv[4] if len(sys.argv) > 4 else "0"
+chosen = stkp.get("chosen")
+row = None
+for r in rep.get("rows") or []:
+    if r.get("candidate_id") == chosen:
+        row = r
+        break
+doc = json.load(open(dep_p))
+if row is None:
+    doc["deadline"] = {"verdict": "insufficient_evidence",
+                       "why": "入选候选没有可行性记录"}
+else:
+    per = {m["sched"]: m.get("deadline_verdict") for m in row.get("measured") or []}
+    used = (stkp.get("sched_class") or "")
+    used_m = next((m for m in row.get("measured") or []
+                   if m.get("sched") == used), None)
+    if used_m is not None:
+        verdict, why = used_m.get("deadline_verdict"), used_m.get("why")
+    else:  # 没选调度类：取最差那一档，理由必须跟着同一档，不许串行
+        verdict, why = row.get("deadline_verdict"), row.get("why")
+    doc["deadline"] = {
+        "verdict": verdict,
+        "per_sched": per,
+        "sched_used": used or None,
+        "why": why,
+        "all_sched": {m["sched"]: m.get("why") for m in row.get("measured") or []},
+        "deadline_us": rep.get("deadline_us"),
+        "horizon_s": rep.get("horizon_s"),
+        "claim": rep.get("claim"),
+    }
+json.dump(doc, open(dep_p, "w"), ensure_ascii=False, indent=2)
+v = (doc.get("deadline") or {}).get("verdict")
+print("  实测期限：%s（%s）" % (v, (doc["deadline"].get("why") or "")[:80]))
+if gate == "1" and v in ("infeasible_observed", "insufficient_evidence"):
+    sys.exit(9)
+PY
+  else
+    echo "  跳过：任务没有 deadline_us，无法判期限"
+  fi
+else
+  echo "  跳过：未给 DEPLOY_OBJECTIVE（没有画像就没有实测期限判断）"
+fi
+
 if [ -n "${TIME_CONTRACT:-}" ] && [ -f "${TIME_CONTRACT}" ]; then
   step "7d) 按需 LET（有时间契约才启用）"
   "$PY" "$KF/scripts/ecos/let_decide.py" \

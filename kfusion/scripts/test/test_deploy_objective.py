@@ -65,7 +65,9 @@ def profile(q99_user=29.471, q99_mixed=34.642, include_mixed=True,
             }
         prof["deployments"][scen] = {
             "maps_to_domain": dom,
-            "shape": dict(do.DEPLOYMENT_SHAPE[scen]),
+            # 合成夹具：候选 plan 没有 release_phase → n_releases=1，
+            # 画像也必须写 1，否则释放结构不匹配（这正是 gold 不能配 plan 的原因）
+            "shape": dict(do.DEPLOYMENT_SHAPE[scen], n_releases=1),
             "sched": blocks,
         }
     prof["env_evidence"] = {

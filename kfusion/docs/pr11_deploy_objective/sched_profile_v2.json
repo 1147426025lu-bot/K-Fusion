@@ -28,6 +28,7 @@
       "shape": {
         "n_groups": 3,
         "fused": false,
+        "n_releases": null,
         "members": [
           [
             "stage_sample"
@@ -39,7 +40,8 @@
             "stage_sink"
           ]
         ],
-        "note": "gold：sample/pid/sink 三次顺序调用，全用户态"
+        "exec_mode": "gold",
+        "note": "gold：原程序顺序执行；探针不打印 releases_per_period，故 n_releases 未知，不得与 plan 候选按组数配对"
       },
       "sched": {
         "cfs": {
@@ -139,6 +141,7 @@
       "shape": {
         "n_groups": 3,
         "fused": false,
+        "n_releases": null,
         "members": [
           [
             "stage_sample"
@@ -150,7 +153,8 @@
             "stage_sink"
           ]
         ],
-        "note": "mixed：三段不融合，中间段经 ioctl 进内核"
+        "exec_mode": "mixed",
+        "note": "mixed：中段经 ioctl；释放结构未记录，同样不得与 plan 候选配对"
       },
       "sched": {
         "cfs": {
@@ -250,6 +254,8 @@
       "shape": {
         "n_groups": 1,
         "fused": true,
+        "n_releases": 1,
+        "exec_mode": "plan",
         "members": [
           [
             "stage_sample",
@@ -303,6 +309,16 @@
             "start_lat_max_worst_us": 2580.623,
             "resp_max_worst_us": 2583.216,
             "rounds_with_miss": 2
+          },
+          "work_p99_us": {
+            "value": 1.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              1.0,
+              1.0
+            ],
+            "statistic": "median_of_round_p99"
           }
         },
         "fifo99": {
@@ -348,6 +364,16 @@
             "start_lat_max_worst_us": 42.717,
             "resp_max_worst_us": 45.05,
             "rounds_with_miss": 0
+          },
+          "work_p99_us": {
+            "value": 1.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              1.0,
+              1.0
+            ],
+            "statistic": "median_of_round_p99"
           }
         }
       }
@@ -357,6 +383,8 @@
       "shape": {
         "n_groups": 2,
         "fused": false,
+        "n_releases": 2,
+        "exec_mode": "plan",
         "members": [
           [
             "stage_sample",
@@ -412,6 +440,16 @@
             "start_lat_max_worst_us": 745.642,
             "resp_max_worst_us": 1146.605,
             "rounds_with_miss": 1
+          },
+          "work_p99_us": {
+            "value": 1.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              0.0,
+              1.0
+            ],
+            "statistic": "median_of_round_p99"
           }
         },
         "fifo99": {
@@ -457,6 +495,16 @@
             "start_lat_max_worst_us": 68.565,
             "resp_max_worst_us": 468.991,
             "rounds_with_miss": 0
+          },
+          "work_p99_us": {
+            "value": 1.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              1.0,
+              1.0
+            ],
+            "statistic": "median_of_round_p99"
           }
         }
       }
@@ -466,6 +514,8 @@
       "shape": {
         "n_groups": 2,
         "fused": false,
+        "n_releases": 2,
+        "exec_mode": "plan",
         "members": [
           [
             "stage_sample"
@@ -521,6 +571,16 @@
             "start_lat_max_worst_us": 954.309,
             "resp_max_worst_us": 990.531,
             "rounds_with_miss": 0
+          },
+          "work_p99_us": {
+            "value": 1.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              1.0,
+              1.0
+            ],
+            "statistic": "median_of_round_p99"
           }
         },
         "fifo99": {
@@ -566,6 +626,149 @@
             "start_lat_max_worst_us": 52.309,
             "resp_max_worst_us": 253.661,
             "rounds_with_miss": 0
+          },
+          "work_p99_us": {
+            "value": 1.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              1.0,
+              1.0
+            ],
+            "statistic": "median_of_round_p99"
+          }
+        }
+      }
+    },
+    "split3_user_plan": {
+      "maps_to_domain": "linux_userspace",
+      "shape": {
+        "n_groups": 3,
+        "fused": false,
+        "n_releases": 3,
+        "exec_mode": "plan",
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ],
+        "note": "三组各释放一次（plan 模式）。PR-13 首版误把 gold（单释放）当成它，Q99 78.27 实际属于 gold，不属于本形状"
+      },
+      "sched": {
+        "cfs": {
+          "rounds": 10,
+          "n_cycles": 50000,
+          "n_miss": 0,
+          "q99_resp_us": {
+            "value": 462.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "n_cycles": 50000,
+            "across_rounds": [
+              462.0,
+              465.0
+            ],
+            "statistic": "median_of_round_p99",
+            "note": "跨轮极差一并保留；混池 p99 会掩盖单轮劣化"
+          },
+          "miss_rate": {
+            "value": 0.0,
+            "evidence": "measured",
+            "n_cycles": 50000,
+            "rounds": 10,
+            "count": 0,
+            "ci95_wilson": [
+              0.0,
+              7.683e-05
+            ],
+            "statistic": "pooled_over_rounds",
+            "note": "事件数少时点估计不稳，可用 --miss-bound upper"
+          },
+          "tail": {
+            "start_lat_p50_median_us": 62.0,
+            "start_lat_p50_range_us": [
+              62.0,
+              62.0
+            ],
+            "start_lat_p99_median_us": 64.0,
+            "start_lat_p99_range_us": [
+              64.0,
+              64.0
+            ],
+            "start_lat_max_worst_us": 504.138,
+            "resp_max_worst_us": 585.873,
+            "rounds_with_miss": 0
+          },
+          "work_p99_us": {
+            "value": 1.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              1.0,
+              1.0
+            ],
+            "statistic": "median_of_round_p99"
+          }
+        },
+        "fifo99": {
+          "rounds": 10,
+          "n_cycles": 50000,
+          "n_miss": 0,
+          "q99_resp_us": {
+            "value": 412.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "n_cycles": 50000,
+            "across_rounds": [
+              412.0,
+              414.0
+            ],
+            "statistic": "median_of_round_p99",
+            "note": "跨轮极差一并保留；混池 p99 会掩盖单轮劣化"
+          },
+          "miss_rate": {
+            "value": 0.0,
+            "evidence": "measured",
+            "n_cycles": 50000,
+            "rounds": 10,
+            "count": 0,
+            "ci95_wilson": [
+              0.0,
+              7.683e-05
+            ],
+            "statistic": "pooled_over_rounds",
+            "note": "事件数少时点估计不稳，可用 --miss-bound upper"
+          },
+          "tail": {
+            "start_lat_p50_median_us": 11.0,
+            "start_lat_p50_range_us": [
+              11.0,
+              11.0
+            ],
+            "start_lat_p99_median_us": 13.0,
+            "start_lat_p99_range_us": [
+              13.0,
+              14.0
+            ],
+            "start_lat_max_worst_us": 47.172,
+            "resp_max_worst_us": 430.189,
+            "rounds_with_miss": 0
+          },
+          "work_p99_us": {
+            "value": 1.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              1.0,
+              1.0
+            ],
+            "statistic": "median_of_round_p99"
           }
         }
       }

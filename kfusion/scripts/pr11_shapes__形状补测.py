@@ -81,6 +81,14 @@ SHAPES = [
                    "domains": ["linux_userspace"] * 2},
         "note": "两组：sample 独立，pid+sink 融合",
     },
+    {
+        "name": "split3_user_plan",
+        "label": "A@linux_userspace",
+        "expect": {"n_groups": 3, "fused": False,
+                   "domains": ["linux_userspace"] * 3},
+        "note": ("三组各释放一次（plan 模式）。PR-13 首版误把 gold（单释放）"
+                 "当成它，Q99 78.27 实际属于 gold，不属于本形状"),
+    },
 ]
 
 
@@ -201,6 +209,11 @@ def parse_stats(text):
     m = re.search(r"# deadline_miss: (\d+)/(\d+)", text)
     if m:
         out["deadline"] = {"miss": int(m.group(1)), "n": int(m.group(2))}
+    # 释放结构是形状的一部分：同组数、不同释放次数，响应差一个量级
+    m = re.search(r"# mode: (\S+)\s+releases_per_period=(\d+)", text)
+    if m:
+        out["exec_mode"] = m.group(1)
+        out["n_releases"] = int(m.group(2))
     m = re.search(r"# digest: ([0-9a-f]+)", text)
     if m:
         out["digest"] = m.group(1)
@@ -241,6 +254,8 @@ def measure_shape(cell, sched, cycles, repeat, out_dir):
                          "avg_us": rp["avg_us"]},
             "work": {"p50_us": wk.get("p50_us"), "p99_us": wk.get("p99_us")},
             "miss": (st.get("deadline") or {}).get("miss"),
+            "n_releases": st.get("n_releases"),
+            "exec_mode": st.get("exec_mode"),
             "stat_source": "probe_stat_block",
             "env_before": before, "env_after": after,
         })
@@ -258,12 +273,48 @@ def _merged(prev, new_cells):
            [c for k, c in by.items() if k not in order]
 
 
+def backfill(cells, out_dir):
+    """已采过的数据不重测：从留档的探针头把释放结构读回来。
+
+    为什么值得单独做：`releases_per_period` 一直就在原始输出里，
+    只是首版没解析。重测一遍既浪费时间，又会引入新的环境差异。
+    """
+    fixed = 0
+    for c in cells:
+        for cond in c.get("conditions") or []:
+            for r in cond.get("runs") or []:
+                if r.get("n_releases") is not None:
+                    continue
+                p = os.path.join(out_dir, c["scenario"],
+                                 "runs_%s" % cond["sched"],
+                                 "r%02d.log.gz" % int(r.get("repeat") or 0))
+                if not os.path.isfile(p):
+                    continue
+                with gzip.open(p, "rt", encoding="utf-8", errors="replace") as f:
+                    head = f.read(400)
+                st = parse_stats(head)
+                if st.get("n_releases") is not None:
+                    r["n_releases"] = st["n_releases"]
+                    r["exec_mode"] = st.get("exec_mode")
+                    fixed += 1
+        rels = [x.get("n_releases") for x in
+                ((c.get("conditions") or [{}])[0].get("runs") or [])]
+        rels = [int(x) for x in rels if x is not None]
+        if rels and c.get("shape") is not None:
+            c["shape"]["n_releases"] = rels[0]
+        if c.get("conditions") and c["conditions"][0].get("runs"):
+            c["shape"]["exec_mode"] = c["conditions"][0]["runs"][0].get("exec_mode")
+    return fixed
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--repeat", type=int, default=10)
     ap.add_argument("--cycles", type=int, default=5000)
     ap.add_argument("--scheds", nargs="+", default=["cfs", "fifo99"])
     ap.add_argument("--only", default=None, help="只测某个形状名")
+    ap.add_argument("--backfill", action="store_true",
+                    help="不测量：从已留档的原始输出回填释放结构")
     ap.add_argument("--fresh", action="store_true", help="不合并旧结果")
     ap.add_argument("--out", default=OUT_ROOT)
     a = ap.parse_args()
@@ -278,14 +329,29 @@ def main():
     out_p = os.path.join(a.out, "shapes.json")
     # 分批跑（--only）不能互相覆盖：按 scenario 合并旧结果，可断点续采
     prev = {}
-    if os.path.isfile(out_p) and not a.fresh:
+    if os.path.isfile(out_p):
         try:
-            for c in (json.load(io.open(out_p, encoding="utf-8"))
-                      .get("cells") or []):
+            doc0 = json.load(io.open(out_p, encoding="utf-8"))
+            for c in doc0.get("cells") or []:
                 if c.get("scenario"):
                     prev[c["scenario"]] = c
         except Exception:
             prev = {}
+    if a.fresh and not a.backfill:
+        prev = {}
+
+    if a.backfill:
+        n = backfill(list(prev.values()), a.out)
+        doc0 = json.load(io.open(out_p, encoding="utf-8"))
+        doc0["cells"] = _merged(prev, [])
+        write_json(out_p, doc0)
+        print("回填 %d 条释放结构，wrote %s" % (n, out_p), file=sys.stderr)
+        for c in doc0["cells"]:
+            sh = c.get("shape") or {}
+            print("  %-18s %s组 releases=%s mode=%s" % (
+                c["scenario"], sh.get("n_groups"), sh.get("n_releases"),
+                sh.get("exec_mode")), file=sys.stderr)
+        return 0
 
     cells = []
     for sh in todo:
@@ -309,6 +375,12 @@ def main():
             res = measure_shape(b, sched, a.cycles, a.repeat, rd)
             conds.append({"sched": sched, "status": res["status"],
                           "runs": res.get("runs") or []})
+        rels = [r.get("n_releases") for r in
+                (conds[0]["runs"] if conds else [])]
+        rels = [int(x) for x in rels if x is not None]
+        b["shape"]["n_releases"] = rels[0] if rels else None
+        b["shape"]["exec_mode"] = (conds[0]["runs"][0].get("exec_mode")
+                                   if conds and conds[0]["runs"] else None)
         cells.append({
             "scenario": sh["name"], "status": "ok",
             "label": sh["label"], "note": sh["note"],

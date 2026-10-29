@@ -100,7 +100,7 @@ def _cell_profile(runs):
     if n_cycles <= 0:
         raise TermMissing("总拍数为 0")
     ci = wilson_interval(n_miss, n_cycles)
-    return {
+    cell = {
         "rounds": len(runs),
         "n_cycles": n_cycles,
         "n_miss": n_miss,
@@ -135,6 +135,19 @@ def _cell_profile(runs):
             "rounds_with_miss": sum(1 for r in runs if (r.get("miss") or 0) > 0),
         },
     }
+    # work p99 只有形状补测（统计块）才有；有才存，没有不编。
+    # PR-14 的 R̂=L̂+Ĉ 分解靠它——用 Q99 反推 Q99 是自证，不做。
+    works = [(r.get("work") or {}).get("p99_us") for r in runs]
+    works = [float(w) for w in works if w is not None]
+    if works:
+        cell["work_p99_us"] = {
+            "value": round(_median(works), 3),
+            "evidence": "measured",
+            "rounds": len(works),
+            "across_rounds": _span(works),
+            "statistic": "median_of_round_p99",
+        }
+    return cell
 
 
 # 基线里的场景名 → STKP 的域；profile 里显式写出，不靠猜
@@ -146,16 +159,24 @@ DEPLOYMENT_DOMAIN = {
 # 实测时的**执行形状**。Q99 是形状相关的：融合会改执行结构，不能把
 # 3 组不融合测出来的尾部借给 1 组全融合的候选。来源：PR-10E 流水线日志
 # 「STKP chosen plan → L[stage_sample]|L[stage_pid]|L[stage_sink]」。
+#
+# n_releases 尤其不能省：`gold` 模式跑的是原程序（一个周期里三段顺序执行，
+# 探针头里连 releases_per_period 都不打印），而 `plan` 模式按组各释放一次。
+# 两者组数可能相同，执行结构却完全不同——PR-13 复查时就是因为只看组数，
+# 把 gold 的 78.27µs（单释放）当成了候选 A（3 次释放）的数。
 DEPLOYMENT_SHAPE = {
     "user_only": {
-        "n_groups": 3, "fused": False,
+        "n_groups": 3, "fused": False, "n_releases": None,
         "members": [["stage_sample"], ["stage_pid"], ["stage_sink"]],
-        "note": "gold：sample/pid/sink 三次顺序调用，全用户态",
+        "exec_mode": "gold",
+        "note": "gold：原程序顺序执行；探针不打印 releases_per_period，"
+                "故 n_releases 未知，不得与 plan 候选按组数配对",
     },
     "partial_kernel": {
-        "n_groups": 3, "fused": False,
+        "n_groups": 3, "fused": False, "n_releases": None,
         "members": [["stage_sample"], ["stage_pid"], ["stage_sink"]],
-        "note": "mixed：三段不融合，中间段经 ioctl 进内核",
+        "exec_mode": "mixed",
+        "note": "mixed：中段经 ioctl；释放结构未记录，同样不得与 plan 候选配对",
     },
 }
 
@@ -215,6 +236,8 @@ def aggregate_shapes(doc, env=None):
             "maps_to_domain": domain,
             "shape": {"n_groups": int(sh["n_groups"]),
                       "fused": bool(sh.get("fused")),
+                      "n_releases": sh.get("n_releases"),
+                      "exec_mode": sh.get("exec_mode"),
                       "members": sh.get("members"),
                       "note": cell.get("note")},
             "sched": scheds,
@@ -230,18 +253,20 @@ def merge_profiles(base, extra):
         for other, ob in out["deployments"].items():
             if ob.get("maps_to_domain") != blk.get("maps_to_domain"):
                 continue
-            ka = _member_key((ob.get("shape") or {}).get("members"))
-            kb = _member_key((blk.get("shape") or {}).get("members"))
-            same = (ka == kb) if (ka is not None and kb is not None) else (
-                (ob.get("shape") or {}).get("n_groups") ==
-                (blk.get("shape") or {}).get("n_groups") and
-                bool((ob.get("shape") or {}).get("fused")) ==
-                bool((blk.get("shape") or {}).get("fused")))
-            if same:
+            sa, sb = (ob.get("shape") or {}), (blk.get("shape") or {})
+            ka = _member_key(sa.get("members"))
+            kb = _member_key(sb.get("members"))
+            same_members = (ka == kb) if (ka is not None and kb is not None) else (
+                sa.get("n_groups") == sb.get("n_groups") and
+                bool(sa.get("fused")) == bool(sb.get("fused")))
+            # 成员相同但释放结构不同，是**不同**形状（gold 单释放 vs plan 三次），
+            # 只有在释放结构也相同（或都未知）时才算真冲突。
+            same_rel = (sa.get("n_releases") == sb.get("n_releases"))
+            if same_members and same_rel:
                 raise SystemExit(
-                    "画像形状冲突：%s 与 %s 同域且同组结构（%s, %s 组）"
-                    % (other, name, blk.get("maps_to_domain"),
-                       (blk.get("shape") or {}).get("n_groups")))
+                    "画像形状冲突：%s 与 %s 同域同组结构且同释放结构（%s, %s 组, "
+                    "releases=%s）" % (other, name, blk.get("maps_to_domain"),
+                                      sb.get("n_groups"), sb.get("n_releases")))
         out["deployments"][name] = blk
     out["unmeasured"] = (out.get("unmeasured") or []) + \
                         (extra.get("unmeasured") or [])
@@ -328,7 +353,7 @@ def deployment_for_domain(profile, domain):
     return hits[0] if len(hits) == 1 else None
 
 
-SHAPE_KEYS = ("n_groups", "fused")
+SHAPE_KEYS = ("n_groups", "n_releases", "fused")
 
 
 def _member_key(members):
@@ -339,6 +364,23 @@ def _member_key(members):
         return tuple(tuple(sorted(m)) for m in members)
     except TypeError:
         return None
+
+
+def _n_releases(groups):
+    """一个周期释放几次 = 组释放相位的去重个数。
+
+    没有 phase 字段时退回组数（无相位信息时组数就是释放次数）。
+    这个数必须进形状键：gold 单释放与 plan 三次释放，组数一样、响应差 400µs。
+    """
+    phases = []
+    for g in groups or []:
+        ph = g.get("release_phase_us")
+        if ph is None:
+            ph = g.get("phase_us")
+        phases.append(round(float(ph or 0.0), 3))
+    if not phases:
+        return None
+    return len(set(phases))
 
 
 def deployment_for(profile, domain, shape):
@@ -354,12 +396,21 @@ def deployment_for(profile, domain, shape):
     """
     shape = shape or {}
     want_members = _member_key(shape.get("members"))
+    want_rel = shape.get("n_releases")
     hits = []
     for name, blk in (profile.get("deployments") or {}).items():
         if blk.get("maps_to_domain") != domain:
             continue
         sh = blk.get("shape") or {}
         if not sh:
+            continue
+        got_rel = sh.get("n_releases")
+        # 释放结构是硬条件：候选按 plan 释放 N 次、画像却没记录释放次数
+        # （gold 模式就是这样）→ 不算命中。只看组数会让 400µs 级的结构差
+        # 被当成同一个形状。
+        if want_rel is not None and got_rel is None:
+            continue
+        if want_rel is not None and int(want_rel) != int(got_rel):
             continue
         if want_members is not None:
             got = _member_key(sh.get("members"))
@@ -368,7 +419,7 @@ def deployment_for(profile, domain, shape):
             hits.append((name, blk))
             continue
         ok = True
-        for k in SHAPE_KEYS:
+        for k in ("n_groups", "fused"):
             if shape.get(k) is None or sh.get(k) is None:
                 ok = False
                 break
@@ -558,6 +609,7 @@ def decide(candidates, profile, alpha=1.0, beta=0.0, gamma=0.0,
             "fused": bool(cand.get("fused")
                           if cand.get("fused") is not None
                           else len(groups) < len((cand.get("plan") or {}).get("order") or [])),
+            "n_releases": _n_releases(groups),
             "members": [g.get("members") or [] for g in groups],
         }
         for s in scheds:
