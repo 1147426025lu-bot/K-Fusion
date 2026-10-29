@@ -30,6 +30,7 @@ import importlib.util
 import io
 import json
 import os
+import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -220,7 +221,34 @@ def parse_stats(text):
     return out
 
 
-def measure_shape(cell, sched, cycles, repeat, out_dir):
+def start_load(n, cpu):
+    """背景忙循环，**钉在测量核上**。
+
+    与 PR-10B 不同（那边不钉）：本实验问的是「同核争用下调度等待怎么变」，
+    钉住才有确定含义；不钉的话 4 个循环可能一个都不落在 CPU3 上。
+    """
+    procs = []
+    for _ in range(n):
+        procs.append(subprocess.Popen(
+            ["taskset", "-c", str(cpu), "bash", "-c", "while :; do :; done"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
+    return procs
+
+
+def stop_load(procs):
+    for p in procs:
+        try:
+            p.kill()
+        except Exception:
+            pass
+    for p in procs:
+        try:
+            p.wait(timeout=5)
+        except Exception:
+            pass
+
+
+def measure_shape(cell, sched, cycles, repeat, out_dir, load=0):
     """与 PR-10E-A 同一口径：taskset 固定 CPU，FIFO 用 chrt，每轮留原始输出。"""
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir)
@@ -231,7 +259,11 @@ def measure_shape(cell, sched, cycles, repeat, out_dir):
         if sched == "fifo99":
             cmd += ["chrt", "-f", "99"]
         cmd += [cell["driver"], "plan", str(cycles)]
-        rc, txt = run(cmd)
+        procs = start_load(load, PIN_CPU) if load else []
+        try:
+            rc, txt = run(cmd)
+        finally:
+            stop_load(procs)
         after = base.env_snapshot()
         with gzip.open(os.path.join(out_dir, "r%02d.log.gz" % i), "wt",
                        encoding="utf-8", newline="\n") as f:
@@ -285,8 +317,10 @@ def backfill(cells, out_dir):
             for r in cond.get("runs") or []:
                 if r.get("n_releases") is not None:
                     continue
+                ld = int(c.get("load") or 0)
                 p = os.path.join(out_dir, c["scenario"],
-                                 "runs_%s" % cond["sched"],
+                                 "runs_%s%s" % (cond["sched"],
+                                                "" if not ld else "_load%d" % ld),
                                  "r%02d.log.gz" % int(r.get("repeat") or 0))
                 if not os.path.isfile(p):
                     continue
@@ -313,6 +347,8 @@ def main():
     ap.add_argument("--cycles", type=int, default=5000)
     ap.add_argument("--scheds", nargs="+", default=["cfs", "fifo99"])
     ap.add_argument("--only", default=None, help="只测某个形状名")
+    ap.add_argument("--load", type=int, default=0,
+                    help="同核背景忙循环个数；>0 时结果存为 <形状>_load<n>")
     ap.add_argument("--backfill", action="store_true",
                     help="不测量：从已留档的原始输出回填释放结构")
     ap.add_argument("--fresh", action="store_true", help="不合并旧结果")
@@ -369,12 +405,15 @@ def main():
               file=sys.stderr)
         conds = []
         for sched in a.scheds:
-            rd = os.path.join(wd, "runs_%s" % sched)
+            rd = os.path.join(wd, "runs_%s%s" % (
+                sched, "" if not a.load else "_load%d" % a.load))
             print("  采集 %-8s ×%d 轮 ×%d 拍" % (sched, a.repeat, a.cycles),
                   file=sys.stderr)
-            res = measure_shape(b, sched, a.cycles, a.repeat, rd)
+            res = measure_shape(b, sched, a.cycles, a.repeat, rd,
+                                load=a.load)
             conds.append({"sched": sched, "status": res["status"],
                           "runs": res.get("runs") or []})
+        scen = sh["name"] if not a.load else "%s_load%d" % (sh["name"], a.load)
         rels = [r.get("n_releases") for r in
                 (conds[0]["runs"] if conds else [])]
         rels = [int(x) for x in rels if x is not None]
@@ -382,7 +421,7 @@ def main():
         b["shape"]["exec_mode"] = (conds[0]["runs"][0].get("exec_mode")
                                    if conds and conds[0]["runs"] else None)
         cells.append({
-            "scenario": sh["name"], "status": "ok",
+            "scenario": scen, "status": "ok", "load": a.load,
             "label": sh["label"], "note": sh["note"],
             "shape": b["shape"], "domains": b["shape"]["domains"],
             "driver": b["driver"], "forced": b.get("forced"),

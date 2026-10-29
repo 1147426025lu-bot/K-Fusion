@@ -95,10 +95,11 @@ def cmd_profile(args):
         print("[warn] 环境证据不完整（缺 %s）：这份画像会被决策门禁挡住"
               % ",".join(env.get("missing") or []))
     prof = do.aggregate_baseline(doc, source=rel(base_path),
-                                 sha256=sha256_file(base_path), env=env)
+                                 sha256=sha256_file(base_path), env=env,
+                                 load=(args.load or 0))
     if args.shapes:
         shp = load_json(args.shapes)
-        extra = do.aggregate_shapes(shp, env=env)
+        extra = do.aggregate_shapes(shp, env=env, load=(args.load or 0))
         prof = do.merge_profiles(prof, extra)
         print("合并形状画像：%s" % ", ".join(sorted(extra["deployments"])))
     if args.boundary:
@@ -346,6 +347,8 @@ def main():
     p1.add_argument("--baseline", required=True)
     p1.add_argument("--shapes", default=None,
                     help="形状补测 shapes.json（与 baseline 合并，按形状索引）")
+    p1.add_argument("--load", type=int, default=0,
+                    help="取哪个载荷条件的形状数据（0=静默）")
     p1.add_argument("--env", default=None,
                     help="环境证据 json；缺失或不完整则决策门禁会拒绝")
     p1.add_argument("--boundary", default=None)

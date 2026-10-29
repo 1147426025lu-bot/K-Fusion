@@ -181,7 +181,7 @@ DEPLOYMENT_SHAPE = {
 }
 
 
-def aggregate_shapes(doc, env=None):
+def aggregate_shapes(doc, env=None, load=0):
     """shapes.json → sched_profile 的 deployments（按形状索引）。
 
     与 aggregate_baseline 的区别：这里的形状来自构建产物回读的 plan.json，
@@ -208,6 +208,9 @@ def aggregate_shapes(doc, env=None):
         "env_evidence": env,
     }
     for cell in cells:
+        # 载荷是环境条件，不是形状：不同 load 的数不许混进同一份画像
+        if int(cell.get("load") or 0) != int(load or 0):
+            continue
         if cell.get("status") != "ok":
             prof["unmeasured"].append({
                 "scenario": cell.get("scenario"),
@@ -276,7 +279,7 @@ def merge_profiles(base, extra):
     return out
 
 
-def aggregate_baseline(doc, source=None, sha256=None, env=None):
+def aggregate_baseline(doc, source=None, sha256=None, env=None, load=0):
     """baseline.json → sched_profile。没测过的部署不编造，写进 unmeasured。
 
     `env` 是**环境证据**（哪台机器/哪个内核），与 baseline 自带的逐轮快照
@@ -305,6 +308,11 @@ def aggregate_baseline(doc, source=None, sha256=None, env=None):
         "unmeasured": [],
         "env_evidence": env,
     }
+    if load:
+        # 基线只跑了静默条件；不能把静默数塞进加压画像
+        profile["unmeasured"].append({
+            "reason": "PR-10E 基线仅静默条件（load=0），不并入 load=%d 画像" % load})
+        cells = []
     for cell in cells:
         scen = cell.get("scenario")
         if scen not in DEPLOYMENT_DOMAIN:
