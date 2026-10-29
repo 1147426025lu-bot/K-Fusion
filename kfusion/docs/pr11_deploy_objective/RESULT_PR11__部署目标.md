@@ -161,6 +161,9 @@ python3 kfusion/scripts/pr11_deploy_objective__部署目标.py selftest
 产物：`sched_profile.json`、`decision_{cfs_only,a1_b0_g0,a1_b1e5_g0,a1_b1e5_upper,a1_b1e5_g1}.json`、
 `candidates_pr10e_stkp.json`（Pi 上 gen_uku/stkp.json 原样取回，sha256 记在决策文件里）。
 
+**跨平台复现**：同一命令在 Pi（Linux python3，`9c3507b`）上重跑，入选与 J 序列
+`[29.471, 34.642, 78.270, 83.367]` 逐项一致；selftest 11 项同样全过。
+
 ## 10. 诚实边界
 
 - 只证明「在这台 Pi4、这个 5.15.86 非 RT 内核、这批 10 轮测量下」的排序；
