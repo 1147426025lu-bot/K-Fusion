@@ -68,6 +68,14 @@ def profile(q99_user=29.471, q99_mixed=34.642, include_mixed=True,
             "shape": dict(do.DEPLOYMENT_SHAPE[scen]),
             "sched": blocks,
         }
+    prof["env_evidence"] = {
+        "kind": "env_evidence", "version": 1, "complete": True, "missing": [],
+        "host": {"model": "synthetic", "nproc": 4},
+        "kernel": {"release": "test", "preempt_class": "PREEMPT",
+                   "config_source": "test"},
+        "sched": {"pin_cpu": 3, "rt_runtime_us": "950000"},
+        "code": {"git_rev": "test", "source_sha256": "test"},
+    }
     return prof
 
 

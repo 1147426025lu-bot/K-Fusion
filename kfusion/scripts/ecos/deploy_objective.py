@@ -158,7 +158,93 @@ DEPLOYMENT_SHAPE = {
 }
 
 
-def aggregate_baseline(doc, source=None, sha256=None):
+def aggregate_shapes(doc, env=None):
+    """shapes.json → sched_profile 的 deployments（按形状索引）。
+
+    与 aggregate_baseline 的区别：这里的形状来自构建产物回读的 plan.json，
+    不是写死的假设。名字用形状名（fused_user / split_sp_k_user ...）。
+    """
+    cells = doc.get("cells") or []
+    if not cells:
+        raise TermMissing("shapes 无 cells")
+    prof = {
+        "kind": PROFILE_KIND,
+        "version": 2,
+        "source": doc.get("source"),
+        "measure_env": {
+            "pin_cpu": doc.get("pin_cpu"),
+            "cycles_per_round": doc.get("cycles"),
+            "repeat": doc.get("repeat"),
+            "scheds": list(doc.get("scheds") or []),
+            "deadline_us": doc.get("deadline_us"),
+            "note": "形状补测用 driver 统计块（plan 模式不产逐拍 csv）；"
+                    "分位数定义与 PR-10E-A 同源探针",
+        },
+        "deployments": {},
+        "unmeasured": [],
+        "env_evidence": env,
+    }
+    for cell in cells:
+        if cell.get("status") != "ok":
+            prof["unmeasured"].append({
+                "scenario": cell.get("scenario"),
+                "reason": "构建/采集失败：%s" % cell.get("status"),
+            })
+            continue
+        sh = cell.get("shape") or {}
+        if not sh.get("n_groups"):
+            prof["unmeasured"].append({"scenario": cell.get("scenario"),
+                                       "reason": "形状回读缺失"})
+            continue
+        scheds = {}
+        for cond in cell.get("conditions") or []:
+            s = cond.get("sched")
+            if not s:
+                continue
+            runs = [r for r in (cond.get("runs") or []) if r.get("n")]
+            try:
+                scheds[s] = _cell_profile(runs)
+            except TermMissing as exc:
+                scheds[s] = {"evidence": "missing", "reason": str(exc)}
+        doms = sh.get("domains") or []
+        domain = "mixed" if len(set(doms)) > 1 else (
+            doms[0] if doms else None)
+        prof["deployments"][cell["scenario"]] = {
+            "maps_to_domain": domain,
+            "shape": {"n_groups": int(sh["n_groups"]),
+                      "fused": bool(sh.get("fused")),
+                      "note": cell.get("note")},
+            "sched": scheds,
+        }
+    return prof
+
+
+def merge_profiles(base, extra):
+    """把两份画像的 deployments 合并；形状冲突直接报错，不静默覆盖。"""
+    out = json.loads(json.dumps(base))
+    out.setdefault("deployments", {})
+    for name, blk in (extra.get("deployments") or {}).items():
+        for other, ob in out["deployments"].items():
+            if ob.get("maps_to_domain") != blk.get("maps_to_domain"):
+                continue
+            if (ob.get("shape") or {}).get("n_groups") == \
+                    (blk.get("shape") or {}).get("n_groups") and \
+                    bool((ob.get("shape") or {}).get("fused")) == \
+                    bool((blk.get("shape") or {}).get("fused")):
+                raise SystemExit(
+                    "画像形状冲突：%s 与 %s 同为 %s/%s 组/fused=%s"
+                    % (other, name, blk.get("maps_to_domain"),
+                       blk["shape"]["n_groups"], blk["shape"]["fused"]))
+        out["deployments"][name] = blk
+    out["unmeasured"] = (out.get("unmeasured") or []) + \
+                        (extra.get("unmeasured") or [])
+    if extra.get("env_evidence") and not out.get("env_evidence"):
+        out["env_evidence"] = extra["env_evidence"]
+    out["version"] = 2
+    return out
+
+
+def aggregate_baseline(doc, source=None, sha256=None, env=None):
     """baseline.json → sched_profile。没测过的部署不编造，写进 unmeasured。"""
     cells = doc.get("cells") or []
     if not cells:
@@ -179,6 +265,7 @@ def aggregate_baseline(doc, source=None, sha256=None):
         },
         "deployments": {},
         "unmeasured": [],
+        "env_evidence": env,
     }
     for cell in cells:
         scen = cell.get("scenario")
@@ -222,10 +309,61 @@ def load_profile(path):
 
 
 def deployment_for_domain(profile, domain):
+    """只按域查。多个形状同域时**不许猜**，返回 None 交给形状精确匹配。"""
+    hits = [name for name, blk in (profile.get("deployments") or {}).items()
+            if blk.get("maps_to_domain") == domain]
+    return hits[0] if len(hits) == 1 else None
+
+
+SHAPE_KEYS = ("n_groups", "fused")
+
+
+def deployment_for(profile, domain, shape):
+    """按 (域, 组数, 是否融合) 精确匹配。返回 (name, block) 或 None。
+
+    为什么必须精确：Q99 是执行形状相关的量。3 组不融合测出来的尾部借给
+    1 组全融合的候选，等于把两个不同程序的数混在一起——文献里最容易被
+    审出来的那种错。匹配不到就返回 None（不可排名），不许退而求其次。
+    """
+    shape = shape or {}
+    hits = []
     for name, blk in (profile.get("deployments") or {}).items():
-        if blk.get("maps_to_domain") == domain:
-            return name
-    return None
+        if blk.get("maps_to_domain") != domain:
+            continue
+        sh = blk.get("shape") or {}
+        if not sh:
+            continue
+        ok = True
+        for k in SHAPE_KEYS:
+            if shape.get(k) is None or sh.get(k) is None:
+                ok = False
+                break
+            if k == "fused":
+                same = bool(shape[k]) == bool(sh[k])
+            else:
+                same = int(shape[k]) == int(sh[k])
+            if not same:
+                ok = False
+                break
+        if ok:
+            hits.append((name, blk))
+    return hits[0] if len(hits) == 1 else None
+
+
+def env_gate(profile, allow_incomplete=False):
+    """环境证据门禁。返回 (ok, reason)。
+
+    审查的 P0：画像必须说清是哪台机器/哪个内核/哪种抢占模式测的。
+    没有这层，跨平台或 PREEMPT_RT 数据会被无标识地混进同一张表。
+    """
+    ev = profile.get("env_evidence")
+    if not isinstance(ev, dict) or not ev.get("complete"):
+        missing = (ev or {}).get("missing") or ["env_evidence 缺失"]
+        if allow_incomplete:
+            return True, "env_incomplete_allowed: %s" % ",".join(
+                str(m) for m in missing)
+        return False, "env_incomplete: %s" % ",".join(str(m) for m in missing)
+    return True, "env_ok"
 
 
 # --------------------------------------------------------------------------
@@ -244,10 +382,10 @@ def evaluate(profile, domain, sched, n_crossings,
              alpha=1.0, beta=0.0, gamma=0.0,
              miss_bound="point", deadline_us=None, cand_shape=None):
     """算一个 (部署, 调度类) 的 J。任何一项缺测 → 不可排名。"""
-    dep = deployment_for_domain(profile, domain)
+    dep = None
     rec = {
         "domain": domain,
-        "deployment": dep,
+        "deployment": None,
         "sched": sched,
         "n_crossings": int(n_crossings or 0),
         "alpha": alpha, "beta": beta, "gamma": gamma,
@@ -257,20 +395,18 @@ def evaluate(profile, domain, sched, n_crossings,
         "rankable": False,
         "missing": [],
     }
-    if dep is None:
-        rec["missing"].append("profile:部署未测(%s)" % domain)
+    if cand_shape is None:
+        rec["missing"].append("形状未知：不能挑画像")
         return rec
-    shape = (profile["deployments"][dep].get("shape") or {})
-    if cand_shape is not None and shape:
-        for k in ("n_groups", "fused"):
-            if cand_shape.get(k) is not None and shape.get(k) is not None \
-                    and cand_shape[k] != shape[k]:
-                rec["missing"].append(
-                    "profile:形状不匹配 候选%s=%r 实测=%r"
-                    % (k, cand_shape[k], shape[k]))
-        if rec["missing"]:
-            return rec
-    cell = ((profile["deployments"][dep].get("sched") or {}).get(sched))
+    hit = deployment_for(profile, domain, cand_shape)
+    if hit is None:
+        rec["missing"].append(
+            "profile:该形状未测（%s, 组数=%s, 融合=%s）"
+            % (domain, cand_shape.get("n_groups"), cand_shape.get("fused")))
+        return rec
+    dep, blk = hit
+    rec["deployment"] = dep
+    cell = (blk.get("sched") or {}).get(sched)
     if not cell or cell.get("evidence") == "missing":
         rec["missing"].append("profile:调度类未测(%s/%s)" % (dep, sched))
         return rec
@@ -346,12 +482,35 @@ def evaluate(profile, domain, sched, n_crossings,
 
 
 def decide(candidates, profile, alpha=1.0, beta=0.0, gamma=0.0,
-           miss_bound="point", deadline_us=None, scheds=SCHED_CLASSES):
+           miss_bound="point", deadline_us=None, scheds=SCHED_CLASSES,
+           allow_incomplete_env=False):
     """对每个候选 d，在调度类上取最小 J；再全局选最小。
 
     返回结构里每个 (d,s) 都留痕，不只留赢家——否则「为什么没选它」
     在报告里无法复核。
     """
+    ok, env_reason = env_gate(profile, allow_incomplete_env)
+    env_note = {
+        "ok": ok, "reason": env_reason,
+        "kernel": ((profile.get("env_evidence") or {}).get("kernel") or {}
+                   ).get("preempt_class"),
+        "release": ((profile.get("env_evidence") or {}).get("kernel") or {}
+                    ).get("release"),
+        "host": ((profile.get("env_evidence") or {}).get("host") or {}
+                 ).get("model"),
+    }
+    if not ok:
+        return {
+            "kind": "pr11_deploy_objective", "version": 1,
+            "objective": "J(d,s)",
+            "weights": {"alpha": alpha, "beta": beta, "gamma": gamma,
+                        "miss_bound": miss_bound},
+            "env": env_note,
+            "blocked": env_reason,
+            "n_rankable": 0, "n_evals": 0, "chosen": None,
+            "ranked": [], "all_evals": [],
+            "claim": "env_evidence_incomplete：没有平台身份的画像不得用于决策",
+        }
     evals = []
     for idx, cand in enumerate(candidates):
         domain = cand.get("domain") or (cand.get("plan") or {}).get("meta", {}).get("platform")
@@ -395,6 +554,7 @@ def decide(candidates, profile, alpha=1.0, beta=0.0, gamma=0.0,
                     "miss_bound": miss_bound,
                     "note": "权重是策略输入，量纲不齐（µs 与率）；不是 WCET"},
         "deadline_us": deadline_us,
+        "env": env_note,
         "n_rankable": len(rankable),
         "n_evals": len(evals),
         "chosen": None if chosen is None else {

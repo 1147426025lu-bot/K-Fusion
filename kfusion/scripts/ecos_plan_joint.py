@@ -824,6 +824,32 @@ def _slim_objective(res):
     return out
 
 
+def apply_forced_choice(doc, label):
+    """测量专用：强制按 <id>@<domain> 选候选，用于按指定形状构建。
+
+    为什么不直接改成本参数凑出目标形状：那会让「测的是哪个部署」取决于
+    一串参数，事后无法复核。这里显式点名，并在 doc 里标 forced，报告里
+    一眼能看出这不是模型/目标函数的结论。
+    """
+    cands = doc.get("candidates") or []
+    want = label.strip()
+    for i, c in enumerate(cands):
+        if ("%s@%s" % (c.get("id"), c.get("domain"))) == want:
+            doc["chosen"] = c.get("id")
+            doc["chosen_record"] = c
+            doc["claim"] = "forced_for_measurement"
+            doc["forced"] = {"label": want, "cand_index": i,
+                             "model_would_pick": doc.get("model_best_before_objective")}
+            c["why"] = ((c.get("why") or "") + "; 强制选择（测量用，非模型结论）"
+                        ).strip("; ")
+            return doc, True
+    doc["force_error"] = {
+        "want": want,
+        "available": ["%s@%s" % (c.get("id"), c.get("domain")) for c in cands],
+    }
+    return doc, False
+
+
 def apply_deploy_objective(doc, profile, alpha=1.0, beta=0.0, gamma=0.0,
                            miss_bound="point", scheds=None, deadline=None):
     """用实测尾部选部署，调度类一起选。返回 (doc, ok)。
@@ -914,6 +940,19 @@ def run_stkp(args):
         dag=dag, contract=contract, platforms=platforms,
         ioctl_cost=ioctl_cost,
     )
+    if args.force_chosen and args.deploy_objective:
+        print("!! --force-chosen 与 --deploy-objective 互斥：一个说「按实测选」，"
+              "一个说「不许选，就要这个」", file=sys.stderr)
+        return 2
+    if args.force_chosen:
+        doc, ok = apply_forced_choice(doc, args.force_chosen)
+        if not ok:
+            print("!! 没有候选 %s；可选：%s" % (
+                args.force_chosen,
+                ", ".join(doc["force_error"]["available"])), file=sys.stderr)
+            return 3
+        print("  forced choice: %s（测量用，不是模型/目标函数结论）"
+              % args.force_chosen)
     if args.deploy_objective:
         prof = do_mod.load_profile(args.deploy_objective)
         scheds = [s.strip() for s in str(args.objective_scheds).split(",")
@@ -1108,6 +1147,9 @@ def main():
     ap.add_argument("--oracle", action="store_true")
     ap.add_argument("--no-baseline", action="store_true")
     ap.add_argument("--chosen-plan", default=None)
+    ap.add_argument("--force-chosen", default=None,
+                    help='测量专用：按 "<id>@<domain>" 强制选候选（如 '
+                         '"B@linux_userspace"）；标 forced，不得当模型结论')
     ap.add_argument("--deploy-objective", default=None,
                     help="实测调度画像 sched_profile.json；给了就按 J(d,s) 选，"
                          "不做任何组合可排名时 fail-closed 不生成")

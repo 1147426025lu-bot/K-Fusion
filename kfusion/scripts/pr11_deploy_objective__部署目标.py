@@ -90,8 +90,17 @@ def rel(path):
 def cmd_profile(args):
     base_path = args.baseline
     doc = load_json(base_path)
+    env = load_json(args.env) if args.env else None
+    if env is not None and not env.get("complete"):
+        print("[warn] 环境证据不完整（缺 %s）：这份画像会被决策门禁挡住"
+              % ",".join(env.get("missing") or []))
     prof = do.aggregate_baseline(doc, source=rel(base_path),
-                                 sha256=sha256_file(base_path))
+                                 sha256=sha256_file(base_path), env=env)
+    if args.shapes:
+        shp = load_json(args.shapes)
+        extra = do.aggregate_shapes(shp, env=env)
+        prof = do.merge_profiles(prof, extra)
+        print("合并形状画像：%s" % ", ".join(sorted(extra["deployments"])))
     if args.boundary:
         bdoc = load_json(args.boundary)
         noop = bdoc.get("noop_ioctl") or {}
@@ -154,7 +163,8 @@ def cmd_decide(args):
                     gamma=args.gamma, miss_bound=args.miss_bound,
                     deadline_us=deadline,
                     scheds=tuple(s.strip() for s in args.scheds.split(",")
-                                 if s.strip()))
+                                 if s.strip()),
+                    allow_incomplete_env=args.allow_incomplete_env)
     doc["sources"] = {
         "profile": rel(args.profile),
         "profile_sha256": sha256_file(args.profile),
@@ -180,6 +190,11 @@ def cmd_decide(args):
             print("%-46s %-8s %-7s  —— 不可排名：%s"
                   % (str(e["candidate_id"])[:46], e["deployment"] or "?",
                      e["sched"], "; ".join(e["missing"])[:70]))
+    if doc.get("blocked"):
+        print("\n拒绝决策：%s" % doc["blocked"])
+        print("（缺平台身份的画像不得进决策；确需对照加 --allow-incomplete-env，"
+              "但那种结果不能进论文表）")
+        return 3
     if doc["chosen"]:
         c = doc["chosen"]
         print("\n入选：%s  %s @ %s  J=%.3f"
@@ -224,6 +239,14 @@ def _synth_profile(q99, miss=None, scheds=("cfs", "fifo99"), n_groups=3):
         }
     prof["boundary"] = {"t_ioctl_us": {"value": 2.0, "evidence": "test",
                                       "samples": 15000}}
+    prof["env_evidence"] = {
+        "kind": "env_evidence", "version": 1, "complete": True, "missing": [],
+        "host": {"model": "synthetic", "nproc": 4},
+        "kernel": {"release": "test", "preempt_class": "PREEMPT",
+                   "config_source": "test"},
+        "sched": {"pin_cpu": 3, "rt_runtime_us": "950000"},
+        "code": {"git_rev": "test", "source_sha256": "test"},
+    }
     return prof
 
 
@@ -270,7 +293,7 @@ def cmd_selftest(args):
     chk("融合形状 fail-closed", d3["chosen"] is None
         and d3["n_rankable"] == 0, d3["n_rankable"])
     chk("形状不匹配写进 missing",
-        any("形状不匹配" in m for e in d3["all_evals"] for m in e["missing"]))
+        any("该形状未测" in m for e in d3["all_evals"] for m in e["missing"]))
 
     # 4. 内核自主部署没有画像 → 不可排名（不许拿用户态的数顶替）
     d4 = do.decide([_cand("K", "linux_kernel")], p)
@@ -292,9 +315,11 @@ def cmd_selftest(args):
     p7 = _synth_profile({("user_only", "cfs"): 77.0, ("user_only", "fifo99"): 20.0},
                         {("user_only", "cfs"): 0.00066})
     lo = do.evaluate(p7, "linux_userspace", "cfs", 0, beta=1.0e5,
-                     miss_bound="point")
+                     miss_bound="point", cand_shape={"n_groups": 3,
+                                                     "fused": False})
     hi = do.evaluate(p7, "linux_userspace", "cfs", 0, beta=1.0e5,
-                     miss_bound="upper")
+                     miss_bound="upper", cand_shape={"n_groups": 3,
+                                                     "fused": False})
     chk("upper ≥ point", hi["J_us"] >= lo["J_us"], (lo["J_us"], hi["J_us"]))
 
     # 8. 不可部署候选不参与入选
@@ -316,8 +341,12 @@ def main():
     ap = argparse.ArgumentParser(description="PR-11 部署目标 J(d,s)")
     sub = ap.add_subparsers(dest="cmd")
 
-    p1 = sub.add_parser("profile", help="基线 json → sched_profile.json")
+    p1 = sub.add_parser("profile", help="基线/形状 json → sched_profile.json")
     p1.add_argument("--baseline", required=True)
+    p1.add_argument("--shapes", default=None,
+                    help="形状补测 shapes.json（与 baseline 合并，按形状索引）")
+    p1.add_argument("--env", default=None,
+                    help="环境证据 json；缺失或不完整则决策门禁会拒绝")
     p1.add_argument("--boundary", default=None)
     p1.add_argument("-o", "--out", required=True)
 
@@ -333,6 +362,9 @@ def main():
                     choices=("point", "upper"))
     p2.add_argument("--scheds", default=",".join(do.SCHED_CLASSES),
                     help="参与决策的调度类，逗号分隔；只给 cfs 可复现「旧决策空间」")
+    p2.add_argument("--allow-incomplete-env", dest="allow_incomplete_env",
+                    action="store_true",
+                    help="环境证据不完整也允许决策（只用于对照，不得进论文表）")
     p2.add_argument("--deadline", type=float, default=None)
     p2.add_argument("-o", "--out", required=True)
 
