@@ -147,6 +147,40 @@ class TestDeployObjectiveClosedLoop(unittest.TestCase):
         self.assertFalse(ok)
         self.assertIsNone(doc["chosen"])
 
+    def test_三释放mixed不吃单释放画像(self):
+        """PR-17：plan 三释放不得配 PR-10E mixed 单释放 Q99。"""
+        prof = profile()
+        groups = [
+            {"members": ["stage_sample"], "domain": "linux_userspace",
+             "release_phase_us": 0.0},
+            {"members": ["stage_pid"], "domain": "linux_kernel",
+             "release_phase_us": 200.0},
+            {"members": ["stage_sink"], "domain": "linux_userspace",
+             "release_phase_us": 400.0},
+        ]
+        shape = {
+            "n_groups": 3, "fused": False, "n_releases": 3,
+            "members": [g["members"] for g in groups],
+        }
+        self.assertIsNone(do.deployment_for(prof, "mixed", shape))
+        blk = json.loads(json.dumps(prof["deployments"]["partial_kernel"]))
+        blk["shape"]["n_releases"] = 3
+        blk["shape"]["exec_mode"] = "plan"
+        blk["sched"]["fifo99"]["q99_resp_us"]["value"] = 427.0
+        blk["sched"]["cfs"]["q99_resp_us"]["value"] = 482.0
+        prof["deployments"]["mixed_plan"] = blk
+        name, hit = do.deployment_for(prof, "mixed", shape)
+        self.assertEqual(name, "mixed_plan")
+        self.assertEqual(hit["sched"]["fifo99"]["q99_resp_us"]["value"], 427.0)
+        c = cand("M", "mixed", 3, n_cross=1, cost=31.0)
+        c["plan"]["groups"] = groups
+        doc, ok = stkp.apply_deploy_objective(doc_with([c], "M"), prof)
+        self.assertTrue(ok)
+        self.assertEqual(doc["chosen_record"]["plan"]["groups"][1]["release_phase_us"],
+                         200.0)
+        self.assertIn("427", doc["chosen_record"]["why"])
+        self.assertNotIn("34.642", doc["chosen_record"]["why"])
+
     def test_默认不吃权重(self):
         # 未给 --deploy-objective 时 doc 不应出现这些键（旧报告要能原样复现）
         cands = [cand("A", "linux_userspace", 3)]

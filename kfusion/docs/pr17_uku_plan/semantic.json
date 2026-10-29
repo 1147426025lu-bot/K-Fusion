@@ -1,0 +1,157 @@
+{
+  "cycles": 80,
+  "driver": "/root/K-Fusion/kfusion/docs/pr17_uku_plan/build/gen/driver",
+  "ko": "/root/K-Fusion/kfusion/docs/pr17_uku_plan/build/gen/kmod_uku/kfusion_uku.ko",
+  "plan_user": {
+    "rc": 0,
+    "stats": {
+      "start_lat": {
+        "min_us": 43.313,
+        "avg_us": 62.101,
+        "p50_us": 61,
+        "p99_us": 82,
+        "p999_us": 91,
+        "p9999_us": 91,
+        "max_us": 91.046,
+        "over": 0,
+        "n": 240
+      },
+      "response": {
+        "min_us": 460.424,
+        "avg_us": 462.402,
+        "p50_us": 462,
+        "p99_us": 477,
+        "p999_us": 477,
+        "p9999_us": 477,
+        "max_us": 477.904,
+        "over": 0,
+        "n": 80
+      },
+      "exec": {
+        "min_us": 2.334,
+        "avg_us": 2.616,
+        "p50_us": 2,
+        "p99_us": 4,
+        "p999_us": 4,
+        "p9999_us": 4,
+        "max_us": 4.24,
+        "over": 0,
+        "n": 80
+      },
+      "deadline": {
+        "miss": 0,
+        "n": 80
+      },
+      "exec_mode": "plan_user",
+      "n_releases": 3,
+      "n_groups": 3,
+      "digest": "cc44ce29",
+      "plan_phases_us": [
+        0.0,
+        200.0,
+        400.0
+      ],
+      "session": {
+        "name": "g_integ",
+        "value": -10000,
+        "readback": 1
+      },
+      "ioctl_error": 0,
+      "seq_mismatch": 0
+    }
+  },
+  "plan": {
+    "rc": 0,
+    "stats": {
+      "start_lat": {
+        "min_us": 59.417,
+        "avg_us": 61.567,
+        "p50_us": 60,
+        "p99_us": 74,
+        "p999_us": 179,
+        "p9999_us": 179,
+        "max_us": 179.157,
+        "over": 0,
+        "n": 240
+      },
+      "response": {
+        "min_us": 460.329,
+        "avg_us": 461.918,
+        "p50_us": 461,
+        "p99_us": 475,
+        "p999_us": 475,
+        "p9999_us": 475,
+        "max_us": 475.183,
+        "over": 0,
+        "n": 80
+      },
+      "exec": {
+        "min_us": 4.815,
+        "avg_us": 5.599,
+        "p50_us": 5,
+        "p99_us": 11,
+        "p999_us": 11,
+        "p9999_us": 11,
+        "max_us": 11.853,
+        "over": 0,
+        "n": 80
+      },
+      "deadline": {
+        "miss": 0,
+        "n": 80
+      },
+      "exec_mode": "plan",
+      "n_releases": 3,
+      "n_groups": 3,
+      "digest": "cc44ce29",
+      "plan_phases_us": [
+        0.0,
+        200.0,
+        400.0
+      ],
+      "session": {
+        "name": "g_integ",
+        "value": -10000,
+        "readback": 1
+      },
+      "ioctl_error": 0,
+      "seq_mismatch": 0
+    },
+    "rmmod_rc": 0,
+    "rmmod_out": ""
+  },
+  "ok": true,
+  "reason": null,
+  "coverage_claim": "4/5（语义过了，矩阵未完成仍不得写 5/5）",
+  "hashes": {
+    "src": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+    "driver": "439bcd64a3d9fe4247e554307e00e99cb990b037ebf96c7f126c5c741e0176c1",
+    "ko": "8ca353b70e6108b3a25482fd2ac46d14c94e385477e4bfaab609cca41f88dc2f"
+  },
+  "shape": {
+    "n_groups": 3,
+    "fused": false,
+    "domains": [
+      "linux_userspace",
+      "linux_kernel",
+      "linux_userspace"
+    ],
+    "members": [
+      [
+        "stage_sample"
+      ],
+      [
+        "stage_pid"
+      ],
+      [
+        "stage_sink"
+      ]
+    ],
+    "phases_us": [
+      0.0,
+      200.0,
+      400.0
+    ],
+    "n_releases": 3
+  }
+}

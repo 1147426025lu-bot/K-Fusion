@@ -93,6 +93,42 @@ class UkuPlan(unittest.TestCase):
         self.assertIn("releases_per_period", drv)
         self.assertIn("plan_phases_us", drv)
         self.assertIn("int multi = plan || plan_user;", drv)
+        self.assertIn("kNGrp", drv)
+        self.assertLess(drv.find("if (g_csv == 2)"), drv.find("else if (g_csv)"))
+        self.assertIn("#define PLC_PROBE_BUCKETS 4096", drv)
+        self.assertIn("#define PLC_PROBE_BUCKETS 4096", drv)
+
+    def test_driver_nrel_is_unique_phases(self):
+        cg_path = os.path.join(KF, "scripts", "mixed_uku_codegen__混合交接.py")
+        spec_cg = importlib.util.spec_from_file_location("uku_cg2", cg_path)
+        cg = importlib.util.module_from_spec(spec_cg)
+        spec_cg.loader.exec_module(cg)
+        plan = uku_plan((0.0, 0.0, 400.0))
+        drv = cg.emit_driver(
+            plan, ["pid"], ["g_in"], ["g_out"],
+            {"sample": "stage_sample()", "pid": "stage_pid()",
+             "sink": "stage_sink()"},
+            "stage_impl.c", "plc_probe.h", 1000, 4, ["g_out"])
+        self.assertIn("static const int kNRel = 2;", drv)
+        self.assertIn("static const int kNGrp = 3;", drv)
+
+    def test_parse_stats_rejects_bad_rc_contract(self):
+        from importlib.util import spec_from_file_location, module_from_spec
+        p = os.path.join(KF, "scripts", "pr11_shapes__形状补测.py")
+        spec = spec_from_file_location("pr11s", p)
+        sh = module_from_spec(spec)
+        spec.loader.exec_module(sh)
+        text = (
+            "# mode: plan  releases_per_period=3  groups_per_period=3  cycles=8\n"
+            "# plan_phases_us: 0 200 400\n"
+            "# digest: abcd1234\n"
+            "# uku_ioctl_error: 0/8\n"
+            "# uku_seq_mismatch: 0/8\n"
+        )
+        st = sh.parse_stats(text)
+        self.assertEqual(st["n_releases"], 3)
+        self.assertEqual(st["n_groups"], 3)
+        self.assertEqual(st["plan_phases_us"], [0.0, 200.0, 400.0])
 
     def test_codegen_reject_clears_ready(self):
         teir_nodes = []

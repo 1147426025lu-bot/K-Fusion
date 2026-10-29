@@ -279,6 +279,10 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     A("#include <time.h>")
     A("#include <unistd.h>")
     A("#include <sys/ioctl.h>")
+    A("/* 三释放 response ≈ 400µs+，默认 200 桶会把 p50/p99 夹成 199。 */")
+    A("#ifndef PLC_PROBE_BUCKETS")
+    A("#define PLC_PROBE_BUCKETS 4096")
+    A("#endif")
     A('#include "%s"' % probe)
     A('#include "kfusion_uku.h"')
     A('#include "%s"' % stage_src)
@@ -344,7 +348,7 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     for g in groups:
         order.extend(g.get("members") or [])
     nst = len(order) or 1
-    nrel = len(groups) or 1
+    ngrp = len(groups) or 1
     phases_ns = []
     for i, g in enumerate(groups):
         v = g.get("release_phase_us")
@@ -353,10 +357,17 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
         if v is None:
             v = float(i) * 200.0
         phases_ns.append(int(round(float(v) * 1000.0)))
+    # 释放次数 = 去重相位（与 STKP/形状键一致）；每组仍各执行一次。
+    uniq_ns = []
+    for p in phases_ns:
+        if p not in uniq_ns:
+            uniq_ns.append(p)
+    nrel = len(uniq_ns) or 1
     A("static const long long kRelPhase[%d] = { %s };" % (
         max(nrel, 1),
-        ", ".join("%dLL" % p for p in (phases_ns or [0]))))
+        ", ".join("%dLL" % p for p in (uniq_ns or [0]))))
     A("static const int kNRel = %d;" % nrel)
+    A("static const int kNGrp = %d;" % ngrp)
     A("")
     si_at = []
     acc = 0
@@ -444,13 +455,19 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     A("				s = now_ns();")
     A("				plc_probe_add(&g_start, s - r);")
     A("				if (j == 0) { r_first = r; s_first = s; }")
-    for gi, g in enumerate(groups):
-        if gi == 0:
-            A("				if (j == %d) {" % gi)
+    first_if = True
+    for pi, p in enumerate(uniq_ns):
+        gix = [gi for gi, gp in enumerate(phases_ns) if gp == p]
+        if not gix:
+            continue
+        if first_if:
+            A("				if (j == %d) {" % pi)
+            first_if = False
         else:
-            A("				} else if (j == %d) {" % gi)
-        emit_one_group("\t\t\t\t", g, si_at[gi], "use_uku")
-    if groups:
+            A("				} else if (j == %d) {" % pi)
+        for gi in gix:
+            emit_one_group("\t\t\t\t", groups[gi], si_at[gi], "use_uku")
+    if uniq_ns:
         A("				}")
     A("				f = now_ns();")
     A("				work += f - s;")
@@ -481,10 +498,10 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
     A("			}")
     A("			if (f - r > DEADLINE_NS) miss++;")
     A("		}")
-    A("		if (g_csv)")
-    A("			printf(\"%ld,%lld,%lld,%lld\\n\", k, s - r, f - s, f - r);")
-    A("		else if (g_csv == 2)")
+    A("		if (g_csv == 2)")
     A("			printf(\"%ld,%lld,%lld,%lld,%lld,%lld\\n\", k, s - r, f - s, f - r, c1 - c0, (f - s) - (c1 - c0));")
+    A("		else if (g_csv)")
+    A("			printf(\"%ld,%lld,%lld,%lld\\n\", k, s - r, f - s, f - r);")
     for v in digest_vars:
         A("		DIGEST_MIX(%s);" % v)
     A("	}")
@@ -504,8 +521,8 @@ def emit_driver(plan, kmem, reads, writes, calls, stage_src, probe, period_us,
         A("	}")
     A("	if (uku_fd >= 0) { close(uku_fd); uku_fd = -1; }")
     A("	if (multi)")
-    A("		printf(\"\\n# mode: %s  releases_per_period=%d  cycles=%ld\\n\",")
-    A("		       mode, kNRel, cycles);")
+    A("		printf(\"\\n# mode: %s  releases_per_period=%d  groups_per_period=%d  cycles=%ld\\n\",")
+    A("		       mode, kNRel, kNGrp, cycles);")
     A("	else")
     A("		printf(\"\\n# mode: %s  cycles=%ld\\n\", mode, cycles);")
     A("	printf(\"# plan_phases_us:\");")

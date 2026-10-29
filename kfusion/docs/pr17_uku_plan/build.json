@@ -1,0 +1,37 @@
+{
+  "status": "ok",
+  "driver": "/root/K-Fusion/kfusion/docs/pr17_uku_plan/build/gen/driver",
+  "shape": {
+    "n_groups": 3,
+    "fused": false,
+    "domains": [
+      "linux_userspace",
+      "linux_kernel",
+      "linux_userspace"
+    ],
+    "members": [
+      [
+        "stage_sample"
+      ],
+      [
+        "stage_pid"
+      ],
+      [
+        "stage_sink"
+      ]
+    ],
+    "phases_us": [
+      0.0,
+      200.0,
+      400.0
+    ],
+    "n_releases": 3
+  },
+  "forced": {
+    "label": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]@mixed",
+    "cand_index": 4,
+    "model_would_pick": null
+  },
+  "stkp": "/root/K-Fusion/kfusion/docs/pr17_uku_plan/build/gen/stkp.json",
+  "ko": "/root/K-Fusion/kfusion/docs/pr17_uku_plan/build/gen/kmod_uku/kfusion_uku.ko"
+}

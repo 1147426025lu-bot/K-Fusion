@@ -85,7 +85,7 @@ SHAPES = [
     {
         "name": "mixed_plan",
         "label": ("STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]@mixed"),
-        "expect": {"n_groups": 3, "fused": False,
+        "expect": {"n_groups": 3, "fused": False, "n_releases": 3,
                    "domains": ["linux_userspace", "linux_kernel",
                                "linux_userspace"]},
         "note": ("中段走 UKU ioctl，plan 模式三组各释放一次。PR-10E 的 mixed "
@@ -163,14 +163,28 @@ def build_shape(shape, workdir):
         return {"status": "no_plan"}
     plan = json.load(io.open(plan_p, encoding="utf-8"))
     groups = plan.get("groups") or []
+    phases = []
+    for g in groups:
+        ph = g.get("release_phase_us")
+        if ph is None:
+            ph = g.get("phase_us")
+        phases.append(round(float(ph or 0.0), 3))
+    uniq = []
+    for p in phases:
+        if p not in uniq:
+            uniq.append(p)
     got = {
         "n_groups": len(groups),
         "fused": bool((plan.get("meta") or {}).get("fusion")),
         "domains": [g.get("domain") for g in groups],
         "members": [g.get("members") for g in groups],
+        "phases_us": phases,
+        "n_releases": len(uniq),
     }
     exp = shape["expect"]
     if got["n_groups"] != exp["n_groups"] or got["domains"] != exp["domains"]:
+        return {"status": "shape_mismatch", "expected": exp, "got": got}
+    if exp.get("n_releases") is not None and got["n_releases"] != exp["n_releases"]:
         return {"status": "shape_mismatch", "expected": exp, "got": got}
     if plan.get("meta", {}).get("fusion") and exp["n_groups"] > 1:
         return {"status": "shape_mismatch", "expected": exp, "got": got}
@@ -248,10 +262,14 @@ def parse_stats(text):
     if m:
         out["deadline"] = {"miss": int(m.group(1)), "n": int(m.group(2))}
     # 释放结构是形状的一部分：同组数、不同释放次数，响应差一个量级
-    m = re.search(r"# mode: (\S+)\s+releases_per_period=(\d+)", text)
+    m = re.search(
+        r"# mode: (\S+)\s+releases_per_period=(\d+)(?:\s+groups_per_period=(\d+))?",
+        text)
     if m:
         out["exec_mode"] = m.group(1)
         out["n_releases"] = int(m.group(2))
+        if m.group(3):
+            out["n_groups"] = int(m.group(3))
     m = re.search(r"# digest: ([0-9a-f]+)", text)
     if m:
         out["digest"] = m.group(1)
@@ -298,62 +316,126 @@ def stop_load(procs):
             pass
 
 
-def measure_shape(cell, sched, cycles, repeat, out_dir, load=0):
-    """与 PR-10E-A 同一口径：taskset 固定 CPU，FIFO 用 chrt，每轮留原始输出。"""
+def measure_shape(cell, sched, cycles, repeat, out_dir, load=0, mode="plan"):
+    """与 PR-10E-A 同一口径：taskset 固定 CPU，FIFO 用 chrt，每轮留原始输出。
+
+    非零 rc、rmmod 失败、缺统计、拍数/释放数不对、ioctl/序号异常 → 该轮无效。
+    编译成功不算实测。
+    """
     if not os.path.isdir(out_dir):
         os.makedirs(out_dir)
     runs = []
-    ko = cell.get("ko")
+    ko = cell.get("ko") if mode != "plan_user" else None
     mod = os.path.basename(ko)[:-3] if ko else None
+    want_rel = (cell.get("shape") or {}).get("n_releases")
+    if want_rel is None and (cell.get("plan") or {}).get("groups"):
+        ph = []
+        for g in cell["plan"]["groups"]:
+            v = g.get("release_phase_us")
+            if v is None:
+                v = g.get("phase_us")
+            p = round(float(v or 0.0), 3)
+            if p not in ph:
+                ph.append(p)
+        want_rel = len(ph) or None
+    multi = mode in ("plan", "plan_user")
+    want_start = (cycles * int(want_rel)) if (multi and want_rel) else cycles
+
+    def invalid(i, rc, reason, before, after=None, extra=None):
+        rec = {"repeat": i, "rc": rc, "n": 0, "valid": False,
+               "reason": reason, "env_before": before}
+        if after is not None:
+            rec["env_after"] = after
+        if extra:
+            rec.update(extra)
+        runs.append(rec)
+
     for i in range(repeat):
         before = base.env_snapshot()
         if ko:
             rc_i, out_i = run(["insmod", ko])
             if rc_i != 0:
-                # 明确失败，不许退化成「没加载内核模块也照跑」——那测的是别的部署
-                runs.append({"repeat": i, "rc": rc_i, "n": 0,
-                             "reason": "insmod 失败：%s" % out_i.strip()[:120],
-                             "env_before": before})
+                invalid(i, rc_i, "insmod 失败：%s" % out_i.strip()[:120], before)
                 continue
         cmd = ["taskset", "-c", str(PIN_CPU)]
         if sched == "fifo99":
             cmd += ["chrt", "-f", "99"]
-        cmd += [cell["driver"], "plan", str(cycles)]
+        cmd += [cell["driver"], mode, str(cycles)]
         procs = start_load(load, PIN_CPU) if load else []
+        rc_rm, out_rm = 0, ""
         try:
             rc, txt = run(cmd)
         finally:
             stop_load(procs)
             if mod:
-                run(["rmmod", mod])
+                rc_rm, out_rm = run(["rmmod", mod])
         after = base.env_snapshot()
         with gzip.open(os.path.join(out_dir, "r%02d.log.gz" % i), "wt",
                        encoding="utf-8", newline="\n") as f:
             f.write(txt)
+        if rc != 0:
+            invalid(i, rc, "driver rc=%s" % rc, before, after,
+                    {"log_tail": txt.splitlines()[-8:], "rmmod_rc": rc_rm})
+            continue
+        if mod and rc_rm != 0:
+            invalid(i, rc, "rmmod 失败：%s" % out_rm.strip()[:120], before, after,
+                    {"rmmod_rc": rc_rm})
+            continue
         st = parse_stats(txt)
-        if not st.get("response"):
-            runs.append({"repeat": i, "rc": rc, "n": 0,
-                         "env_before": before, "env_after": after,
-                         "reason": "统计块缺失",
-                         "log_tail": txt.splitlines()[-5:]})
+        if not st.get("response") or not st.get("start_lat"):
+            invalid(i, rc, "统计块缺失", before, after,
+                    {"log_tail": txt.splitlines()[-5:], "rmmod_rc": rc_rm})
             continue
         sl, rp, wk = st["start_lat"], st["response"], st.get("exec") or {}
+        why = None
+        if rp.get("n") != cycles:
+            why = "拍数 %s != %s" % (rp.get("n"), cycles)
+        elif sl.get("n") != want_start:
+            why = "start_lat 样本 %s != %s（cycles×releases）" % (
+                sl.get("n"), want_start)
+        elif want_rel is not None and st.get("n_releases") != want_rel:
+            why = "释放数 %s != %s" % (st.get("n_releases"), want_rel)
+        elif not st.get("digest"):
+            why = "缺 digest"
+        elif (st.get("ioctl_error") or 0) != 0:
+            why = "ioctl_error=%s" % st.get("ioctl_error")
+        elif (st.get("seq_mismatch") or 0) != 0:
+            why = "seq_mismatch=%s" % st.get("seq_mismatch")
+        elif (rp.get("min_us") is not None and rp.get("p99_us") is not None
+              and float(rp["min_us"]) > float(rp["p99_us"]) + 0.5):
+            why = ("response 分位数被桶顶夹住 min=%.3f p99=%s over=%s"
+                   % (rp["min_us"], rp["p99_us"], rp.get("over")))
+        elif (rp.get("min_us") is not None and rp.get("p99_us") is not None
+              and float(rp["min_us"]) > float(rp["p99_us"]) + 0.5):
+            why = ("response 分位数被桶顶夹住 min=%s p99=%s over=%s"
+                   % (rp.get("min_us"), rp.get("p99_us"), rp.get("over")))
+        if why:
+            invalid(i, rc, why, before, after, {"rmmod_rc": rc_rm, "stats": st})
+            continue
         runs.append({
-            "repeat": i, "rc": rc, "n": rp["n"], "digest": st.get("digest"),
+            "repeat": i, "rc": rc, "n": rp["n"], "valid": True,
+            "digest": st.get("digest"),
             "start_lat": {"p50_us": sl["p50_us"], "p99_us": sl["p99_us"],
                           "p999_us": sl["p999_us"], "max_us": sl["max_us"],
-                          "avg_us": sl["avg_us"]},
+                          "avg_us": sl["avg_us"], "n": sl.get("n")},
             "response": {"p50_us": rp["p50_us"], "p99_us": rp["p99_us"],
                          "p999_us": rp["p999_us"], "max_us": rp["max_us"],
-                         "avg_us": rp["avg_us"]},
+                         "avg_us": rp["avg_us"], "min_us": rp.get("min_us"),
+                         "over": rp.get("over")},
             "work": {"p50_us": wk.get("p50_us"), "p99_us": wk.get("p99_us")},
             "miss": (st.get("deadline") or {}).get("miss"),
             "n_releases": st.get("n_releases"),
+            "n_groups": st.get("n_groups"),
+            "plan_phases_us": st.get("plan_phases_us"),
+            "session": st.get("session"),
             "exec_mode": st.get("exec_mode"),
+            "rmmod_rc": rc_rm,
             "stat_source": "probe_stat_block",
             "env_before": before, "env_after": after,
         })
-    return {"status": "ok", "runs": runs}
+    n_ok = sum(1 for r in runs if r.get("valid"))
+    return {"status": "ok" if n_ok == repeat else "runs_invalid",
+            "runs": runs, "n_valid": n_ok, "n_repeat": repeat}
 
 
 def _merged(prev, new_cells):

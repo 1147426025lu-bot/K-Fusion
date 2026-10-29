@@ -227,7 +227,8 @@ def aggregate_shapes(doc, env=None, load=0):
             s = cond.get("sched")
             if not s:
                 continue
-            runs = [r for r in (cond.get("runs") or []) if r.get("n")]
+            runs = [r for r in (cond.get("runs") or [])
+                    if r.get("n") and r.get("valid") is not False]
             try:
                 scheds[s] = _cell_profile(runs)
             except TermMissing as exc:

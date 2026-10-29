@@ -1,0 +1,211 @@
+{
+  "kind": "sched_profile",
+  "version": 2,
+  "source": null,
+  "measure_env": {
+    "pin_cpu": 3,
+    "cycles_per_round": 5000,
+    "repeat": 10,
+    "scheds": [
+      "cfs",
+      "fifo99"
+    ],
+    "deadline_us": 1000,
+    "note": "形状补测用 driver 统计块（plan 模式不产逐拍 csv）；分位数定义与 PR-10E-A 同源探针"
+  },
+  "deployments": {
+    "mixed_plan_load4": {
+      "maps_to_domain": "mixed",
+      "shape": {
+        "n_groups": 3,
+        "fused": false,
+        "n_releases": 3,
+        "exec_mode": "plan",
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ],
+        "note": "UKU 三释放 plan；不得与 PR-10E mixed 单释放混表"
+      },
+      "sched": {
+        "cfs": {
+          "rounds": 10,
+          "n_cycles": 50000,
+          "n_miss": 123,
+          "q99_resp_us": {
+            "value": 478.5,
+            "evidence": "measured",
+            "rounds": 10,
+            "n_cycles": 50000,
+            "across_rounds": [
+              477.0,
+              484.0
+            ],
+            "statistic": "median_of_round_p99",
+            "note": "跨轮极差一并保留；混池 p99 会掩盖单轮劣化"
+          },
+          "miss_rate": {
+            "value": 0.00246,
+            "evidence": "measured",
+            "n_cycles": 50000,
+            "rounds": 10,
+            "count": 123,
+            "ci95_wilson": [
+              0.00206235,
+              0.0029341
+            ],
+            "statistic": "pooled_over_rounds",
+            "note": "事件数少时点估计不稳，可用 --miss-bound upper"
+          },
+          "tail": {
+            "start_lat_p50_median_us": 71.0,
+            "start_lat_p50_range_us": [
+              71.0,
+              72.0
+            ],
+            "start_lat_p99_median_us": 78.5,
+            "start_lat_p99_range_us": [
+              78.0,
+              92.0
+            ],
+            "start_lat_max_worst_us": 23431.63,
+            "resp_max_worst_us": 23517.017,
+            "rounds_with_miss": 10
+          },
+          "work_p99_us": {
+            "value": 13.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              12.0,
+              16.0
+            ],
+            "statistic": "median_of_round_p99"
+          }
+        },
+        "fifo99": {
+          "rounds": 10,
+          "n_cycles": 50000,
+          "n_miss": 0,
+          "q99_resp_us": {
+            "value": 428.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "n_cycles": 50000,
+            "across_rounds": [
+              427.0,
+              430.0
+            ],
+            "statistic": "median_of_round_p99",
+            "note": "跨轮极差一并保留；混池 p99 会掩盖单轮劣化"
+          },
+          "miss_rate": {
+            "value": 0.0,
+            "evidence": "measured",
+            "n_cycles": 50000,
+            "rounds": 10,
+            "count": 0,
+            "ci95_wilson": [
+              0.0,
+              7.683e-05
+            ],
+            "statistic": "pooled_over_rounds",
+            "note": "事件数少时点估计不稳，可用 --miss-bound upper"
+          },
+          "tail": {
+            "start_lat_p50_median_us": 21.0,
+            "start_lat_p50_range_us": [
+              21.0,
+              21.0
+            ],
+            "start_lat_p99_median_us": 28.0,
+            "start_lat_p99_range_us": [
+              27.0,
+              47.0
+            ],
+            "start_lat_max_worst_us": 118.027,
+            "resp_max_worst_us": 472.55,
+            "rounds_with_miss": 0
+          },
+          "work_p99_us": {
+            "value": 13.0,
+            "evidence": "measured",
+            "rounds": 10,
+            "across_rounds": [
+              12.0,
+              16.0
+            ],
+            "statistic": "median_of_round_p99"
+          }
+        }
+      }
+    }
+  },
+  "unmeasured": [],
+  "env_evidence": {
+    "kind": "env_evidence",
+    "version": 1,
+    "host": {
+      "hostname": "demo",
+      "model": "Raspberry Pi 4 Model B Rev 1.5",
+      "compatible": "raspberrypi,4-model-bbrcm,bcm2711",
+      "nproc": 4,
+      "machine": "aarch64"
+    },
+    "kernel": {
+      "release": "5.15.86",
+      "version_line": "Linux version 5.15.86 (builder@e3665d6e1a6c) (aarch64-linux-gnu-gcc (Debian 10.2.1-6) 10.2.1 20210110, GNU ld (GNU Binutils for Debian) 2.35.2) #1 SMP PREEMPT Wed Oct 14 10:16:11 UTC 2026",
+      "preempt_class": "PREEMPT",
+      "config_source": "/boot/config-5.15.86",
+      "config": {
+        "CONFIG_PREEMPT": "y",
+        "CONFIG_PREEMPT_RT": null,
+        "CONFIG_PREEMPT_VOLUNTARY": null,
+        "CONFIG_PREEMPT_NONE": null,
+        "CONFIG_HZ": "250",
+        "CONFIG_HZ_250": "y",
+        "CONFIG_NO_HZ_IDLE": "y",
+        "CONFIG_NO_HZ_FULL": null,
+        "CONFIG_FTRACE": null
+      }
+    },
+    "boot": {
+      "cmdline": "dma.dmachans=0x37f5 bcm2709.boardrev=0xc03115 bcm2709.serial=0xee6a48ab bcm2709.uart_clock=48000000 bcm2709.disk_led_gpio=42 bcm2709.disk_led_active_low=0 smsc95xx.macaddr=E4:5F:01:B1:07:55 vc_mem.mem_base=0x3ec00000 vc_mem.mem_size=0x40000000  console=ttyS1,115200 root=PARTUUID=def068db-02 rootfstype=ext4 rootwait net.ifnames=0",
+      "isolcpus": false,
+      "nohz_full": false,
+      "console": "ttyS1,115200"
+    },
+    "sched": {
+      "pin_cpu": 3,
+      "rt_runtime_us": "950000",
+      "rt_period_us": "1000000",
+      "governor": null,
+      "freq_control_present": false
+    },
+    "code": {
+      "git_rev": "d7bedfa",
+      "git_dirty": true,
+      "source": "kfusion/examples/ecos/mixed_pid_stateful__积分混合.c",
+      "source_sha256": "6cee00a2ac9b651bee39195846be767cc22b3ee71bc174e70ae3a55be38dba72",
+      "dirty_files": [
+        "kfusion/docs/pr11_deploy_objective/decision_v2_a1_b0_g0.json",
+        "kfusion/docs/pr11_deploy_objective/env_evidence.json",
+        "kfusion/docs/pr11_deploy_objective/sched_profile_v2.json"
+      ],
+      "dirty_source": [],
+      "dirty_means": "dirty_source 非空 = 被测代码与 git_rev 不一致，该次结果不可复现；只有产物/文档脏不算"
+    },
+    "uptime_s": "27035.75 107744.22",
+    "note": "配置取自 /boot/config-<release>；抢占类别以配置为准，版本串只在无配置时作旁证并标注。缺失即 complete=False。",
+    "complete": true,
+    "missing": []
+  },
+  "note": "UKU 三释放 plan 画像；不得与 PR-10E mixed 单释放混用；非 WCET"
+}

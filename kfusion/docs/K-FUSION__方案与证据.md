@@ -130,17 +130,17 @@
 **部署目标**（`ecos/deploy_objective.py`）：J 最小者入选；缺形状/缺调度类/缺边界单价
 → 该组合不可排名，**不许退而求其次**；全部不可排名 → `chosen=None` +
 `objective_fail_closed`，上层拒绝生成。覆盖率不足时控制台与 `deploy.json` 都标
-`⚠ 覆盖不全 x/y`（当前 4/5，缺的是 mixed 的 plan 口径——原因见下）。
+`⚠ 覆盖不全 x/y`。
 
-**混合候选为什么测不到（已查实，不是没测）**：STKP 给 mixed 选的 plan 是
-三组在 0/200/400 µs 各释放一次（`releases_per_period=3`），而生成的 UKU 驱动
-只实现 `gold|mixed` 两种**单释放**模式（`usage: ./driver gold|mixed`），
-没有 plan 分支。构建能成、`.ko` 能 insmod、单释放能跑（34.64 µs），但**该候选的
-plan 形状执行不了**，所以它的 Q99 未知。证据存档
-`docs/pr11_shapes/mixed_plan_blocked.json`。
-两条修法：给 UKU 驱动加 plan 模式（按组相位释放在用户态做），或让 STKP 对
-mixed 域只枚举单释放方案。**在修好之前，mixed 只能按单释放口径报告，
-不许把它当成 plan 形状参与排名。**
+**mixed 三释放已可测、且必须与单释放分表。** 驱动现有 `plan`/`plan_user`
+（相位 0/200/400 µs）。`docs/pr17_uku_plan/report.json` 覆盖 **5/5**
+（语义 digest `cc44ce29` + 矩阵 40/40 有效 Q99）。静默 Q99：
+`mixed_plan` CFS 482 / FIFO99 427 µs。旧 `partial_kernel` 仍是
+单释放 mixed（FIFO 34.64 µs，`n_releases=null`），**不得**配给 plan 候选。
+排名用 `sched_profile_v3.json`（v2 ∪ mixed_plan load=0）；v2 原样保留。
+同 STKP：v2 上 mixed 不可排名；v3 上 mixed_plan FIFO **J=427**。
+入选仍是 `fused_user @ fifo99`（J=15）——三释放跨 400 µs 相位，Q99 大是结构差，
+不是内核化优劣。加压格子在 `sched_profile_mixed_plan_load4.json`，未并进 v3。
 
 **可行性 v2**（`ecos/sched_aware_cost.py`）三列、四档，**没有「可调度」档**：
 
@@ -267,7 +267,13 @@ python3 kfusion/scripts/pr11_deploy_objective__部署目标.py profile \
   --boundary kfusion/docs/pr10c_boundary/boundary.json \
   -o kfusion/docs/pr11_deploy_objective/sched_profile_v2.json
 
-# ④ 决策 + 三列可行性
+# ③b mixed_plan 并入 v3（不要覆盖 v2）
+python3 kfusion/scripts/pr11_deploy_objective__部署目标.py decide \
+  --profile kfusion/docs/pr11_deploy_objective/sched_profile_v3.json \
+  --stkp kfusion/docs/pr17_uku_plan/build/gen/stkp.json \
+  --deadline 1000 -o kfusion/docs/pr17_uku_plan/decision_v3_a1_b0_g0.json
+
+# ④ 决策 + 三列可行性（历史复现仍用 v2）
 python3 .../pr11_deploy_objective__部署目标.py decide --profile ... --stkp ... --deadline 1000
 python3 kfusion/scripts/pr14_sched_aware_verify__调度感知验证.py \
   --stkp ... --profile ... --deadline 1000 --horizon-s 3600 -o pr14_report.json
@@ -288,8 +294,11 @@ DEPLOY_OBJECTIVE=...sched_profile_v2.json APPLY_SCHED=1 \
 | 路径 | 内容 |
 |---|---|
 | `docs/pr11_deploy_objective/env_evidence.json` | 平台身份冻结 |
-| `docs/pr11_deploy_objective/sched_profile_v2.json` | 静默画像（5 形状 × 2 调度类） |
-| `docs/pr11_deploy_objective/sched_profile_load4.json` | 加压画像（4 形状 × 2 调度类） |
+| `docs/pr11_deploy_objective/sched_profile_v2.json` | 静默画像（不含 mixed_plan；gold/mixed 的 n_releases=null） |
+| `docs/pr11_deploy_objective/sched_profile_v3.json` | v2 + mixed_plan(load=0, n_releases=3)；排名用这份 |
+| `docs/pr17_uku_plan/sched_profile_mixed_plan.json` | mixed 三释放静默格子（Q99 482/427） |
+| `docs/pr17_uku_plan/decision_v3_a1_b0_g0.json` | 上述 STKP × v3 的 J(d,s) |
+| `docs/pr11_deploy_objective/sched_profile_load4.json` | 加压画像（4 形状 × 2 调度类；不含 mixed_plan_load4） |
 | `docs/pr11_deploy_objective/decision_*.json` | 决策与权重敏感性 |
 | `docs/pr11_deploy_objective/pr14_report*.json` | 三列可行性报告 |
 | `docs/pr11_shapes/shapes.json` + `*/runs_*_loadN/r*.log.gz` | 形状/载荷原始输出（含 1 µs 直方图）；统计可由 `--rebuild` 从原始日志重算 |
@@ -306,12 +315,12 @@ DEPLOY_OBJECTIVE=...sched_profile_v2.json APPLY_SCHED=1 \
 
 ## 10. 未完成（按优先级）
 
-1. **mixed 的多释放执行能力**：采集侧已支持 insmod（`pr11_shapes` 会 insmod/rmmod，
-   失败不退化），缺的是驱动本身没有 `plan` 模式。给 UKU 驱动加按组相位释放，
-   或让 STKP 对 mixed 只枚举单释放——两条都能把覆盖率推到 5/5，但改的是生成器，
-   不是测量。
-2. **PR-15 训练/验证分离**：用一部分轮次建画像，独立轮次检验所选部署。
-3. **PR-16 论文级消融**：静态模型 / +调度类 / +实测尾部 / +边界成本 四套对照，
-   报错误选择率、违约率、p99、最差轮次最大值、候选覆盖率。
+1. **PR-17B 板上测量已 5/5**（`docs/pr17_uku_plan/report.json`）。编译成功不算覆盖；
+   语义 digest + 有效 Q99 矩阵才算。排名已用 v3，**不是**旧单释放 mixed。
+   加压 mixed_plan 与 v2 加压表仍分文件，未混表。
+2. **PR-15 / PR-16 已实现**：不要重复开发。用 mixed_plan 新格子重跑留一/消融
+   属于后续，不是缺脚本。
+3. **下一步是 PR-18（测量→校准→再选择→holdout）**。scenario 钳定值
+   （BUILD u/k/ioctl）不是实测成本，不得写进校准后的 C(G,d)。
 4. **谁抢了 CPU 的机制归因**：受 p1 32 MB 限制，需换分区或外部 trace。
 5. **构造 margin ≈ 噪声的候选对**：否则「选择正确率」永远满分，PR-16 只能证判定、不能证选择。
