@@ -318,7 +318,7 @@ def backfill(cells, out_dir):
                 if r.get("n_releases") is not None:
                     continue
                 ld = int(c.get("load") or 0)
-                p = os.path.join(out_dir, c["scenario"],
+                p = os.path.join(_scen_dir(out_dir, c),
                                  "runs_%s%s" % (cond["sched"],
                                                 "" if not ld else "_load%d" % ld),
                                  "r%02d.log.gz" % int(r.get("repeat") or 0))
@@ -341,6 +341,17 @@ def backfill(cells, out_dir):
     return fixed
 
 
+
+def _scen_dir(out_dir, cell):
+    """加压数据的运行目录挂在**基础形状名**下（runs_*_loadN），
+    而 scenario 名带了 _loadN 后缀——两者不能混用，否则回填/重算找不到文件。"""
+    scen = cell.get("scenario") or ""
+    ld = int(cell.get("load") or 0)
+    if ld and scen.endswith("_load%d" % ld):
+        scen = scen[: -len("_load%d" % ld)]
+    return os.path.join(out_dir, scen)
+
+
 def rebuild(cells, out_dir):
     """从留档的原始输出重算每轮统计，替换 json 里的旧数。
 
@@ -352,7 +363,7 @@ def rebuild(cells, out_dir):
     for c in cells:
         ld = int(c.get("load") or 0)
         for cond in c.get("conditions") or []:
-            pat = os.path.join(out_dir, c["scenario"],
+            pat = os.path.join(_scen_dir(out_dir, c),
                                "runs_%s%s" % (cond["sched"],
                                               "" if not ld else "_load%d" % ld),
                                "r*.log.gz")
