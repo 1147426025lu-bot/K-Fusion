@@ -1,0 +1,25 @@
+
+# mode: flat  releases_per_period=3  cycles=1
+
+# probe: r/s/f v1.2
+# period_ns: 1000000
+# deadline_ns: 1000000
+# samples: 1
+# release_id: serial 0..0
+# series_us: start_lat exec response  (1us buckets, cap 1023)
+# stat_start_lat_us: min=61.422 avg=66.104 p50=61 p90=75 p99=75 p99.9=75 p99.99=75 max=75.446 over=0 neg=0 min_signed=61.422 n=3
+# stat_exec_us: min=1.777 avg=1.777 p50=1 p90=1 p99=1 p99.9=1 p99.99=1 max=1.777 over=0 neg=0 min_signed=1.777 n=1
+# stat_span_us: min=386.290 avg=386.290 p50=386 p90=386 p99=386 p99.9=386 p99.99=386 max=386.290 over=0 neg=0 min_signed=386.290 n=1
+# stat_response_us: min=461.736 avg=461.736 p50=461 p90=461 p99=461 p99.9=461 p99.99=461 max=461.736 over=0 neg=0 min_signed=461.736 n=1
+# deadline_miss: 0/1 (none)
+# exec_overrun: 0/1
+# digest: ecf6b3aa
+# stat_exec_stage_sample_us: min=0.833 avg=0.833 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.833 over=0 neg=0 min_signed=0.833 n=1
+# instant_stage_sample_us: min=76.279 avg=76.279 p50=76 max=76.279
+# stat_exec_stage_pid_us: min=0.630 avg=0.630 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.630 over=0 neg=0 min_signed=0.630 n=1
+# instant_stage_pid_us: min=262.073 avg=262.073 p50=262 max=262.073
+# stat_exec_stage_sink_us: min=0.314 avg=0.314 p50=0 p90=0 p99=0 p99.9=0 p99.99=0 max=0.314 over=0 neg=0 min_signed=0.314 n=1
+# instant_stage_sink_us: min=461.736 avg=461.736 p50=461 max=461.736
+# hist_start_lat_us: 61 2
+# hist_start_lat_us: 75 1
+# hist_response_us: 461 1

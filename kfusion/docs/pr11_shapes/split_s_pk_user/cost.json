@@ -1,0 +1,31 @@
+{
+  "_note": "PR-11 形状补测：沿用 PR-10E-A 的域级量级假设（scenario），只为复现同一候选集；本实验测形状，不测成本模型",
+  "linux_userspace": {
+    "stage_sample": {
+      "value": 5.0,
+      "evidence": "scenario"
+    },
+    "stage_pid": {
+      "value": 5.0,
+      "evidence": "scenario"
+    },
+    "stage_sink": {
+      "value": 5.0,
+      "evidence": "scenario"
+    }
+  },
+  "linux_kernel": {
+    "stage_sample": {
+      "value": 0.05,
+      "evidence": "scenario"
+    },
+    "stage_pid": {
+      "value": 0.05,
+      "evidence": "scenario"
+    },
+    "stage_sink": {
+      "value": 0.05,
+      "evidence": "scenario"
+    }
+  }
+}

@@ -1,0 +1,246 @@
+{
+  "version": 1,
+  "kind": "teir",
+  "task": {
+    "name": "mixed_pid",
+    "entry": "loop_main",
+    "period_us": 1000,
+    "deadline_us": 1000,
+    "step_us": 200,
+    "notes": "由 Clang AST 抽取；相位来自源注释或命令行，不是分析猜测"
+  },
+  "nodes": [
+    {
+      "name": "stage_sample",
+      "fns": [
+        "stage_sample"
+      ],
+      "phase_us": 0.0,
+      "reads": [
+        "@g_seq"
+      ],
+      "writes": [
+        "@g_in",
+        "@g_seq"
+      ],
+      "persistent": [
+        "@g_seq"
+      ],
+      "unread_this_job": [],
+      "live_same_job": [
+        "@g_in"
+      ],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "softirq",
+        "thread"
+      ],
+      "unknown_calls": [],
+      "must_preserve": true,
+      "may_delete": false,
+      "why_preserve": [
+        "same_job_live:@g_in",
+        "self_carry:@g_seq"
+      ],
+      "allowed_domains": [
+        "linux_userspace"
+      ],
+      "blocked_domains": [
+        "linux_kernel:kfusion:pin",
+        "nuttx:kfusion:pin"
+      ],
+      "migration_reason": "源注释钉在 linux_userspace",
+      "cost_us_by_domain": {
+        "linux_userspace": {
+          "value": null,
+          "evidence": "missing",
+          "note": "节点未分域实测时两域同值，不得当作 WCET"
+        }
+      },
+      "exec_us": null,
+      "call": "stage_sample()"
+    },
+    {
+      "name": "stage_pid",
+      "fns": [
+        "stage_pid"
+      ],
+      "phase_us": 200.0,
+      "reads": [
+        "@g_in",
+        "@g_integ"
+      ],
+      "writes": [
+        "@g_integ",
+        "@g_out"
+      ],
+      "persistent": [
+        "@g_integ"
+      ],
+      "unread_this_job": [
+        "@g_out"
+      ],
+      "live_same_job": [],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "softirq",
+        "thread"
+      ],
+      "unknown_calls": [],
+      "must_preserve": true,
+      "may_delete": false,
+      "why_preserve": [
+        "self_carry:@g_integ",
+        "unobserved_write:@g_out"
+      ],
+      "allowed_domains": [
+        "linux_userspace",
+        "linux_kernel",
+        "nuttx"
+      ],
+      "blocked_domains": [],
+      "migration_reason": "状态访问可分析，计算不依赖用户态 API，持久状态=@g_integ",
+      "cost_us_by_domain": {
+        "linux_userspace": {
+          "value": null,
+          "evidence": "missing",
+          "note": "节点未分域实测时两域同值，不得当作 WCET"
+        },
+        "linux_kernel": {
+          "value": null,
+          "evidence": "missing",
+          "note": "节点未分域实测时两域同值，不得当作 WCET"
+        }
+      },
+      "exec_us": null,
+      "call": "stage_pid()"
+    },
+    {
+      "name": "stage_sink",
+      "fns": [
+        "stage_sink"
+      ],
+      "phase_us": 400.0,
+      "reads": [],
+      "writes": [],
+      "persistent": [],
+      "unread_this_job": [],
+      "live_same_job": [],
+      "effects": [
+        "pure"
+      ],
+      "contexts": [
+        "softirq",
+        "thread"
+      ],
+      "unknown_calls": [],
+      "must_preserve": false,
+      "may_delete": true,
+      "why_preserve": [
+        "empty_pure"
+      ],
+      "allowed_domains": [
+        "linux_userspace"
+      ],
+      "blocked_domains": [
+        "linux_kernel:kfusion:pin",
+        "nuttx:kfusion:pin"
+      ],
+      "migration_reason": "源注释钉在 linux_userspace",
+      "cost_us_by_domain": {
+        "linux_userspace": {
+          "value": null,
+          "evidence": "missing",
+          "note": "节点未分域实测时两域同值，不得当作 WCET"
+        }
+      },
+      "exec_us": null,
+      "call": "stage_sink()"
+    }
+  ],
+  "edges": [
+    {
+      "from": "stage_sample",
+      "to": "stage_pid",
+      "kind": "data",
+      "version": "same-job",
+      "pinned": true,
+      "proven": true,
+      "regions": [
+        "@g_in"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "kind": "state_update",
+      "stage": "stage_sample",
+      "region": "@g_seq",
+      "version": "previous-job"
+    },
+    {
+      "kind": "state_update",
+      "stage": "stage_pid",
+      "region": "@g_integ",
+      "version": "previous-job"
+    },
+    {
+      "kind": "output_commit",
+      "stage": "stage_pid",
+      "region": "@g_out",
+      "version": "this-job"
+    },
+    {
+      "kind": "same_job_flow",
+      "from": "stage_sample",
+      "to": "stage_pid",
+      "region": "@g_in",
+      "version": "same-job"
+    }
+  ],
+  "persistent_state": [
+    {
+      "region": "@g_seq",
+      "writer": "stage_sample",
+      "kind": "carry"
+    },
+    {
+      "region": "@g_integ",
+      "writer": "stage_pid",
+      "kind": "carry"
+    }
+  ],
+  "transform": {
+    "closed": false,
+    "alias_uncertain": false,
+    "delete_forbidden": true,
+    "reorder_forbidden_if_alias": false,
+    "reasons": [],
+    "policy": "ok"
+  },
+  "meta": {
+    "note": "输出本拍未读 ≠ 可删除；别名未证则保留依赖或拒绝变换",
+    "session_init": {
+      "g_seq": "zero",
+      "g_integ": "zero"
+    },
+    "delay_edges": []
+  },
+  "calls": {
+    "stage_sample": "stage_sample()",
+    "stage_pid": "stage_pid()",
+    "stage_sink": "stage_sink()"
+  },
+  "region_types": {
+    "g_in": "int32_t",
+    "g_integ": "int32_t",
+    "g_out": "int32_t",
+    "g_seq": "uint32_t"
+  }
+}

@@ -1,0 +1,91 @@
+{
+  "version": 2,
+  "meta": {
+    "platform": "linux_userspace",
+    "fusion": false,
+    "generator": "stkp_v1",
+    "model_feasible": true,
+    "deployment_ready": true,
+    "xdom_adapter": null
+  },
+  "order": [
+    "stage_sample",
+    "stage_pid",
+    "stage_sink"
+  ],
+  "groups": [
+    {
+      "id": "g0",
+      "members": [
+        "stage_sample"
+      ],
+      "domain": "linux_userspace",
+      "release_phase_us": 0.0
+    },
+    {
+      "id": "g1",
+      "members": [
+        "stage_pid",
+        "stage_sink"
+      ],
+      "domain": "linux_userspace",
+      "release_phase_us": 200.0
+    }
+  ],
+  "domains": {
+    "stage_sample": "linux_userspace",
+    "stage_pid": "linux_userspace",
+    "stage_sink": "linux_userspace"
+  },
+  "cost": {
+    "predicted_R_us": 57.0,
+    "grade": "explore_uncertain"
+  },
+  "schedule": {
+    "exec_us": {
+      "stage_sample": 5.0,
+      "stage_pid": 5.0,
+      "stage_sink": 5.0
+    },
+    "release": [
+      {
+        "group": "g0",
+        "domain": "linux_userspace",
+        "L_us": 21.0,
+        "phase_us": 0.0
+      },
+      {
+        "group": "g1",
+        "domain": "linux_userspace",
+        "L_us": 21.0,
+        "phase_us": 200.0
+      }
+    ],
+    "complete": true
+  },
+  "verification": {
+    "ok": true,
+    "by": "kfusion/scripts/ecos/plan_verify.py",
+    "errors": [],
+    "stats": {
+      "groups": 2,
+      "nodes": 3,
+      "same_cycle_edges": 1,
+      "cross_cycle_edges": 0,
+      "evidence": "empirical",
+      "temporal_source": "none",
+      "domains": [
+        "default"
+      ],
+      "cross_domain_edges": 0,
+      "cross_domain_periods": 0,
+      "cross_domain_extra_us": 0.0,
+      "period_us": 1000.0,
+      "domain_period_us": {},
+      "multirate": false,
+      "xdom_deployable": null,
+      "completion_us": 231.0,
+      "backlog_us": 0.0
+    }
+  }
+}

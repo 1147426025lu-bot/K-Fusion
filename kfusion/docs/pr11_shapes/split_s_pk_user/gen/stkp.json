@@ -1,0 +1,1811 @@
+{
+  "version": 1,
+  "kind": "stkp",
+  "algorithm": "STKP_v1",
+  "scope": "fixed-order contiguous fusion; domains=linux_userspace|linux_kernel; not arbitrary DAG",
+  "order": [
+    "stage_sample",
+    "stage_pid",
+    "stage_sink"
+  ],
+  "raw_space": 18,
+  "enumerated": 18,
+  "pruned": {
+    "domain": 13,
+    "semantic": 0,
+    "temporal": 0,
+    "runtime": 0,
+    "incomparable": 0
+  },
+  "n_model_feasible": 5,
+  "n_deployment_ready": 5,
+  "claim": "forced_for_measurement",
+  "candidates": [
+    {
+      "id": "B",
+      "domain": "linux_userspace",
+      "fused": true,
+      "legal": true,
+      "model_feasible": true,
+      "deployment_ready": true,
+      "comparable": true,
+      "diagnostics": [],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_userspace",
+          "fusion": true,
+          "generator": "stkp_v1",
+          "model_feasible": true,
+          "deployment_ready": true,
+          "xdom_adapter": null
+        },
+        "order": [
+          "stage_sample",
+          "stage_pid",
+          "stage_sink"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "stage_sample",
+              "stage_pid",
+              "stage_sink"
+            ],
+            "domain": "linux_userspace",
+            "release_phase_us": 0.0
+          }
+        ],
+        "domains": {
+          "stage_sample": "linux_userspace",
+          "stage_pid": "linux_userspace",
+          "stage_sink": "linux_userspace"
+        },
+        "cost": {
+          "predicted_R_us": 36.0,
+          "grade": "explore_uncertain"
+        },
+        "schedule": {
+          "exec_us": {
+            "stage_sample": 5.0,
+            "stage_pid": 5.0,
+            "stage_sink": 5.0
+          },
+          "release": [
+            {
+              "group": "g0",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 0.0
+            }
+          ],
+          "complete": true
+        }
+      },
+      "cost": {
+        "comparable": true,
+        "final_rankable": false,
+        "explore_rankable": true,
+        "missing_costs": [],
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_userspace:scenario",
+          "stage_sink@linux_userspace:scenario"
+        ],
+        "compute_us": 15.0,
+        "release_us": 21.0,
+        "handoff_us": 0.0,
+        "handoff_channels": 0,
+        "channels": [],
+        "sync_us": 0.0,
+        "ioctl_model": null,
+        "predicted_R_us": 36.0,
+        "total_us": 36.0,
+        "grade": "explore_uncertain",
+        "temporal_ok": true,
+        "temporal_why": null,
+        "schedule": {
+          "exec_us": {
+            "stage_sample": 5.0,
+            "stage_pid": 5.0,
+            "stage_sink": 5.0
+          },
+          "release": [
+            {
+              "group": "g0",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 0.0
+            }
+          ],
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "missing": [],
+          "timing_bound": [],
+          "complete": true,
+          "model": "per_group_release",
+          "T_ioctl_us": 0.0
+        }
+      },
+      "schedule": {
+        "exec_us": {
+          "stage_sample": 5.0,
+          "stage_pid": 5.0,
+          "stage_sink": 5.0
+        },
+        "release": [
+          {
+            "group": "g0",
+            "domain": "linux_userspace",
+            "L_us": 21.0,
+            "phase_us": 0.0
+          }
+        ],
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_userspace:scenario",
+          "stage_sink@linux_userspace:scenario"
+        ],
+        "missing": [],
+        "timing_bound": [],
+        "complete": true,
+        "model": "per_group_release",
+        "T_ioctl_us": 0.0
+      },
+      "why": null
+    },
+    {
+      "id": "STKP:L[stage_sample+stage_pid]|L[stage_sink]",
+      "domain": "linux_userspace",
+      "fused": false,
+      "legal": true,
+      "model_feasible": true,
+      "deployment_ready": true,
+      "comparable": true,
+      "diagnostics": [],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_userspace",
+          "fusion": false,
+          "generator": "stkp_v1",
+          "model_feasible": true,
+          "deployment_ready": true,
+          "xdom_adapter": null
+        },
+        "order": [
+          "stage_sample",
+          "stage_pid",
+          "stage_sink"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "stage_sample",
+              "stage_pid"
+            ],
+            "domain": "linux_userspace",
+            "release_phase_us": 0.0
+          },
+          {
+            "id": "g1",
+            "members": [
+              "stage_sink"
+            ],
+            "domain": "linux_userspace",
+            "release_phase_us": 400.0
+          }
+        ],
+        "domains": {
+          "stage_sample": "linux_userspace",
+          "stage_pid": "linux_userspace",
+          "stage_sink": "linux_userspace"
+        },
+        "cost": {
+          "predicted_R_us": 57.0,
+          "grade": "explore_uncertain"
+        },
+        "schedule": {
+          "exec_us": {
+            "stage_sample": 5.0,
+            "stage_pid": 5.0,
+            "stage_sink": 5.0
+          },
+          "release": [
+            {
+              "group": "g0",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 0.0
+            },
+            {
+              "group": "g1",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 400.0
+            }
+          ],
+          "complete": true
+        }
+      },
+      "cost": {
+        "comparable": true,
+        "final_rankable": false,
+        "explore_rankable": true,
+        "missing_costs": [],
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_userspace:scenario",
+          "stage_sink@linux_userspace:scenario"
+        ],
+        "compute_us": 15.0,
+        "release_us": 42.0,
+        "handoff_us": 0.0,
+        "handoff_channels": 0,
+        "channels": [],
+        "sync_us": 0.0,
+        "ioctl_model": null,
+        "predicted_R_us": 57.0,
+        "total_us": 57.0,
+        "grade": "explore_uncertain",
+        "temporal_ok": true,
+        "temporal_why": null,
+        "schedule": {
+          "exec_us": {
+            "stage_sample": 5.0,
+            "stage_pid": 5.0,
+            "stage_sink": 5.0
+          },
+          "release": [
+            {
+              "group": "g0",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 0.0
+            },
+            {
+              "group": "g1",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 400.0
+            }
+          ],
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "missing": [],
+          "timing_bound": [],
+          "complete": true,
+          "model": "per_group_release",
+          "T_ioctl_us": 0.0
+        }
+      },
+      "schedule": {
+        "exec_us": {
+          "stage_sample": 5.0,
+          "stage_pid": 5.0,
+          "stage_sink": 5.0
+        },
+        "release": [
+          {
+            "group": "g0",
+            "domain": "linux_userspace",
+            "L_us": 21.0,
+            "phase_us": 0.0
+          },
+          {
+            "group": "g1",
+            "domain": "linux_userspace",
+            "L_us": 21.0,
+            "phase_us": 400.0
+          }
+        ],
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_userspace:scenario",
+          "stage_sink@linux_userspace:scenario"
+        ],
+        "missing": [],
+        "timing_bound": [],
+        "complete": true,
+        "model": "per_group_release",
+        "T_ioctl_us": 0.0
+      },
+      "why": null
+    },
+    {
+      "id": "STKP:L[stage_sample]|L[stage_pid+stage_sink]",
+      "domain": "linux_userspace",
+      "fused": false,
+      "legal": true,
+      "model_feasible": true,
+      "deployment_ready": true,
+      "comparable": true,
+      "diagnostics": [],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_userspace",
+          "fusion": false,
+          "generator": "stkp_v1",
+          "model_feasible": true,
+          "deployment_ready": true,
+          "xdom_adapter": null
+        },
+        "order": [
+          "stage_sample",
+          "stage_pid",
+          "stage_sink"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "stage_sample"
+            ],
+            "domain": "linux_userspace",
+            "release_phase_us": 0.0
+          },
+          {
+            "id": "g1",
+            "members": [
+              "stage_pid",
+              "stage_sink"
+            ],
+            "domain": "linux_userspace",
+            "release_phase_us": 200.0
+          }
+        ],
+        "domains": {
+          "stage_sample": "linux_userspace",
+          "stage_pid": "linux_userspace",
+          "stage_sink": "linux_userspace"
+        },
+        "cost": {
+          "predicted_R_us": 57.0,
+          "grade": "explore_uncertain"
+        },
+        "schedule": {
+          "exec_us": {
+            "stage_sample": 5.0,
+            "stage_pid": 5.0,
+            "stage_sink": 5.0
+          },
+          "release": [
+            {
+              "group": "g0",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 0.0
+            },
+            {
+              "group": "g1",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 200.0
+            }
+          ],
+          "complete": true
+        }
+      },
+      "cost": {
+        "comparable": true,
+        "final_rankable": false,
+        "explore_rankable": true,
+        "missing_costs": [],
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_userspace:scenario",
+          "stage_sink@linux_userspace:scenario"
+        ],
+        "compute_us": 15.0,
+        "release_us": 42.0,
+        "handoff_us": 0.0,
+        "handoff_channels": 0,
+        "channels": [],
+        "sync_us": 0.0,
+        "ioctl_model": null,
+        "predicted_R_us": 57.0,
+        "total_us": 57.0,
+        "grade": "explore_uncertain",
+        "temporal_ok": true,
+        "temporal_why": null,
+        "schedule": {
+          "exec_us": {
+            "stage_sample": 5.0,
+            "stage_pid": 5.0,
+            "stage_sink": 5.0
+          },
+          "release": [
+            {
+              "group": "g0",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 0.0
+            },
+            {
+              "group": "g1",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 200.0
+            }
+          ],
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "missing": [],
+          "timing_bound": [],
+          "complete": true,
+          "model": "per_group_release",
+          "T_ioctl_us": 0.0
+        }
+      },
+      "schedule": {
+        "exec_us": {
+          "stage_sample": 5.0,
+          "stage_pid": 5.0,
+          "stage_sink": 5.0
+        },
+        "release": [
+          {
+            "group": "g0",
+            "domain": "linux_userspace",
+            "L_us": 21.0,
+            "phase_us": 0.0
+          },
+          {
+            "group": "g1",
+            "domain": "linux_userspace",
+            "L_us": 21.0,
+            "phase_us": 200.0
+          }
+        ],
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_userspace:scenario",
+          "stage_sink@linux_userspace:scenario"
+        ],
+        "missing": [],
+        "timing_bound": [],
+        "complete": true,
+        "model": "per_group_release",
+        "T_ioctl_us": 0.0
+      },
+      "why": "强制选择（测量用，非模型结论）"
+    },
+    {
+      "id": "A",
+      "domain": "linux_userspace",
+      "fused": false,
+      "legal": true,
+      "model_feasible": true,
+      "deployment_ready": true,
+      "comparable": true,
+      "diagnostics": [],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_userspace",
+          "fusion": false,
+          "generator": "stkp_v1",
+          "model_feasible": true,
+          "deployment_ready": true,
+          "xdom_adapter": null
+        },
+        "order": [
+          "stage_sample",
+          "stage_pid",
+          "stage_sink"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "stage_sample"
+            ],
+            "domain": "linux_userspace",
+            "release_phase_us": 0.0
+          },
+          {
+            "id": "g1",
+            "members": [
+              "stage_pid"
+            ],
+            "domain": "linux_userspace",
+            "release_phase_us": 200.0
+          },
+          {
+            "id": "g2",
+            "members": [
+              "stage_sink"
+            ],
+            "domain": "linux_userspace",
+            "release_phase_us": 400.0
+          }
+        ],
+        "domains": {
+          "stage_sample": "linux_userspace",
+          "stage_pid": "linux_userspace",
+          "stage_sink": "linux_userspace"
+        },
+        "cost": {
+          "predicted_R_us": 78.0,
+          "grade": "explore_uncertain"
+        },
+        "schedule": {
+          "exec_us": {
+            "stage_sample": 5.0,
+            "stage_pid": 5.0,
+            "stage_sink": 5.0
+          },
+          "release": [
+            {
+              "group": "g0",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 0.0
+            },
+            {
+              "group": "g1",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 200.0
+            },
+            {
+              "group": "g2",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 400.0
+            }
+          ],
+          "complete": true
+        }
+      },
+      "cost": {
+        "comparable": true,
+        "final_rankable": false,
+        "explore_rankable": true,
+        "missing_costs": [],
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_userspace:scenario",
+          "stage_sink@linux_userspace:scenario"
+        ],
+        "compute_us": 15.0,
+        "release_us": 63.0,
+        "handoff_us": 0.0,
+        "handoff_channels": 0,
+        "channels": [],
+        "sync_us": 0.0,
+        "ioctl_model": null,
+        "predicted_R_us": 78.0,
+        "total_us": 78.0,
+        "grade": "explore_uncertain",
+        "temporal_ok": true,
+        "temporal_why": null,
+        "schedule": {
+          "exec_us": {
+            "stage_sample": 5.0,
+            "stage_pid": 5.0,
+            "stage_sink": 5.0
+          },
+          "release": [
+            {
+              "group": "g0",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 0.0
+            },
+            {
+              "group": "g1",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 200.0
+            },
+            {
+              "group": "g2",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 400.0
+            }
+          ],
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_userspace:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "missing": [],
+          "timing_bound": [],
+          "complete": true,
+          "model": "per_group_release",
+          "T_ioctl_us": 0.0
+        }
+      },
+      "schedule": {
+        "exec_us": {
+          "stage_sample": 5.0,
+          "stage_pid": 5.0,
+          "stage_sink": 5.0
+        },
+        "release": [
+          {
+            "group": "g0",
+            "domain": "linux_userspace",
+            "L_us": 21.0,
+            "phase_us": 0.0
+          },
+          {
+            "group": "g1",
+            "domain": "linux_userspace",
+            "L_us": 21.0,
+            "phase_us": 200.0
+          },
+          {
+            "group": "g2",
+            "domain": "linux_userspace",
+            "L_us": 21.0,
+            "phase_us": 400.0
+          }
+        ],
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_userspace:scenario",
+          "stage_sink@linux_userspace:scenario"
+        ],
+        "missing": [],
+        "timing_bound": [],
+        "complete": true,
+        "model": "per_group_release",
+        "T_ioctl_us": 0.0
+      },
+      "why": null
+    },
+    {
+      "id": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
+      "domain": "mixed",
+      "fused": false,
+      "legal": true,
+      "model_feasible": true,
+      "deployment_ready": true,
+      "comparable": true,
+      "diagnostics": [],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "mixed",
+          "fusion": false,
+          "generator": "stkp_v1",
+          "model_feasible": true,
+          "deployment_ready": true,
+          "xdom_adapter": "uku_ioctl",
+          "uku_check": {
+            "ok": true,
+            "codes": [],
+            "errors": []
+          },
+          "uku_session": {
+            "kind": "integ_i32",
+            "region": "g_integ"
+          }
+        },
+        "order": [
+          "stage_sample",
+          "stage_pid",
+          "stage_sink"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "stage_sample"
+            ],
+            "domain": "linux_userspace",
+            "release_phase_us": 0.0
+          },
+          {
+            "id": "g1",
+            "members": [
+              "stage_pid"
+            ],
+            "domain": "linux_kernel",
+            "release_phase_us": 200.0
+          },
+          {
+            "id": "g2",
+            "members": [
+              "stage_sink"
+            ],
+            "domain": "linux_userspace",
+            "release_phase_us": 400.0
+          }
+        ],
+        "domains": {
+          "stage_sample": "linux_userspace",
+          "stage_pid": "linux_kernel",
+          "stage_sink": "linux_userspace"
+        },
+        "cost": {
+          "predicted_R_us": 31.05,
+          "grade": "explore_uncertain"
+        },
+        "schedule": {
+          "exec_us": {
+            "stage_sample": 5.0,
+            "stage_pid": 0.05,
+            "stage_sink": 5.0
+          },
+          "release": [
+            {
+              "group": "g0",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 0.0
+            },
+            {
+              "group": "g1",
+              "domain": "linux_kernel",
+              "L_us": 0.0,
+              "phase_us": 200.0
+            },
+            {
+              "group": "g2",
+              "domain": "linux_userspace",
+              "L_us": 0.0,
+              "phase_us": 400.0
+            }
+          ],
+          "complete": true
+        }
+      },
+      "cost": {
+        "comparable": true,
+        "final_rankable": false,
+        "explore_rankable": true,
+        "missing_costs": [],
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_kernel:scenario",
+          "stage_sink@linux_userspace:scenario",
+          "T_ioctl:cli_override"
+        ],
+        "compute_us": 10.05,
+        "release_us": 21.0,
+        "handoff_us": 0.0,
+        "handoff_channels": 1,
+        "channels": [
+          {
+            "from_group": 0,
+            "to_group": 1,
+            "from_domain": "linux_userspace",
+            "to_domain": "linux_kernel",
+            "from_stage": "stage_sample",
+            "to_stage": "stage_pid",
+            "regions": [
+              "@g_in"
+            ]
+          },
+          {
+            "from_group": 1,
+            "to_group": 2,
+            "from_domain": "linux_kernel",
+            "to_domain": "linux_userspace",
+            "from_stage": "stage_pid",
+            "to_stage": "stage_sink",
+            "regions": []
+          }
+        ],
+        "sync_us": 0.0,
+        "ioctl_model": {
+          "L_user_us": 21.0,
+          "C_us": 10.05,
+          "T_ioctl_us": 0.0,
+          "T_ioctl_evidence": "cli_override",
+          "note": "Ĉ=L_U+ΣC+T_ioctl；T_ioctl 须实测才可结题；非 WCET"
+        },
+        "predicted_R_us": 31.05,
+        "total_us": 31.05,
+        "grade": "explore_uncertain",
+        "temporal_ok": true,
+        "temporal_why": null,
+        "schedule": {
+          "exec_us": {
+            "stage_sample": 5.0,
+            "stage_pid": 0.05,
+            "stage_sink": 5.0
+          },
+          "release": [
+            {
+              "group": "g0",
+              "domain": "linux_userspace",
+              "L_us": 21.0,
+              "phase_us": 0.0
+            },
+            {
+              "group": "g1",
+              "domain": "linux_kernel",
+              "L_us": 0.0,
+              "phase_us": 200.0
+            },
+            {
+              "group": "g2",
+              "domain": "linux_userspace",
+              "L_us": 0.0,
+              "phase_us": 400.0
+            }
+          ],
+          "evidence": [
+            "stage_sample@linux_userspace:scenario",
+            "stage_pid@linux_kernel:scenario",
+            "stage_sink@linux_userspace:scenario"
+          ],
+          "missing": [],
+          "timing_bound": [],
+          "complete": true,
+          "model": "uku_ioctl_serial",
+          "T_ioctl_us": 0.0,
+          "events_us": {
+            "stage_sample": {
+              "start_us": 21.0,
+              "read_us": 21.0,
+              "finish_us": 26.0,
+              "commit_us": 26.0
+            },
+            "stage_pid": {
+              "start_us": 26.0,
+              "read_us": 26.0,
+              "finish_us": 26.05,
+              "commit_us": 26.05
+            },
+            "stage_sink": {
+              "start_us": 26.05,
+              "read_us": 26.05,
+              "finish_us": 31.05,
+              "commit_us": 31.05
+            }
+          },
+          "finish_us": {
+            "stage_sample": 26.0,
+            "stage_pid": 26.05,
+            "stage_sink": 31.05
+          }
+        }
+      },
+      "schedule": {
+        "exec_us": {
+          "stage_sample": 5.0,
+          "stage_pid": 0.05,
+          "stage_sink": 5.0
+        },
+        "release": [
+          {
+            "group": "g0",
+            "domain": "linux_userspace",
+            "L_us": 21.0,
+            "phase_us": 0.0
+          },
+          {
+            "group": "g1",
+            "domain": "linux_kernel",
+            "L_us": 0.0,
+            "phase_us": 200.0
+          },
+          {
+            "group": "g2",
+            "domain": "linux_userspace",
+            "L_us": 0.0,
+            "phase_us": 400.0
+          }
+        ],
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_kernel:scenario",
+          "stage_sink@linux_userspace:scenario"
+        ],
+        "missing": [],
+        "timing_bound": [],
+        "complete": true,
+        "model": "uku_ioctl_serial",
+        "T_ioctl_us": 0.0,
+        "events_us": {
+          "stage_sample": {
+            "start_us": 21.0,
+            "read_us": 21.0,
+            "finish_us": 26.0,
+            "commit_us": 26.0
+          },
+          "stage_pid": {
+            "start_us": 26.0,
+            "read_us": 26.0,
+            "finish_us": 26.05,
+            "commit_us": 26.05
+          },
+          "stage_sink": {
+            "start_us": 26.05,
+            "read_us": 26.05,
+            "finish_us": 31.05,
+            "commit_us": 31.05
+          }
+        },
+        "finish_us": {
+          "stage_sample": 26.0,
+          "stage_pid": 26.05,
+          "stage_sink": 31.05
+        }
+      },
+      "why": "STKP Ĉ=ΣC_i,d + ΣL_g + ΣH_q + C_sync = 31.05; groups=3 channels=1; deployment_ready; claim=explore_uncertain"
+    }
+  ],
+  "model_only": [],
+  "rejected_sample": [
+    {
+      "reason": "domain",
+      "detail": [
+        "stage_sample∉linux_kernel",
+        "stage_sink∉linux_kernel"
+      ]
+    },
+    {
+      "reason": "domain",
+      "detail": [
+        "stage_sink∉linux_kernel"
+      ]
+    },
+    {
+      "reason": "domain",
+      "detail": [
+        "stage_sample∉linux_kernel"
+      ]
+    },
+    {
+      "reason": "domain",
+      "detail": [
+        "stage_sample∉linux_kernel",
+        "stage_sink∉linux_kernel"
+      ]
+    },
+    {
+      "reason": "domain",
+      "detail": [
+        "stage_sink∉linux_kernel"
+      ]
+    },
+    {
+      "reason": "domain",
+      "detail": [
+        "stage_sample∉linux_kernel"
+      ]
+    },
+    {
+      "reason": "domain",
+      "detail": [
+        "stage_sample∉linux_kernel",
+        "stage_sink∉linux_kernel"
+      ]
+    },
+    {
+      "reason": "domain",
+      "detail": [
+        "stage_sink∉linux_kernel"
+      ]
+    },
+    {
+      "reason": "domain",
+      "detail": [
+        "stage_sink∉linux_kernel"
+      ]
+    },
+    {
+      "reason": "domain",
+      "detail": [
+        "stage_sample∉linux_kernel"
+      ]
+    },
+    {
+      "reason": "domain",
+      "detail": [
+        "stage_sample∉linux_kernel",
+        "stage_sink∉linux_kernel"
+      ]
+    },
+    {
+      "reason": "domain",
+      "detail": [
+        "stage_sample∉linux_kernel"
+      ]
+    },
+    {
+      "reason": "domain",
+      "detail": [
+        "stage_sample∉linux_kernel",
+        "stage_sink∉linux_kernel"
+      ]
+    }
+  ],
+  "best_model": {
+    "id": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
+    "domain": "mixed",
+    "fused": false,
+    "legal": true,
+    "model_feasible": true,
+    "deployment_ready": true,
+    "comparable": true,
+    "diagnostics": [],
+    "plan": {
+      "version": 2,
+      "meta": {
+        "platform": "mixed",
+        "fusion": false,
+        "generator": "stkp_v1",
+        "model_feasible": true,
+        "deployment_ready": true,
+        "xdom_adapter": "uku_ioctl",
+        "uku_check": {
+          "ok": true,
+          "codes": [],
+          "errors": []
+        },
+        "uku_session": {
+          "kind": "integ_i32",
+          "region": "g_integ"
+        }
+      },
+      "order": [
+        "stage_sample",
+        "stage_pid",
+        "stage_sink"
+      ],
+      "groups": [
+        {
+          "id": "g0",
+          "members": [
+            "stage_sample"
+          ],
+          "domain": "linux_userspace",
+          "release_phase_us": 0.0
+        },
+        {
+          "id": "g1",
+          "members": [
+            "stage_pid"
+          ],
+          "domain": "linux_kernel",
+          "release_phase_us": 200.0
+        },
+        {
+          "id": "g2",
+          "members": [
+            "stage_sink"
+          ],
+          "domain": "linux_userspace",
+          "release_phase_us": 400.0
+        }
+      ],
+      "domains": {
+        "stage_sample": "linux_userspace",
+        "stage_pid": "linux_kernel",
+        "stage_sink": "linux_userspace"
+      },
+      "cost": {
+        "predicted_R_us": 31.05,
+        "grade": "explore_uncertain"
+      },
+      "schedule": {
+        "exec_us": {
+          "stage_sample": 5.0,
+          "stage_pid": 0.05,
+          "stage_sink": 5.0
+        },
+        "release": [
+          {
+            "group": "g0",
+            "domain": "linux_userspace",
+            "L_us": 21.0,
+            "phase_us": 0.0
+          },
+          {
+            "group": "g1",
+            "domain": "linux_kernel",
+            "L_us": 0.0,
+            "phase_us": 200.0
+          },
+          {
+            "group": "g2",
+            "domain": "linux_userspace",
+            "L_us": 0.0,
+            "phase_us": 400.0
+          }
+        ],
+        "complete": true
+      }
+    },
+    "cost": {
+      "comparable": true,
+      "final_rankable": false,
+      "explore_rankable": true,
+      "missing_costs": [],
+      "evidence": [
+        "stage_sample@linux_userspace:scenario",
+        "stage_pid@linux_kernel:scenario",
+        "stage_sink@linux_userspace:scenario",
+        "T_ioctl:cli_override"
+      ],
+      "compute_us": 10.05,
+      "release_us": 21.0,
+      "handoff_us": 0.0,
+      "handoff_channels": 1,
+      "channels": [
+        {
+          "from_group": 0,
+          "to_group": 1,
+          "from_domain": "linux_userspace",
+          "to_domain": "linux_kernel",
+          "from_stage": "stage_sample",
+          "to_stage": "stage_pid",
+          "regions": [
+            "@g_in"
+          ]
+        },
+        {
+          "from_group": 1,
+          "to_group": 2,
+          "from_domain": "linux_kernel",
+          "to_domain": "linux_userspace",
+          "from_stage": "stage_pid",
+          "to_stage": "stage_sink",
+          "regions": []
+        }
+      ],
+      "sync_us": 0.0,
+      "ioctl_model": {
+        "L_user_us": 21.0,
+        "C_us": 10.05,
+        "T_ioctl_us": 0.0,
+        "T_ioctl_evidence": "cli_override",
+        "note": "Ĉ=L_U+ΣC+T_ioctl；T_ioctl 须实测才可结题；非 WCET"
+      },
+      "predicted_R_us": 31.05,
+      "total_us": 31.05,
+      "grade": "explore_uncertain",
+      "temporal_ok": true,
+      "temporal_why": null,
+      "schedule": {
+        "exec_us": {
+          "stage_sample": 5.0,
+          "stage_pid": 0.05,
+          "stage_sink": 5.0
+        },
+        "release": [
+          {
+            "group": "g0",
+            "domain": "linux_userspace",
+            "L_us": 21.0,
+            "phase_us": 0.0
+          },
+          {
+            "group": "g1",
+            "domain": "linux_kernel",
+            "L_us": 0.0,
+            "phase_us": 200.0
+          },
+          {
+            "group": "g2",
+            "domain": "linux_userspace",
+            "L_us": 0.0,
+            "phase_us": 400.0
+          }
+        ],
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_kernel:scenario",
+          "stage_sink@linux_userspace:scenario"
+        ],
+        "missing": [],
+        "timing_bound": [],
+        "complete": true,
+        "model": "uku_ioctl_serial",
+        "T_ioctl_us": 0.0,
+        "events_us": {
+          "stage_sample": {
+            "start_us": 21.0,
+            "read_us": 21.0,
+            "finish_us": 26.0,
+            "commit_us": 26.0
+          },
+          "stage_pid": {
+            "start_us": 26.0,
+            "read_us": 26.0,
+            "finish_us": 26.05,
+            "commit_us": 26.05
+          },
+          "stage_sink": {
+            "start_us": 26.05,
+            "read_us": 26.05,
+            "finish_us": 31.05,
+            "commit_us": 31.05
+          }
+        },
+        "finish_us": {
+          "stage_sample": 26.0,
+          "stage_pid": 26.05,
+          "stage_sink": 31.05
+        }
+      }
+    },
+    "schedule": {
+      "exec_us": {
+        "stage_sample": 5.0,
+        "stage_pid": 0.05,
+        "stage_sink": 5.0
+      },
+      "release": [
+        {
+          "group": "g0",
+          "domain": "linux_userspace",
+          "L_us": 21.0,
+          "phase_us": 0.0
+        },
+        {
+          "group": "g1",
+          "domain": "linux_kernel",
+          "L_us": 0.0,
+          "phase_us": 200.0
+        },
+        {
+          "group": "g2",
+          "domain": "linux_userspace",
+          "L_us": 0.0,
+          "phase_us": 400.0
+        }
+      ],
+      "evidence": [
+        "stage_sample@linux_userspace:scenario",
+        "stage_pid@linux_kernel:scenario",
+        "stage_sink@linux_userspace:scenario"
+      ],
+      "missing": [],
+      "timing_bound": [],
+      "complete": true,
+      "model": "uku_ioctl_serial",
+      "T_ioctl_us": 0.0,
+      "events_us": {
+        "stage_sample": {
+          "start_us": 21.0,
+          "read_us": 21.0,
+          "finish_us": 26.0,
+          "commit_us": 26.0
+        },
+        "stage_pid": {
+          "start_us": 26.0,
+          "read_us": 26.0,
+          "finish_us": 26.05,
+          "commit_us": 26.05
+        },
+        "stage_sink": {
+          "start_us": 26.05,
+          "read_us": 26.05,
+          "finish_us": 31.05,
+          "commit_us": 31.05
+        }
+      },
+      "finish_us": {
+        "stage_sample": 26.0,
+        "stage_pid": 26.05,
+        "stage_sink": 31.05
+      }
+    },
+    "why": "STKP Ĉ=ΣC_i,d + ΣL_g + ΣH_q + C_sync = 31.05; groups=3 channels=1; deployment_ready; claim=explore_uncertain"
+  },
+  "best_deploy": {
+    "id": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
+    "domain": "mixed",
+    "fused": false,
+    "legal": true,
+    "model_feasible": true,
+    "deployment_ready": true,
+    "comparable": true,
+    "diagnostics": [],
+    "plan": {
+      "version": 2,
+      "meta": {
+        "platform": "mixed",
+        "fusion": false,
+        "generator": "stkp_v1",
+        "model_feasible": true,
+        "deployment_ready": true,
+        "xdom_adapter": "uku_ioctl",
+        "uku_check": {
+          "ok": true,
+          "codes": [],
+          "errors": []
+        },
+        "uku_session": {
+          "kind": "integ_i32",
+          "region": "g_integ"
+        }
+      },
+      "order": [
+        "stage_sample",
+        "stage_pid",
+        "stage_sink"
+      ],
+      "groups": [
+        {
+          "id": "g0",
+          "members": [
+            "stage_sample"
+          ],
+          "domain": "linux_userspace",
+          "release_phase_us": 0.0
+        },
+        {
+          "id": "g1",
+          "members": [
+            "stage_pid"
+          ],
+          "domain": "linux_kernel",
+          "release_phase_us": 200.0
+        },
+        {
+          "id": "g2",
+          "members": [
+            "stage_sink"
+          ],
+          "domain": "linux_userspace",
+          "release_phase_us": 400.0
+        }
+      ],
+      "domains": {
+        "stage_sample": "linux_userspace",
+        "stage_pid": "linux_kernel",
+        "stage_sink": "linux_userspace"
+      },
+      "cost": {
+        "predicted_R_us": 31.05,
+        "grade": "explore_uncertain"
+      },
+      "schedule": {
+        "exec_us": {
+          "stage_sample": 5.0,
+          "stage_pid": 0.05,
+          "stage_sink": 5.0
+        },
+        "release": [
+          {
+            "group": "g0",
+            "domain": "linux_userspace",
+            "L_us": 21.0,
+            "phase_us": 0.0
+          },
+          {
+            "group": "g1",
+            "domain": "linux_kernel",
+            "L_us": 0.0,
+            "phase_us": 200.0
+          },
+          {
+            "group": "g2",
+            "domain": "linux_userspace",
+            "L_us": 0.0,
+            "phase_us": 400.0
+          }
+        ],
+        "complete": true
+      }
+    },
+    "cost": {
+      "comparable": true,
+      "final_rankable": false,
+      "explore_rankable": true,
+      "missing_costs": [],
+      "evidence": [
+        "stage_sample@linux_userspace:scenario",
+        "stage_pid@linux_kernel:scenario",
+        "stage_sink@linux_userspace:scenario",
+        "T_ioctl:cli_override"
+      ],
+      "compute_us": 10.05,
+      "release_us": 21.0,
+      "handoff_us": 0.0,
+      "handoff_channels": 1,
+      "channels": [
+        {
+          "from_group": 0,
+          "to_group": 1,
+          "from_domain": "linux_userspace",
+          "to_domain": "linux_kernel",
+          "from_stage": "stage_sample",
+          "to_stage": "stage_pid",
+          "regions": [
+            "@g_in"
+          ]
+        },
+        {
+          "from_group": 1,
+          "to_group": 2,
+          "from_domain": "linux_kernel",
+          "to_domain": "linux_userspace",
+          "from_stage": "stage_pid",
+          "to_stage": "stage_sink",
+          "regions": []
+        }
+      ],
+      "sync_us": 0.0,
+      "ioctl_model": {
+        "L_user_us": 21.0,
+        "C_us": 10.05,
+        "T_ioctl_us": 0.0,
+        "T_ioctl_evidence": "cli_override",
+        "note": "Ĉ=L_U+ΣC+T_ioctl；T_ioctl 须实测才可结题；非 WCET"
+      },
+      "predicted_R_us": 31.05,
+      "total_us": 31.05,
+      "grade": "explore_uncertain",
+      "temporal_ok": true,
+      "temporal_why": null,
+      "schedule": {
+        "exec_us": {
+          "stage_sample": 5.0,
+          "stage_pid": 0.05,
+          "stage_sink": 5.0
+        },
+        "release": [
+          {
+            "group": "g0",
+            "domain": "linux_userspace",
+            "L_us": 21.0,
+            "phase_us": 0.0
+          },
+          {
+            "group": "g1",
+            "domain": "linux_kernel",
+            "L_us": 0.0,
+            "phase_us": 200.0
+          },
+          {
+            "group": "g2",
+            "domain": "linux_userspace",
+            "L_us": 0.0,
+            "phase_us": 400.0
+          }
+        ],
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_kernel:scenario",
+          "stage_sink@linux_userspace:scenario"
+        ],
+        "missing": [],
+        "timing_bound": [],
+        "complete": true,
+        "model": "uku_ioctl_serial",
+        "T_ioctl_us": 0.0,
+        "events_us": {
+          "stage_sample": {
+            "start_us": 21.0,
+            "read_us": 21.0,
+            "finish_us": 26.0,
+            "commit_us": 26.0
+          },
+          "stage_pid": {
+            "start_us": 26.0,
+            "read_us": 26.0,
+            "finish_us": 26.05,
+            "commit_us": 26.05
+          },
+          "stage_sink": {
+            "start_us": 26.05,
+            "read_us": 26.05,
+            "finish_us": 31.05,
+            "commit_us": 31.05
+          }
+        },
+        "finish_us": {
+          "stage_sample": 26.0,
+          "stage_pid": 26.05,
+          "stage_sink": 31.05
+        }
+      }
+    },
+    "schedule": {
+      "exec_us": {
+        "stage_sample": 5.0,
+        "stage_pid": 0.05,
+        "stage_sink": 5.0
+      },
+      "release": [
+        {
+          "group": "g0",
+          "domain": "linux_userspace",
+          "L_us": 21.0,
+          "phase_us": 0.0
+        },
+        {
+          "group": "g1",
+          "domain": "linux_kernel",
+          "L_us": 0.0,
+          "phase_us": 200.0
+        },
+        {
+          "group": "g2",
+          "domain": "linux_userspace",
+          "L_us": 0.0,
+          "phase_us": 400.0
+        }
+      ],
+      "evidence": [
+        "stage_sample@linux_userspace:scenario",
+        "stage_pid@linux_kernel:scenario",
+        "stage_sink@linux_userspace:scenario"
+      ],
+      "missing": [],
+      "timing_bound": [],
+      "complete": true,
+      "model": "uku_ioctl_serial",
+      "T_ioctl_us": 0.0,
+      "events_us": {
+        "stage_sample": {
+          "start_us": 21.0,
+          "read_us": 21.0,
+          "finish_us": 26.0,
+          "commit_us": 26.0
+        },
+        "stage_pid": {
+          "start_us": 26.0,
+          "read_us": 26.0,
+          "finish_us": 26.05,
+          "commit_us": 26.05
+        },
+        "stage_sink": {
+          "start_us": 26.05,
+          "read_us": 26.05,
+          "finish_us": 31.05,
+          "commit_us": 31.05
+        }
+      },
+      "finish_us": {
+        "stage_sample": 26.0,
+        "stage_pid": 26.05,
+        "stage_sink": 31.05
+      }
+    },
+    "why": "STKP Ĉ=ΣC_i,d + ΣL_g + ΣH_q + C_sync = 31.05; groups=3 channels=1; deployment_ready; claim=explore_uncertain"
+  },
+  "chosen": "STKP:L[stage_sample]|L[stage_pid+stage_sink]",
+  "chosen_record": {
+    "id": "STKP:L[stage_sample]|L[stage_pid+stage_sink]",
+    "domain": "linux_userspace",
+    "fused": false,
+    "legal": true,
+    "model_feasible": true,
+    "deployment_ready": true,
+    "comparable": true,
+    "diagnostics": [],
+    "plan": {
+      "version": 2,
+      "meta": {
+        "platform": "linux_userspace",
+        "fusion": false,
+        "generator": "stkp_v1",
+        "model_feasible": true,
+        "deployment_ready": true,
+        "xdom_adapter": null
+      },
+      "order": [
+        "stage_sample",
+        "stage_pid",
+        "stage_sink"
+      ],
+      "groups": [
+        {
+          "id": "g0",
+          "members": [
+            "stage_sample"
+          ],
+          "domain": "linux_userspace",
+          "release_phase_us": 0.0
+        },
+        {
+          "id": "g1",
+          "members": [
+            "stage_pid",
+            "stage_sink"
+          ],
+          "domain": "linux_userspace",
+          "release_phase_us": 200.0
+        }
+      ],
+      "domains": {
+        "stage_sample": "linux_userspace",
+        "stage_pid": "linux_userspace",
+        "stage_sink": "linux_userspace"
+      },
+      "cost": {
+        "predicted_R_us": 57.0,
+        "grade": "explore_uncertain"
+      },
+      "schedule": {
+        "exec_us": {
+          "stage_sample": 5.0,
+          "stage_pid": 5.0,
+          "stage_sink": 5.0
+        },
+        "release": [
+          {
+            "group": "g0",
+            "domain": "linux_userspace",
+            "L_us": 21.0,
+            "phase_us": 0.0
+          },
+          {
+            "group": "g1",
+            "domain": "linux_userspace",
+            "L_us": 21.0,
+            "phase_us": 200.0
+          }
+        ],
+        "complete": true
+      }
+    },
+    "cost": {
+      "comparable": true,
+      "final_rankable": false,
+      "explore_rankable": true,
+      "missing_costs": [],
+      "evidence": [
+        "stage_sample@linux_userspace:scenario",
+        "stage_pid@linux_userspace:scenario",
+        "stage_sink@linux_userspace:scenario"
+      ],
+      "compute_us": 15.0,
+      "release_us": 42.0,
+      "handoff_us": 0.0,
+      "handoff_channels": 0,
+      "channels": [],
+      "sync_us": 0.0,
+      "ioctl_model": null,
+      "predicted_R_us": 57.0,
+      "total_us": 57.0,
+      "grade": "explore_uncertain",
+      "temporal_ok": true,
+      "temporal_why": null,
+      "schedule": {
+        "exec_us": {
+          "stage_sample": 5.0,
+          "stage_pid": 5.0,
+          "stage_sink": 5.0
+        },
+        "release": [
+          {
+            "group": "g0",
+            "domain": "linux_userspace",
+            "L_us": 21.0,
+            "phase_us": 0.0
+          },
+          {
+            "group": "g1",
+            "domain": "linux_userspace",
+            "L_us": 21.0,
+            "phase_us": 200.0
+          }
+        ],
+        "evidence": [
+          "stage_sample@linux_userspace:scenario",
+          "stage_pid@linux_userspace:scenario",
+          "stage_sink@linux_userspace:scenario"
+        ],
+        "missing": [],
+        "timing_bound": [],
+        "complete": true,
+        "model": "per_group_release",
+        "T_ioctl_us": 0.0
+      }
+    },
+    "schedule": {
+      "exec_us": {
+        "stage_sample": 5.0,
+        "stage_pid": 5.0,
+        "stage_sink": 5.0
+      },
+      "release": [
+        {
+          "group": "g0",
+          "domain": "linux_userspace",
+          "L_us": 21.0,
+          "phase_us": 0.0
+        },
+        {
+          "group": "g1",
+          "domain": "linux_userspace",
+          "L_us": 21.0,
+          "phase_us": 200.0
+        }
+      ],
+      "evidence": [
+        "stage_sample@linux_userspace:scenario",
+        "stage_pid@linux_userspace:scenario",
+        "stage_sink@linux_userspace:scenario"
+      ],
+      "missing": [],
+      "timing_bound": [],
+      "complete": true,
+      "model": "per_group_release",
+      "T_ioctl_us": 0.0
+    },
+    "why": "强制选择（测量用，非模型结论）"
+  },
+  "note": "经验成本，不是 WCET；不可部署的混合方案可出现在报告中",
+  "forced": {
+    "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@linux_userspace",
+    "cand_index": 2,
+    "model_would_pick": null
+  },
+  "baseline_af": {
+    "chosen": "B",
+    "n_legal": 4,
+    "candidates": [
+      {
+        "id": "A",
+        "legal": true,
+        "domain": "linux_userspace",
+        "fused": false,
+        "total_us": 63.0
+      },
+      {
+        "id": "B",
+        "legal": true,
+        "domain": "linux_userspace",
+        "fused": true,
+        "total_us": 21.0
+      },
+      {
+        "id": "C",
+        "legal": false,
+        "domain": "linux_kernel",
+        "fused": false,
+        "total_us": 63.0
+      },
+      {
+        "id": "D",
+        "legal": false,
+        "domain": "linux_kernel",
+        "fused": true,
+        "total_us": 21.0
+      },
+      {
+        "id": "E",
+        "legal": true,
+        "domain": "mixed",
+        "fused": true,
+        "total_us": 113.0
+      },
+      {
+        "id": "F",
+        "legal": true,
+        "domain": "mixed",
+        "fused": false,
+        "total_us": 113.0
+      }
+    ]
+  },
+  "vs_baseline": {
+    "cost_model": "stkp_unified",
+    "note": "A–F 旧公式不用于论文优劣证据；此处用同一套 STKP 成本",
+    "af_chosen": "B",
+    "stkp_chosen": "STKP:L[stage_sample]|L[stage_pid+stage_sink]",
+    "stkp_cost_of_af_ids": {
+      "B": 36.0,
+      "A": 78.0
+    },
+    "stkp_total_us": 57.0,
+    "stkp_missed_by_af": true,
+    "claim": "forced_for_measurement"
+  }
+}
