@@ -1,0 +1,1555 @@
+{
+  "kind": "pr11_deploy_objective",
+  "version": 1,
+  "objective": "J(d,s) = alpha*Q99_resp(d,s) + beta*R_miss(d,s) + gamma*C_boundary(d)",
+  "weights": {
+    "alpha": 1.0,
+    "beta": 0.0,
+    "gamma": 0.0,
+    "miss_bound": "point",
+    "note": "权重是策略输入，量纲不齐（µs 与率）；不是 WCET"
+  },
+  "deadline_us": 1000.0,
+  "env": {
+    "ok": true,
+    "reason": "env_ok",
+    "kernel": "PREEMPT",
+    "release": "5.15.86",
+    "host": "Raspberry Pi 4 Model B Rev 1.5"
+  },
+  "n_rankable": 10,
+  "n_evals": 10,
+  "chosen": {
+    "candidate_id": "B",
+    "cand_index": 0,
+    "label": "B@linux_userspace",
+    "deployment": "fused_user",
+    "sched": "fifo99",
+    "J_us": 15.0,
+    "terms": {
+      "Q99_resp_us": 15.0,
+      "R_miss": 0.0,
+      "C_boundary_us": 0.0
+    }
+  },
+  "ranked": [
+    {
+      "domain": "linux_userspace",
+      "deployment": "fused_user",
+      "sched": "fifo99",
+      "n_crossings": 0,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 15.0,
+        "R_miss": 0.0,
+        "C_boundary_us": 0.0
+      },
+      "J_us": 15.0,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          15.0,
+          16.0
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 0,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          0.0,
+          7.683e-05
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 0,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 11.0,
+        "start_lat_p50_range_us": [
+          11.0,
+          11.0
+        ],
+        "start_lat_p99_median_us": 14.0,
+        "start_lat_p99_range_us": [
+          14.0,
+          15.0
+        ],
+        "start_lat_max_worst_us": 42.717,
+        "resp_max_worst_us": 45.05,
+        "rounds_with_miss": 0
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": false,
+      "candidate_id": "B",
+      "cand_index": 0,
+      "cand_shape": {
+        "n_groups": 1,
+        "fused": true,
+        "members": [
+          [
+            "stage_sample",
+            "stage_pid",
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "B@linux_userspace"
+    },
+    {
+      "domain": "linux_userspace",
+      "deployment": "user_only",
+      "sched": "fifo99",
+      "n_crossings": 0,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 29.471,
+        "R_miss": 0.0,
+        "C_boundary_us": 0.0
+      },
+      "J_us": 29.471,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          27.591,
+          36.323
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 0,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          0.0,
+          7.683e-05
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 0,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 11.92,
+        "start_lat_p50_range_us": [
+          11.732,
+          12.065
+        ],
+        "start_lat_p99_median_us": 27.038,
+        "start_lat_p99_range_us": [
+          25.396,
+          33.468
+        ],
+        "start_lat_max_worst_us": 74.647,
+        "resp_max_worst_us": 78.536,
+        "rounds_with_miss": 0
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": false,
+      "candidate_id": "A",
+      "cand_index": 3,
+      "cand_shape": {
+        "n_groups": 3,
+        "fused": false,
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "A@linux_userspace"
+    },
+    {
+      "domain": "mixed",
+      "deployment": "partial_kernel",
+      "sched": "fifo99",
+      "n_crossings": 1,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 34.642,
+        "R_miss": 0.0,
+        "C_boundary_us": 2.0
+      },
+      "J_us": 34.642,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          30.651,
+          50.951
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 0,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          0.0,
+          7.683e-05
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 1,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 12.315,
+        "start_lat_p50_range_us": [
+          11.931,
+          12.491
+        ],
+        "start_lat_p99_median_us": 26.256,
+        "start_lat_p99_range_us": [
+          23.405,
+          38.969
+        ],
+        "start_lat_max_worst_us": 225.622,
+        "resp_max_worst_us": 367.386,
+        "rounds_with_miss": 0
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": false,
+      "candidate_id": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
+      "cand_index": 4,
+      "cand_shape": {
+        "n_groups": 3,
+        "fused": false,
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]@mixed"
+    },
+    {
+      "domain": "linux_userspace",
+      "deployment": "fused_user",
+      "sched": "cfs",
+      "n_crossings": 0,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 66.0,
+        "R_miss": 0.0001,
+        "C_boundary_us": 0.0
+      },
+      "J_us": 66.0,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          65.0,
+          66.0
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 5,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          4.271e-05,
+          0.0002341
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 0,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 62.0,
+        "start_lat_p50_range_us": [
+          62.0,
+          62.0
+        ],
+        "start_lat_p99_median_us": 65.0,
+        "start_lat_p99_range_us": [
+          64.0,
+          65.0
+        ],
+        "start_lat_max_worst_us": 2580.623,
+        "resp_max_worst_us": 2583.216,
+        "rounds_with_miss": 2
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": true,
+      "candidate_id": "B",
+      "cand_index": 0,
+      "cand_shape": {
+        "n_groups": 1,
+        "fused": true,
+        "members": [
+          [
+            "stage_sample",
+            "stage_pid",
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "B@linux_userspace"
+    },
+    {
+      "domain": "linux_userspace",
+      "deployment": "user_only",
+      "sched": "cfs",
+      "n_crossings": 0,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 78.27,
+        "R_miss": 0.00066,
+        "C_boundary_us": 0.0
+      },
+      "J_us": 78.27,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          74.011,
+          113.637
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 33,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          0.00047001,
+          0.00092671
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 0,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 62.907,
+        "start_lat_p50_range_us": [
+          62.664,
+          63.044
+        ],
+        "start_lat_p99_median_us": 76.105,
+        "start_lat_p99_range_us": [
+          72.603,
+          110.195
+        ],
+        "start_lat_max_worst_us": 11783.565,
+        "resp_max_worst_us": 11786.399,
+        "rounds_with_miss": 7
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": true,
+      "candidate_id": "A",
+      "cand_index": 3,
+      "cand_shape": {
+        "n_groups": 3,
+        "fused": false,
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "A@linux_userspace"
+    },
+    {
+      "domain": "mixed",
+      "deployment": "partial_kernel",
+      "sched": "cfs",
+      "n_crossings": 1,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 83.367,
+        "R_miss": 0.00066,
+        "C_boundary_us": 2.0
+      },
+      "J_us": 83.367,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          74.597,
+          116.602
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 33,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          0.00047001,
+          0.00092671
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 1,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 63.005,
+        "start_lat_p50_range_us": [
+          62.842,
+          63.318
+        ],
+        "start_lat_p99_median_us": 75.487,
+        "start_lat_p99_range_us": [
+          68.928,
+          105.018
+        ],
+        "start_lat_max_worst_us": 3461.144,
+        "resp_max_worst_us": 3470.329,
+        "rounds_with_miss": 10
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": true,
+      "candidate_id": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
+      "cand_index": 4,
+      "cand_shape": {
+        "n_groups": 3,
+        "fused": false,
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]@mixed"
+    },
+    {
+      "domain": "linux_userspace",
+      "deployment": "split_s_pk_user",
+      "sched": "fifo99",
+      "n_crossings": 0,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 213.0,
+        "R_miss": 0.0,
+        "C_boundary_us": 0.0
+      },
+      "J_us": 213.0,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          213.0,
+          215.0
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 0,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          0.0,
+          7.683e-05
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 0,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 11.0,
+        "start_lat_p50_range_us": [
+          11.0,
+          11.0
+        ],
+        "start_lat_p99_median_us": 14.0,
+        "start_lat_p99_range_us": [
+          14.0,
+          14.0
+        ],
+        "start_lat_max_worst_us": 52.309,
+        "resp_max_worst_us": 253.661,
+        "rounds_with_miss": 0
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": false,
+      "candidate_id": "STKP:L[stage_sample]|L[stage_pid+stage_sink]",
+      "cand_index": 2,
+      "cand_shape": {
+        "n_groups": 2,
+        "fused": false,
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid",
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@linux_userspace"
+    },
+    {
+      "domain": "linux_userspace",
+      "deployment": "split_s_pk_user",
+      "sched": "cfs",
+      "n_crossings": 0,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 263.0,
+        "R_miss": 0.0,
+        "C_boundary_us": 0.0
+      },
+      "J_us": 263.0,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          263.0,
+          265.0
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 0,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          0.0,
+          7.683e-05
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 0,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 62.0,
+        "start_lat_p50_range_us": [
+          62.0,
+          62.0
+        ],
+        "start_lat_p99_median_us": 64.0,
+        "start_lat_p99_range_us": [
+          64.0,
+          65.0
+        ],
+        "start_lat_max_worst_us": 954.309,
+        "resp_max_worst_us": 990.531,
+        "rounds_with_miss": 0
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": false,
+      "candidate_id": "STKP:L[stage_sample]|L[stage_pid+stage_sink]",
+      "cand_index": 2,
+      "cand_shape": {
+        "n_groups": 2,
+        "fused": false,
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid",
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@linux_userspace"
+    },
+    {
+      "domain": "linux_userspace",
+      "deployment": "split_sp_k_user",
+      "sched": "fifo99",
+      "n_crossings": 0,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 414.0,
+        "R_miss": 0.0,
+        "C_boundary_us": 0.0
+      },
+      "J_us": 414.0,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          412.0,
+          414.0
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 0,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          0.0,
+          7.683e-05
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 0,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 11.0,
+        "start_lat_p50_range_us": [
+          11.0,
+          11.0
+        ],
+        "start_lat_p99_median_us": 14.0,
+        "start_lat_p99_range_us": [
+          13.0,
+          14.0
+        ],
+        "start_lat_max_worst_us": 68.565,
+        "resp_max_worst_us": 468.991,
+        "rounds_with_miss": 0
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": false,
+      "candidate_id": "STKP:L[stage_sample+stage_pid]|L[stage_sink]",
+      "cand_index": 1,
+      "cand_shape": {
+        "n_groups": 2,
+        "fused": false,
+        "members": [
+          [
+            "stage_sample",
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "STKP:L[stage_sample+stage_pid]|L[stage_sink]@linux_userspace"
+    },
+    {
+      "domain": "linux_userspace",
+      "deployment": "split_sp_k_user",
+      "sched": "cfs",
+      "n_crossings": 0,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 462.0,
+        "R_miss": 2e-05,
+        "C_boundary_us": 0.0
+      },
+      "J_us": 462.0,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          462.0,
+          465.0
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 1,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          3.53e-06,
+          0.00011329
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 0,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 62.0,
+        "start_lat_p50_range_us": [
+          62.0,
+          62.0
+        ],
+        "start_lat_p99_median_us": 64.0,
+        "start_lat_p99_range_us": [
+          64.0,
+          64.0
+        ],
+        "start_lat_max_worst_us": 745.642,
+        "resp_max_worst_us": 1146.605,
+        "rounds_with_miss": 1
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": true,
+      "candidate_id": "STKP:L[stage_sample+stage_pid]|L[stage_sink]",
+      "cand_index": 1,
+      "cand_shape": {
+        "n_groups": 2,
+        "fused": false,
+        "members": [
+          [
+            "stage_sample",
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "STKP:L[stage_sample+stage_pid]|L[stage_sink]@linux_userspace"
+    }
+  ],
+  "all_evals": [
+    {
+      "domain": "linux_userspace",
+      "deployment": "fused_user",
+      "sched": "cfs",
+      "n_crossings": 0,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 66.0,
+        "R_miss": 0.0001,
+        "C_boundary_us": 0.0
+      },
+      "J_us": 66.0,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          65.0,
+          66.0
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 5,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          4.271e-05,
+          0.0002341
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 0,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 62.0,
+        "start_lat_p50_range_us": [
+          62.0,
+          62.0
+        ],
+        "start_lat_p99_median_us": 65.0,
+        "start_lat_p99_range_us": [
+          64.0,
+          65.0
+        ],
+        "start_lat_max_worst_us": 2580.623,
+        "resp_max_worst_us": 2583.216,
+        "rounds_with_miss": 2
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": true,
+      "candidate_id": "B",
+      "cand_index": 0,
+      "cand_shape": {
+        "n_groups": 1,
+        "fused": true,
+        "members": [
+          [
+            "stage_sample",
+            "stage_pid",
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "B@linux_userspace"
+    },
+    {
+      "domain": "linux_userspace",
+      "deployment": "fused_user",
+      "sched": "fifo99",
+      "n_crossings": 0,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 15.0,
+        "R_miss": 0.0,
+        "C_boundary_us": 0.0
+      },
+      "J_us": 15.0,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          15.0,
+          16.0
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 0,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          0.0,
+          7.683e-05
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 0,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 11.0,
+        "start_lat_p50_range_us": [
+          11.0,
+          11.0
+        ],
+        "start_lat_p99_median_us": 14.0,
+        "start_lat_p99_range_us": [
+          14.0,
+          15.0
+        ],
+        "start_lat_max_worst_us": 42.717,
+        "resp_max_worst_us": 45.05,
+        "rounds_with_miss": 0
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": false,
+      "candidate_id": "B",
+      "cand_index": 0,
+      "cand_shape": {
+        "n_groups": 1,
+        "fused": true,
+        "members": [
+          [
+            "stage_sample",
+            "stage_pid",
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "B@linux_userspace"
+    },
+    {
+      "domain": "linux_userspace",
+      "deployment": "split_sp_k_user",
+      "sched": "cfs",
+      "n_crossings": 0,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 462.0,
+        "R_miss": 2e-05,
+        "C_boundary_us": 0.0
+      },
+      "J_us": 462.0,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          462.0,
+          465.0
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 1,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          3.53e-06,
+          0.00011329
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 0,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 62.0,
+        "start_lat_p50_range_us": [
+          62.0,
+          62.0
+        ],
+        "start_lat_p99_median_us": 64.0,
+        "start_lat_p99_range_us": [
+          64.0,
+          64.0
+        ],
+        "start_lat_max_worst_us": 745.642,
+        "resp_max_worst_us": 1146.605,
+        "rounds_with_miss": 1
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": true,
+      "candidate_id": "STKP:L[stage_sample+stage_pid]|L[stage_sink]",
+      "cand_index": 1,
+      "cand_shape": {
+        "n_groups": 2,
+        "fused": false,
+        "members": [
+          [
+            "stage_sample",
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "STKP:L[stage_sample+stage_pid]|L[stage_sink]@linux_userspace"
+    },
+    {
+      "domain": "linux_userspace",
+      "deployment": "split_sp_k_user",
+      "sched": "fifo99",
+      "n_crossings": 0,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 414.0,
+        "R_miss": 0.0,
+        "C_boundary_us": 0.0
+      },
+      "J_us": 414.0,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          412.0,
+          414.0
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 0,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          0.0,
+          7.683e-05
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 0,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 11.0,
+        "start_lat_p50_range_us": [
+          11.0,
+          11.0
+        ],
+        "start_lat_p99_median_us": 14.0,
+        "start_lat_p99_range_us": [
+          13.0,
+          14.0
+        ],
+        "start_lat_max_worst_us": 68.565,
+        "resp_max_worst_us": 468.991,
+        "rounds_with_miss": 0
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": false,
+      "candidate_id": "STKP:L[stage_sample+stage_pid]|L[stage_sink]",
+      "cand_index": 1,
+      "cand_shape": {
+        "n_groups": 2,
+        "fused": false,
+        "members": [
+          [
+            "stage_sample",
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "STKP:L[stage_sample+stage_pid]|L[stage_sink]@linux_userspace"
+    },
+    {
+      "domain": "linux_userspace",
+      "deployment": "split_s_pk_user",
+      "sched": "cfs",
+      "n_crossings": 0,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 263.0,
+        "R_miss": 0.0,
+        "C_boundary_us": 0.0
+      },
+      "J_us": 263.0,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          263.0,
+          265.0
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 0,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          0.0,
+          7.683e-05
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 0,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 62.0,
+        "start_lat_p50_range_us": [
+          62.0,
+          62.0
+        ],
+        "start_lat_p99_median_us": 64.0,
+        "start_lat_p99_range_us": [
+          64.0,
+          65.0
+        ],
+        "start_lat_max_worst_us": 954.309,
+        "resp_max_worst_us": 990.531,
+        "rounds_with_miss": 0
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": false,
+      "candidate_id": "STKP:L[stage_sample]|L[stage_pid+stage_sink]",
+      "cand_index": 2,
+      "cand_shape": {
+        "n_groups": 2,
+        "fused": false,
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid",
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@linux_userspace"
+    },
+    {
+      "domain": "linux_userspace",
+      "deployment": "split_s_pk_user",
+      "sched": "fifo99",
+      "n_crossings": 0,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 213.0,
+        "R_miss": 0.0,
+        "C_boundary_us": 0.0
+      },
+      "J_us": 213.0,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          213.0,
+          215.0
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 0,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          0.0,
+          7.683e-05
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 0,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 11.0,
+        "start_lat_p50_range_us": [
+          11.0,
+          11.0
+        ],
+        "start_lat_p99_median_us": 14.0,
+        "start_lat_p99_range_us": [
+          14.0,
+          14.0
+        ],
+        "start_lat_max_worst_us": 52.309,
+        "resp_max_worst_us": 253.661,
+        "rounds_with_miss": 0
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": false,
+      "candidate_id": "STKP:L[stage_sample]|L[stage_pid+stage_sink]",
+      "cand_index": 2,
+      "cand_shape": {
+        "n_groups": 2,
+        "fused": false,
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid",
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "STKP:L[stage_sample]|L[stage_pid+stage_sink]@linux_userspace"
+    },
+    {
+      "domain": "linux_userspace",
+      "deployment": "user_only",
+      "sched": "cfs",
+      "n_crossings": 0,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 78.27,
+        "R_miss": 0.00066,
+        "C_boundary_us": 0.0
+      },
+      "J_us": 78.27,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          74.011,
+          113.637
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 33,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          0.00047001,
+          0.00092671
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 0,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 62.907,
+        "start_lat_p50_range_us": [
+          62.664,
+          63.044
+        ],
+        "start_lat_p99_median_us": 76.105,
+        "start_lat_p99_range_us": [
+          72.603,
+          110.195
+        ],
+        "start_lat_max_worst_us": 11783.565,
+        "resp_max_worst_us": 11786.399,
+        "rounds_with_miss": 7
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": true,
+      "candidate_id": "A",
+      "cand_index": 3,
+      "cand_shape": {
+        "n_groups": 3,
+        "fused": false,
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "A@linux_userspace"
+    },
+    {
+      "domain": "linux_userspace",
+      "deployment": "user_only",
+      "sched": "fifo99",
+      "n_crossings": 0,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 29.471,
+        "R_miss": 0.0,
+        "C_boundary_us": 0.0
+      },
+      "J_us": 29.471,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          27.591,
+          36.323
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 0,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          0.0,
+          7.683e-05
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 0,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 11.92,
+        "start_lat_p50_range_us": [
+          11.732,
+          12.065
+        ],
+        "start_lat_p99_median_us": 27.038,
+        "start_lat_p99_range_us": [
+          25.396,
+          33.468
+        ],
+        "start_lat_max_worst_us": 74.647,
+        "resp_max_worst_us": 78.536,
+        "rounds_with_miss": 0
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": false,
+      "candidate_id": "A",
+      "cand_index": 3,
+      "cand_shape": {
+        "n_groups": 3,
+        "fused": false,
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "A@linux_userspace"
+    },
+    {
+      "domain": "mixed",
+      "deployment": "partial_kernel",
+      "sched": "cfs",
+      "n_crossings": 1,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 83.367,
+        "R_miss": 0.00066,
+        "C_boundary_us": 2.0
+      },
+      "J_us": 83.367,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          74.597,
+          116.602
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 33,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          0.00047001,
+          0.00092671
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 1,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 63.005,
+        "start_lat_p50_range_us": [
+          62.842,
+          63.318
+        ],
+        "start_lat_p99_median_us": 75.487,
+        "start_lat_p99_range_us": [
+          68.928,
+          105.018
+        ],
+        "start_lat_max_worst_us": 3461.144,
+        "resp_max_worst_us": 3470.329,
+        "rounds_with_miss": 10
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": true,
+      "candidate_id": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
+      "cand_index": 4,
+      "cand_shape": {
+        "n_groups": 3,
+        "fused": false,
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]@mixed"
+    },
+    {
+      "domain": "mixed",
+      "deployment": "partial_kernel",
+      "sched": "fifo99",
+      "n_crossings": 1,
+      "alpha": 1.0,
+      "beta": 0.0,
+      "gamma": 0.0,
+      "miss_bound": "point",
+      "terms": {
+        "Q99_resp_us": 34.642,
+        "R_miss": 0.0,
+        "C_boundary_us": 2.0
+      },
+      "J_us": 34.642,
+      "rankable": true,
+      "missing": [],
+      "q99_provenance": {
+        "rounds": 10,
+        "across_rounds": [
+          30.651,
+          50.951
+        ],
+        "statistic": "median_of_round_p99"
+      },
+      "miss_provenance": {
+        "count": 0,
+        "n_cycles": 50000,
+        "ci95_wilson": [
+          0.0,
+          7.683e-05
+        ],
+        "used": "point"
+      },
+      "boundary_provenance": {
+        "unit_us": 2.0,
+        "n_crossings": 1,
+        "source_log": "kfusion/docs/pr10c_boundary/boundary.json",
+        "p99_us": 5.0
+      },
+      "tail": {
+        "start_lat_p50_median_us": 12.315,
+        "start_lat_p50_range_us": [
+          11.931,
+          12.491
+        ],
+        "start_lat_p99_median_us": 26.256,
+        "start_lat_p99_range_us": [
+          23.405,
+          38.969
+        ],
+        "start_lat_max_worst_us": 225.622,
+        "resp_max_worst_us": 367.386,
+        "rounds_with_miss": 0
+      },
+      "deadline_us": 1000.0,
+      "worst_resp_over_deadline": false,
+      "candidate_id": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",
+      "cand_index": 4,
+      "cand_shape": {
+        "n_groups": 3,
+        "fused": false,
+        "members": [
+          [
+            "stage_sample"
+          ],
+          [
+            "stage_pid"
+          ],
+          [
+            "stage_sink"
+          ]
+        ]
+      },
+      "deployment_ready": true,
+      "label": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]@mixed"
+    }
+  ],
+  "claim": "在已通过 verify 的候选之间按实测尾部排序；不宣称硬实时可调度性",
+  "sources": {
+    "profile": "kfusion/docs/pr11_deploy_objective/sched_profile_v2.json",
+    "profile_sha256": "26c719d642f88038b157e6f2ca2d33850daa16df81f05cd91310e931e394c7ba",
+    "stkp": "kfusion/docs/pr11_deploy_objective/candidates_pr10e_stkp.json",
+    "stkp_sha256": "306ea6f318b1282ee85cdefd67fa06bda033f2c72c2a6aee54ea538dde40e203",
+    "stkp_chosen_as_generated": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]"
+  }
+}
