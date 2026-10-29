@@ -883,10 +883,11 @@ def apply_deploy_objective(doc, profile, alpha=1.0, beta=0.0, gamma=0.0,
     doc["chosen"] = rec.get("id")
     doc["sched_class"] = res["chosen"]["sched"]
     doc["claim"] = "objective_ranked_measured_tail"
-    rec["why"] = ("%s; J=%s µs（α=%s β=%s γ=%s, miss_bound=%s）；"
-                  "模型原选 %s" % (rec.get("why") or "",
-                                  res["chosen"]["J_us"], alpha, beta, gamma,
-                                  miss_bound, prev_id))
+    parts = [p for p in (rec.get("why") or "").split("; ") if p.strip()]
+    parts.append("J=%s µs（α=%s β=%s γ=%s, miss_bound=%s）；模型原选 %s"
+                 % (res["chosen"]["J_us"], alpha, beta, gamma, miss_bound,
+                    prev_id))
+    rec["why"] = "; ".join(parts)
     return doc, True
 
 

@@ -151,8 +151,13 @@ if [ -n "${DEPLOY_OBJECTIVE:-}" ] && [ -f "${DEPLOY_OBJECTIVE}" ]; then
               --objective-scheds "${OBJ_SCHEDS:-cfs,fifo99}"
               --objective-out "$OUT/deploy_objective.json")
 fi
-"$PY" "$KF/scripts/ecos_plan_joint.py" "${STKP_ARGS[@]}" \
-  || die "STKP 无 deployment_ready 方案" 8
+if ! "$PY" "$KF/scripts/ecos_plan_joint.py" "${STKP_ARGS[@]}"; then
+  CLAIM="$("$PY" -c "import json; print(json.load(open('$OUT/stkp.json')).get('claim') or '')" 2>/dev/null || true)"
+  if [ "$CLAIM" = "objective_fail_closed" ]; then
+    die "部署目标 fail-closed：没有 (部署, 调度类) 同时具备实测 Q99 与 R_miss，拒绝生成（见 $OUT/deploy_objective.json）" 8
+  fi
+  die "STKP 无 deployment_ready 方案" 8
+fi
 
 CLAIM="$("$PY" -c "import json; print(json.load(open('$OUT/stkp.json')).get('claim') or '')")"
 if [ "$CLAIM" = "objective_fail_closed" ]; then

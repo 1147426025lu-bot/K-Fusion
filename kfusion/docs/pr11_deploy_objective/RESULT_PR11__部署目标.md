@@ -5,6 +5,10 @@
 而 STKP 按模型选出的混合方案在实测尾部上比全用户态**差 5.171 µs**——
 编译器原来那句话「混合更优」在这台机器上不成立。
 
+已接进生成器并上板闭环：生成器现在按 J 选入选方案，模型原选 B 被改成
+A@fifo99，试跑**真的**在 FIFO 下跑（start_lat 9–13 µs，CFS 基线 62.9 µs）；
+排不出名时直接拒绝生成，不退回模型排序。见 §10。
+
 ---
 
 ## 1. 为什么必须加这一维
@@ -164,8 +168,52 @@ python3 kfusion/scripts/pr11_deploy_objective__部署目标.py selftest
 **跨平台复现**：同一命令在 Pi（Linux python3，`9c3507b`）上重跑，入选与 J 序列
 `[29.471, 34.642, 78.270, 83.367]` 逐项一致；selftest 11 项同样全过。
 
-## 10. 诚实边界
+## 10. 闭环：J 接进生成器（不只是离线报告）
 
+只出一份报告不算闭环——生成器还会照模型排序生成另一套东西。已把 J 接到
+STKP 的入选点：
+
+```bash
+DEPLOY_OBJECTIVE=kfusion/docs/pr11_deploy_objective/sched_profile.json \
+STAGE_COST=... IOCTL_COST=... APPLY_SCHED=1 \
+bash kfusion/scripts/ecos_from_c__从C编译.sh kfusion/examples/ecos/mixed_pid_stateful__积分混合.c
+```
+
+`ecos_plan_joint.py --deploy-objective` 的行为：
+
+| 情形 | 行为 |
+|---|---|
+| 有可排名组合 | 入选改为 J 最小者，`sched_class` 写入 stkp.json / deploy.json，`claim=objective_ranked_measured_tail` |
+| 一个都排不出 | `chosen=None`、`claim=objective_fail_closed`，**脚本退出 8，不写 chosen.plan.json**（=不生成代码） |
+| 覆盖不全 | 照常选，但控制台与 deploy.json 都标 `⚠ 覆盖不全 x/y`，列出未测形状 |
+
+真机端到端（Pi4，`/tmp/pr11_e2e2`，40 拍）：
+
+```
+deploy objective: A@linux_userspace @ fifo99 J=29.471 µs（模型原选 B；有画像 2/5）
+⚠ 覆盖不全：B@…, L[sample+pid]|L[sink]@…, L[sample]|L[pid+sink]@… 无实测画像
+STKP 入选 A  域 linux_userspace  调度类 fifo99
+▶ 按部署决策加调度类：chrt -f 99
+digest match: a0bf855e
+hist_start_lat_us: 9 104 / 10 8 / 11 3 / 12 3 / 13 1 ...
+```
+
+三件事同时发生，缺一件都不算闭环：① 入选从模型选的 B（全融合）改成 A（三组不融合）；
+② 调度类从缺省 CFS 改成 FIFO99；③ 试跑**真的**在 FIFO 下跑——start_lat 集中在
+9–13 µs，与 PR-10E-A 的 FIFO 中位 11.92 µs 同量级，而不是 CFS 的 62.9 µs。
+
+fail-closed 也验过（`OBJ_SCHEDS=nosuchclass` 制造「一个组合都排不出」）：
+
+```
+!! 部署目标 fail-closed：没有同时具备实测 Q99 与 R_miss 的 (部署, 调度类) 组合，拒绝生成（5 个候选，5 条拒因）
+❌ … 退出 8；chosen.plan.json 不存在
+```
+
+`APPLY_SCHED` 默认 0：改调度类会改测量口径，所以默认只记录、不改试跑行为；
+要复现决策结果才显式开。回归：`test_deploy_objective.py` 6 项 + `test_stkp.py`
+44 项全过（后者保证「不给 --deploy-objective 时旧行为逐字不变」）。
+
+## 11. 诚实边界
 - 只证明「在这台 Pi4、这个 5.15.86 非 RT 内核、这批 10 轮测量下」的排序；
   换板、换内核、换负载都没测。
 - Q99 是**典型一轮的 p99 取中位数**，不是 10 轮混池 p99（混池会掩盖单轮劣化）。
