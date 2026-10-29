@@ -149,10 +149,12 @@ DEPLOYMENT_DOMAIN = {
 DEPLOYMENT_SHAPE = {
     "user_only": {
         "n_groups": 3, "fused": False,
+        "members": [["stage_sample"], ["stage_pid"], ["stage_sink"]],
         "note": "gold：sample/pid/sink 三次顺序调用，全用户态",
     },
     "partial_kernel": {
         "n_groups": 3, "fused": False,
+        "members": [["stage_sample"], ["stage_pid"], ["stage_sink"]],
         "note": "mixed：三段不融合，中间段经 ioctl 进内核",
     },
 }
@@ -213,6 +215,7 @@ def aggregate_shapes(doc, env=None):
             "maps_to_domain": domain,
             "shape": {"n_groups": int(sh["n_groups"]),
                       "fused": bool(sh.get("fused")),
+                      "members": sh.get("members"),
                       "note": cell.get("note")},
             "sched": scheds,
         }
@@ -227,14 +230,18 @@ def merge_profiles(base, extra):
         for other, ob in out["deployments"].items():
             if ob.get("maps_to_domain") != blk.get("maps_to_domain"):
                 continue
-            if (ob.get("shape") or {}).get("n_groups") == \
-                    (blk.get("shape") or {}).get("n_groups") and \
-                    bool((ob.get("shape") or {}).get("fused")) == \
-                    bool((blk.get("shape") or {}).get("fused")):
+            ka = _member_key((ob.get("shape") or {}).get("members"))
+            kb = _member_key((blk.get("shape") or {}).get("members"))
+            same = (ka == kb) if (ka is not None and kb is not None) else (
+                (ob.get("shape") or {}).get("n_groups") ==
+                (blk.get("shape") or {}).get("n_groups") and
+                bool((ob.get("shape") or {}).get("fused")) ==
+                bool((blk.get("shape") or {}).get("fused")))
+            if same:
                 raise SystemExit(
-                    "画像形状冲突：%s 与 %s 同为 %s/%s 组/fused=%s"
+                    "画像形状冲突：%s 与 %s 同域且同组结构（%s, %s 组）"
                     % (other, name, blk.get("maps_to_domain"),
-                       blk["shape"]["n_groups"], blk["shape"]["fused"]))
+                       (blk.get("shape") or {}).get("n_groups")))
         out["deployments"][name] = blk
     out["unmeasured"] = (out.get("unmeasured") or []) + \
                         (extra.get("unmeasured") or [])
@@ -318,20 +325,41 @@ def deployment_for_domain(profile, domain):
 SHAPE_KEYS = ("n_groups", "fused")
 
 
+def _member_key(members):
+    """把组结构归一成可比较的键：组内顺序无关、组间顺序有关。"""
+    if not members:
+        return None
+    try:
+        return tuple(tuple(sorted(m)) for m in members)
+    except TypeError:
+        return None
+
+
 def deployment_for(profile, domain, shape):
-    """按 (域, 组数, 是否融合) 精确匹配。返回 (name, block) 或 None。
+    """按 (域, 组结构) 精确匹配。返回 (name, block) 或 None。
 
     为什么必须精确：Q99 是执行形状相关的量。3 组不融合测出来的尾部借给
     1 组全融合的候选，等于把两个不同程序的数混在一起——文献里最容易被
     审出来的那种错。匹配不到就返回 None（不可排名），不许退而求其次。
+
+    只用「组数」不够：`[sample+pid][sink]` 与 `[sample][pid+sink]` 都是
+    2 组不融合，但相位跨度差一倍（实测 p99 462 vs 263 µs）。所以优先比
+    组成员集合，成员缺失时才退回 (组数, 融合) 且要求唯一命中。
     """
     shape = shape or {}
+    want_members = _member_key(shape.get("members"))
     hits = []
     for name, blk in (profile.get("deployments") or {}).items():
         if blk.get("maps_to_domain") != domain:
             continue
         sh = blk.get("shape") or {}
         if not sh:
+            continue
+        if want_members is not None:
+            got = _member_key(sh.get("members"))
+            if got is None or got != want_members:
+                continue
+            hits.append((name, blk))
             continue
         ok = True
         for k in SHAPE_KEYS:
@@ -524,6 +552,7 @@ def decide(candidates, profile, alpha=1.0, beta=0.0, gamma=0.0,
             "fused": bool(cand.get("fused")
                           if cand.get("fused") is not None
                           else len(groups) < len((cand.get("plan") or {}).get("order") or [])),
+            "members": [g.get("members") or [] for g in groups],
         }
         for s in scheds:
             r = evaluate(profile, domain, s, n_cross,
