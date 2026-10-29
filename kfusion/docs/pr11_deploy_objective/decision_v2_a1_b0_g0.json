@@ -354,7 +354,7 @@
         "rounds": 10,
         "across_rounds": [
           412.0,
-          427.0
+          414.0
         ],
         "statistic": "median_of_round_p99"
       },
@@ -382,10 +382,10 @@
         "start_lat_p99_median_us": 14.0,
         "start_lat_p99_range_us": [
           13.0,
-          24.0
+          14.0
         ],
-        "start_lat_max_worst_us": 98.658,
-        "resp_max_worst_us": 698.258,
+        "start_lat_max_worst_us": 72.525,
+        "resp_max_worst_us": 453.121,
         "rounds_with_miss": 0
       },
       "deadline_us": 1000.0,
@@ -574,7 +574,7 @@
       "miss_bound": "point",
       "terms": {
         "Q99_resp_us": 462.0,
-        "R_miss": 0.0001,
+        "R_miss": 0.00016,
         "C_boundary_us": 0.0
       },
       "J_us": 462.0,
@@ -589,11 +589,11 @@
         "statistic": "median_of_round_p99"
       },
       "miss_provenance": {
-        "count": 5,
+        "count": 8,
         "n_cycles": 50000,
         "ci95_wilson": [
-          4.271e-05,
-          0.0002341
+          8.108e-05,
+          0.00031572
         ],
         "used": "point"
       },
@@ -604,19 +604,19 @@
         "p99_us": 5.0
       },
       "tail": {
-        "start_lat_p50_median_us": 61.0,
+        "start_lat_p50_median_us": 62.0,
         "start_lat_p50_range_us": [
           61.0,
-          61.0
+          62.0
         ],
         "start_lat_p99_median_us": 64.0,
         "start_lat_p99_range_us": [
           64.0,
           64.0
         ],
-        "start_lat_max_worst_us": 1923.631,
-        "resp_max_worst_us": 2156.334,
-        "rounds_with_miss": 4
+        "start_lat_max_worst_us": 2182.571,
+        "resp_max_worst_us": 2583.182,
+        "rounds_with_miss": 6
       },
       "deadline_us": 1000.0,
       "worst_resp_over_deadline": true,
@@ -1106,7 +1106,7 @@
       "miss_bound": "point",
       "terms": {
         "Q99_resp_us": 462.0,
-        "R_miss": 0.0001,
+        "R_miss": 0.00016,
         "C_boundary_us": 0.0
       },
       "J_us": 462.0,
@@ -1121,11 +1121,11 @@
         "statistic": "median_of_round_p99"
       },
       "miss_provenance": {
-        "count": 5,
+        "count": 8,
         "n_cycles": 50000,
         "ci95_wilson": [
-          4.271e-05,
-          0.0002341
+          8.108e-05,
+          0.00031572
         ],
         "used": "point"
       },
@@ -1136,19 +1136,19 @@
         "p99_us": 5.0
       },
       "tail": {
-        "start_lat_p50_median_us": 61.0,
+        "start_lat_p50_median_us": 62.0,
         "start_lat_p50_range_us": [
           61.0,
-          61.0
+          62.0
         ],
         "start_lat_p99_median_us": 64.0,
         "start_lat_p99_range_us": [
           64.0,
           64.0
         ],
-        "start_lat_max_worst_us": 1923.631,
-        "resp_max_worst_us": 2156.334,
-        "rounds_with_miss": 4
+        "start_lat_max_worst_us": 2182.571,
+        "resp_max_worst_us": 2583.182,
+        "rounds_with_miss": 6
       },
       "deadline_us": 1000.0,
       "worst_resp_over_deadline": true,
@@ -1194,7 +1194,7 @@
         "rounds": 10,
         "across_rounds": [
           412.0,
-          427.0
+          414.0
         ],
         "statistic": "median_of_round_p99"
       },
@@ -1222,10 +1222,10 @@
         "start_lat_p99_median_us": 14.0,
         "start_lat_p99_range_us": [
           13.0,
-          24.0
+          14.0
         ],
-        "start_lat_max_worst_us": 98.658,
-        "resp_max_worst_us": 698.258,
+        "start_lat_max_worst_us": 72.525,
+        "resp_max_worst_us": 453.121,
         "rounds_with_miss": 0
       },
       "deadline_us": 1000.0,
@@ -1327,7 +1327,7 @@
   "claim": "在已通过 verify 的候选之间按实测尾部排序；不宣称硬实时可调度性",
   "sources": {
     "profile": "kfusion/docs/pr11_deploy_objective/sched_profile_v2.json",
-    "profile_sha256": "7669dbfb6e3ab6b4ab9469aec7268d8de4d5314fc2c66190b961a395aab747c0",
+    "profile_sha256": "2c30f0325fc13d248471f229061b8074726a5ca5bf3c0eb7053e7f49ee7d4129",
     "stkp": "kfusion/docs/pr11_deploy_objective/candidates_pr10e_stkp.json",
     "stkp_sha256": "306ea6f318b1282ee85cdefd67fa06bda033f2c72c2a6aee54ea538dde40e203",
     "stkp_chosen_as_generated": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]"

@@ -46,12 +46,12 @@
           "measured": {
             "q99_resp_us": 74.0,
             "start_lat_p99_us": 72.0,
-            "start_lat_p50_us": 72.0,
-            "resp_max_us": 14284.584,
-            "misses": 69,
+            "start_lat_p50_us": 71.5,
+            "resp_max_us": 14568.022,
+            "misses": 77,
             "n_cycles": 50000,
             "rounds": 10,
-            "miss_rate_upper": 0.00174594,
+            "miss_rate_upper": 0.00192412,
             "sched": "cfs"
           },
           "reconstruction": {
@@ -62,8 +62,8 @@
             "note": "分解自同一批实测；差值应≈0，明显非 0 说明两项不同源"
           },
           "deadline_verdict": "infeasible_observed",
-          "why": "实测 69/50000 拍超期 1000.0 µs（最差 14284.6 µs）",
-          "over_deadline_max_us": 14284.584,
+          "why": "实测 77/50000 拍超期 1000.0 µs（最差 14568.0 µs）",
+          "over_deadline_max_us": 14568.022,
           "boundary_unit_us": 2.0
         },
         {
@@ -72,7 +72,7 @@
             "q99_resp_us": 24.0,
             "start_lat_p99_us": 22.0,
             "start_lat_p50_us": 21.0,
-            "resp_max_us": 75.4,
+            "resp_max_us": 164.138,
             "misses": 0,
             "n_cycles": 50000,
             "rounds": 10,
@@ -101,7 +101,7 @@
       "deployment": "fused_user_load4",
       "deadline_verdict": "infeasible_observed",
       "worst_sched": "cfs",
-      "why": "实测 69/50000 拍超期 1000.0 µs（最差 14284.6 µs）"
+      "why": "实测 77/50000 拍超期 1000.0 µs（最差 14568.0 µs）"
     },
     {
       "candidate_id": "STKP:L[stage_sample+stage_pid]|L[stage_sink]",
@@ -140,55 +140,51 @@
         {
           "sched": "cfs",
           "measured": {
-            "q99_resp_us": 473.0,
-            "start_lat_p99_us": 72.0,
-            "start_lat_p50_us": 71.0,
-            "resp_max_us": 14570.762,
-            "misses": 78,
+            "q99_resp_us": 1023.0,
+            "start_lat_p99_us": 1023.0,
+            "start_lat_p50_us": 235.5,
+            "resp_max_us": 43005.809,
+            "misses": 8336,
             "n_cycles": 50000,
             "rounds": 10,
-            "miss_rate_upper": 0.00194633,
+            "miss_rate_upper": 0.17001266,
             "sched": "cfs"
           },
           "reconstruction": {
-            "R_hat_us": 74.0,
-            "start_lat_p99_us": 72.0,
+            "R_hat_us": 1025.0,
+            "start_lat_p99_us": 1023.0,
             "exec_p99_us": 2.0,
-            "gap_vs_q99_us": -399.0,
+            "gap_vs_q99_us": 2.0,
             "note": "分解自同一批实测；差值应≈0，明显非 0 说明两项不同源"
           },
           "deadline_verdict": "infeasible_observed",
-          "why": "实测 78/50000 拍超期 1000.0 µs（最差 14570.8 µs）",
-          "over_deadline_max_us": 14570.762,
+          "why": "实测 8336/50000 拍超期 1000.0 µs（最差 43005.8 µs）",
+          "over_deadline_max_us": 43005.809,
           "boundary_unit_us": 2.0
         },
         {
           "sched": "fifo99",
           "measured": {
-            "q99_resp_us": 422.0,
+            "q99_resp_us": 422.5,
             "start_lat_p99_us": 22.0,
             "start_lat_p50_us": 21.0,
-            "resp_max_us": 436.352,
-            "misses": 0,
+            "resp_max_us": 1013.662,
+            "misses": 1,
             "n_cycles": 50000,
             "rounds": 10,
-            "miss_rate_upper": 7.683e-05,
+            "miss_rate_upper": 0.00011329,
             "sched": "fifo99"
           },
           "reconstruction": {
             "R_hat_us": 24.0,
             "start_lat_p99_us": 22.0,
             "exec_p99_us": 2.0,
-            "gap_vs_q99_us": -398.0,
+            "gap_vs_q99_us": -398.5,
             "note": "分解自同一批实测；差值应≈0，明显非 0 说明两项不同源"
           },
-          "horizon": {
-            "period_us": 1000.0,
-            "cycles": 3600000.0,
-            "expected_misses_upper": 276.58799999999997
-          },
-          "deadline_verdict": "cannot_certify",
-          "why": "已观测 0 超期，但 1.0h 内上界 276.59 次超期（率上界 7.68e-05）",
+          "deadline_verdict": "infeasible_observed",
+          "why": "实测 1/50000 拍超期 1000.0 µs（最差 1013.7 µs）",
+          "over_deadline_max_us": 1013.662,
           "boundary_unit_us": 2.0
         }
       ],
@@ -197,7 +193,7 @@
       "deployment": "split_sp_k_user_load4",
       "deadline_verdict": "infeasible_observed",
       "worst_sched": "cfs",
-      "why": "实测 78/50000 拍超期 1000.0 µs（最差 14570.8 µs）"
+      "why": "实测 8336/50000 拍超期 1000.0 µs（最差 43005.8 µs）"
     },
     {
       "candidate_id": "STKP:L[stage_sample]|L[stage_pid+stage_sink]",
@@ -239,11 +235,11 @@
             "q99_resp_us": 274.0,
             "start_lat_p99_us": 72.0,
             "start_lat_p50_us": 71.0,
-            "resp_max_us": 16483.321,
-            "misses": 115,
+            "resp_max_us": 16364.006,
+            "misses": 79,
             "n_cycles": 50000,
             "rounds": 10,
-            "miss_rate_upper": 0.00275985,
+            "miss_rate_upper": 0.00196852,
             "sched": "cfs"
           },
           "reconstruction": {
@@ -254,8 +250,8 @@
             "note": "分解自同一批实测；差值应≈0，明显非 0 说明两项不同源"
           },
           "deadline_verdict": "infeasible_observed",
-          "why": "实测 115/50000 拍超期 1000.0 µs（最差 16483.3 µs）",
-          "over_deadline_max_us": 16483.321,
+          "why": "实测 79/50000 拍超期 1000.0 µs（最差 16364.0 µs）",
+          "over_deadline_max_us": 16364.006,
           "boundary_unit_us": 2.0
         },
         {
@@ -264,7 +260,7 @@
             "q99_resp_us": 223.0,
             "start_lat_p99_us": 22.0,
             "start_lat_p50_us": 21.0,
-            "resp_max_us": 233.437,
+            "resp_max_us": 243.758,
             "misses": 0,
             "n_cycles": 50000,
             "rounds": 10,
@@ -293,7 +289,7 @@
       "deployment": "split_s_pk_user_load4",
       "deadline_verdict": "infeasible_observed",
       "worst_sched": "cfs",
-      "why": "实测 115/50000 拍超期 1000.0 µs（最差 16483.3 µs）"
+      "why": "实测 79/50000 拍超期 1000.0 µs（最差 16364.0 µs）"
     },
     {
       "candidate_id": "A",
@@ -337,11 +333,11 @@
             "q99_resp_us": 473.0,
             "start_lat_p99_us": 72.0,
             "start_lat_p50_us": 71.0,
-            "resp_max_us": 16484.303,
-            "misses": 81,
+            "resp_max_us": 16641.466,
+            "misses": 101,
             "n_cycles": 50000,
             "rounds": 10,
-            "miss_rate_upper": 0.00201286,
+            "miss_rate_upper": 0.00245366,
             "sched": "cfs"
           },
           "reconstruction": {
@@ -352,8 +348,8 @@
             "note": "分解自同一批实测；差值应≈0，明显非 0 说明两项不同源"
           },
           "deadline_verdict": "infeasible_observed",
-          "why": "实测 81/50000 拍超期 1000.0 µs（最差 16484.3 µs）",
-          "over_deadline_max_us": 16484.303,
+          "why": "实测 101/50000 拍超期 1000.0 µs（最差 16641.5 µs）",
+          "over_deadline_max_us": 16641.466,
           "boundary_unit_us": 2.0
         },
         {
@@ -362,7 +358,7 @@
             "q99_resp_us": 422.0,
             "start_lat_p99_us": 22.0,
             "start_lat_p50_us": 21.0,
-            "resp_max_us": 450.041,
+            "resp_max_us": 536.375,
             "misses": 0,
             "n_cycles": 50000,
             "rounds": 10,
@@ -370,10 +366,10 @@
             "sched": "fifo99"
           },
           "reconstruction": {
-            "R_hat_us": 23.0,
+            "R_hat_us": 24.0,
             "start_lat_p99_us": 22.0,
-            "exec_p99_us": 1.0,
-            "gap_vs_q99_us": -399.0,
+            "exec_p99_us": 2.0,
+            "gap_vs_q99_us": -398.0,
             "note": "分解自同一批实测；差值应≈0，明显非 0 说明两项不同源"
           },
           "horizon": {
@@ -391,7 +387,7 @@
       "deployment": "split3_user_plan_load4",
       "deadline_verdict": "infeasible_observed",
       "worst_sched": "cfs",
-      "why": "实测 81/50000 拍超期 1000.0 µs（最差 16484.3 µs）"
+      "why": "实测 101/50000 拍超期 1000.0 µs（最差 16641.5 µs）"
     },
     {
       "candidate_id": "STKP:L[stage_sample]|L[stage_pid]|L[stage_sink]",

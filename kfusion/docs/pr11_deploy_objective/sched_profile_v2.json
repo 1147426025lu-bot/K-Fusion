@@ -664,7 +664,7 @@
         "cfs": {
           "rounds": 10,
           "n_cycles": 50000,
-          "n_miss": 5,
+          "n_miss": 8,
           "q99_resp_us": {
             "value": 462.0,
             "evidence": "measured",
@@ -678,32 +678,32 @@
             "note": "跨轮极差一并保留；混池 p99 会掩盖单轮劣化"
           },
           "miss_rate": {
-            "value": 0.0001,
+            "value": 0.00016,
             "evidence": "measured",
             "n_cycles": 50000,
             "rounds": 10,
-            "count": 5,
+            "count": 8,
             "ci95_wilson": [
-              4.271e-05,
-              0.0002341
+              8.108e-05,
+              0.00031572
             ],
             "statistic": "pooled_over_rounds",
             "note": "事件数少时点估计不稳，可用 --miss-bound upper"
           },
           "tail": {
-            "start_lat_p50_median_us": 61.0,
+            "start_lat_p50_median_us": 62.0,
             "start_lat_p50_range_us": [
               61.0,
-              61.0
+              62.0
             ],
             "start_lat_p99_median_us": 64.0,
             "start_lat_p99_range_us": [
               64.0,
               64.0
             ],
-            "start_lat_max_worst_us": 1923.631,
-            "resp_max_worst_us": 2156.334,
-            "rounds_with_miss": 4
+            "start_lat_max_worst_us": 2182.571,
+            "resp_max_worst_us": 2583.182,
+            "rounds_with_miss": 6
           },
           "work_p99_us": {
             "value": 1.0,
@@ -727,7 +727,7 @@
             "n_cycles": 50000,
             "across_rounds": [
               412.0,
-              427.0
+              414.0
             ],
             "statistic": "median_of_round_p99",
             "note": "跨轮极差一并保留；混池 p99 会掩盖单轮劣化"
@@ -754,10 +754,10 @@
             "start_lat_p99_median_us": 14.0,
             "start_lat_p99_range_us": [
               13.0,
-              24.0
+              14.0
             ],
-            "start_lat_max_worst_us": 98.658,
-            "resp_max_worst_us": 698.258,
+            "start_lat_max_worst_us": 72.525,
+            "resp_max_worst_us": 453.121,
             "rounds_with_miss": 0
           },
           "work_p99_us": {
