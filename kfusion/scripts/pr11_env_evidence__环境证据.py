@@ -77,18 +77,28 @@ def sha256_file(path):
     return h.hexdigest()
 
 
-def kernel_cfg(release):
-    """从 /boot/config-<rel> 取抢占类别。拿不到就返回 None，**不猜**。"""
-    path = "/boot/config-%s" % release
-    txt = readf(path)
-    if txt is None:
-        return None, None
-    kv = {}
-    for line in txt.splitlines():
-        if line.startswith("CONFIG_") and "=" in line:
-            k, v = line.split("=", 1)
-            kv[k] = v
-    return kv, path
+def kernel_cfg(release, explicit=None):
+    """取抢占类别用的内核配置。**拿不到就返回 None，不猜。**
+
+    显式 --config 优先：自建内核（比如 PREEMPT_RT）常常没有
+    /boot/config-<release>，配置只存在于源码树的 .config 里；
+    这时必须由调用者指明路径，并把来源写进证据，否则「从哪读的」无从追溯。
+    """
+    candidates = []
+    if explicit:
+        candidates.append(explicit)
+    candidates.append("/boot/config-%s" % release)
+    for path in candidates:
+        txt = readf(path)
+        if txt is None:
+            continue
+        kv = {}
+        for line in txt.splitlines():
+            if line.startswith("CONFIG_") and "=" in line:
+                k, v = line.split("=", 1)
+                kv[k] = v
+        return kv, path
+    return None, None
 
 
 def preempt_class(kv, version_line):
@@ -109,10 +119,10 @@ def preempt_class(kv, version_line):
     return None
 
 
-def collect(pin_cpu, source, extra=None):
+def collect(pin_cpu, source, extra=None, config=None):
     release = os.uname()[2]
     version_line = readf("/proc/version") or ""
-    kv, cfg_path = kernel_cfg(release)
+    kv, cfg_path = kernel_cfg(release, explicit=config)
     cmdline = readf("/proc/cmdline") or ""
     doc = {
         "kind": "env_evidence",
@@ -198,10 +208,14 @@ def main():
     ap = argparse.ArgumentParser(description="冻结实验环境证据")
     ap.add_argument("--pin-cpu", type=int, default=3)
     ap.add_argument("--source", default=None, help="被测源码，记 sha256")
+    ap.add_argument("--config", default=None,
+                    help="内核配置文件路径；自建内核（如 PREEMPT_RT）没有 "
+                         "/boot/config-<rel> 时必须显式给，例如 "
+                         "~/rt/kernel/linux-rt47/.config")
     ap.add_argument("-o", "--out", required=True)
     a = ap.parse_args()
 
-    doc = collect(a.pin_cpu, a.source)
+    doc = collect(a.pin_cpu, a.source, config=a.config)
     d = os.path.dirname(os.path.abspath(a.out))
     if d and not os.path.isdir(d):
         os.makedirs(d)

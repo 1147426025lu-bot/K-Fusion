@@ -590,6 +590,9 @@ def main():
     ap.add_argument("--plan", required=True)
     ap.add_argument("--teir", required=True)
     ap.add_argument("--source", required=True)
+    ap.add_argument("--stage-obj", dest="stage_obj", default=None,
+                    help="预编译的计算体目标文件（由 PLCFusionPass 产出）；"
+                         "给了就不写 stage_impl.c")
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--probe-header", default="plc_probe__统一测量探针.h")
     ap.add_argument("--period-us", type=float, default=1000)
@@ -620,11 +623,26 @@ def main():
          emit_mod(kmem, reads, writes, calls, a.source,
                   session_vars=(iface or {}).get("session_vars")))
     src_abs = os.path.abspath(a.source)
-    # stage_impl.c is a copy/include of user source
-    with io.open(src_abs, encoding="utf-8") as f:
-        body = f.read().replace("#include <stdint.h>",
-                                "/* stdint via compat -include */")
-        dump(os.path.join(out, "stage_impl.c"), body)
+    stage_obj = getattr(a, "stage_obj", None)
+    if stage_obj:
+        # 计算体由 Clang/LLVM + PLCFusionPass 产出（stage_impl.o）。
+        # 这里**不再写 stage_impl.c**：写了就等于 kbuild 会现场编译原始 C，
+        # .ko 里的计算体便没经过任何内核化转换。
+        import shutil
+        # kbuild 只接受「有源文件」的对象：给 .s 它就会汇编；给裸 .o 会因缺 .cmd 失败
+        if stage_obj.endswith((".s", ".S")):
+            shutil.copy(stage_obj, os.path.join(out, "stage_impl.S"))
+        else:
+            shutil.copy(stage_obj, os.path.join(out, "stage_impl.o"))
+        dump(os.path.join(out, "READ_ME__stage_obj.txt"),
+             "stage_impl.o 由 build_kernel_stage__内核计算体.py 生成：\n"
+             "  task.c -clang-> task.kernel.ll -plc-fusion-remap-> llc -> stage_impl.o\n"
+             "不要在此目录放 stage_impl.c，否则 kbuild 会重新编译原始 C。\n")
+    else:
+        with io.open(src_abs, encoding="utf-8") as f:
+            body = f.read().replace("#include <stdint.h>",
+                                    "/* stdint via compat -include */")
+            dump(os.path.join(out, "stage_impl.c"), body)
     dump(os.path.join(out, "Kbuild"), emit_kbuild(a.source))
     dump(os.path.join(out, "Makefile"),
          "KDIR ?= /root/linux-5.15.86\n"

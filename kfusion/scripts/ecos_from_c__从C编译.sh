@@ -354,9 +354,19 @@ fi
 
 step "8) 生成用户态驱动（#include 原计算体，不复制）"
 if [ "$DOMAIN" = "mixed" ]; then
+  # 内核段计算体同样必须由 Pass 产出（UKU 的 kernel 组 = stage_pid 之类）
+  step "8-uku-a) 内核计算体（Pass 产出 .o，供 UKU 模块链接）"
+  "$PY" "$KF/scripts/build_kernel_stage__内核计算体.py" \
+    --source "$STAGE_SRC" --plan "$OUT/plan.json" \
+    --out-dir "$OUT/uku_stage" \
+    --pass-so "${KFUSION_PASS_SO:-$KF/kfusion/build/KFusionPass.so}" \
+    --clang "$CLANG" --opt "$OPT" --llc "${LLC_BIN:-llc}" \
+    --extra-public "${KERNEL_STATE_SYMS:-g_in,g_integ,g_out,loop_reset,loop_main}" \
+    || die "UKU 内核计算体构建失败（拒绝回落到直接编译原 C）" 9
   "$PY" "$KF/scripts/mixed_uku_codegen__混合交接.py" \
     --plan "$OUT/plan.json" --teir "$OUT/task.teir.json" \
     --source "$STAGE_SRC" --out-dir "$OUT/kmod_uku" \
+    --stage-obj "$OUT/uku_stage/stage_impl.S" \
     --probe-header "$PROBE" --period-us "$PERIOD" --cycles "$CYCLES" \
     "${CALLS[@]}" "${DIGEST[@]}" || die "UKU codegen 失败" 9
   cp "$OUT/kmod_uku/driver.c" "$OUT/driver.c"
@@ -395,7 +405,16 @@ if [ "$DOMAIN" = "linux_kernel" ]; then
     --target linux-kernel \
     --name five_stage_loop \
     "${CALLS[@]}" "${EMIT_DIGEST[@]}" || die "emit linux-kernel 失败" 9
-  cp "$STAGE_SRC" "$OUT/kmod_hrtimer/stage_impl.c"
+  # 计算体必须由 Clang/LLVM + PLCFusionPass 产生，**不再复制原始 C**。
+  # 复制 = kbuild 现场编译原 C，等于 .ko 里的计算体没经过任何内核化转换。
+  step "8b-1) 内核计算体：task.ll → plc-fusion-remap → llc → stage_impl.o"
+  "$PY" "$KF/scripts/build_kernel_stage__内核计算体.py" \
+    --source "$STAGE_SRC" --plan "$OUT/plan.json" \
+    --out-dir "$OUT/kmod_hrtimer" \
+    --pass-so "${KFUSION_PASS_SO:-$KF/kfusion/build/KFusionPass.so}" \
+    --clang "$CLANG" --opt "$OPT" --llc "${LLC_BIN:-llc}" \
+    --extra-public "${KERNEL_STATE_SYMS:-g_in,g_integ,g_out,loop_reset,loop_main}" \
+    || die "内核计算体构建失败（拒绝回落到直接编译原 C）" 9
   if [ "${SKIP_KMOD:-0}" != "1" ] && [ -d "$KDIR" ]; then
     make -C "$KDIR" M="$OUT/kmod_hrtimer" modules || echo "⚠ 内核模块构建失败（源码仍保留）"
   else
