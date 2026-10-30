@@ -63,8 +63,23 @@ rtb_setup() {
         echo "$PROBE_CPU" > "$CG/$ISO_NAME/cpuset.cpus" 2>/dev/null
         w 0 "$CG/$HK_NAME/cpuset.mems"; w 0 "$CG/$ISO_NAME/cpuset.mems"
         # v2 的分区语义等价于原版 sched_load_balance=0（CPU3 独立 partition root）
-        w isolated "$CG/$ISO_NAME/cpuset.cpus.partition"
-        ptype="$(cat "$CG/$ISO_NAME/cpuset.cpus.partition" 2>/dev/null)"
+        #
+        # 2026-10-30 实测（Pi4 / 5.15.49-rt47 / Debian 13 systemd 257）：
+        # 写 `isolated` 返回 EINVAL——isolated 要求这些 CPU 在同级之间"独占"，
+        # 而 init.scope 等 cgroup 没有设 cpuset.cpus，其有效 cpuset 继承了 0-3，
+        # 与 kfusion_iso 的 {3} 重叠。5.15 没有 cpuset.cpus.exclusive，
+        # 无法用「显式让出」的方式消解。
+        # 退一步写 `root`：仍是 partition root（CPU3 从父分区调度域中摘出，
+        # 负载均衡不再把任务往这里推），只是没到 isolated 的"完全不做均衡"。
+        # 域级隔离本就由 isolcpus=domain,managed_irq,3 提供，两者不冲突。
+        local ptype="none"
+        if echo isolated > "$CG/$ISO_NAME/cpuset.cpus.partition" 2>/dev/null; then
+            ptype="$(cat "$CG/$ISO_NAME/cpuset.cpus.partition" 2>/dev/null)"
+        elif echo root > "$CG/$ISO_NAME/cpuset.cpus.partition" 2>/dev/null; then
+            ptype="$(cat "$CG/$ISO_NAME/cpuset.cpus.partition" 2>/dev/null)"
+            echo "   [RTB] ⚠ isolated 被内核拒绝（同级有效 cpuset 重叠），退为 partition=root"
+        fi
+        record "RTB_PARTITION" "$ptype"
         echo "   [RTB] v2: $HK_NAME(cpus=$HK_CPUS) + $ISO_NAME(cpus=$PROBE_CPU, partition=$ptype)"
         # 松散进程迁入 housekeeping（跳过自身；失败即跳过——多为已受限的内核线程）
         local moved=0 p

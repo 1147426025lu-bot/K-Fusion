@@ -53,6 +53,10 @@ struct kfusion_uku_state {
 	int32_t value;
 };
 #define KFUSION_UKU_STATE_IOC _IOWR('K', 2, struct kfusion_uku_state)
+/* 复位会话。**契约**：复位会调用 loop_reset()，即清空内核侧持久状态
+ * （如积分的 g_integ），并把期望序号归一到 1。它不保留"故障前的进度"。
+ * 调用方必须在复位后重新灌入完整初值，否则后续每拍都会建立在清零状态上。 */
+#define KFUSION_UKU_IOC_RESET _IO('K', 3)
 #endif
 """
 
@@ -152,13 +156,56 @@ static DEFINE_MUTEX(uku_mu);
 static bool uku_busy;
 static u32 uku_expect;
 
+/* 会话状态机（审查建议的短路径修法）：
+ *     READY --(seq 合法)--> 计算 --+--> 复制成功 --> READY
+ *                                  +--> 复制失败 --> FAULTED（锁死，拒绝一切重试）
+ *
+ * 为什么必须锁死而不是让调用方重试：
+ *   copy_to_user 失败发生在阶段函数**已经改过持久状态**之后（例如 g_integ 已前进）。
+ *   此时序号没提交，调用方若重试同一 seq，积分会再累加一次——状态悄悄多推进一拍，
+ *   而每拍输出看起来都对。这不是性能问题，是正确性缺陷。
+ * 复位是显式的：KFUSION_UKU_IOC_RESET 会调用 loop_reset()，**清空持久状态**，
+ * 并把 seq 归一到 1。这条写进接口契约（见 kfusion_uku.h），不是默默重置。
+ */
+enum uku_sess { UKU_READY = 0, UKU_FAULTED = 1 };
+static int uku_sess_state = UKU_READY;
+static u32 uku_fault_seq;
+
+/* 仅用于验收的故障注入：在该 seq 上强制走「计算已执行、结果复制失败」分支。
+ * 默认 0=关闭。没有它就无法构造 copy_to_user 失败——而从用户态无法让
+ * copy_from_user 成功、copy_to_user 失败（同一个 arg 指针）。
+ * 验收脚本 insmod 时传 uku_fault_at_seq=N 打开，产物 README 会记录这一点。 */
+static unsigned int uku_fault_at_seq;
+module_param_named(fault_at_seq, uku_fault_at_seq, uint, 0644);
+MODULE_PARM_DESC(fault_at_seq, "验收用：在第 N 个请求上强制 copy_to_user 失败（0=关闭）");
+
+static long uku_reset(void)
+{
+	long rc = 0;
+
+	mutex_lock(&uku_mu);
+	if (!uku_busy) {
+		rc = -ENODEV;
+		goto out;
+	}
+	loop_reset();
+	uku_expect = 1;
+	uku_sess_state = UKU_READY;
+	uku_fault_seq = 0;
+out:
+	mutex_unlock(&uku_mu);
+	return rc;
+}
+
 static long uku_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 {
 	struct kfusion_uku_msg msg;
 	s64 t0, t1;
 	long rc = 0;
 
-%(state_ioctl)s	if (cmd != KFUSION_UKU_IOC)
+%(state_ioctl)s	if (cmd == KFUSION_UKU_IOC_RESET)
+		return uku_reset();
+	if (cmd != KFUSION_UKU_IOC)
 		return -ENOTTY;
 	if (copy_from_user(&msg, (void __user *)arg, sizeof(msg)))
 		return -EFAULT;
@@ -172,6 +219,12 @@ static long uku_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 		rc = -EINVAL;
 		goto out;
 	}
+	if (uku_sess_state == UKU_FAULTED) {
+		/* 上次算完了但没交出去：拒绝任何请求（包括同一 seq 的重试）。
+		 * 想恢复只能走 KFUSION_UKU_IOC_RESET，而那会清持久状态。 */
+		rc = -EIO;
+		goto out;
+	}
 	if (msg.seq != uku_expect) {
 		rc = -EILSEQ;
 		goto out;
@@ -183,7 +236,21 @@ static long uku_ioctl(struct file *f, unsigned int cmd, unsigned long arg)
 	t1 = ktime_get_ns();
 	msg.k_start_ns = (int64_t)t0;
 	msg.k_end_ns = (int64_t)t1;
+	if (uku_fault_at_seq && msg.seq == uku_fault_at_seq) {
+		uku_sess_state = UKU_FAULTED;
+		uku_fault_seq = msg.seq;
+		pr_err("uku: [injected] seq=%%u 计算已执行、复制失败 -> FAULTED\\n",
+		       uku_fault_seq);
+		rc = -EFAULT;
+		goto out;
+	}
 	if (copy_to_user((void __user *)arg, &msg, sizeof(msg))) {
+		/* 走到这里说明阶段函数已经执行、持久状态已经前进，
+		 * 但结果没交出去、序号也没提交。锁死会话，禁止重试。 */
+		uku_sess_state = UKU_FAULTED;
+		uku_fault_seq = msg.seq;
+		pr_err("uku: copy_to_user failed at seq=%%u -> FAULTED（状态已前进，禁止重试；需 RESET）\\n",
+		       uku_fault_seq);
 		rc = -EFAULT;
 		goto out;
 	}
@@ -203,6 +270,8 @@ static int uku_open(struct inode *i, struct file *f)
 	loop_reset();
 	uku_busy = true;
 	uku_expect = 1;
+	uku_sess_state = UKU_READY;
+	uku_fault_seq = 0;
 	mutex_unlock(&uku_mu);
 	return 0;
 }
@@ -213,6 +282,8 @@ static int uku_release(struct inode *i, struct file *f)
 	loop_reset();
 	uku_busy = false;
 	uku_expect = 0;
+	uku_sess_state = UKU_READY;
+	uku_fault_seq = 0;
 	mutex_unlock(&uku_mu);
 	return 0;
 }

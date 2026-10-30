@@ -9,6 +9,8 @@
 #   bash kfusion/scripts/ecos_from_c__从C编译.sh \
 #        kfusion/examples/ecos/five_stage_loop__闭环五阶段示例.c
 #
+# 注意 KERNEL_STATE_SYMS 不要把 loop_main 放进去：它调用全部阶段，
+# 会把未入选的用户态阶段一起拖进内核计算体（符号检查会拒绝交付）。
 # 环境变量：
 #   CLANG OPT PYTHON  OUT_DIR  BIND (默认 setpoint=1000)
 #   SKIP_HOST=1  只生成不编译用户态
@@ -361,7 +363,7 @@ if [ "$DOMAIN" = "mixed" ]; then
     --out-dir "$OUT/uku_stage" \
     --pass-so "${KFUSION_PASS_SO:-$KF/kfusion/build/KFusionPass.so}" \
     --clang "$CLANG" --opt "$OPT" --llc "${LLC_BIN:-llc}" \
-    --extra-public "${KERNEL_STATE_SYMS:-g_in,g_integ,g_out,loop_reset,loop_main}" \
+    --extra-public "${KERNEL_STATE_SYMS:-g_in,g_integ,g_out,loop_reset}" \
     || die "UKU 内核计算体构建失败（拒绝回落到直接编译原 C）" 9
   "$PY" "$KF/scripts/mixed_uku_codegen__混合交接.py" \
     --plan "$OUT/plan.json" --teir "$OUT/task.teir.json" \
@@ -413,10 +415,17 @@ if [ "$DOMAIN" = "linux_kernel" ]; then
     --out-dir "$OUT/kmod_hrtimer" \
     --pass-so "${KFUSION_PASS_SO:-$KF/kfusion/build/KFusionPass.so}" \
     --clang "$CLANG" --opt "$OPT" --llc "${LLC_BIN:-llc}" \
-    --extra-public "${KERNEL_STATE_SYMS:-g_in,g_integ,g_out,loop_reset,loop_main}" \
+    --extra-public "${KERNEL_STATE_SYMS:-g_in,g_integ,g_out,loop_reset}" \
     || die "内核计算体构建失败（拒绝回落到直接编译原 C）" 9
   if [ "${SKIP_KMOD:-0}" != "1" ] && [ -d "$KDIR" ]; then
     make -C "$KDIR" M="$OUT/kmod_hrtimer" modules || echo "⚠ 内核模块构建失败（源码仍保留）"
+    KO=$(ls "$OUT/kmod_hrtimer"/*.ko 2>/dev/null | head -1)
+    if [ -n "$KO" ]; then
+      "$PY" "$KF/scripts/build_kernel_stage__内核计算体.py" \
+        --source "$STAGE_SRC" --plan "$OUT/plan.json" \
+        --out-dir "$OUT/kmod_hrtimer" --pass-so "${KFUSION_PASS_SO:-$KF/kfusion/build/KFusionPass.so}" \
+        --attach-ko "$KO" 2>/dev/null || echo "⚠ manifest 回填 .ko 失败"
+    fi
   else
     echo "跳过 .ko 构建（无 KERNELDIR 或 SKIP_KMOD=1）"
   fi
@@ -425,6 +434,14 @@ elif [ "$DOMAIN" = "mixed" ]; then
   rm -rf "$OUT/kmod_hrtimer"
   if [ "${SKIP_KMOD:-0}" != "1" ] && [ -d "$KDIR" ]; then
     make -C "$KDIR" M="$OUT/kmod_uku" modules || echo "⚠ UKU 模块构建失败（源码仍保留）"
+    KO=$(ls "$OUT/kmod_uku"/*.ko 2>/dev/null | head -1)
+    if [ -n "$KO" ]; then
+      # 身份回填：manifest 里的 final_ko.sha256 是「这个 .ko 由哪次转换产生」的锚点
+      "$PY" "$KF/scripts/build_kernel_stage__内核计算体.py" \
+        --source "$STAGE_SRC" --plan "$OUT/plan.json" \
+        --out-dir "$OUT/uku_stage" --pass-so "${KFUSION_PASS_SO:-$KF/kfusion/build/KFusionPass.so}" \
+        --attach-ko "$KO" 2>/dev/null || echo "⚠ manifest 回填 .ko 失败"
+    fi
   else
     echo "跳过 UKU .ko（无 KERNELDIR 或 SKIP_KMOD=1）"
   fi
