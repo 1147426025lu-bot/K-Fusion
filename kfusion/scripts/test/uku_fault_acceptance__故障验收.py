@@ -103,6 +103,24 @@ def do_reset(fd):
         return -e.errno
 
 
+def ref_step(integ, g_in):
+    """Python 参考模型：与 stage_pid 逐位一致（含 asr3 与钳位）。
+
+    用来回答「模块里的计算到底等不等于原程序」——只比 digest 不够，
+    因为 digest 是聚合量，两个不同序列也可能撞上。逐拍比对才是证据。
+    """
+    err = 0 - g_in
+    integ += err
+    if integ > 10000:
+        integ = 10000
+    elif integ < -10000:
+        integ = -10000
+    asr3 = (integ >> 3) if integ >= 0 else ~((~integ) >> 3)
+    acc = err * 2 + asr3
+    acc = max(-2147483648, min(2147483647, acc))
+    return integ, acc
+
+
 def run_phase(seqs, values, fault_at=0, verbose=True):
     """跑一轮：返回逐拍记录 + 故障后的重试与复位结果。"""
     fd = os.open(DEV, os.O_RDWR)
@@ -148,6 +166,11 @@ def main():
 
     if os.geteuid() != 0:
         raise SystemExit("需要 root（insmod/rmmod）")
+    # 验收只跑几百拍，但要**避开隔离核**：板上可能正在做 CPU3 的浸泡测量。
+    try:
+        os.sched_setaffinity(0, {0})
+    except Exception:
+        pass
     if not os.path.isfile(a.module):
         raise SystemExit("模块不存在：%s" % a.module)
 
@@ -164,7 +187,13 @@ def main():
     flt = run_phase(seqs, values, fault_at=a.fault_at)
     rmmod()
 
+    # 参考模型逐拍比对（只对成功返回的拍；故障拍的 out 不可信）
+    ref_integ, ref_trace = 0, []
+    for v in values:
+        ref_integ, out = ref_step(ref_integ, v)
+        ref_trace.append({"integ": ref_integ, "out": out})
     doc = {"kind": "uku_fault_acceptance", "version": 1,
+           "reference_model": ref_trace,
            "module": os.path.abspath(a.module),
            "seqs": seqs, "values": values, "fault_at": a.fault_at,
            "reference": ref, "faulted": flt, "checks": []}
@@ -200,6 +229,22 @@ def main():
         retry.get("state_after") == (fh[0]["state_after"] if fh else None),
         "retry=%s fault=%s" % (retry.get("state_after"),
                                fh[0]["state_after"] if fh else None))
+    # 5.5) 逐拍与参考模型一致（状态 + 输出）
+    mism = []
+    for i, t in enumerate(rt):
+        if t["rc"] != 0:
+            continue
+        if t["state_after"] != ref_trace[i]["integ"]:
+            mism.append("seq%d 状态 %s≠%s" % (t["seq"], t["state_after"],
+                                              ref_trace[i]["integ"]))
+        if t["out"] != ref_trace[i]["out"]:
+            mism.append("seq%d 输出 %s≠%s" % (t["seq"], t["out"],
+                                              ref_trace[i]["out"]))
+    add("每拍持久状态与参考模型一致", not any("状态" in m for m in mism),
+        "; ".join(m for m in mism if "状态" in m)[:160])
+    add("每拍输出与参考模型一致", not any("输出" in m for m in mism),
+        "; ".join(m for m in mism if "输出" in m)[:160])
+
     # 6) 复位清空持久状态，之后可重新开始
     add("RESET 返回 0", flt.get("reset_rc") == 0, "rc=%s" % flt.get("reset_rc"))
     add("RESET 后持久状态清零", flt.get("state_after_reset") == 0,
