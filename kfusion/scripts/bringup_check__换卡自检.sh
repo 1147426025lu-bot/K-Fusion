@@ -68,7 +68,38 @@ note "git rev" "$REV（源码脏文件 $DIRTY 个）"
 SRC="$KF/examples/ecos/mixed_pid_stateful__积分混合.c"
 [ -f "$SRC" ] && note "被测源 sha256" "$(sha256sum "$SRC" | cut -c1-16)" || bad "被测源" "缺失"
 
-echo "── 5) 与上次画像的平台身份证比对 ──"
+echo "── 5) 最新产物（PR-17/17b/18）──"
+V3="$KF/docs/pr11_deploy_objective/sched_profile_v3.json"
+if [ -f "$V3" ]; then
+  note "sched_profile_v3" "存在（含 mixed_plan 三释放）"
+  "$PY" - "$V3" <<'PY2'
+import io, json, sys
+p = json.load(io.open(sys.argv[1], encoding="utf-8"))
+dep = p.get("deployments") or {}
+mp = dep.get("mixed_plan") or {}
+sh = mp.get("shape") or {}
+print("    mixed_plan: n_releases=%s exec_mode=%s" % (sh.get("n_releases"),
+                                                    sh.get("exec_mode")))
+PY2
+else
+  bad "sched_profile_v3" "缺失（clone 不完整或还在旧提交？）"
+fi
+RPT="$KF/docs/pr17_uku_plan/report.json"
+if [ -f "$RPT" ]; then
+  "$PY" - "$RPT" <<'PY3'
+import io, json, sys
+r = json.load(io.open(sys.argv[1], encoding="utf-8"))
+print("    形状覆盖率 %s  语义 digest 校验 %s" % (r.get("coverage"),
+                                             r.get("semantic_ok")))
+PY3
+else
+  bad "pr17 report" "缺失（mixed 三释放的覆盖证据）"
+fi
+for f in docs/pr18_feedback/calibration_loo_r09.json          docs/pr17_uku_plan/stkp.json; do
+  [ -f "$KF/$f" ] && note "$(basename "$f")" "存在" || bad "$(basename "$f")" "缺失"
+done
+
+echo "── 6) 与上次画像的平台身份证比对 ──"
 if [ -f "$REC" ]; then
   "$PY" - "$REC" "$REL" "$MODEL" "$PY" <<'PY'
 import io, json, sys
@@ -94,8 +125,13 @@ fi
 
 echo
 if [ "$fail" = "1" ]; then
-  echo "结论：**不能**直接沿用旧数据。先按上面逐项补齐，再跑文档 §8 的 ①–⑤。"
-  echo "尤其：内核不同 ⇒ 旧 Q99/超期数属于另一台机器，混表会被审稿直接打掉。"
+  echo "结论：**不能**直接沿用旧数据。先补齐上面各项，然后按顺序重做："
+  echo "  ① env_evidence 重新取证"
+  echo "  ② 形状×载荷重测：--repeat 10（静默 6 形状 + 加压 4 形状，约 30–40 分钟）"
+  echo "  ③ profile v2 → v3（v2 不许被覆盖，历史复现要用）"
+  echo "  ④ decision / pr14 / pr15 / pr16 重算"
+  echo "  ⑤ PR-17b 的 mixed_plan 重测 + report.json 覆盖 5/5 复核"
+  echo "内核不同 ⇒ 旧 Q99/超期数属于另一台机器，混表会被审稿直接打掉。"
   exit 5
 fi
 echo "结论：环境一致、依赖齐全 → 可以直接接着做内核宿主那条路径。"
