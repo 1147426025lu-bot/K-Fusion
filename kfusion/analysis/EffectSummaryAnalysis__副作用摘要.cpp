@@ -34,6 +34,15 @@
 
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/Config/llvm-config.h"
+
+// LLVM 18 起把 StringRef::startswith 改名为 starts_with。两个版本都要能编：
+// 旧卡是 LLVM 16，新卡是 LLVM 19——写死任何一边都会让另一边的构建直接失败。
+#if LLVM_VERSION_MAJOR >= 18
+#define KF_STARTS_WITH(S, P) ((S).starts_with(P))
+#else
+#define KF_STARTS_WITH(S, P) ((S).startswith(P))
+#endif
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Function.h"
@@ -144,7 +153,7 @@ bool isBenignIntrinsic(StringRef Name) {
                       "llvm.smax", "llvm.smin", "llvm.umax", "llvm.umin",
                       "llvm.smul.with.overflow", "llvm.uadd.with.overflow",
                       "llvm.readnone", "llvm.sideeffect"})
-    if (Name.startswith(K))
+    if (KF_STARTS_WITH(Name, K))
       return true;
   return false;
 }
