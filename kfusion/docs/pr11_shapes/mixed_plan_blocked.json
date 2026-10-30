@@ -41,5 +41,7 @@
     "ko_built": "kfusion_uku.ko（构建成功，能 insmod，能跑 mixed 单释放）"
   },
   "consequence": "覆盖率停在 4/5：该候选的 plan 形状（Q99）不可执行/不可测，只能按单释放口径 34.64µs 报告，而那属于另一个形状",
-  "to_fix": "给 UKU 驱动加 plan 模式（按组相位释放在用户态驱动里做），或让 STKP 对 mixed 域只枚举单释放方案"
+  "to_fix": "给 UKU 驱动加 plan 模式（按组相位释放在用户态驱动里做），或让 STKP 对 mixed 域只枚举单释放方案",
+  "superseded_by": "PR-17b (aca967c)：UKU 驱动已支持 plan/plan_user，mixed_plan 三释放可测可排名，覆盖 5/5",
+  "status_now": "已修复，本文件仅作历史记录，不得再引用为「现状」"
 }
