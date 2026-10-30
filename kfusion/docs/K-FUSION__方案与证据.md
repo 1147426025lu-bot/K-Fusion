@@ -329,6 +329,35 @@ stat_interval）+`iso_rtbubbles`（cgroup 分区）。
 所以档位按机制强度选 L4，并用 15 min / 1 h / 8 h 验证它「不退化」，
 而不是声称它「更快」。
 
+### 6.7.6 统一计划接口（审查第 5 条）：`plan_v2` 与 V1–V7 校验
+
+`plan.json` 原来只有 `groups[].{members,domain,release_phase_us}`——能画图、能算成本，
+但**不足以生成代码**：谁负责释放、跨域传什么、状态归谁、哪个相位是硬约束，全靠
+生成器猜。新增 `ecos/plan_extend__计划扩展.py`：
+
+| 新增字段 | 用途 |
+|---|---|
+| `state_ownership` | 跨拍状态只能有一个所有者（`g_seq→user`、`g_integ→kernel`） |
+| `handoffs[]` | 只在域边界出现：`user→kernel: [g_in] ioctl`、`kernel→user: [g_out] ioctl` |
+| `release_owner` | 同一任务只能一个释放负责人（UKU 是 `user_driver`，全内核宿主是 `kernel_host`） |
+| `groups[].phase_binding` | `required`（时间契约要求，不许被融合改动）/ `advisory` |
+| `runtime` | `{cpu:3, sched:fifo, priority:80, timer:absolute}` |
+| `provenance` | 输入 plan/teir 的 sha256，便于复现 |
+
+校验 V1–V7 全部 fail-closed，任一不过就拒绝：未知顶层字段直接拒（防拼错被静默忽略）、
+组 id 唯一、相位 `0 ≤ ph < period`、`kernel_host` 必须真有 kernel 组、
+跨拍状态必须有唯一所有者、域边界必须有 handoff 且不能多出无边界 handoff、
+`fifo` 的优先级必须 1..99、`phase_binding` 只能是 required/advisory。
+
+在真实 STKP 输出上的结果（`chosen.plan.json` + `task.teir.json`）：
+3 组、owner=`user_driver`、状态 2 个（`g_seq→user`、`g_integ→kernel`）、
+2 条 handoff（`g_in` 下行、`g_out` 上行），与设计预期逐项一致。
+自测 13 项通过。
+
+⚠ **该门禁默认关闭**（`PLAN_SCHEMA_GATE=1` 才启用）：它必须在**全部候选形状**上
+验证过才能当默认——目前只验过 mixed 与 fused 两个形状，其余形状未跑，
+所以先留成可选步骤，而不是让一个没验过的门禁挡住生成。
+
 ---
 
 ## 7. 不成立 / 不许写的说法

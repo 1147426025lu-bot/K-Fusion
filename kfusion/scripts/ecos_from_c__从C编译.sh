@@ -196,6 +196,17 @@ if [ "$DOMAIN" = "mixed" ] && [ "$ADAPTER" != "uku_ioctl" ]; then
 fi
 cp "$OUT/chosen.plan.json" "$OUT/plan.json"
 
+if [ "${PLAN_SCHEMA_GATE:-0}" = "1" ]; then
+  # 计划扩展：把 STKP 的输出补成「能指导代码生成」的形态并做 V1–V7 校验。
+  # 默认关闭的原因：它必须在**全部候选形状**上都验证过才能当默认门禁；
+  # 目前只在 mixed（U–K–U）与 fused 两个形状上离线验证通过。
+  # 打开方式：PLAN_SCHEMA_GATE=1；校验不过即退出 8，不生成代码。
+  step "7b0) 计划扩展与校验（state_ownership / handoffs / release_owner / runtime）"
+  "$PY" "$KF/scripts/ecos/plan_extend__计划扩展.py" extend \
+    --plan "$OUT/plan.json" --teir "$OUT/task.teir.json" \
+    -o "$OUT/plan_v2.json" || die "计划扩展/校验失败（V1–V7）" 8
+fi
+
 step "7b) 独立验证器（验证入选方案，不调用规划器）"
 "$PY" "$KF/verify/plan_verify.py" \
   --teir "$OUT/task.teir.json" --plan "$OUT/plan.json" \
