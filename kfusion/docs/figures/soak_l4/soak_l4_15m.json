@@ -1,0 +1,106 @@
+{
+  "kind": "soak_ecos",
+  "version": 1,
+  "label": "soak_l4_15m",
+  "level": "l4",
+  "rc": 0,
+  "cmd": [
+    "sh",
+    "-c",
+    "echo $$ > /sys/fs/cgroup/kfusion_iso/cgroup.procs 2>/dev/null || true; exec taskset -c 3 chrt -f 99 /tmp/soakB/driver plan 900000 trace"
+  ],
+  "minutes_planned": 15.0,
+  "period_us": 1000.0,
+  "cycles_planned": 900000,
+  "wall_s": 900.39,
+  "wall_ratio": 1.0004,
+  "sched": "fifo99",
+  "pin_cpu": 3,
+  "iso_cgroup": "/sys/fs/cgroup/kfusion_iso",
+  "kernel": {
+    "release": "5.15.49-rt47-v8+",
+    "version": "Linux version 5.15.49-rt47-v8+ (root@raspberrypi) (gcc (Debian 10.2.1-6) 10.2.1 20210110, GNU ld (GNU Binutils for Debian) 2.35.2) #10 SMP PREEMPT_RT Fri Apr 14 12:14:00 CST 2023",
+    "realtime": "1"
+  },
+  "boot": {
+    "isolcpus": "isolcpus=domain,managed_irq,3",
+    "nohz_full": "nohz_full=3"
+  },
+  "rt_runtime_us": "-1",
+  "stat": {
+    "start_lat": {
+      "min": 8.042,
+      "avg": 8.313,
+      "p50": 8,
+      "p90": 8,
+      "p99": 8,
+      "p99.9": 16,
+      "p99.99": 36,
+      "max": 85.925,
+      "over": 0,
+      "neg": 0,
+      "min_signed": 8.042,
+      "n": 900000
+    },
+    "exec": {
+      "min": 0.333,
+      "avg": 0.375,
+      "p50": 0,
+      "p90": 0,
+      "p99": 0,
+      "p99.9": 3,
+      "p99.99": 7,
+      "max": 28.314,
+      "over": 0,
+      "neg": 0,
+      "min_signed": 0.333,
+      "n": 900000
+    },
+    "response": {
+      "min": 8.418,
+      "avg": 8.688,
+      "p50": 8,
+      "p90": 8,
+      "p99": 8,
+      "p99.9": 17,
+      "p99.99": 39,
+      "max": 91.962,
+      "over": 0,
+      "neg": 0,
+      "min_signed": 8.418,
+      "n": 900000
+    },
+    "span": {
+      "min": 0.333,
+      "avg": 0.375,
+      "p50": 0,
+      "p90": 0,
+      "p99": 0,
+      "p99.9": 3,
+      "p99.99": 7,
+      "max": 28.314,
+      "over": 0,
+      "neg": 0,
+      "min_signed": 0.333,
+      "n": 900000
+    }
+  },
+  "miss": [
+    "0",
+    "900000"
+  ],
+  "digest": "e0e3bf7a",
+  "rtlat": {
+    "stride": 1,
+    "n_samples_kept": 900000,
+    "fine_hist_n": 900000,
+    "p50_us": 8.25,
+    "p99_us": 8.45,
+    "p999_us": 16.25,
+    "p9999_us": 36.85,
+    "max_us": 85.9,
+    "under": null,
+    "under_n": 0,
+    "fine_over_n": 0
+  }
+}

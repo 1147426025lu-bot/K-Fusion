@@ -232,6 +232,105 @@ M2–M4 都 10/10 选对 B@fifo99），差别全在**期限判定的可信度**�
 
 ---
 
+## 6.7 统一架构第一轮（U-3 之后）：计算体闭包、故障语义、PID 未定义行为
+
+平台换了：旧卡 `5.15.86` 非 RT → 现在 **`5.15.49-rt47-v8+`（PREEMPT_RT，`/sys/kernel/realtime=1`，
+HZ=1000）**，启动参数 `isolcpus=domain,managed_irq,3 nohz_full=3 rcu_nocbs=3 irqaffinity=0-2
+workqueue.cpumask=7`。**旧卡的所有 Q99 与超期数属于另一台机器，不许混表。**
+
+### 6.7.1 计算体：从"复制原 C"到"Pass 产出 + 符号三查"
+
+现在两条内核分支（`kmod_hrtimer`、`kmod_uku`）的计算体都由
+`clang → task.ll → plc-fusion-remap → internalize+globaldce → llc → stage_impl.S`
+产生，**不再有 `stage_impl.c`**（有就等于 kbuild 现场编译原 C）。
+
+`internalize` 只改可见性，**不删代码**——所以必须再跑 `globaldce`，
+否则未入选的用户态阶段仍留在 `.o` 里。之后三道闸门：
+
+| 检查 | 失败后果 |
+|---|---|
+| 入选函数必须在 `.o` 里 | 退出 6（名字对不上或没定义） |
+| **未入选阶段必须不在** | 退出 7（闭包没收敛住） |
+| 未定义符号必须为空；间接调用一律拒绝 | 退出 4 / 5 |
+
+这条闸门当场抓到一处真泄漏：`KERNEL_STATE_SYMS` 里带了 `loop_main`，
+而它调用全部阶段 ⇒ `stage_sample` 被拖进内核体。去掉后 mixed 形状的计算体是
+`asr3, g_in, g_integ, g_out, g_seq, loop_reset, stage_pid`（2 008 B / `.S` 3 019 B），
+`stage_sample`、`stage_sink` 均不在。`.ko` 的 sha256 回填进 manifest，
+可追到「这个模块由哪次转换产生」。
+
+### 6.7.2 UKU 复制失败：状态会悄悄多推进一拍（已修）
+
+原实现顺序是：校验 seq → **执行阶段（改 `g_integ`）** → `copy_to_user` → 提交 seq。
+复制失败时序号没提交，调用方若重试同一 seq，**积分会再累加一次**——
+每拍输出看起来都对，状态却多走了一拍。这不是性能问题。
+
+改成会话状态机 `READY → READY | FAULTED`；`FAULTED` 拒绝一切请求，
+只能用 `KFUSION_UKU_IOC_RESET` 复位，而复位按契约**清空持久状态**。
+
+板上验收（`scripts/test/uku_fault_acceptance__故障验收.py`，9/9 通过）：
+
+| 检查 | 实测 |
+|---|---|
+| 参考相 seq 1–8 全部成功 | 状态 300 → 1130 |
+| 注入相 seq5 返回 `EFAULT` | rc=-14 |
+| **故障拍状态已前进且与参考同拍相同** | 1130 = 1130（证明阶段确实跑过一次） |
+| 重试被拒 `EIO` | rc=-5 |
+| **重试后状态未再前进** | 1130 → 1130 |
+| RESET 后状态清零、可重新开始 | 0，seq1 成功 |
+
+注入点 `uku_fault_at_seq=N` 是模块参数（默认 0=关）：从用户态无法构造
+「`copy_from_user` 成功而 `copy_to_user` 失败」（同一个 arg 指针），
+所以必须有确定的注入点，否则这条永远只能"声明已修"。
+
+### 6.7.3 PID 示例的未定义行为
+
+`(err << 1)` 在 `err<0` 时是有符号左移，C 标准未定义；`g_integ >> 3` 对负数是
+实现定义行为。改为 64 位计算 + 显式钳位 + 可移植的 `asr3()`。
+**语义未变**：gold 与 mixed 的 digest 仍同为 `c46a2fa3`（400 拍，同一二进制）。
+
+### 6.7.4 隔离：L4 的实际状态（不是"申请了就算"）
+
+历史档位：L2=启动参数；L1=+运行时调优；L4=L1+`iso_l4_extra`（IRQ 清场/watchdog/
+stat_interval）+`iso_rtbubbles`（cgroup 分区）。
+
+板上取证（`scripts/tune/iso_evidence__隔离取证.py`）结论：
+
+| 项 | L0（仅启动参数） | L4 |
+|---|---|---|
+| `sched_rt_runtime_us` | 950000（**长跑会被节流**） | **-1** |
+| CPU3 cpuidle | `ondemand` | 无 idle state 可进（恒 C0） |
+| workqueue cpumask | 7 | 7 |
+| IRQ 亲和含 CPU3 | 1（`arm-pmu`，per-CPU，改不动） | 1（同上） |
+| cpuset 分区 | 无 | **partition=root** |
+| `vm.stat_interval` | 1 | 60 |
+
+两个必须如实写明的限制：
+
+1. **`cpuset.cpus.partition=isolated` 在 5.15 上写不进去**（EINVAL）：`isolated`
+   要求这些 CPU 在同级间独占，而 `init.scope` 等 cgroup 没设 `cpuset.cpus`、
+   有效 cpuset 继承了 0-3，与 `{3}` 重叠；5.15 没有 `cpuset.cpus.exclusive`
+   可以用来让出。已退为 `partition=root`（CPU3 从父分区调度域摘出），
+   并在 `iso_rtbubbles` 里显式打印这条降级，不再静默停在 `member`。
+2. **一旦 CPU3 成为 partition root，不在 `kfusion_iso` 组里的进程 `taskset -c 3`
+   会直接 EINVAL**。所以测量进程必须先进入该 cgroup 再钉核——`soak_ecos`
+   已自动这么做；否则会得到 `rc=1 / 0.0s` 的假失败。
+
+### 6.7.5 隔离档位 A/B（1 分钟短测，交替两轮）：分辨不出
+
+| 档位 | 运行 | p50 | p99 | p99.9 | p99.99 | max |
+|---|---|---|---|---|---|---|
+| l0 | r1 / r2 | 8.35 / 8.35 | 8.45 / 8.45 | 8.65 / 8.65 | 8.95 / 9.15 | 15.10 / 15.70 |
+| l1 | r1 / r2 | 8.35 / 8.25 | 8.45 / 8.45 | 8.65 / 8.55 | 9.35 / 8.95 | 19.51 / 12.97 |
+| l4 | r1 / r2 | 8.25 / 8.25 | 8.45 / 8.45 | 8.55 / 8.55 | 8.85 / 8.85 | 14.89 / 15.65 |
+
+**结论**：60 s × 6 万拍下，三档的分布主体完全重合，max 的差异（12.9–19.5）落在
+轮间波动里。**短测选不出档位**——隔离的收益只能靠长跑看稀有事件，
+所以档位按机制强度选 L4，并用 15 min / 1 h / 8 h 验证它「不退化」，
+而不是声称它「更快」。
+
+---
+
 ## 7. 不成立 / 不许写的说法
 
 - ❌「验证器通过 = 可调度」——反例：CFS 5/50000（静默）、69–115/50000（加压）。
