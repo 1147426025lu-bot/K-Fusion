@@ -462,3 +462,11 @@ DEPLOY_OBJECTIVE=...sched_profile_v2.json APPLY_SCHED=1 \
    已有格子写成 RT 结论。
 4. **谁抢了 CPU 的机制归因**：受 p1 32 MB 限制，需换分区或外部 trace。
 5. **构造 margin ≈ 噪声的候选对**：否则选择正确率永远满分。
+
+<!-- SOAK_TABLE -->
+| 段长 | 拍数 | 实际墙钟 | p50 | p99 | p99.9 | p99.99 | max | 超期 |
+|---|---|---|---|---|---|---|---|---|
+| 15m | 900000 | 900 s | 8.25 | 8.45 | 16.25 | 36.85 | 85.90 | 0/900000 |
+
+图：`docs/figures/soak_l4/soak_l4_{15m}.png`（四联抖动分布）与 `..._latency.png`（延迟时间线）。
+<!-- /SOAK_TABLE -->
