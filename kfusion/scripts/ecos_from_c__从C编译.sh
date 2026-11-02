@@ -197,20 +197,22 @@ if [ "$DOMAIN" = "mixed" ] && [ "$ADAPTER" != "uku_ioctl" ]; then
 fi
 cp "$OUT/chosen.plan.json" "$OUT/plan.json"
 
-step "7b-enrich) 计划补全：state_ownership / handoffs（U-2）"
-"$PY" "$KF/scripts/plan_enrich__计划补全.py" \
-  --plan "$OUT/plan.json" --teir "$OUT/task.teir.json" \
-  -o "$OUT/plan.json" || die "plan enrich 失败" 8
-
-if [ "${PLAN_SCHEMA_GATE:-0}" = "1" ]; then
-  # 计划扩展：把 STKP 的输出补成「能指导代码生成」的形态并做 V1–V7 校验。
-  # 默认关闭的原因：它必须在**全部候选形状**上都验证过才能当默认门禁；
-  # 目前只在 mixed（U–K–U）与 fused 两个形状上离线验证通过。
-  # 打开方式：PLAN_SCHEMA_GATE=1；校验不过即退出 8，不生成代码。
-  step "7b0) 计划扩展与校验（state_ownership / handoffs / release_owner / runtime）"
+# PR-U6：唯一计划事实来源。extend 产出 verified_plan.json（含 ownership/handoffs
+# 与 V1–V6 校验），再覆盖 plan.json——后端只读 plan.json，不再有 plan_v2 旁路。
+# PLAN_SCHEMA_GATE=0 仅作紧急逃生（仍写 enrich 软补全）；正式路径默认开启。
+step "7b-verify) 计划规范化 + 校验 → verified_plan.json（U-6）"
+if [ "${PLAN_SCHEMA_GATE:-1}" = "1" ]; then
   "$PY" "$KF/scripts/ecos/plan_extend__计划扩展.py" extend \
     --plan "$OUT/plan.json" --teir "$OUT/task.teir.json" \
-    -o "$OUT/plan_v2.json" || die "计划扩展/校验失败（V1–V7）" 8
+    -o "$OUT/verified_plan.json" \
+    || die "计划扩展/校验失败（拒绝生成）" 8
+  cp "$OUT/verified_plan.json" "$OUT/plan.json"
+  cp "$OUT/verified_plan.json" "$OUT/plan_v2.json"  # 兼容旧脚本读 plan_v2
+else
+  echo "⚠ PLAN_SCHEMA_GATE=0：跳过严格校验，仅做 soft enrich（不得用于论文证据）"
+  "$PY" "$KF/scripts/plan_enrich__计划补全.py" \
+    --plan "$OUT/plan.json" --teir "$OUT/task.teir.json" \
+    -o "$OUT/plan.json" || die "plan enrich 失败" 8
 fi
 
 step "7b) 独立验证器（验证入选方案，不调用规划器）"
@@ -437,14 +439,16 @@ if [ "$DOMAIN" = "linux_kernel" ]; then
     --extra-public "${KERNEL_STATE_SYMS:-g_in,g_integ,g_out,loop_reset}" \
     || die "内核计算体构建失败（拒绝回落到直接编译原 C）" 9
   if [ "${SKIP_KMOD:-0}" != "1" ] && [ -d "$KDIR" ]; then
-    make -C "$KDIR" M="$OUT/kmod_hrtimer" modules || echo "⚠ 内核模块构建失败（源码仍保留）"
+    make -C "$KDIR" M="$OUT/kmod_hrtimer" modules \
+      || die "内核模块构建失败（kmod_hrtimer）" 9
     KO=$(ls "$OUT/kmod_hrtimer"/*.ko 2>/dev/null | head -1)
-    if [ -n "$KO" ]; then
-      "$PY" "$KF/scripts/build_kernel_stage__内核计算体.py" \
-        --source "$STAGE_SRC" --plan "$OUT/plan.json" \
-        --out-dir "$OUT/kmod_hrtimer" --pass-so "${KFUSION_PASS_SO:-$KF/kfusion/build/KFusionPass.so}" \
-        --attach-ko "$KO" 2>/dev/null || echo "⚠ manifest 回填 .ko 失败"
-    fi
+    [ -n "$KO" ] || die "make 成功但未产出 .ko" 9
+    "$PY" "$KF/scripts/build_kernel_stage__内核计算体.py" \
+      --source "$STAGE_SRC" --plan "$OUT/plan.json" \
+      --out-dir "$OUT/kmod_hrtimer" \
+      --pass-so "${KFUSION_PASS_SO:-$KF/build/KFusionPass.so}" \
+      --attach-ko "$KO" \
+      || die "manifest 回填 .ko 失败" 9
   else
     echo "跳过 .ko 构建（无 KERNELDIR 或 SKIP_KMOD=1）"
   fi
@@ -452,15 +456,16 @@ elif [ "$DOMAIN" = "mixed" ]; then
   step "8b) UKU ioctl 内核计算模块"
   rm -rf "$OUT/kmod_hrtimer"
   if [ "${SKIP_KMOD:-0}" != "1" ] && [ -d "$KDIR" ]; then
-    make -C "$KDIR" M="$OUT/kmod_uku" modules || echo "⚠ UKU 模块构建失败（源码仍保留）"
+    make -C "$KDIR" M="$OUT/kmod_uku" modules \
+      || die "UKU 模块构建失败" 9
     KO=$(ls "$OUT/kmod_uku"/*.ko 2>/dev/null | head -1)
-    if [ -n "$KO" ]; then
-      # 身份回填：manifest 里的 final_ko.sha256 是「这个 .ko 由哪次转换产生」的锚点
-      "$PY" "$KF/scripts/build_kernel_stage__内核计算体.py" \
-        --source "$STAGE_SRC" --plan "$OUT/plan.json" \
-        --out-dir "$OUT/uku_stage" --pass-so "${KFUSION_PASS_SO:-$KF/kfusion/build/KFusionPass.so}" \
-        --attach-ko "$KO" 2>/dev/null || echo "⚠ manifest 回填 .ko 失败"
-    fi
+    [ -n "$KO" ] || die "UKU make 成功但未产出 .ko" 9
+    "$PY" "$KF/scripts/build_kernel_stage__内核计算体.py" \
+      --source "$STAGE_SRC" --plan "$OUT/plan.json" \
+      --out-dir "$OUT/uku_stage" \
+      --pass-so "${KFUSION_PASS_SO:-$KF/build/KFusionPass.so}" \
+      --attach-ko "$KO" \
+      || die "UKU manifest 回填 .ko 失败" 9
   else
     echo "跳过 UKU .ko（无 KERNELDIR 或 SKIP_KMOD=1）"
   fi

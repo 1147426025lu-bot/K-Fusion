@@ -121,13 +121,19 @@ def build_extended(plan, teir, src_hash=None, teir_hash=None):
     groups = []
     for g in plan.get("groups") or []:
         dom = norm_domain(g.get("domain"))
+        # 后端（emit / build_kernel_stage / STKP）仍认 linux_*；
+        # 短名 user/kernel 只用于 ownership/handoffs 与 V2–V5 校验。
+        dom_long = ("linux_kernel" if dom == "kernel"
+                    else "linux_userspace" if dom == "user"
+                    else g.get("domain"))
         phase = g.get("release_phase_us")
         if phase is None:
             phase = g.get("phase_us")
         groups.append({
             "id": g.get("id"),
             "members": list(g.get("members") or []),
-            "domain": dom,
+            "domain": dom_long,
+            "domain_short": dom,
             "phase_us": float(phase) if phase is not None else None,
             # 默认按时间契约要求（required）：把相位改成 advisory 必须显式声明，
             # 否则融合会把「必须在 400µs 更新输出」的阶段提前，语义就变了。
@@ -142,14 +148,18 @@ def build_extended(plan, teir, src_hash=None, teir_hash=None):
     task_name = (plan.get("task") or meta.get("task") or tk.get("name")
                  or tk.get("entry"))
 
-    has_kernel = any(g["domain"] == "kernel" for g in groups)
-    # 释放负责人：有内核宿主时由内核定时器负责；纯用户态/UKU 由用户驱动负责。
-    # UKU 的中段虽然进内核，但**释放仍由用户线程发起**（同步 ioctl），
-    # 所以不能因为存在 kernel 组就判成 kernel_host。
+    has_kernel = any(g.get("domain_short") == "kernel" for g in groups)
+    all_kernel = bool(groups) and all(g.get("domain_short") == "kernel" for g in groups)
+    # 释放负责人：
+    #   · 全内核 → kernel_host（hrtimer 宿主）
+    #   · 纯用户 / UKU 混合 → user_driver（UKU 中段虽进内核，释放仍由用户线程 ioctl）
+    #   · 显式 meta.host=hrtimer 且有内核组 → kernel_host
     owner = plan.get("release_owner")
     if owner is None:
-        owner = "kernel_host" if (has_kernel and meta.get("host") == "hrtimer") \
-            else "user_driver"
+        if all_kernel or (has_kernel and meta.get("host") == "hrtimer"):
+            owner = "kernel_host"
+        else:
+            owner = "user_driver"
 
     carry = teir_self_carry(teir)
     ownership = dict(plan.get("state_ownership") or {})
@@ -168,13 +178,13 @@ def build_extended(plan, teir, src_hash=None, teir_hash=None):
                              + [norm_var(x) for x in (st.get("self_carry") or [])]
                              + [norm_var(x) for x in (st.get("writes") or [])])
                 if v in vars_here:
-                    doms.append(g["domain"])
+                    doms.append(g["domain_short"])
         ownership[v] = doms[-1] if doms and len(set(doms)) == 1 else None
 
     handoffs = []
     for i in range(1, len(groups)):
         a, b = groups[i - 1], groups[i]
-        if a["domain"] == b["domain"]:
+        if a["domain_short"] == b["domain_short"]:
             continue
         # 跨域字段：a 里阶段写的、b 里阶段读的全局量
         wa, rb = [], []
@@ -188,13 +198,28 @@ def build_extended(plan, teir, src_hash=None, teir_hash=None):
             if v not in fields and v not in ownership:
                 fields.append(v)
         handoffs.append({
-            "from": a["domain"], "to": b["domain"],
+            "from": a["domain_short"], "to": b["domain_short"],
             "fields": fields,
             "method": "ioctl" if has_kernel else "shared_memory",
         })
 
-    doc = dict(plan)
-    doc.update({
+    # 只保留白名单顶层字段：STKP/验证器可能塞进 verification 等，
+    # 不能原样带进 v2，否则 V1 会因「未知字段」拒收。
+    runtime = dict(plan.get("runtime") or {
+        "cpu": 3, "sched": "fifo", "priority": 80, "timer": "absolute",
+    })
+    # enrich 用过 release_owner 嵌在 runtime 里；提升到顶层后去掉重复
+    runtime.pop("release_owner", None)
+    if "cpu" not in runtime or runtime.get("cpu") is None:
+        runtime["cpu"] = 3
+    if runtime.get("sched") in ("SCHED_FIFO", "fifo99"):
+        runtime["sched"] = "fifo"
+    if runtime.get("sched") == "SCHED_OTHER":
+        runtime["sched"] = "cfs"
+    if runtime.get("priority") is None and runtime.get("sched") == "fifo":
+        runtime["priority"] = 80
+
+    doc = {
         "version": PLAN_VERSION,
         "task": task_name,
         "period_us": float(period) if period is not None else None,
@@ -203,16 +228,17 @@ def build_extended(plan, teir, src_hash=None, teir_hash=None):
         "state_ownership": ownership,
         "handoffs": handoffs,
         "release_owner": owner,
-        "runtime": dict(plan.get("runtime") or {
-            "cpu": 3, "sched": "fifo", "priority": 80, "timer": "absolute",
-        }),
+        "runtime": runtime,
+        "order": list(plan.get("order") or []),
+        "meta": dict(meta),
         "provenance": {
             "generator": "plan_extend__计划扩展.py",
             "plan_version": PLAN_VERSION,
             "input_plan_sha256": src_hash,
             "input_teir_sha256": teir_hash,
+            "verified": True,
         },
-    })
+    }
     return doc
 
 
@@ -250,9 +276,10 @@ def verify(doc, teir=None):
         if gid in seen_ids:
             errs.append("V2 组 id 重复：%r" % gid)
         seen_ids.add(gid)
-        if g.get("domain") not in DOMAINS:
+        dom = g.get("domain_short") or norm_domain(g.get("domain"))
+        if dom not in DOMAINS:
             errs.append("V2 组 %r domain 非法：%r" % (gid, g.get("domain")))
-        if g.get("domain") == "kernel":
+        if dom == "kernel":
             has_kernel = True
         ph = g.get("phase_us")
         if ph is None or float(ph) < 0 or float(ph) >= period:
@@ -280,12 +307,16 @@ def verify(doc, teir=None):
         if o not in DOMAINS:
             errs.append("V4 状态 %r 所有者非法：%r（必须是 user/kernel）" % (v, o))
 
-    # V5 域边界必须有 handoff，且不能多出无对应边界的 handoff
+    # V5 域边界必须有 handoff，且不能多出无对应边界的 handoff（用短域名）
+    def _short(g):
+        return g.get("domain_short") or norm_domain(g.get("domain"))
+
     boundaries = []
     gs = doc["groups"]
     for i in range(1, len(gs)):
-        if gs[i - 1]["domain"] != gs[i]["domain"]:
-            boundaries.append((gs[i - 1]["domain"], gs[i]["domain"]))
+        a, b = _short(gs[i - 1]), _short(gs[i])
+        if a != b:
+            boundaries.append((a, b))
     got = [(h.get("from"), h.get("to")) for h in doc["handoffs"]]
     for b in boundaries:
         if b not in got:

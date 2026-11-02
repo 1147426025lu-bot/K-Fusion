@@ -431,7 +431,8 @@ static struct ecos_rsf_series ecos_rsf_start = { .name = "start_lat", .min_ns = 
 static struct ecos_rsf_series ecos_rsf_exec  = { .name = "exec",      .min_ns = LONG_MAX };
 static struct ecos_rsf_series ecos_rsf_resp  = { .name = "response",  .min_ns = LONG_MAX };
 static unsigned long ecos_rsf_miss;
-static s64 ecos_rsf_r0, ecos_rsf_s0;	/* 本拍首组 r/s，末组完成时配对 */
+/* per_group 宿主写入；single_worker 用 kf_open，故 maybe_unused */
+static s64 ecos_rsf_r0 __maybe_unused, ecos_rsf_s0 __maybe_unused;
 
 static void ecos_rsf_push(struct ecos_rsf_series *s, s64 v_ns)
 {

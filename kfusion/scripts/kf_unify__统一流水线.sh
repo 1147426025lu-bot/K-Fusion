@@ -94,17 +94,22 @@ else
   echo "  skip .ko 验收（入选用户态；要用内核请 FORCE_CHOSEN=…@linux_kernel）"
 fi
 
-# plan 字段
+# plan 字段（U-6：认 verified_plan / provenance.verified，不再依赖 soft enrich）
 python3 - "$OUT_DIR/plan.json" <<'PY'
 import json, sys
 p = json.load(open(sys.argv[1]))
+prov = p.get("provenance") or {}
 en = (p.get("meta") or {}).get("enriched") or {}
-print("  plan ownership=%s handoffs=%s release=%s"
+verified = bool(prov.get("verified")) or bool((p.get("verification") or {}).get("ok"))
+print("  plan ownership=%s handoffs=%s release_owner=%s verified=%s"
       % (len(p.get("state_ownership") or {}),
          len(p.get("handoffs") or {}),
-         (p.get("runtime") or {}).get("release_owner")))
-if not en:
-    raise SystemExit("plan 未经 enrich")
+         p.get("release_owner"),
+         verified))
+if not verified and not en:
+    raise SystemExit("plan 未经 verified_plan 门禁（也无 soft enrich）")
+if not p.get("state_ownership"):
+    raise SystemExit("plan 缺 state_ownership")
 PY
 
 echo

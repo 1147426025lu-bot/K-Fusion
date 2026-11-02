@@ -1,14 +1,19 @@
 # -*- coding: utf-8 -*-
-"""单工作线程内核宿主（U-5）。
+"""单工作线程内核宿主（U-5 / PR-U7）。
 
 一个 PLC 任务 → 一个 hrtimer + 一个 FIFO kthread + 有界释放事件队列。
 多相位仍按 plan 的 phase 表绝对时间入队；同任务阶段不会被第二个本任务线程并发执行。
+
+测量语义（审查 P0-2/P0-3）：
+  · response 只在末组与首组 **cycle_id 一致** 时入账；
+  · periods 只在配对成功后 +1（完整周期）；
+  · 积压用 queue_backlog_max / release_overflow，禁止 missed+=depth。
 
 旧版「每组一线程」仍由 linux_kernel_emitter._LINUX_C 生成，作对照，不删除。
 """
 from __future__ import print_function
 
-_HOST = r'''/* %(name)s —— 单工作线程 ring-0 宿主（U-5）；不要手改。
+_HOST = r'''/* %(name)s —— 单工作线程 ring-0 宿主（U-5/PR-U7）；不要手改。
  *
  * 方案：%(ngroups)d 组 / %(nstages)d 阶段，周期 %(period)s µs，证据级别 %(evidence)s
  * 组落位：%(layout)s
@@ -16,7 +21,8 @@ _HOST = r'''/* %(name)s —— 单工作线程 ring-0 宿主（U-5）；不要�
  * 与「每组一线程」对照版的差别：
  *   · 只有 1 个 hrtimer、1 个 SCHED_FIFO 工作线程
  *   · 定时器按绝对相位表入队 kf_release_event，工作线程按序执行
- *   · 队列满记 overflow（不静默覆盖）
+ *   · 队列满记 release_overflow（不静默覆盖）
+ *   · r/s/f 按 cycle_id 配对，禁止跨周期拼样本
  */
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -71,23 +77,58 @@ struct kf_release_event {
 	s64 nominal_release_ns;
 };
 
+/* 打开中的周期：首组登记，末组按 cycle_id 配对后才记账。 */
+struct kf_cycle_record {
+	u64 cycle_id;
+	s64 release_ns;
+	s64 start_ns;
+	bool started;
+};
+
 static const s64 ecos_phase_ns[ECOS_GROUPS] = {
 %(phase_ns)s
 };
 
 %(digest_decls)s
 
+/* completed_cycles：末组与首组 cycle_id 配对成功后才 +1 */
 static unsigned long periods;
 module_param(periods, ulong, 0444);
-MODULE_PARM_DESC(periods, "已完成周期数（末组执行后 +1）");
+MODULE_PARM_DESC(periods, "已完整完成的周期数（末组配对成功后 +1）");
 
-static unsigned long missed;
-module_param(missed, ulong, 0444);
-MODULE_PARM_DESC(missed, "工作线程取到时队列已积压的额外事件数");
+static unsigned long queue_backlog_max;
+module_param(queue_backlog_max, ulong, 0444);
+MODULE_PARM_DESC(queue_backlog_max, "观测到的最大队列积压深度（事件数）");
 
+static unsigned long release_overflow;
+module_param(release_overflow, ulong, 0444);
+MODULE_PARM_DESC(release_overflow, "因队列满丢弃的释放事件数（必须为 0）");
+
+/* 兼容旧参数名 */
 static unsigned long overflow;
 module_param(overflow, ulong, 0444);
-MODULE_PARM_DESC(overflow, "释放队列满而丢弃的事件数（必须为 0）");
+MODULE_PARM_DESC(overflow, "同 release_overflow（兼容旧名）");
+
+static unsigned long late_start;
+module_param(late_start, ulong, 0444);
+MODULE_PARM_DESC(late_start, "开始时刻晚于名义释放的事件数");
+
+static unsigned long deadline_miss;
+module_param(deadline_miss, ulong, 0444);
+MODULE_PARM_DESC(deadline_miss, "同周期完成时刻超过名义首释放+period 的次数");
+
+static unsigned long unpaired_finish;
+module_param(unpaired_finish, ulong, 0444);
+MODULE_PARM_DESC(unpaired_finish, "末组完成时与首组 cycle_id 不一致而丢弃的样本");
+
+static unsigned long incomplete_cycle;
+module_param(incomplete_cycle, ulong, 0444);
+MODULE_PARM_DESC(incomplete_cycle, "新周期首组到来时上一拍尚未配对完成的次数");
+
+/* 废弃：旧 missed+=depth 会重复累计；恒为 0 */
+static unsigned long missed;
+module_param(missed, ulong, 0444);
+MODULE_PARM_DESC(missed, "已废弃（恒 0）；看 queue_backlog_max / release_overflow / deadline_miss");
 
 static bool frozen;
 module_param(frozen, bool, 0644);
@@ -98,16 +139,17 @@ MODULE_PARM_DESC(frozen, "写 1 暂停周期体（取一致快照）");
 %(stage_profile)s
 %(xdom_shift_decls)s
 
+static struct kf_cycle_record kf_open;
 static struct hrtimer kf_timer;
 static struct task_struct *kf_worker;
 static wait_queue_head_t kf_wait;
 static DEFINE_SPINLOCK(kf_lock);
 static struct kf_release_event kf_q[KF_Q_DEPTH];
-static unsigned int kf_head;	/* 消费端 */
-static unsigned int kf_tail;	/* 生产端 */
+static unsigned int kf_head;
+static unsigned int kf_tail;
 static s64 kf_base_ns;
-static u64 kf_cycle;		/* 即将入队的周期序号 */
-static int kf_next_g;		/* 即将入队的组下标 */
+static u64 kf_cycle;
+static int kf_next_g;
 
 static bool kf_q_empty(void)
 {
@@ -117,6 +159,19 @@ static bool kf_q_empty(void)
 static bool kf_q_full(void)
 {
 	return ((kf_tail + 1) %% KF_Q_DEPTH) == kf_head;
+}
+
+static unsigned int kf_q_depth(void)
+{
+	return (kf_tail + KF_Q_DEPTH - kf_head) %% KF_Q_DEPTH;
+}
+
+static void kf_note_depth(void)
+{
+	unsigned int d = kf_q_depth();
+
+	if (d > queue_backlog_max)
+		queue_backlog_max = d;
 }
 
 static void kf_arm_next(void)
@@ -150,20 +205,21 @@ static enum hrtimer_restart kf_tick(struct hrtimer *t)
 
 	spin_lock_irqsave(&kf_lock, flags);
 	if (kf_q_full()) {
-		overflow++;
+		release_overflow++;
+		overflow = release_overflow;
 	} else {
 		kf_q[kf_tail] = ev;
 		kf_tail = (kf_tail + 1) %% KF_Q_DEPTH;
+		kf_note_depth();
 	}
 	kf_advance_slot();
 	spin_unlock_irqrestore(&kf_lock, flags);
 
 	wake_up_interruptible(&kf_wait);
 
-	/* 下一拍绝对时间：以统一 base 为准，不因执行迟到而重锚 */
 %(xdom_tick_shift_single)s
 	kf_arm_next();
-	return HRTIMER_NORESTART;	/* 我们自己 arm */
+	return HRTIMER_NORESTART;
 }
 
 static void ecos_run_body(int id)
@@ -171,8 +227,6 @@ static void ecos_run_body(int id)
 	switch (id) {
 %(body_cases)s
 	}
-	if (id == ECOS_FIRST_GROUP)
-		periods++;
 %(digest_update)s%(xdom_report)s
 }
 
@@ -187,8 +241,7 @@ static int kf_worker_fn(void *data)
 		for (;;) {
 			struct kf_release_event ev;
 			unsigned long flags;
-			unsigned int depth;
-			s64 s_ns, f_ns;
+			s64 s_ns, f_ns, T_ns;
 
 			spin_lock_irqsave(&kf_lock, flags);
 			if (kf_q_empty()) {
@@ -197,25 +250,40 @@ static int kf_worker_fn(void *data)
 			}
 			ev = kf_q[kf_head];
 			kf_head = (kf_head + 1) %% KF_Q_DEPTH;
-			depth = (kf_tail + KF_Q_DEPTH - kf_head) %% KF_Q_DEPTH;
+			kf_note_depth();
 			spin_unlock_irqrestore(&kf_lock, flags);
-
-			/* depth 是取走本事件后仍剩的事件数；>0 说明已积压 */
-			if (depth > 0)
-				missed += depth;
 
 			if (unlikely(frozen))
 				continue;
 %(xdom_anchor)s%(probe_before_sw)s
 			s_ns = ktime_get();
+			if (s_ns > ev.nominal_release_ns)
+				late_start++;
+
 			if (ev.group_id == ECOS_FIRST_GROUP) {
-				ecos_rsf_r0 = ev.nominal_release_ns;
-				ecos_rsf_s0 = s_ns;
+				if (kf_open.started)
+					incomplete_cycle++;
+				kf_open.cycle_id = ev.cycle_id;
+				kf_open.release_ns = ev.nominal_release_ns;
+				kf_open.start_ns = s_ns;
+				kf_open.started = true;
 			}
+
 			ecos_run_body((int)ev.group_id);
 			f_ns = ktime_get();
-			if (ev.group_id == ECOS_LAST_GROUP)
-				ecos_rsf_add(ecos_rsf_r0, ecos_rsf_s0, f_ns);
+
+			if (ev.group_id == ECOS_LAST_GROUP) {
+				T_ns = (s64)period_us * 1000LL;
+				if (kf_open.started && kf_open.cycle_id == ev.cycle_id) {
+					ecos_rsf_add(kf_open.release_ns, kf_open.start_ns, f_ns);
+					if (f_ns > kf_open.release_ns + T_ns)
+						deadline_miss++;
+					periods++;
+				} else {
+					unpaired_finish++;
+				}
+				kf_open.started = false;
+			}
 %(probe_after_sw)s
 		}
 	}
@@ -248,6 +316,7 @@ static int __init ecos_init(void)
 	kf_head = kf_tail = 0;
 	kf_cycle = 0;
 	kf_next_g = 0;
+	memset(&kf_open, 0, sizeof(kf_open));
 
 	kf_worker = kthread_create(kf_worker_fn, NULL, "ecos_sw");
 	if (IS_ERR(kf_worker)) {
@@ -284,7 +353,9 @@ static void __exit ecos_exit(void)
 	if (kf_worker)
 		kthread_stop(kf_worker);
 	ecos_stage_report();
-	pr_info("ecos-sw: 已停止 overflow=%%lu missed=%%lu\n", overflow, missed);
+	pr_info("ecos-sw: 已停止 periods=%%lu overflow=%%lu backlog_max=%%lu late=%%lu deadline_miss=%%lu unpaired=%%lu\n",
+		periods, release_overflow, queue_backlog_max, late_start,
+		deadline_miss, unpaired_finish);
 }
 
 module_init(ecos_init);
@@ -297,12 +368,10 @@ MODULE_DESCRIPTION("ECoS single-worker host (%(ngroups)d groups)");
 
 def render(ir, module_name, shared):
     """shared: dict of already-computed placeholders from linux_kernel_emitter.emit."""
-    # 单工作线程下 xdom 周期伸缩：仍按绝对 base 推进，占位为空操作注释
     xdom_tick = shared.get("xdom_tick_shift_single")
     if not xdom_tick:
         xdom_tick = "\t/* 下一相位由 kf_arm_next() 按 base+cycle+phase 绝对计算 */\n"
 
-    # probe_before/after 原模板用 g->id；单线程改为 ev.group_id 的轻量版
     probe_before = shared.get("probe_before_sw", "")
     probe_after = shared.get("probe_after_sw", "")
 
