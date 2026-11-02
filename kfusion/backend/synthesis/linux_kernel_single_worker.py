@@ -4,9 +4,11 @@
 一个 PLC 任务 → 一个 hrtimer + 一个 FIFO kthread + 有界释放事件队列。
 多相位仍按 plan 的 phase 表绝对时间入队；同任务阶段不会被第二个本任务线程并发执行。
 
-测量语义（审查 P0-2/P0-3）：
-  · response 只在末组与首组 **cycle_id 一致** 时入账；
-  · periods 只在配对成功后 +1（完整周期）；
+测量语义（审查 P0-2/P0-3 / 第二轮）：
+  · response 只在末组与首组 **cycle_id 一致** 且 **全部组位图齐全** 时入账；
+  · periods 只在完整周期（组掩码 == ALL）配对成功后 +1；
+  · deadline_miss 用 plan.deadline_us（不是 period）；
+  · late_start 需超过 late_start_slack_ns（默认 50µs）；
   · 积压用 queue_backlog_max / release_overflow，禁止 missed+=depth。
 
 旧版「每组一线程」仍由 linux_kernel_emitter._LINUX_C 生成，作对照，不删除。
@@ -46,18 +48,27 @@ _HOST = r'''/* %(name)s —— 单工作线程 ring-0 宿主（U-5/PR-U7）；�
 #define ECOS_FIRST_GROUP %(first_group)d
 #define ECOS_LAST_GROUP %(last_group)d
 #define KF_Q_DEPTH 64
+#define KF_ALL_GROUPS_MASK ((1U << ECOS_GROUPS) - 1U)
 
 static unsigned int period_us = %(period)d;
 module_param(period_us, uint, 0444);
 MODULE_PARM_DESC(period_us, "控制周期（µs）");
 
+static unsigned int deadline_us = %(deadline)d;
+module_param(deadline_us, uint, 0444);
+MODULE_PARM_DESC(deadline_us, "相对首释放的期限（µs；来自 plan.deadline_us）");
+
 static unsigned int rt_priority = %(rtprio)d;
 module_param(rt_priority, uint, 0444);
-MODULE_PARM_DESC(rt_priority, "工作线程 SCHED_FIFO 优先级");
+MODULE_PARM_DESC(rt_priority, "工作线程 SCHED_FIFO 优先级（来自 plan.runtime.priority）");
 
-static int cpu = -1;
+static int cpu = %(cpu)d;
 module_param(cpu, int, 0444);
-MODULE_PARM_DESC(cpu, "绑定的 CPU（-1 = 不绑）");
+MODULE_PARM_DESC(cpu, "绑定的 CPU（-1 = 不绑；来自 plan.runtime.cpu）");
+
+static unsigned int late_start_slack_ns = %(late_slack_ns)d;
+module_param(late_start_slack_ns, uint, 0644);
+MODULE_PARM_DESC(late_start_slack_ns, "开始晚于名义释放超过此松弛才记 late_start（ns）");
 
 static void ecos_set_fifo(struct task_struct *t, unsigned int prio)
 {
@@ -77,11 +88,12 @@ struct kf_release_event {
 	s64 nominal_release_ns;
 };
 
-/* 打开中的周期：首组登记，末组按 cycle_id 配对后才记账。 */
+/* 打开中的周期：首组登记；末组须 cycle_id 一致且 groups_seen 齐全才记账。 */
 struct kf_cycle_record {
 	u64 cycle_id;
 	s64 release_ns;
 	s64 start_ns;
+	u32 groups_seen;
 	bool started;
 };
 
@@ -91,10 +103,10 @@ static const s64 ecos_phase_ns[ECOS_GROUPS] = {
 
 %(digest_decls)s
 
-/* completed_cycles：末组与首组 cycle_id 配对成功后才 +1 */
+/* completed_cycles：末组 cycle_id 配对且组掩码齐全后才 +1 */
 static unsigned long periods;
 module_param(periods, ulong, 0444);
-MODULE_PARM_DESC(periods, "已完整完成的周期数（末组配对成功后 +1）");
+MODULE_PARM_DESC(periods, "已完整完成的周期数（全部组到位且配对成功后 +1）");
 
 static unsigned long queue_backlog_max;
 module_param(queue_backlog_max, ulong, 0444);
@@ -111,11 +123,11 @@ MODULE_PARM_DESC(overflow, "同 release_overflow（兼容旧名）");
 
 static unsigned long late_start;
 module_param(late_start, ulong, 0444);
-MODULE_PARM_DESC(late_start, "开始时刻晚于名义释放的事件数");
+MODULE_PARM_DESC(late_start, "开始晚于名义释放+slack 的事件数（非期限违约）");
 
 static unsigned long deadline_miss;
 module_param(deadline_miss, ulong, 0444);
-MODULE_PARM_DESC(deadline_miss, "同周期完成时刻超过名义首释放+period 的次数");
+MODULE_PARM_DESC(deadline_miss, "完成时刻超过名义首释放+deadline_us 的次数");
 
 static unsigned long unpaired_finish;
 module_param(unpaired_finish, ulong, 0444);
@@ -123,7 +135,11 @@ MODULE_PARM_DESC(unpaired_finish, "末组完成时与首组 cycle_id 不一致�
 
 static unsigned long incomplete_cycle;
 module_param(incomplete_cycle, ulong, 0444);
-MODULE_PARM_DESC(incomplete_cycle, "新周期首组到来时上一拍尚未配对完成的次数");
+MODULE_PARM_DESC(incomplete_cycle, "新周期首组到来时上一拍尚未完整关闭的次数");
+
+static unsigned long missing_groups;
+module_param(missing_groups, ulong, 0444);
+MODULE_PARM_DESC(missing_groups, "末组到达但本周期组掩码不齐全（中间阶段丢失）的次数");
 
 /* 废弃：旧 missed+=depth 会重复累计；恒为 0 */
 static unsigned long missed;
@@ -257,7 +273,7 @@ static int kf_worker_fn(void *data)
 				continue;
 %(xdom_anchor)s%(probe_before_sw)s
 			s_ns = ktime_get();
-			if (s_ns > ev.nominal_release_ns)
+			if (s_ns > ev.nominal_release_ns + (s64)late_start_slack_ns)
 				late_start++;
 
 			if (ev.group_id == ECOS_FIRST_GROUP) {
@@ -266,23 +282,34 @@ static int kf_worker_fn(void *data)
 				kf_open.cycle_id = ev.cycle_id;
 				kf_open.release_ns = ev.nominal_release_ns;
 				kf_open.start_ns = s_ns;
+				kf_open.groups_seen = 0;
 				kf_open.started = true;
 			}
+
+			if (kf_open.started && kf_open.cycle_id == ev.cycle_id &&
+			    ev.group_id < ECOS_GROUPS)
+				kf_open.groups_seen |= (1U << ev.group_id);
 
 			ecos_run_body((int)ev.group_id);
 			f_ns = ktime_get();
 
 			if (ev.group_id == ECOS_LAST_GROUP) {
-				T_ns = (s64)period_us * 1000LL;
+				T_ns = (s64)deadline_us * 1000LL;
 				if (kf_open.started && kf_open.cycle_id == ev.cycle_id) {
-					ecos_rsf_add(kf_open.release_ns, kf_open.start_ns, f_ns);
-					if (f_ns > kf_open.release_ns + T_ns)
-						deadline_miss++;
-					periods++;
+					if (kf_open.groups_seen == KF_ALL_GROUPS_MASK) {
+						ecos_rsf_add(kf_open.release_ns,
+							     kf_open.start_ns, f_ns);
+						if (f_ns > kf_open.release_ns + T_ns)
+							deadline_miss++;
+						periods++;
+					} else {
+						missing_groups++;
+					}
 				} else {
 					unpaired_finish++;
 				}
 				kf_open.started = false;
+				kf_open.groups_seen = 0;
 			}
 %(probe_after_sw)s
 		}
@@ -342,8 +369,8 @@ static int __init ecos_init(void)
 		}
 	}
 
-	pr_info("ecos-sw: single-worker %%d 组，周期 %%u µs，FIFO %%u，cpu %%d（证据 %(evidence)s）\n",
-		ECOS_GROUPS, period_us, rt_priority, cpu);
+	pr_info("ecos-sw: single-worker %%d 组，周期 %%u µs，deadline %%u µs，FIFO %%u，cpu %%d（证据 %(evidence)s）\n",
+		ECOS_GROUPS, period_us, deadline_us, rt_priority, cpu);
 	return 0;
 }
 
@@ -353,9 +380,9 @@ static void __exit ecos_exit(void)
 	if (kf_worker)
 		kthread_stop(kf_worker);
 	ecos_stage_report();
-	pr_info("ecos-sw: 已停止 periods=%%lu overflow=%%lu backlog_max=%%lu late=%%lu deadline_miss=%%lu unpaired=%%lu\n",
+	pr_info("ecos-sw: 已停止 periods=%%lu overflow=%%lu backlog_max=%%lu late=%%lu deadline_miss=%%lu unpaired=%%lu missing=%%lu\n",
 		periods, release_overflow, queue_backlog_max, late_start,
-		deadline_miss, unpaired_finish);
+		deadline_miss, unpaired_finish, missing_groups);
 }
 
 module_init(ecos_init);
@@ -382,7 +409,10 @@ def render(ir, module_name, shared):
         "first_group": shared["first_group"],
         "last_group": shared["last_group"],
         "period": shared["period"],
+        "deadline": shared.get("deadline", shared["period"]),
         "rtprio": shared["rtprio"],
+        "cpu": shared.get("cpu", -1),
+        "late_slack_ns": shared.get("late_slack_ns", 50000),
         "evidence": shared["evidence"],
         "layout": shared["layout"],
         "phase_ns": shared["phase_ns"],

@@ -84,19 +84,18 @@ static unsigned int period_us = %(period)d;
 module_param(period_us, uint, 0444);
 MODULE_PARM_DESC(period_us, "控制周期（µs），默认取方案里的周期");
 
-/* 实时优先级：默认 99，与用户态 BM2 实验的 FIFO 99 对齐。
+/* 实时优先级：默认取 verified_plan.runtime.priority（缺省 99）。
  * 注意 5.15 只导出 sched_setattr_nocheck / sched_set_fifo；
  * sched_setscheduler_nocheck 在 kallsyms 里有符号但**没有 EXPORT**，链接/加载会失败。 */
 static unsigned int rt_priority = %(rtprio)d;
 module_param(rt_priority, uint, 0444);
-MODULE_PARM_DESC(rt_priority, "内核线程 SCHED_FIFO 优先级（默认 99，与用户态口径一致）");
+MODULE_PARM_DESC(rt_priority, "内核线程 SCHED_FIFO 优先级（默认来自 plan.runtime.priority）");
 
-/* 绑核：-1 = 不绑（默认）。>=0 时把每组的内核线程和它的 hrtimer 都放到该核上。
- * 为什么要绑：不绑时线程可能迁移，唤醒走跨核 IPI，抖动里混进了"跑到哪去了"
- * 这个与融合无关的变量。用户态 BM2 基线是绑核跑的，对比必须同口径。 */
-static int cpu = -1;
+/* 绑核：默认取 verified_plan.runtime.cpu（缺省 -1 = 不绑）。
+ * >=0 时把每组的内核线程和它的 hrtimer 都放到该核上。 */
+static int cpu = %(cpu)d;
 module_param(cpu, int, 0444);
-MODULE_PARM_DESC(cpu, "绑定的 CPU 编号（-1 = 不绑）");
+MODULE_PARM_DESC(cpu, "绑定的 CPU 编号（-1 = 不绑；默认来自 plan.runtime.cpu）");
 
 static void ecos_set_fifo(struct task_struct *t, unsigned int prio)
 {
@@ -548,9 +547,13 @@ _README = """%(name)s —— 构建说明（必须在内核侧构建）
 2) 构建模块（KDIR vermagic 必须与运行内核一致）：
 
    make -C /lib/modules/$(uname -r)/build M=$(pwd) modules
-   sudo insmod %(mod)s.ko period_us=%(period)d
+   # 默认 cpu/rt_priority/deadline 已烧进 .ko（来自 verified_plan.runtime）；
+   # 下面显式写出便于核对「计划 = 加载参数 = 线程配置」。
+   sudo insmod %(mod)s.ko period_us=%(period)d cpu=%(cpu)d rt_priority=%(rtprio)d
    dmesg | tail
    cat /sys/module/%(mod)s/parameters/periods
+   cat /sys/module/%(mod)s/parameters/cpu
+   cat /sys/module/%(mod)s/parameters/rt_priority
    cat /sys/module/%(mod)s/parameters/rsf_probe
    cat /sys/module/%(mod)s/parameters/exec_probe
    # 取“同拍”快照：先冻结，再读，读完解冻（sysfs 分开读会跨周期）
@@ -563,7 +566,7 @@ _README = """%(name)s —— 构建说明（必须在内核侧构建）
   · 目录里若出现 stage_impl.c，kbuild 会现场编译原 C，等于绕过 Pass——禁止。
   · 阶段若含 sleep/blocking_io，生成器已拒绝进 ring-0（内核态会睡死整核）。
   · 相位由 hrtimer 的首次到期时间给出，之后按 period_us 周期前推；
-    组间相位差保留在 ecos_phase_ns[] 里，与方案一致。
+    组间相位差保留在 ecos_phase_ns[] 里，与方案 phase_us 一致。
 """
 
 
@@ -795,10 +798,26 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
     first_group = min(phases)[1] if phases else 0
     last_group = max(phases)[1] if phases else 0
 
+    # verified_plan.runtime → 宿主默认（审查 P0-2）；缺省保持旧口径
+    _cpu = getattr(ir, "runtime_cpu", None)
+    if _cpu is None:
+        _cpu = -1
+    _prio = getattr(ir, "runtime_priority", None)
+    if _prio is None:
+        _prio = 99
+    _deadline = int(ir.deadline_us or ir.period_us or 0)
+    # 开始晚于名义释放超过此松弛才记 late_start（默认 50µs，避免把正常唤醒延迟当违约）
+    _late_slack_ns = 50000
+
     shared = {
         "name": HOST_C, "ngroups": ngroups, "nstages": len(ir.order),
         "first_group": first_group, "last_group": last_group,
-        "period": int(ir.period_us or 0), "rtprio": 99, "evidence": ir.evidence,
+        "period": int(ir.period_us or 0),
+        "deadline": _deadline,
+        "rtprio": int(_prio),
+        "cpu": int(_cpu),
+        "late_slack_ns": int(_late_slack_ns),
+        "evidence": ir.evidence,
         "layout": layout, "group_init": group_init,
         "phase_ns": phase_ns, "body_cases": body_cases,
         "digest_decls": "\n".join(decls),
@@ -846,6 +865,7 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
         host_note = "host_model=per_group"
     readme = _README % {"name": module_name, "mod": module_name,
                         "period": int(ir.period_us or 0),
+                        "cpu": int(_cpu), "rtprio": int(_prio),
                         "digest_hint": digest_hint}
     readme = ("# %s\n\n" % host_note) + readme
     return {

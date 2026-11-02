@@ -107,11 +107,16 @@ class FusionIR(object):
         phase_blk = dag.get("phase") or {}
         phase_known = bool(phase_blk.get("known"))
         offsets = phase_blk.get("offsets") or {}
-        period = (phase_blk.get("period_us")
+        # 已验证计划优先：verified_plan 的 period/deadline/phase_us 是部署事实源；
+        # DAG/contract 只在计划缺字段时回落（审查 P0-1）。
+        period = (plan.get("period_us")
+                  or phase_blk.get("period_us")
                   or ((dag.get("meta") or {}).get("task") or {}).get("period_us")
                   or (contract or {}).get("task", {}).get("period_us"))
-        deadline = ((contract or {}).get("task") or {}).get("deadline_us") \
-            or ((dag.get("meta") or {}).get("task") or {}).get("deadline_us")
+        deadline = (plan.get("deadline_us")
+                    or ((contract or {}).get("task") or {}).get("deadline_us")
+                    or ((dag.get("meta") or {}).get("task") or {}).get("deadline_us")
+                    or period)
 
         raw_groups = plan.get("groups") or []
         if not raw_groups:
@@ -133,11 +138,18 @@ class FusionIR(object):
                     ph = node.get("phase_us")
                 call = calls.get(m) or node.get("call") or ("%s()" % m)
                 stages.append(Stage(m, node, call, exec_us.get(m, 0.0), ph))
-            phase = g.get("release_phase_us")
+            # plan_extend 写 phase_us；旧计划可能仍用 release_phase_us
+            phase = g.get("phase_us")
+            if phase is None:
+                phase = g.get("release_phase_us")
             if phase is None and phase_known:
                 phase = min(s.phase_us for s in stages if s.phase_us is not None) \
                     if any(s.phase_us is not None for s in stages) else None
             groups.append(Group(gid, stages, phase))
+
+        # 计划已给出全部组相位 → 视为相位已知（勿被 DAG.phase.known=false 打回）
+        if groups and all(g.phase_us is not None for g in groups):
+            phase_known = True
 
         # 顺序一致性：IR 展平后的顺序必须等于方案展平顺序（防上游乱序）
         flat_plan = [m for g in raw_groups for m in (g.get("members") or [])]
@@ -178,6 +190,12 @@ class FusionIR(object):
         ir.digest_vars = [v for v in (digest_vars or []) if v]
         ir.probe = bool(probe)
         ir.let_events = list(plan.get("let_events") or [])
+        # runtime：verified_plan → 宿主默认 cpu/prio（审查 P0-2）
+        rt = plan.get("runtime") or {}
+        ir.runtime_cpu = rt.get("cpu")
+        ir.runtime_priority = rt.get("priority")
+        ir.runtime_sched = rt.get("sched")
+        ir.release_owner = plan.get("release_owner")
 
         # ---- 跨域接线（PR10-C）----
         # xdom 是拆分器写的 per-domain meta：本域要发布/订阅哪些全局。
