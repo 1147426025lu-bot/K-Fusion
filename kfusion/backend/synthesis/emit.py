@@ -121,6 +121,10 @@ def main():
                     help="【LET 部署】LET 窗口占周期比例（默认 0.8，与 plc_let_demo 约定一致）")
     ap.add_argument("--no-let-skip", action="store_true",
                     help="【LET 部署】关掉 PLC_LET_SKIP_MISSED（默认开：严格周期，落后不追赶）")
+    ap.add_argument("--host-model", default="single_worker",
+                    choices=["single_worker", "per_group"],
+                    help="内核宿主：single_worker=一任务一线程+事件表（U-5 默认）；"
+                         "per_group=每组一线程（旧对照）")
     a = ap.parse_args()
 
     plan = fusion_ir.load(a.plan)
@@ -479,8 +483,10 @@ def main():
     if a.target in ("linux-kernel", "both"):
         d = a.out_dir if a.target == "linux-kernel" else os.path.join(a.out_dir, "linux")
         os.makedirs(d, exist_ok=True)
-        for fn, text in linux_em.emit(ir, name, xdom=bool(xdom),
-                                      xdom_resync=_is_rs_master).items():
+        for fn, text in linux_em.emit(
+                ir, name, xdom=bool(xdom),
+                xdom_resync=_is_rs_master,
+                host_model=a.host_model).items():
             written.append(_write(d, fn, text))
 
     if nuttx_files is not None:

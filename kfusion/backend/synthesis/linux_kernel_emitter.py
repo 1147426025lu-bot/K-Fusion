@@ -528,13 +528,23 @@ ccflags-y += -I$(src)/compat
 
 _README = """%(name)s —— 构建说明（必须在内核侧构建）
 
-1) 先产阶段实现的内核化对象（复用现有 LLVM 内核化链路，不重写 POSIX 映射）：
+统一架构入口（推荐）：
 
-   bash kfusion/scripts/plc_kernelize__内核化.sh <manifest>
-   # 产物形如 kfusion/test/<FUSE_NAME>_kernel.o
-   cp kfusion/test/<FUSE_NAME>_kernel.o stage_impl.o
+   bash kfusion/scripts/kf_unify__统一流水线.sh <periodic.c>
+   # 内部：plan → PLCFusionPass → stage_impl.S → 本宿主 → .ko
+   # 产物目录会有 kernel_stage.manifest.json（证明计算体来自 Pass）
 
-2) 构建模块（需要目标侧的 KDIR，且 vermagic 必须与运行内核一致）：
+手动分步：
+
+1) 按已验证 plan 产出内核计算体（禁止拷贝原始 stage_impl.c）：
+
+   python3 kfusion/scripts/build_kernel_stage__内核计算体.py \\
+     --source <periodic.c> --plan plan.json --out-dir . \\
+     --pass-so kfusion/build/KFusionPass.so \\
+     --clang clang-19 --opt opt-19 --llc llc-19
+   # 得到 stage_impl.S / stage_impl.o + kernel_stage.manifest.json
+
+2) 构建模块（KDIR vermagic 必须与运行内核一致）：
 
    make -C /lib/modules/$(uname -r)/build M=$(pwd) modules
    sudo insmod %(mod)s.ko period_us=%(period)d
@@ -549,8 +559,7 @@ _README = """%(name)s —— 构建说明（必须在内核侧构建）
    sudo rmmod %(mod)s
 
 注意：
-  · 本机（Windows）没有编译器/内核头，只生成了源码；不要在步骤 1/2 之外
-    声称"已经构建"。
+  · 目录里若出现 stage_impl.c，kbuild 会现场编译原 C，等于绕过 Pass——禁止。
   · 阶段若含 sleep/blocking_io，生成器已拒绝进 ring-0（内核态会睡死整核）。
   · 相位由 hrtimer 的首次到期时间给出，之后按 period_us 周期前推；
     组间相位差保留在 ecos_phase_ns[] 里，与方案一致。
@@ -569,7 +578,9 @@ def _ident(s):
     return s if not s[:1].isdigit() else "v_" + s
 
 
-def emit(ir, module_name, phases_known=True, xdom=False, xdom_resync=False):
+def emit(ir, module_name, phases_known=True, xdom=False, xdom_resync=False,
+         host_model="per_group"):
+    """host_model: per_group（旧对照，每组一线程）| single_worker（U-5 默认新宿主）。"""
     ngroups = len(ir.groups)
     layout = " | ".join(
         "%s@%sµs[%s]" % (g.gid,
@@ -783,7 +794,7 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
     first_group = min(phases)[1] if phases else 0
     last_group = max(phases)[1] if phases else 0
 
-    host = _LINUX_C % {
+    shared = {
         "name": HOST_C, "ngroups": ngroups, "nstages": len(ir.order),
         "first_group": first_group, "last_group": last_group,
         "period": int(ir.period_us or 0), "rtprio": 99, "evidence": ir.evidence,
@@ -820,12 +831,26 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
         "stage_profile": stage_profile,
         "rsf_probe": _RSF_PROBE,
     }
+    if host_model == "single_worker":
+        import linux_kernel_single_worker as _sw
+        # 死区探针仍按组 id；单线程里用 ev.group_id 替换 g->id
+        shared["probe_before_sw"] = (probe_before.replace("g->id", "ev.group_id")
+                                     if probe_before else "")
+        shared["probe_after_sw"] = (probe_after.replace("g->id", "ev.group_id")
+                                    if probe_after else "")
+        host = _sw.render(ir, module_name, shared)
+        host_note = "host_model=single_worker"
+    else:
+        host = _LINUX_C % shared
+        host_note = "host_model=per_group"
+    readme = _README % {"name": module_name, "mod": module_name,
+                        "period": int(ir.period_us or 0),
+                        "digest_hint": digest_hint}
+    readme = ("# %s\n\n" % host_note) + readme
     return {
         HOST_C: host,
         COMPAT_H: _COMPAT_STDINT,
         KBUILD: _KBUILD % {"mod": module_name,
                            "xdom_objs": " ecos_xdom.o" if xdom else ""},
-        README: _README % {"name": module_name, "mod": module_name,
-                           "period": int(ir.period_us or 0),
-                           "digest_hint": digest_hint},
+        README: readme,
     }

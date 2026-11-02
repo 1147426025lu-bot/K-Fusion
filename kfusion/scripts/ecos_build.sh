@@ -189,8 +189,21 @@ PY
         for v in "${DIGEST_VARS[@]:-}"; do [ -n "$v" ] && emit_args+=(--digest-var "$v"); done
         [ "$PROBE" = "1" ] && emit_args+=(--probe)
         "$PY" "$SYNTH" "${emit_args[@]}" || die "后端合成失败（$d，见上面的拒绝原因）" 3
-        # 阶段实现与环头文件：两端口径必须**同一份**，否则 ABI 对不上
-        cp "$SOURCE" "$OUT_DIR/$d/stage_impl.c" || die "拷 stage_impl.c 失败" 2
+        # 内核域：计算体必须经 PLCFusionPass；禁止拷原始 C 给 kbuild。
+        # NuttX 域仍用同一份源 C（交叉工具链侧编译，无本机 Pass 对象）。
+        if [ "$TGT" = "linux-kernel" ]; then
+          PASS_SO="${KFUSION_PASS_SO:-$HERE/../build/KFusionPass.so}"
+          "$PY" "$HERE/build_kernel_stage__内核计算体.py" \
+            --source "$SOURCE" --plan "$SPLIT_DIR/$d/plan.json" \
+            --out-dir "$OUT_DIR/$d" \
+            --pass-so "$PASS_SO" \
+            --clang "${CLANG:-clang-19}" --opt "${OPT:-opt-19}" \
+            --llc "${LLC_BIN:-llc-19}" \
+            || die "内核计算体（Pass）构建失败，拒绝回落拷贝原 C" 3
+          rm -f "$OUT_DIR/$d/stage_impl.c"
+        else
+          cp "$SOURCE" "$OUT_DIR/$d/stage_impl.c" || die "拷 stage_impl.c 失败" 2
+        fi
         [ -f "$XIPC_H" ] && cp "$XIPC_H" "$OUT_DIR/$d/ecos_xipc.h"
         RESULTS+=("$OUT_DIR/$d")
     done

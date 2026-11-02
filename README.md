@@ -23,12 +23,14 @@ cd K-Fusion
 |------|------|
 | [`kfusion/`](kfusion/) | **K-Fusion 工具链**：LLVM Pass、manifest、`.ko` 构建 |
 | [`compare/kfusion/`](compare/) | 本地 jitter 基准（gitignore） |
+| [`docs/architecture_unify__统一架构方案.md`](docs/architecture_unify__统一架构方案.md) | 统一流水线架构（AST/TEIR/STKP → Pass → 宿主 → `.ko`） |
 
 ```bash
 cd kfusion
-cmake -B build -G Ninja && ninja -C build
-bash scripts/run_ci__CI门禁.sh
-bash scripts/ignite_fused__通用ko构建.sh manifests/manifest_plc_cc_hello__入门.env
+# 统一入口：plan → PLCFusionPass → stage_impl.S → 单工作线程宿主 → .ko
+FORCE_CHOSEN=D@linux_kernel \
+  bash scripts/kf_unify__统一流水线.sh examples/ecos/four_stage_chain__四阶段示例.c
+# 旧对照宿主：HOST_MODEL=per_group
 ```
 
 ## 对照与参考（非主线）

@@ -152,6 +152,8 @@ bool isBenignIntrinsic(StringRef Name) {
                       "llvm.sqrt", "llvm.floor", "llvm.ceil", "llvm.trunc",
                       "llvm.smax", "llvm.smin", "llvm.umax", "llvm.umin",
                       "llvm.smul.with.overflow", "llvm.uadd.with.overflow",
+                      /* Clang -O2 常把定点求和变成向量 reduce；纯算术、无副作用 */
+                      "llvm.vector.reduce.",
                       "llvm.readnone", "llvm.sideeffect"})
     if (KF_STARTS_WITH(Name, K))
       return true;

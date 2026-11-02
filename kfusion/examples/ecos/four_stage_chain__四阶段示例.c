@@ -12,6 +12,9 @@
  */
 #include <stdint.h>
 
+/* kfusion:task name=four_stage_chain entry=chain_main period_us=1000 deadline_us=1000 step_us=200
+ * sample@0 fir@200 pid@400 clamp@600 */
+
 /* 注意：这里**不能**用 static。
  * 若状态全为内部链接且最终输出无人读取，-O1/-O2 会把整条尾链当死代码删掉
  * （实测 stage_clamp 被优化成 `ret void`，@g_act / @g_out 直接消失），
@@ -31,24 +34,31 @@ void stage_sample(void)
 	g_raw = (int32_t)((g_seed >> 16) & 0x7fffu);
 }
 
-/* 阶段 2：8 点滑动平均 + 窗口右移 */
+/* 阶段 2：8 点滑动平均 + 窗口右移。
+ * 手写展开，避免 Clang 在 -O2 插入 llvm.vector.reduce.add.*（会被
+ * EffectSummary 标成 unknown external，契约默认拒内核/用户态）。 */
 void stage_fir(void)
 {
-	int32_t acc = 0;
-	int i;
+	int32_t acc = g_hist[0] + g_hist[1] + g_hist[2] + g_hist[3]
+		+ g_hist[4] + g_hist[5] + g_hist[6] + g_hist[7];
 
-	for (i = 0; i < 8; i++)
-		acc += g_hist[i];
-	for (i = 7; i > 0; i--)
-		g_hist[i] = g_hist[i - 1];
+	g_hist[7] = g_hist[6];
+	g_hist[6] = g_hist[5];
+	g_hist[5] = g_hist[4];
+	g_hist[4] = g_hist[3];
+	g_hist[3] = g_hist[2];
+	g_hist[2] = g_hist[1];
+	g_hist[1] = g_hist[0];
 	g_hist[0] = g_raw;
 	g_fir_out = acc >> 3;
 }
 
-/* 阶段 3：PI 控制（Kp=2, Ki=1/8），带积分限幅 */
+/* 阶段 3：PI 控制（Kp=2, Ki=1/8），带积分限幅。
+ * 有符号左移改为 64 位乘法，避免 C 标准对负值左移的 UB。 */
 void stage_pid(int32_t setpoint)
 {
 	int32_t err = setpoint - g_fir_out;
+	int64_t acc;
 
 	g_integ += err;
 	if (g_integ > 100000)
@@ -56,7 +66,12 @@ void stage_pid(int32_t setpoint)
 	else if (g_integ < -100000)
 		g_integ = -100000;
 
-	g_act = (err << 1) + (g_integ >> 3);
+	acc = (int64_t)err * 2 + (int64_t)(g_integ / 8);
+	if (acc > 2147483647LL)
+		acc = 2147483647LL;
+	else if (acc < -2147483648LL)
+		acc = -2147483648LL;
+	g_act = (int32_t)acc;
 }
 
 /* 阶段 4：输出限幅 */

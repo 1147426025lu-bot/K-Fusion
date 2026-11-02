@@ -30,8 +30,9 @@ set -euo pipefail
 KF="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SRC="${1:?usage: ecos_from_c__从C编译.sh <periodic.c>}"
 SRC="$(cd "$(dirname "$SRC")" && pwd)/$(basename "$SRC")"
-CLANG="${CLANG:-clang-16}"
-OPT="${OPT:-opt-16}"
+CLANG="${CLANG:-clang-19}"
+OPT="${OPT:-opt-19}"
+LLC_BIN="${LLC_BIN:-llc-19}"
 PY="${PYTHON:-python3}"
 SO="${PLCEFFECTSUMMARY_SO:-$KF/analysis/build/PLCEffectSummary.so}"
 CAPS="$KF/contracts/examples/platform_caps.json"
@@ -195,6 +196,11 @@ if [ "$DOMAIN" = "mixed" ] && [ "$ADAPTER" != "uku_ioctl" ]; then
   die "混合形态 $CHOSEN 无 UKU ioctl 适配器，拒绝部署" 8
 fi
 cp "$OUT/chosen.plan.json" "$OUT/plan.json"
+
+step "7b-enrich) 计划补全：state_ownership / handoffs（U-2）"
+"$PY" "$KF/scripts/plan_enrich__计划补全.py" \
+  --plan "$OUT/plan.json" --teir "$OUT/task.teir.json" \
+  -o "$OUT/plan.json" || die "plan enrich 失败" 8
 
 if [ "${PLAN_SCHEMA_GATE:-0}" = "1" ]; then
   # 计划扩展：把 STKP 的输出补成「能指导代码生成」的形态并做 V1–V7 校验。
@@ -408,15 +414,17 @@ for g in d.get("globals") or []:
 PY
 )"
 
-KDIR="${KERNELDIR:-/root/linux-5.15.86}"
+KDIR="${KERNELDIR:-/lib/modules/$(uname -r)/build}"
 if [ "$DOMAIN" = "linux_kernel" ]; then
   step "8b) hrtimer 内核宿主（入选域=linux_kernel）"
+  HOST_MODEL="${HOST_MODEL:-single_worker}"
   "$PY" "$KF/backend/synthesis/emit.py" \
     --plan "$OUT/plan.json" --dag "$OUT/task.dag.json" \
     --source "$STAGE_SRC" \
     --out-dir "$OUT/kmod_hrtimer" \
     --target linux-kernel \
-    --name five_stage_loop \
+    --name "${MOD_NAME:-kf_task}" \
+    --host-model "$HOST_MODEL" \
     "${CALLS[@]}" "${EMIT_DIGEST[@]}" || die "emit linux-kernel 失败" 9
   # 计算体必须由 Clang/LLVM + PLCFusionPass 产生，**不再复制原始 C**。
   # 复制 = kbuild 现场编译原 C，等于 .ko 里的计算体没经过任何内核化转换。
