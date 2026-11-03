@@ -386,7 +386,8 @@ class PlanVerifier(object):
 
     # ------------------------------------------------------------------
     def _head_phase(self, g, members):
-        v = g.get("release_phase_us")
+        # 与 temporal_model / fusion_ir 同一事实源：phase_us 优先
+        v = temporal_model.group_phase_us(g, None)
         if v is not None:
             return float(v)
         phases = []

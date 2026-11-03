@@ -40,6 +40,21 @@ def _num(x):
         return None
 
 
+def group_phase_us(g, default=None):
+    """统一相位事实源：优先 phase_us（verified_plan），兼容旧 release_phase_us。
+
+    验证器/时间模型/生成器必须读同一字段；禁止验证阶段静默回退到另一套相位。
+    """
+    if not g:
+        return default
+    ph = g.get("phase_us")
+    if ph is None:
+        ph = g.get("release_phase_us")
+    if ph is None:
+        return default
+    return float(ph)
+
+
 def _first(*vals):
     for v in vals:
         if v is not None:
@@ -216,8 +231,7 @@ class TemporalModel(object):
         prev_finish = {}                      # 域 → 该域上一组完成时刻
         for g in groups:
             members = list(g.get("members") or [])
-            phi = g.get("release_phase_us")
-            phi = float(phi) if phi is not None else 0.0
+            phi = group_phase_us(g, 0.0)
             dom = self.group_domain(members) or "default"
             pf = prev_finish.get(dom, 0.0)
             start = max(phi, pf) + self.c
@@ -391,7 +405,7 @@ class TemporalModel(object):
             gid = g.get("id") or ("g%d" % gi)
             members = list(g.get("members") or [])
             members_of[gid] = members
-            nominal = float(g.get("release_phase_us") or 0.0)
+            nominal = float(group_phase_us(g, 0.0))
             actual = (float(rows[gi].get("start_us", nominal))
                       if gi < len(rows) and rows[gi] is not None else nominal)
             start_of[gid] = actual

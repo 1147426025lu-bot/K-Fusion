@@ -84,6 +84,10 @@ static unsigned int period_us = %(period)d;
 module_param(period_us, uint, 0444);
 MODULE_PARM_DESC(period_us, "控制周期（µs），默认取方案里的周期");
 
+static unsigned int deadline_us = %(deadline)d;
+module_param(deadline_us, uint, 0444);
+MODULE_PARM_DESC(deadline_us, "相对首释放的期限（µs；来自 plan.deadline_us）");
+
 /* 实时优先级：默认取 verified_plan.runtime.priority（缺省 99）。
  * 注意 5.15 只导出 sched_setattr_nocheck / sched_set_fifo；
  * sched_setscheduler_nocheck 在 kallsyms 里有符号但**没有 EXPORT**，链接/加载会失败。 */
@@ -97,16 +101,33 @@ static int cpu = %(cpu)d;
 module_param(cpu, int, 0444);
 MODULE_PARM_DESC(cpu, "绑定的 CPU 编号（-1 = 不绑；默认来自 plan.runtime.cpu）");
 
-static void ecos_set_fifo(struct task_struct *t, unsigned int prio)
+/* use_fifo=1 → SCHED_FIFO；0 → SCHED_NORMAL（CFS）。来自 plan.runtime.sched。 */
+static int use_fifo = %(use_fifo)d;
+module_param(use_fifo, int, 0444);
+MODULE_PARM_DESC(use_fifo, "1=SCHED_FIFO（plan.runtime.sched=fifo）；0=CFS");
+
+static int ecos_set_sched(struct task_struct *t, unsigned int prio)
 {
 	struct sched_attr attr;
+	int ret;
 
 	memset(&attr, 0, sizeof(attr));
 	attr.size = sizeof(attr);
-	attr.sched_policy = SCHED_FIFO;
-	attr.sched_priority = prio;
-	if (sched_setattr_nocheck(t, &attr))
-		sched_set_fifo(t);	/* 退回导出接口（优先级 MAX_RT_PRIO/2） */
+	if (use_fifo) {
+		attr.sched_policy = SCHED_FIFO;
+		attr.sched_priority = prio;
+	} else {
+		attr.sched_policy = SCHED_NORMAL;
+		attr.sched_priority = 0;
+	}
+	ret = sched_setattr_nocheck(t, &attr);
+	if (ret) {
+		if (use_fifo)
+			sched_set_fifo(t);	/* 退回导出接口；仍可能非目标优先级 */
+		pr_err("ecos: sched_setattr 失败 ret=%%d use_fifo=%%d（计划策略未完全生效）\n",
+		       ret, use_fifo);
+	}
+	return ret;
 }
 
 /* 1 组 1 个定时器 + 1 个线程 + 1 个唤醒点。
@@ -276,7 +297,7 @@ static int __init ecos_init(void)
 		 * 这里优先用 sched_setattr_nocheck 把优先级设成 rt_priority（默认 99，
 		 * 与用户态 BM2 的 FIFO 99 对齐），失败再退回 sched_set_fifo。
 		 */
-		ecos_set_fifo(g->task, rt_priority);
+		ecos_set_sched(g->task, rt_priority);
 		if (cpu >= 0)
 			kthread_bind(g->task, cpu);
 		wake_up_process(g->task);
@@ -456,7 +477,8 @@ static void ecos_rsf_push(struct ecos_rsf_series *s, s64 v_ns)
 
 static void ecos_rsf_add(s64 r_ns, s64 s_ns, s64 f_ns)
 {
-	s64 T = (s64)period_us * 1000;
+	/* 与 deadline_miss 同一契约：plan.deadline_us（不是 period） */
+	s64 T = (s64)deadline_us * 1000;
 
 	ecos_rsf_push(&ecos_rsf_start, s_ns - r_ns);
 	ecos_rsf_push(&ecos_rsf_exec,  f_ns - s_ns);
@@ -808,6 +830,8 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
     _deadline = int(ir.deadline_us or ir.period_us or 0)
     # 开始晚于名义释放超过此松弛才记 late_start（默认 50µs，避免把正常唤醒延迟当违约）
     _late_slack_ns = 50000
+    _sched = (getattr(ir, "runtime_sched", None) or "fifo")
+    _use_fifo = 0 if str(_sched).lower() in ("cfs", "other", "sched_other", "normal") else 1
 
     shared = {
         "name": HOST_C, "ngroups": ngroups, "nstages": len(ir.order),
@@ -816,6 +840,7 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
         "deadline": _deadline,
         "rtprio": int(_prio),
         "cpu": int(_cpu),
+        "use_fifo": int(_use_fifo),
         "late_slack_ns": int(_late_slack_ns),
         "evidence": ir.evidence,
         "layout": layout, "group_init": group_init,

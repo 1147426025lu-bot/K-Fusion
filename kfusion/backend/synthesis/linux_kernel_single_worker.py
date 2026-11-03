@@ -66,20 +66,40 @@ static int cpu = %(cpu)d;
 module_param(cpu, int, 0444);
 MODULE_PARM_DESC(cpu, "绑定的 CPU（-1 = 不绑；来自 plan.runtime.cpu）");
 
+static int use_fifo = %(use_fifo)d;
+module_param(use_fifo, int, 0444);
+MODULE_PARM_DESC(use_fifo, "1=SCHED_FIFO（plan.runtime.sched=fifo）；0=CFS");
+
 static unsigned int late_start_slack_ns = %(late_slack_ns)d;
 module_param(late_start_slack_ns, uint, 0644);
 MODULE_PARM_DESC(late_start_slack_ns, "开始晚于名义释放超过此松弛才记 late_start（ns）");
 
-static void ecos_set_fifo(struct task_struct *t, unsigned int prio)
+#if ECOS_GROUPS > 31
+#error "single_worker groups_seen 位图最多支持 31 组"
+#endif
+
+static int ecos_set_sched(struct task_struct *t, unsigned int prio)
 {
 	struct sched_attr attr;
+	int ret;
 
 	memset(&attr, 0, sizeof(attr));
 	attr.size = sizeof(attr);
-	attr.sched_policy = SCHED_FIFO;
-	attr.sched_priority = prio;
-	if (sched_setattr_nocheck(t, &attr))
-		sched_set_fifo(t);
+	if (use_fifo) {
+		attr.sched_policy = SCHED_FIFO;
+		attr.sched_priority = prio;
+	} else {
+		attr.sched_policy = SCHED_NORMAL;
+		attr.sched_priority = 0;
+	}
+	ret = sched_setattr_nocheck(t, &attr);
+	if (ret) {
+		if (use_fifo)
+			sched_set_fifo(t);
+		pr_err("ecos-sw: sched_setattr 失败 ret=%%d use_fifo=%%d\n",
+		       ret, use_fifo);
+	}
+	return ret;
 }
 
 struct kf_release_event {
@@ -350,7 +370,7 @@ static int __init ecos_init(void)
 		pr_err("ecos-sw: kthread_create failed\n");
 		return PTR_ERR(kf_worker);
 	}
-	ecos_set_fifo(kf_worker, rt_priority);
+	ecos_set_sched(kf_worker, rt_priority);
 	if (cpu >= 0)
 		kthread_bind(kf_worker, cpu);
 	wake_up_process(kf_worker);
@@ -369,8 +389,10 @@ static int __init ecos_init(void)
 		}
 	}
 
-	pr_info("ecos-sw: single-worker %%d 组，周期 %%u µs，deadline %%u µs，FIFO %%u，cpu %%d（证据 %(evidence)s）\n",
-		ECOS_GROUPS, period_us, deadline_us, rt_priority, cpu);
+	pr_info("ecos-sw: single-worker %%d 组，周期 %%u µs，deadline %%u µs，%%s%%u，cpu %%d（证据 %(evidence)s）\n",
+		ECOS_GROUPS, period_us, deadline_us,
+		use_fifo ? "FIFO " : "CFS prio=",
+		use_fifo ? rt_priority : 0, cpu);
 	return 0;
 }
 
@@ -412,6 +434,7 @@ def render(ir, module_name, shared):
         "deadline": shared.get("deadline", shared["period"]),
         "rtprio": shared["rtprio"],
         "cpu": shared.get("cpu", -1),
+        "use_fifo": shared.get("use_fifo", 1),
         "late_slack_ns": shared.get("late_slack_ns", 50000),
         "evidence": shared["evidence"],
         "layout": shared["layout"],

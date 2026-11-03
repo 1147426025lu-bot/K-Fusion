@@ -30,7 +30,8 @@
   V4 state_ownership 覆盖 teir 里所有跨拍状态；同一变量不得有两个所有者
   V5 handoffs 必须恰好对应域边界（相邻两组域不同处）；字段不得跨域重复
   V6 runtime.sched ∈ {cfs, fifo}；fifo 时 priority ∈ [1,99]
-  V7 相位硬约束：phase_binding=required 的组不得被融合（组内成员数必须等于原始阶段数）
+  V7 相位硬约束：phase_binding=required 时，组释放相位必须与 TEIR 各成员
+                 契约相位一致（禁止把后段前拉到更早释放）；缺 TEIR 则拒收
 
 用法：
   plan_extend__计划扩展.py extend --plan p.json --teir t.teir.json -o plan_v2.json
@@ -118,6 +119,7 @@ def teir_self_carry(teir):
 
 def build_extended(plan, teir, src_hash=None, teir_hash=None):
     """在 plan 上补字段。**不猜**：能从输入推的才填，推不出来的留 None 让 verify 报。"""
+    teir = teir or {}
     groups = []
     for g in plan.get("groups") or []:
         dom = norm_domain(g.get("domain"))
@@ -126,18 +128,34 @@ def build_extended(plan, teir, src_hash=None, teir_hash=None):
         dom_long = ("linux_kernel" if dom == "kernel"
                     else "linux_userspace" if dom == "user"
                     else g.get("domain"))
-        phase = g.get("release_phase_us")
+        # verified_plan 事实源：phase_us 优先；旧 release_phase_us 仅兼容输入
+        phase = g.get("phase_us")
         if phase is None:
-            phase = g.get("phase_us")
+            phase = g.get("release_phase_us")
+        members = list(g.get("members") or [])
+        # phase_binding：显式声明优先；否则仅当组相位与 TEIR 各成员契约相位
+        # 完全一致时才标 required。融合把后段前拉到更早释放 → advisory。
+        explicit_bind = g.get("phase_binding")
+        if explicit_bind in ("required", "advisory"):
+            binding = explicit_bind
+        else:
+            teir_ph = {n.get("name"): n.get("phase_us")
+                       for n in teir_stages(teir)}
+            known = [float(teir_ph[m]) for m in members
+                     if teir_ph.get(m) is not None]
+            gph = float(phase) if phase is not None else None
+            if (gph is not None and known
+                    and all(abs(p - gph) < 1e-6 for p in known)):
+                binding = "required"
+            else:
+                binding = "advisory"
         groups.append({
             "id": g.get("id"),
-            "members": list(g.get("members") or []),
+            "members": members,
             "domain": dom_long,
             "domain_short": dom,
             "phase_us": float(phase) if phase is not None else None,
-            # 默认按时间契约要求（required）：把相位改成 advisory 必须显式声明，
-            # 否则融合会把「必须在 400µs 更新输出」的阶段提前，语义就变了。
-            "phase_binding": g.get("phase_binding") or "required",
+            "phase_binding": binding,
         })
 
     meta = plan.get("meta") or {}
@@ -290,6 +308,26 @@ def verify(doc, teir=None):
                         % (gid, g.get("phase_binding")))
         if g.get("phase_binding") == "required" and not (g.get("members") or []):
             errs.append("V7 组 %r 是硬相位但没有成员" % gid)
+        if g.get("phase_binding") == "required":
+            if teir is None:
+                errs.append("V7 组 %r phase_binding=required 但未提供 TEIR，"
+                            "无法核对契约相位" % gid)
+            else:
+                teir_ph = {n.get("name"): n.get("phase_us")
+                           for n in teir_stages(teir)}
+                gph = g.get("phase_us")
+                for m in (g.get("members") or []):
+                    op = teir_ph.get(m)
+                    if op is None:
+                        errs.append("V7 硬相位：阶段 %s 在 TEIR 中无 phase_us，"
+                                    "无法核对组 %r" % (m, gid))
+                    elif gph is None:
+                        errs.append("V7 硬相位：组 %r 缺 phase_us" % gid)
+                    elif abs(float(op) - float(gph)) > 1e-6:
+                        errs.append(
+                            "V7 硬相位：阶段 %s 契约相位 %.1f 与组 %s 释放相位 %.1f "
+                            "不一致（禁止提前/延后执行）"
+                            % (m, float(op), gid, float(gph)))
 
     if owner == "kernel_host" and not has_kernel:
         errs.append("V3 release_owner=kernel_host 但计划里没有 kernel 组")
@@ -415,9 +453,10 @@ def selftest():
         print("  ✓ %s" % name)
 
     teir = {"stages": [
-        {"name": "sample", "writes": ["in"], "self_carry": []},
-        {"name": "pid", "reads": ["in"], "writes": ["out"], "self_carry": ["integ"]},
-        {"name": "sink", "reads": ["out"]},
+        {"name": "sample", "phase_us": 0.0, "writes": ["in"], "self_carry": []},
+        {"name": "pid", "phase_us": 200.0, "reads": ["in"], "writes": ["out"],
+         "self_carry": ["integ"]},
+        {"name": "sink", "phase_us": 400.0, "reads": ["out"]},
     ]}
 
     e, _ = verify(_fixture(), teir)
@@ -461,6 +500,31 @@ def selftest():
     e, _ = verify(bad, teir)
     chk("phase_binding 非法被拒", any("V7" in x for x in e))
 
+    # 硬相位：把 pid（契约 200）融进 0µs 组且标 required → 拒
+    bad = _fixture()
+    bad["groups"] = [{
+        "id": "g_fused", "members": ["sample", "pid"], "domain": "kernel",
+        "domain_short": "kernel", "phase_us": 0.0, "phase_binding": "required",
+    }]
+    bad["handoffs"] = []
+    e, _ = verify(bad, teir)
+    chk("硬相位前拉被拒", any("硬相位" in x for x in e))
+
+    # 同相位融合 + required → 通过
+    ok_fuse = _fixture()
+    ok_fuse["groups"] = [{
+        "id": "g0", "members": ["sample"], "domain": "user",
+        "domain_short": "user", "phase_us": 0.0, "phase_binding": "required",
+    }, {
+        "id": "g1", "members": ["pid"], "domain": "kernel",
+        "domain_short": "kernel", "phase_us": 200.0, "phase_binding": "required",
+    }, {
+        "id": "g2", "members": ["sink"], "domain": "user",
+        "domain_short": "user", "phase_us": 400.0, "phase_binding": "required",
+    }]
+    e, _ = verify(ok_fuse, teir)
+    chk("契约相位一致的 required 通过", not e)
+
     # extend：能从 teir 推出跨拍状态与 handoff 字段
     doc = build_extended(
         {"version": 1, "meta": {"task": "t", "period_us": 1000},
@@ -474,6 +538,20 @@ def selftest():
     chk("extend 产物能通过校验", not e)
     chk("extend 推出状态所有者", doc["state_ownership"].get("integ") == "kernel")
     chk("extend 推出两条域边界 handoff", len(doc["handoffs"]) == 2)
+    chk("同相位组默认 required",
+        all(g.get("phase_binding") == "required" for g in doc["groups"]))
+
+    # 融合前拉：未显式声明 → advisory；显式 required → verify 拒
+    fused_in = {"version": 1, "meta": {"task": "t", "period_us": 1000},
+                "groups": [{"id": "g0", "members": ["sample", "pid", "sink"],
+                            "domain": "linux_kernel", "phase_us": 0}]}
+    fused = build_extended(fused_in, teir)
+    chk("融合前拉自动 advisory", fused["groups"][0]["phase_binding"] == "advisory")
+    e, _ = verify(fused, teir)
+    chk("融合+advisory 可通过", not e)
+    fused["groups"][0]["phase_binding"] = "required"
+    e, _ = verify(fused, teir)
+    chk("融合+required 被拒", any("硬相位" in x for x in e))
 
     print("\nselftest 通过 %d 项" % ok)
     return 0

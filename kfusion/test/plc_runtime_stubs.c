@@ -6,10 +6,20 @@
  * 链接: 与 fused .o + (plc_fused_host | plc_runner_official) 一起编入 .ko
  */
 #include <linux/module.h>
+#include <linux/version.h>	/* LINUX_VERSION_CODE，供下面的版本分支使用 */
 #include <linux/slab.h>
 #include <linux/string.h>
 #include <linux/sched.h>
 #include <linux/sched/signal.h>
+/* struct sched_param 的位置随内核版本变化：
+ *   5.15 —— 只在 uapi 版 <uapi/linux/sched/types.h>；
+ *   6.0+ —— 由 <linux/sched/types.h> 提供。
+ * 两个 guard 不同，同时包含会重定义，所以按版本二选一。 */
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
+#include <linux/sched/types.h>
+#else
+#include <uapi/linux/sched/types.h>
+#endif
 #include <linux/cpumask.h>
 #include <linux/delay.h>
 #include <linux/spinlock.h>
@@ -191,7 +201,10 @@ int __weak check_privs(void)
 
 void __weak enable_trace_mark(void) {}
 void __weak disable_trace_mark(void) {}
+#ifdef CONFIG_TRACING
+/* CONFIG_TRACING=n 时 <linux/kernel.h> 已给 static inline 空实现，重复定义会报错 */
 void __weak tracing_stop(void) {}
+#endif
 void __weak tracemark(char *fmt, ...) { (void)fmt; }
 
 int __weak numa_initialize(void) { return 0; }
@@ -837,7 +850,9 @@ static uint64_t plc_udiv128_by_64(uint64_t hi, uint64_t lo, uint64_t div)
 		return ~0ULL;
 	uint64_t rem = hi;
 	uint64_t quot = 0;
-	for (int i = 0; i < 64; ++i) {
+	int i;
+
+	for (i = 0; i < 64; ++i) {
 		rem = (rem << 1) | (lo >> 63);
 		lo <<= 1;
 		quot <<= 1;
@@ -1638,7 +1653,8 @@ struct plc_stub_tm *localtime(const long *timep)
 	ns = ktime_get_ns();
 	memset(&plc_tm, 0, sizeof(plc_tm));
 	plc_tm.tm_sec = (int)(div_u64(ns, NSEC_PER_SEC) % 60);
-        plc_tm.tm_min = (int)(div_u64(ns, (u64)(60ULL * NSEC_PER_SEC)) % 60);
+        /* div_u64() 的除数是 u32：60000000000 会被截成 4165425152，必须用 div64_u64 */
+        plc_tm.tm_min = (int)(div64_u64(ns, 60ULL * NSEC_PER_SEC) % 60);
 	return &plc_tm;
 }
 
