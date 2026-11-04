@@ -691,10 +691,11 @@ def main():
         os.path.basename(src))[0]
 
     offsets = None
-    if args.offset_us:
-        offsets = [float(x) for x in args.offset_us.split(",") if x.strip()]
+    raw_off = args.offset_us or meta.get("offset_us")
+    if raw_off:
+        offsets = [float(x) for x in str(raw_off).split(",") if x.strip()]
         if len(offsets) != len(stages):
-            raise SystemExit("--offset-us 个数 (%d) 与阶段数 (%d) 不一致"
+            raise SystemExit("offset_us 个数 (%d) 与阶段数 (%d) 不一致"
                              % (len(offsets), len(stages)))
 
     stage_list = []

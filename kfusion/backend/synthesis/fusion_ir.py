@@ -190,6 +190,18 @@ class FusionIR(object):
         ir.digest_vars = [v for v in (digest_vars or []) if v]
         ir.probe = bool(probe)
         ir.let_events = list(plan.get("let_events") or [])
+        # LET 钉扎阶段从组计算体推迟到宿主槽位（at_us）执行
+        defer = set()
+        for e in ir.let_events:
+            kind = e.get("kind")
+            st = e.get("stage")
+            if not st:
+                continue
+            if kind == "output_commit":
+                defer.add(st)
+            elif kind == "input_snapshot":
+                defer.add(st)
+        ir.let_defer_stages = defer
         # runtime：verified_plan → 宿主默认 cpu/prio（审查 P0-2）
         rt = plan.get("runtime") or {}
         ir.runtime_cpu = rt.get("cpu")

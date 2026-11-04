@@ -102,7 +102,13 @@ def emit_body_c(ir, protos):
                         g.exec_us, len(g.stages)))
         lines.append("void %s(void)" % g.body)
         lines.append("{")
+        defer = set(getattr(ir, "let_defer_stages", None) or ())
         for s in g.stages:
+            if s.name in defer:
+                # 钉扎阶段改由宿主在 let_events.at_us 调用；此处只留覆盖标记
+                lines.append("\t/* LET_DEFER %s — 由宿主 LET 槽位在逻辑时刻调用 */"
+                             % s.name)
+                continue
             # 跨域输入：先订阅，再跑这个阶段（否则它读到的还是本域上一拍的旧值）
             for c in getattr(s, "xdom_sub", []) or []:
                 lines.append("\tecos_xdom_sub(%d, &%s);\t/* 跨域输入：通道 %d，"

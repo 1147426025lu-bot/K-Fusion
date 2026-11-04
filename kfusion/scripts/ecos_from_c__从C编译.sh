@@ -197,6 +197,49 @@ if [ "$DOMAIN" = "mixed" ] && [ "$ADAPTER" != "uku_ioctl" ]; then
 fi
 cp "$OUT/chosen.plan.json" "$OUT/plan.json"
 
+# 7b-let) TIME_CONTRACT 的 pins → plan.let_events（开题：LET 读写进入统一计划）
+if [ -n "${TIME_CONTRACT:-}" ] && [ -f "${TIME_CONTRACT}" ]; then
+  step "7b-let) 从时间契约挂接 let_events / shared_objects"
+  PYTHONPATH="$KF/scripts/ecos${PYTHONPATH:+:$PYTHONPATH}" \
+  "$PY" - "$OUT/plan.json" "$TIME_CONTRACT" <<'PY' || die "挂接 LET 事件失败" 8
+import json, os, sys
+from let_events import from_time_contract, normalize_list, reshape_groups_for_let
+plan = json.load(open(sys.argv[1], encoding="utf-8"))
+ctr = json.load(open(sys.argv[2], encoding="utf-8"))
+# 契约 pins 为 LET 钉扎事实源（含 path/publish/snap_vars）；覆盖 plan 内旧事件
+ctr_evs = from_time_contract(ctr)
+if ctr_evs:
+    evs = ctr_evs
+else:
+    evs = normalize_list(plan.get("let_events") or [])
+plan["let_events"] = evs
+if ctr.get("shared_objects"):
+    plan["shared_objects"] = ctr["shared_objects"]
+meta = dict(plan.get("meta") or {})
+if evs:
+    meta["let"] = True
+plan["meta"] = meta
+teir = {}
+teir_path = os.environ.get("TEIR_JSON") or ""
+if not teir_path:
+    # 同目录 task.teir.json（ecos_from_c 惯例）
+    cand = os.path.join(os.path.dirname(sys.argv[1]), "task.teir.json")
+    if os.path.isfile(cand):
+        teir_path = cand
+if teir_path and os.path.isfile(teir_path):
+    teir = json.load(open(teir_path, encoding="utf-8"))
+plan, reshaped = reshape_groups_for_let(plan, teir=teir, contract=ctr)
+json.dump(plan, open(sys.argv[1], "w", encoding="utf-8"),
+          ensure_ascii=False, indent=2)
+open(sys.argv[1], "a", encoding="utf-8").write("\n")
+n_irq = sum(1 for e in evs if e.get("path") == "irq")
+print("  let_events=%d irq=%d shared_objects=%d reshaped=%s groups=%s"
+      % (len(evs), n_irq, len(plan.get("shared_objects") or []),
+         reshaped, [(g.get("id"), g.get("phase_us"), g.get("members"))
+                    for g in plan.get("groups") or []]))
+PY
+fi
+
 # PR-U6：唯一计划事实来源。extend 产出 verified_plan.json（含 ownership/handoffs
 # 与 V1–V6 校验），再覆盖 plan.json——后端只读 plan.json，不再有 plan_v2 旁路。
 # PLAN_SCHEMA_GATE=0 仅作紧急逃生（仍写 enrich 软补全）；正式路径默认开启。

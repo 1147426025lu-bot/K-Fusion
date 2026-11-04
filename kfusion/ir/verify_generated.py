@@ -23,6 +23,7 @@ _STAGE_RE = re.compile(
     r'^\s*([A-Za-z_]\w*\s*\([^)]*\))\s*;\s*/\*\s*([A-Za-z_]\w*)\s*[，,]\s*相位')
 _ENTER_RE = re.compile(r'ecos_stage_enter\(\s*(\d+)\s*\)')
 _EXIT_RE = re.compile(r'ecos_stage_exit\(\s*(\d+)\s*\)')
+_LET_DEFER_RE = re.compile(r'LET_DEFER\s+(\S+)')
 _SUB_RE = re.compile(r'ecos_xdom_sub\(\s*\d+\s*,\s*&?\w+')
 _PUB_RE = re.compile(r'ecos_xdom_pub\(\s*\d+\s*,\s*\w+')
 
@@ -53,9 +54,11 @@ def parse_body(text):
             if i < len(exits):
                 st["exit_idx"] = exits[i]
         stages.extend(blk_stages)
+    let_defer = _LET_DEFER_RE.findall(text)
     n_sub = len(_SUB_RE.findall(text))
     n_pub = len(_PUB_RE.findall(text))
-    return {"stages": stages, "xdom_subs": n_sub, "xdom_pubs": n_pub}
+    return {"stages": stages, "let_defer": let_defer,
+            "xdom_subs": n_sub, "xdom_pubs": n_pub}
 
 
 def expected_names_from_plan(plan):
@@ -76,6 +79,7 @@ def verify(body_text, plan=None, expected_names=None, deadline_us=None,
     parsed = parse_body(body_text)
     stages = parsed["stages"]
     found = [s["name"] for s in stages]
+    let_defer = list(parsed.get("let_defer") or [])
     errors = []
     warnings = []
 
@@ -85,16 +89,20 @@ def verify(body_text, plan=None, expected_names=None, deadline_us=None,
         errors.append("无法推导期望阶段集合（既没给 expected_names 也没给 plan.groups）")
     else:
         set_exp = set(exp)
-        set_found = set(found)
+        set_found = set(found) | set(let_defer)
         missing = set_exp - set_found
         extra = set_found - set_exp
         if missing:
             errors.append("生成体缺阶段：%s" % ", ".join(sorted(missing)))
         if extra:
             errors.append("生成体夹带未声明阶段：%s" % ", ".join(sorted(extra)))
-        if set_exp == set_found and found != exp:
+        # 有 LET_DEFER 时只核对「仍留在组内的计算阶段」相对序
+        if not let_defer and set_exp == set_found and found != exp:
             errors.append("生成体阶段顺序与方案不一致：\n  方案 %s\n  生成 %s"
                          % (exp, found))
+        elif let_defer:
+            warnings.append("LET_DEFER 阶段 %s 由宿主槽位调用（不在 ecos_body 内执行）"
+                            % ", ".join(let_defer))
 
     # 计时钩子：0..N-1 连续且每个阶段配对
     idxs = [s["enter_idx"] for s in stages if s["enter_idx"] is not None]

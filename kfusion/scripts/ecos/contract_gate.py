@@ -5,8 +5,11 @@
 采样、提交钉扎与 TEIR 数据版本（same-job / previous-job / age=1）必须在
 STKP 入选方案、LET 旁路方案、codegen 之前用同一入口检查。
 
-LET 事件不能单独把「融合前拉」变成可部署；要部署仍须通过无 LET 的窗口检查，
-或由 STKP 已验证的分组来生成。
+可部署条件（开题 LET 贯通后）：
+  · TEIR 验证通过；且
+  · 无 LET 时窗口/钉扎全部通过；或
+  · 计划含 let_events，且 apply_let 后钉扎全部通过（宿主必须兑现 at_us）。
+无 LET 的「融合前拉」仍不可部署。
 """
 from __future__ import print_function
 
@@ -39,23 +42,29 @@ def check(teir, plan, contract=None):
     ok_teir, d_teir = teir_v.verify(teir, plan)
     d_pin = []
     d_raw = []
+    d_period = []
     hydrated = None
+    has_let = bool(plan.get("let_events"))
     if contract:
         hydrated = let.hydrate_pins(contract, teir)
         ph = let.phase_map(teir)
-        has_let = bool(plan.get("let_events"))
         d_pin = let.pin_violations(plan, ph, hydrated, apply_let=has_let)
         d_raw = let.pin_violations(plan, ph, hydrated, apply_let=False)
-        d_raw.extend(let.period_ok(plan, hydrated))
+        d_period = list(let.period_ok(plan, hydrated))
         d_raw.extend(let.window_ok(hydrated))
-    deploy_ok = bool(ok_teir) and not d_raw
+    pin_ok_with_let = not d_pin
+    window_ok_without_let = not d_raw
+    # LET 修复钉扎后可部署；周期拉伸等仍看 d_period
+    deploy_ok = bool(ok_teir) and not d_period and (
+        window_ok_without_let or (has_let and pin_ok_with_let))
     return {
         "teir_ok": bool(ok_teir),
         "teir_diagnostics": d_teir,
-        "pin_ok_with_let": not d_pin,
+        "pin_ok_with_let": pin_ok_with_let,
         "pin_diagnostics": d_pin,
-        "window_ok_without_let": not d_raw,
+        "window_ok_without_let": window_ok_without_let,
         "window_diagnostics": d_raw,
+        "has_let": has_let,
         "deploy_ok": deploy_ok,
         "ok": deploy_ok,
         "contract_pinned": sorted((hydrated or {}).get("pins") or {})
@@ -81,12 +90,15 @@ def main():
         with io.open(args.out, "w", encoding="utf-8") as f:
             json.dump(rep, f, ensure_ascii=False, indent=2)
             f.write("\n")
-    print("contract_gate teir_ok=%s window_raw=%s deploy_ok=%s" % (
-        rep["teir_ok"], rep["window_ok_without_let"], rep["deploy_ok"]))
+    print("contract_gate teir_ok=%s window_raw=%s pin_let=%s has_let=%s deploy_ok=%s" % (
+        rep["teir_ok"], rep["window_ok_without_let"],
+        rep.get("pin_ok_with_let"), rep.get("has_let"), rep["deploy_ok"]))
     for d in (rep.get("teir_diagnostics") or [])[:4]:
         print("  TEIR %s %s" % (d.get("code"), d.get("where") or ""))
     for d in (rep.get("window_diagnostics") or [])[:4]:
         print("  WIN %s %s" % (d.get("code"), d.get("where") or ""))
+    for d in (rep.get("pin_diagnostics") or [])[:4]:
+        print("  PIN %s %s" % (d.get("code"), d.get("where") or ""))
     return 0 if rep["deploy_ok"] else 3
 
 

@@ -25,6 +25,7 @@ _HOST = r'''/* %(name)s —— 单工作线程 ring-0 宿主（U-5/PR-U7）；�
  *   · 定时器按绝对相位表入队 kf_release_event，工作线程按序执行
  *   · 队列满记 release_overflow（不静默覆盖）
  *   · r/s/f 按 cycle_id 配对，禁止跨周期拼样本
+ *   · LET：kf_slots 合并组释放与逻辑读写钉扎；path=irq 时在定时器回调跑桩
  */
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -49,6 +50,11 @@ _HOST = r'''/* %(name)s —— 单工作线程 ring-0 宿主（U-5/PR-U7）；�
 #define ECOS_LAST_GROUP %(last_group)d
 #define KF_Q_DEPTH 64
 #define KF_ALL_GROUPS_MASK ((1U << ECOS_GROUPS) - 1U)
+#define KF_N_SLOTS %(nslots)d
+#define KF_KIND_GROUP 0u
+#define KF_KIND_LET   1u
+
+%(let_externs)s
 
 static unsigned int period_us = %(period)d;
 module_param(period_us, uint, 0444);
@@ -104,8 +110,16 @@ static int ecos_set_sched(struct task_struct *t, unsigned int prio)
 
 struct kf_release_event {
 	u64 cycle_id;
-	u32 group_id;
+	u32 kind;	/* KF_KIND_GROUP / KF_KIND_LET */
+	u32 id;		/* group_id 或 let 事件下标 */
 	s64 nominal_release_ns;
+};
+
+struct kf_slot {
+	s64 phase_ns;
+	u32 kind;
+	u32 id;
+	u8 irq_path;	/* LET 且 path=irq 时在 hrtimer 回调执行 */
 };
 
 /* 打开中的周期：首组登记；末组须 cycle_id 一致且 groups_seen 齐全才记账。 */
@@ -117,8 +131,8 @@ struct kf_cycle_record {
 	bool started;
 };
 
-static const s64 ecos_phase_ns[ECOS_GROUPS] = {
-%(phase_ns)s
+static const struct kf_slot kf_slots[KF_N_SLOTS] = {
+%(slot_inits)s
 };
 
 %(digest_decls)s
@@ -161,6 +175,29 @@ static unsigned long missing_groups;
 module_param(missing_groups, ulong, 0444);
 MODULE_PARM_DESC(missing_groups, "末组到达但本周期组掩码不齐全（中间阶段丢失）的次数");
 
+static unsigned long let_rw_fires;
+module_param(let_rw_fires, ulong, 0444);
+MODULE_PARM_DESC(let_rw_fires, "LET 逻辑读写槽位执行次数");
+
+static unsigned long let_rw_irq;
+module_param(let_rw_irq, ulong, 0444);
+MODULE_PARM_DESC(let_rw_irq, "其中在 hrtimer 回调（irq 路径）执行的次数");
+
+static long let_rw_lat_max_ns;
+module_param(let_rw_lat_max_ns, long, 0444);
+MODULE_PARM_DESC(let_rw_lat_max_ns, "LET 读写实际时刻相对名义相位的最大正偏差（ns）");
+
+static unsigned long let_skip_commit;
+module_param(let_skip_commit, ulong, 0444);
+MODULE_PARM_DESC(let_skip_commit, "计算未就绪时跳过的 output_commit 次数（on_timeout=skip_commit）");
+
+static unsigned long let_hold_last;
+module_param(let_hold_last, ulong, 0444);
+MODULE_PARM_DESC(let_hold_last, "计算未就绪时保持上拍输出的次数（on_timeout=hold_last）");
+
+/* 本拍计算体已完成、可供逻辑写入消费；IRQ 与 kthread 同 CPU 绑定下用 WRITE_ONCE/READ_ONCE */
+static bool kf_let_ready;
+
 /* 废弃：旧 missed+=depth 会重复累计；恒为 0 */
 static unsigned long missed;
 module_param(missed, ulong, 0444);
@@ -185,7 +222,17 @@ static unsigned int kf_head;
 static unsigned int kf_tail;
 static s64 kf_base_ns;
 static u64 kf_cycle;
-static int kf_next_g;
+static int kf_next_slot;
+
+%(let_run_fn)s
+
+static void kf_note_let_lat(s64 nominal_ns, s64 now_ns)
+{
+	s64 d = now_ns - nominal_ns;
+
+	if (d > let_rw_lat_max_ns)
+		let_rw_lat_max_ns = d;
+}
 
 static bool kf_q_empty(void)
 {
@@ -216,15 +263,15 @@ static void kf_arm_next(void)
 
 	at = kf_base_ns
 	   + (s64)kf_cycle * (s64)period_us * 1000LL
-	   + ecos_phase_ns[kf_next_g];
+	   + kf_slots[kf_next_slot].phase_ns;
 	hrtimer_start(&kf_timer, ns_to_ktime(at), HRTIMER_MODE_ABS_PINNED);
 }
 
 static void kf_advance_slot(void)
 {
-	kf_next_g++;
-	if (kf_next_g >= ECOS_GROUPS) {
-		kf_next_g = 0;
+	kf_next_slot++;
+	if (kf_next_slot >= KF_N_SLOTS) {
+		kf_next_slot = 0;
 		kf_cycle++;
 	}
 }
@@ -233,10 +280,26 @@ static enum hrtimer_restart kf_tick(struct hrtimer *t)
 {
 	unsigned long flags;
 	struct kf_release_event ev;
+	const struct kf_slot *slot = &kf_slots[kf_next_slot];
 	s64 expires = ktime_to_ns(hrtimer_get_expires(t));
+	s64 now;
+
+	/* LET + irq：在定时器回调直接跑受限读写桩（不得做重计算） */
+	if (slot->kind == KF_KIND_LET && slot->irq_path) {
+		now = ktime_get();
+		let_run(slot->id);
+		let_rw_fires++;
+		let_rw_irq++;
+		kf_note_let_lat(expires, now);
+		kf_advance_slot();
+%(xdom_tick_shift_single)s
+		kf_arm_next();
+		return HRTIMER_NORESTART;
+	}
 
 	ev.cycle_id = kf_cycle;
-	ev.group_id = (u32)kf_next_g;
+	ev.kind = slot->kind;
+	ev.id = slot->id;
 	ev.nominal_release_ns = expires;
 
 	spin_lock_irqsave(&kf_lock, flags);
@@ -291,12 +354,24 @@ static int kf_worker_fn(void *data)
 
 			if (unlikely(frozen))
 				continue;
+
+			/* LET 线程路径：在工作线程执行逻辑读写 */
+			if (ev.kind == KF_KIND_LET) {
+				s_ns = ktime_get();
+				if (s_ns > ev.nominal_release_ns + (s64)late_start_slack_ns)
+					late_start++;
+				let_run(ev.id);
+				let_rw_fires++;
+				kf_note_let_lat(ev.nominal_release_ns, s_ns);
+				continue;
+			}
+
 %(xdom_anchor)s%(probe_before_sw)s
 			s_ns = ktime_get();
 			if (s_ns > ev.nominal_release_ns + (s64)late_start_slack_ns)
 				late_start++;
 
-			if (ev.group_id == ECOS_FIRST_GROUP) {
+			if (ev.id == ECOS_FIRST_GROUP) {
 				if (kf_open.started)
 					incomplete_cycle++;
 				kf_open.cycle_id = ev.cycle_id;
@@ -307,13 +382,15 @@ static int kf_worker_fn(void *data)
 			}
 
 			if (kf_open.started && kf_open.cycle_id == ev.cycle_id &&
-			    ev.group_id < ECOS_GROUPS)
-				kf_open.groups_seen |= (1U << ev.group_id);
+			    ev.id < ECOS_GROUPS)
+				kf_open.groups_seen |= (1U << ev.id);
 
-			ecos_run_body((int)ev.group_id);
+			ecos_run_body((int)ev.id);
+			/* 组体跑完 → 本拍计算就绪，供后续 LET commit 消费 */
+			WRITE_ONCE(kf_let_ready, true);
 			f_ns = ktime_get();
 
-			if (ev.group_id == ECOS_LAST_GROUP) {
+			if (ev.id == ECOS_LAST_GROUP) {
 				T_ns = (s64)deadline_us * 1000LL;
 				if (kf_open.started && kf_open.cycle_id == ev.cycle_id) {
 					if (kf_open.groups_seen == KF_ALL_GROUPS_MASK) {
@@ -362,7 +439,9 @@ static int __init ecos_init(void)
 	kf_timer.function = kf_tick;
 	kf_head = kf_tail = 0;
 	kf_cycle = 0;
-	kf_next_g = 0;
+	kf_next_slot = 0;
+	let_rw_lat_max_ns = 0;
+	WRITE_ONCE(kf_let_ready, false);
 	memset(&kf_open, 0, sizeof(kf_open));
 
 	kf_worker = kthread_create(kf_worker_fn, NULL, "ecos_sw");
@@ -378,7 +457,7 @@ static int __init ecos_init(void)
 	t0 = ktime_get();
 	kf_base_ns = t0;
 	{
-		ktime_t first = ns_to_ktime(kf_base_ns + ecos_phase_ns[0]);
+		ktime_t first = ns_to_ktime(kf_base_ns + kf_slots[0].phase_ns);
 
 		if (cpu >= 0) {
 			struct ecos_start_arg a = { .at = first };
@@ -402,9 +481,10 @@ static void __exit ecos_exit(void)
 	if (kf_worker)
 		kthread_stop(kf_worker);
 	ecos_stage_report();
-	pr_info("ecos-sw: 已停止 periods=%%lu overflow=%%lu backlog_max=%%lu late=%%lu deadline_miss=%%lu unpaired=%%lu missing=%%lu\n",
+	pr_info("ecos-sw: 已停止 periods=%%lu overflow=%%lu backlog_max=%%lu late=%%lu deadline_miss=%%lu unpaired=%%lu missing=%%lu let_rw=%%lu irq=%%lu skip=%%lu\n",
 		periods, release_overflow, queue_backlog_max, late_start,
-		deadline_miss, unpaired_finish, missing_groups);
+		deadline_miss, unpaired_finish, missing_groups,
+		let_rw_fires, let_rw_irq, let_skip_commit);
 }
 
 module_init(ecos_init);
@@ -415,6 +495,184 @@ MODULE_DESCRIPTION("ECoS single-worker host (%(ngroups)d groups)");
 '''
 
 
+def _ns(us):
+    return "%.0f" % (float(us) * 1000.0) if us is not None else "0"
+
+
+def _ident(s):
+    out = []
+    for ch in s:
+        out.append(ch if (ch.isalnum() or ch == "_") else "_")
+    s = "".join(out)
+    return s if not s[:1].isdigit() else "v_" + s
+
+
+def _let_ctype(name):
+    """与 body_emit / stage_impl 对齐：跨阶段全局一律 int32_t（含 *_ver）。"""
+    (name)  # 保留形参供日后按 TEIR 精细化
+    return "int32_t"
+
+
+def _let_can_stub(e):
+    """有显式 publish / snap_vars 映射时可生成硬中断安全赋值桩。"""
+    if e.get("kind") == "output_commit" and e.get("publish"):
+        return True
+    if e.get("kind") == "input_snapshot":
+        snaps = e.get("snap_vars") or []
+        srcs = e.get("vars") or []
+        return bool(snaps) and len(snaps) == len(srcs)
+    return False
+
+
+def _emit_let_stub_body(e):
+    """返回 (body_lines, used_symbols)。body 不含函数外壳。"""
+    kind = e.get("kind")
+    timeout = e.get("on_timeout") or "skip_commit"
+    lines = []
+    used = set()
+    if kind == "output_commit":
+        # 超时：计算未就绪
+        lines.append("\tif (!READ_ONCE(kf_let_ready)) {")
+        if timeout == "hold_last":
+            lines.append("\t\tlet_hold_last++;")
+            lines.append("\t\treturn;")
+        elif timeout == "fault":
+            lines.append("\t\tlet_skip_commit++;")
+            lines.append("\t\tWRITE_ONCE(frozen, true);")
+            lines.append("\t\treturn;")
+        else:  # skip_commit
+            lines.append("\t\tlet_skip_commit++;")
+            lines.append("\t\treturn;")
+        lines.append("\t}")
+        for item in (e.get("publish") or []):
+            if not isinstance(item, dict):
+                continue
+            dst = item.get("dst")
+            if not dst:
+                continue
+            used.add(dst)
+            if item.get("op") == "inc":
+                lines.append("\tWRITE_ONCE(%s, READ_ONCE(%s) + 1u);" % (dst, dst))
+            else:
+                src = item.get("src")
+                if not src:
+                    continue
+                used.add(src)
+                lines.append("\tWRITE_ONCE(%s, READ_ONCE(%s));" % (dst, src))
+        lines.append("\tWRITE_ONCE(kf_let_ready, false);")
+    elif kind == "input_snapshot":
+        srcs = list(e.get("vars") or [])
+        snaps = list(e.get("snap_vars") or [])
+        for src, dst in zip(srcs, snaps):
+            used.add(src)
+            used.add(dst)
+            lines.append("\tWRITE_ONCE(%s, READ_ONCE(%s));" % (dst, src))
+    return lines, used
+
+
+def _build_slots_and_let(ir):
+    """组释放 + LET 钉扎 → 统一相位槽；并生成 irq 安全桩 / let_run。"""
+    events = list(getattr(ir, "let_events", None) or [])
+    slots = []
+    for i, g in enumerate(ir.groups):
+        ph = g.phase_us if g.phase_us is not None else 0.0
+        slots.append((float(ph), 0, i, 0, None))  # kind=group
+    let_meta = []
+    for li, e in enumerate(events):
+        at = float(e.get("at_us") or 0.0)
+        # irq 仅当可生成赋值桩；否则强制 thread（避免在硬中断调重计算阶段）
+        want_irq = (e.get("path") or "thread") == "irq"
+        irq = 1 if (want_irq and _let_can_stub(e)) else 0
+        st = e.get("stage") or ("let_%d" % li)
+        slots.append((at, 1, li, irq, st))
+        let_meta.append(e)
+    # 同时刻：组释放 → output_commit → input_snapshot
+    def _key(s):
+        ph, kind, idx, irq, st = s
+        if kind == 0:
+            return (ph, 0, idx)
+        ev = let_meta[idx]
+        kpri = 0 if ev.get("kind") == "output_commit" else 1
+        return (ph, 1, kpri, idx)
+
+    slots.sort(key=_key)
+    inits = []
+    for ph, kind, idx, irq, _st in slots:
+        inits.append("\t{ .phase_ns = %s, .kind = %u, .id = %u, .irq_path = %u }"
+                     % (_ns(ph), kind, idx, irq))
+    if not let_meta:
+        return {
+            "nslots": len(slots),
+            "slot_inits": ",\n".join(inits) + ("\n" if inits else ""),
+            "let_externs": "/* 无 LET 事件 */\n",
+            "let_run_fn": ("static void let_run(u32 id)\n{\n"
+                           "\t(void)id;\n}\n"),
+        }
+
+    stage_externs = []
+    var_externs = []
+    stubs = []
+    cases = []
+    seen_fn = set()
+    seen_var = set()
+    irq_by_id = {}
+    for ph, kind, idx, irq, _st in slots:
+        if kind == 1:
+            irq_by_id[idx] = irq
+
+    for li, e in enumerate(let_meta):
+        st = e.get("stage") or ("let_%d" % li)
+        path = e.get("path") or "thread"
+        use_stub = _let_can_stub(e)
+        # irq 槽或具备映射表时走赋值桩；否则回退调阶段函数（仅 thread）
+        if use_stub:
+            body, used = _emit_let_stub_body(e)
+            for name in sorted(used):
+                if name in seen_var:
+                    continue
+                seen_var.add(name)
+                var_externs.append("extern %s %s;" % (_let_ctype(name), name))
+            stub_name = "let_stub_%u" % li
+            stubs.append(
+                "static void %s(void)\t/* %s @%.0fµs path=%s */\n{\n%s\n}\n"
+                % (stub_name, e.get("kind"), float(e.get("at_us") or 0),
+                   path, "\n".join(body) if body else "\t/* empty */")
+            )
+            cases.append("\tcase %u:\n\t\t%s();\n\t\tbreak;" % (li, stub_name))
+        else:
+            if irq_by_id.get(li):
+                # 安全网：不可桩却标了 irq —— 生成空操作并注释
+                cases.append(
+                    "\tcase %u:\n\t\t/* path=irq 但缺 publish/snap 映射，跳过 */\n"
+                    "\t\tbreak;" % li
+                )
+            else:
+                if st not in seen_fn:
+                    stage_externs.append("extern void %s(void);" % st)
+                    seen_fn.add(st)
+                cases.append(
+                    "\tcase %u:\n\t\t%s();\t/* %s @%.0fµs path=thread */\n\t\tbreak;"
+                    % (li, st, e.get("kind"), float(e.get("at_us") or 0))
+                )
+
+    let_externs = ("\n".join(var_externs + stage_externs)
+                   + ("\n" if (var_externs or stage_externs) else ""))
+    let_run = (
+        "".join(stubs)
+        + "static void let_run(u32 id)\n{\n"
+        "\tswitch (id) {\n"
+        + "\n".join(cases) + "\n"
+        "\tdefault:\n\t\tbreak;\n"
+        "\t}\n}\n"
+    )
+    return {
+        "nslots": len(slots),
+        "slot_inits": ",\n".join(inits) + ("\n" if inits else ""),
+        "let_externs": let_externs,
+        "let_run_fn": let_run,
+    }
+
+
 def render(ir, module_name, shared):
     """shared: dict of already-computed placeholders from linux_kernel_emitter.emit."""
     xdom_tick = shared.get("xdom_tick_shift_single")
@@ -423,6 +681,7 @@ def render(ir, module_name, shared):
 
     probe_before = shared.get("probe_before_sw", "")
     probe_after = shared.get("probe_after_sw", "")
+    let_bits = _build_slots_and_let(ir)
 
     host = _HOST % {
         "name": "ecos_fused_linux.c",
@@ -438,7 +697,10 @@ def render(ir, module_name, shared):
         "late_slack_ns": shared.get("late_slack_ns", 50000),
         "evidence": shared["evidence"],
         "layout": shared["layout"],
-        "phase_ns": shared["phase_ns"],
+        "nslots": let_bits["nslots"],
+        "slot_inits": let_bits["slot_inits"],
+        "let_externs": let_bits["let_externs"],
+        "let_run_fn": let_bits["let_run_fn"],
         "body_cases": shared["body_cases"],
         "digest_decls": shared["digest_decls"],
         "digest_update": shared["digest_update"],
@@ -451,7 +713,7 @@ def render(ir, module_name, shared):
         "xdom_init": shared["xdom_init"],
         "xdom_include": shared["xdom_include"],
         "xdom_report": shared["xdom_report"],
-        "xdom_anchor": shared["xdom_anchor"].replace("g->id", "ev.group_id")
+        "xdom_anchor": shared["xdom_anchor"].replace("g->id", "ev.id")
             if shared.get("xdom_anchor") else "",
         "xdom_shift_decls": shared["xdom_shift_decls"],
         "xdom_tick_shift_single": xdom_tick,

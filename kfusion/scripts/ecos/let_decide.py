@@ -180,6 +180,20 @@ def pin_violations(plan, ph, contract, apply_let):
                         "msg": "提交钉在 %.0f µs，融合后组头 %.0f，无输出保持 LET"
                                % (want, head),
                     })
+            # 计算钉扎：禁止融进更早组头（LET 事件修不了，必须拆组）
+            if kind == "compute" and pin.get("pull_forbidden"):
+                gph = g.get("phase_us")
+                if gph is None:
+                    gph = g.get("release_phase_us")
+                if gph is None:
+                    gph = head
+                if float(gph) + 1e-9 < want:
+                    diags.append({
+                        "code": "E_PIN_EARLY_COMPUTE",
+                        "where": m,
+                        "msg": "计算钉在 %.0f µs，组释放 %.0f，禁止前拉"
+                               % (want, float(gph)),
+                    })
     return diags
 
 
@@ -223,7 +237,8 @@ def pin_preserving_groups(order, pins, ph):
     for name in order:
         pin = pins.get(name)
         pinned = bool(pin) and (
-            pin.get("pull_forbidden") or pin.get("early_commit_forbidden"))
+            pin.get("pull_forbidden") or pin.get("early_commit_forbidden")
+            or (pin.get("kind") == "compute" and pin.get("phase_us") is not None))
         if pinned:
             if cur:
                 groups.append(cur)
@@ -299,6 +314,12 @@ def decide(teir, contract, verifier, c_us, let_event_us, exec_us,
         plan = groups_plan(order, groups, platform, period_us=period_us)
         if let:
             plan = let_repair(plan, ph, contract)
+            # 与部署路径一致：LET 钉扎后按相位重切组（act 不得留在 g0@0）
+            try:
+                from let_events import reshape_groups_for_let as _reshape
+            except ImportError:
+                from ecos.let_events import reshape_groups_for_let as _reshape
+            plan, _ = _reshape(plan, teir=teir, contract=contract)
         ok_v, d_v = verifier.verify(teir, plan)
         d_pin = pin_violations(plan, ph, contract, apply_let=True)
         d_raw = pin_violations(plan, ph, contract, apply_let=False)

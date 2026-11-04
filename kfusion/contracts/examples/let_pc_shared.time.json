@@ -1,0 +1,48 @@
+{
+  "version": 1,
+  "mode": "strict_period",
+  "period_us": 1000,
+  "deadline_us": 1000,
+  "allow_period_stretch": false,
+  "pins": {
+    "stage_commit": {
+      "kind": "output_commit",
+      "phase_us": 400,
+      "early_commit_forbidden": true,
+      "path": "irq",
+      "vars": ["g_cmd", "g_cmd_ver"],
+      "publish": [
+        {"dst": "g_cmd", "src": "g_cmd_pending"},
+        {"dst": "g_cmd_ver", "op": "inc"}
+      ],
+      "notes": "逻辑写入：硬中断路径发布 g_cmd/版本；计算未就绪则 skip_commit"
+    },
+    "stage_fetch": {
+      "kind": "input_snapshot",
+      "phase_us": 500,
+      "pull_forbidden": true,
+      "path": "irq",
+      "vars": ["g_cmd", "g_cmd_ver"],
+      "snap_vars": ["g_cmd_snap", "g_cmd_snap_ver"],
+      "notes": "逻辑读取：硬中断路径快照到消费者私有变量"
+    },
+    "stage_act": {
+      "kind": "compute",
+      "phase_us": 700,
+      "pull_forbidden": true,
+      "notes": "消费快照的计算：必须在 fetch@500 之后释放，禁止融进 g0@0"
+    }
+  },
+  "timeout": {
+    "on_compute_miss": "skip_commit",
+    "notes": "计算未在写入时刻前就绪则跳过本拍发布，版本不递增"
+  },
+  "shared_objects": [
+    {
+      "name": "g_cmd",
+      "writer": "stage_commit",
+      "readers": ["stage_fetch"],
+      "version": "g_cmd_ver"
+    }
+  ]
+}

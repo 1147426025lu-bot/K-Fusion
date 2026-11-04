@@ -52,6 +52,8 @@ ALLOWED_TOP = {
     "version", "task", "period_us", "deadline_us", "groups", "state_ownership",
     "handoffs", "release_owner", "runtime", "provenance", "meta", "order",
     "domains", "cost", "schedule", "chosen", "note",
+    # LET 逻辑读写事件（开题方案：与 groups 并列的一等字段）
+    "let_events", "shared_objects", "verification",
 }
 DOMAINS = ("user", "kernel")
 
@@ -237,6 +239,14 @@ def build_extended(plan, teir, src_hash=None, teir_hash=None):
     if runtime.get("priority") is None and runtime.get("sched") == "fifo":
         runtime["priority"] = 80
 
+    # LET 事件：规范化后写入；缺省空列表（无 LET 计划也显式带字段，避免宿主漏读）
+    try:
+        from let_events import normalize_list as _let_norm
+    except ImportError:
+        from ecos.let_events import normalize_list as _let_norm  # noqa: E401
+    let_events = _let_norm(plan.get("let_events") or [])
+    shared_objects = list(plan.get("shared_objects") or [])
+
     doc = {
         "version": PLAN_VERSION,
         "task": task_name,
@@ -248,6 +258,8 @@ def build_extended(plan, teir, src_hash=None, teir_hash=None):
         "release_owner": owner,
         "runtime": runtime,
         "order": list(plan.get("order") or []),
+        "let_events": let_events,
+        "shared_objects": shared_objects,
         "meta": dict(meta),
         "provenance": {
             "generator": "plan_extend__计划扩展.py",
@@ -378,6 +390,34 @@ def verify(doc, teir=None):
             errs.append("V6 fifo 时 priority 必须在 1..99：%r" % pr)
     if not isinstance(rt.get("cpu"), int) or rt["cpu"] < 0:
         errs.append("V6 runtime.cpu 非法：%r" % rt.get("cpu"))
+
+    # V8 LET 事件：形状/相位/路径；与计划阶段集合一致
+    try:
+        from let_events import validate_events as _let_validate
+    except ImportError:
+        from ecos.let_events import validate_events as _let_validate  # noqa: E401
+    stage_set = []
+    for g in doc["groups"]:
+        stage_set.extend(g.get("members") or [])
+    for msg in _let_validate(doc.get("let_events") or [],
+                             period_us=period, stages=stage_set):
+        errs.append("V8 %s" % msg)
+    # 同一逻辑时刻：output_commit 必须排在同对象 input_snapshot 之前（同拍内）
+    by_at = {}
+    for e in (doc.get("let_events") or []):
+        at = e.get("at_us")
+        by_at.setdefault(at, []).append(e)
+    for at, evs in by_at.items():
+        kinds = [e.get("kind") for e in evs]
+        if "input_snapshot" in kinds and "output_commit" in kinds:
+            # 同 at_us：要求计划里 commit 事件排在 snapshot 前（列表序）
+            first_snap = min(i for i, e in enumerate(evs)
+                             if e.get("kind") == "input_snapshot")
+            first_commit = min(i for i, e in enumerate(evs)
+                               if e.get("kind") == "output_commit")
+            if first_commit > first_snap:
+                errs.append("V8 同时刻 %.1fµs：output_commit 必须排在 "
+                            "input_snapshot 之前（同拍发布先于读取）" % float(at))
 
     return errs, warns
 
