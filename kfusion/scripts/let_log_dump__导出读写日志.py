@@ -28,6 +28,27 @@ SAMP_SIZE = struct.calcsize(SAMP_FMT)
 
 OP_NAME = {1: "write", 2: "read"}
 ST_NAME = {0: "ok", 1: "skip", 2: "hold", 3: "err"}
+# 臂标识：0=kthread(B 组) 1=hrtimer_hard(D 组) 2=手写硬中断(C 组) 3=用户态(A 组) 4=用户态忙等(诊断)
+ARM_NAME = {0: "thread", 1: "irq_hard", 2: "handwritten_irq", 3: "userspace",
+            4: "userspace_spin"}
+
+
+def pctl(vals, q):
+    """最近秩分位数（不插值）：小样本下不会凭空造出中间值。
+
+    vals 需已排序。q ∈ [0,100]。空表返回 None。
+    """
+    if not vals:
+        return None
+    if q <= 0:
+        return vals[0]
+    if q >= 100:
+        return vals[-1]
+    # 最近秩：ceil(q/100 * n)
+    import math
+    k = int(math.ceil(q / 100.0 * len(vals)))
+    k = max(1, min(k, len(vals)))
+    return vals[k - 1]
 
 
 def ctx_name(c: int) -> str:
@@ -94,7 +115,7 @@ def load_bin(path: str):
         "drops": drops,
         "period_us": period_us,
         "arm_path": arm_path,
-        "arm_name": "irq_hard" if arm_path else "thread",
+        "arm_name": ARM_NAME.get(arm_path, "path%d" % arm_path),
     }
     return hdr, samples
 
@@ -155,6 +176,25 @@ def summarize(samples):
 
     rd_late, rd_early = signed_extrema(2)
     wr_late, wr_early = signed_extrema(1)
+
+    def dist(op):
+        """返回该 op 的抖动分布（|t_after-nominal|，单位 ns，仅 status=ok）。
+
+        只报分位数不报均值：均值会被个别异常拍拉偏，跨轮比较会造出假波动。
+        """
+        vals = sorted(s["jitter_ns"] for s in samples
+                      if s["op"] == op and s["status"] == 0
+                      and s["jitter_ns"] is not None)
+        return {
+            "n": len(vals),
+            "p50_ns": pctl(vals, 50),
+            "p90_ns": pctl(vals, 90),
+            "p99_ns": pctl(vals, 99),
+            "p999_ns": pctl(vals, 99.9),
+            "max_ns": vals[-1] if vals else None,
+            "mean_ns": (sum(vals) // len(vals)) if vals else None,
+        }
+
     return {
         "n": len(samples),
         "n_read_ok": sum(1 for s in samples if s["op"] == 2 and s["status"] == 0),
@@ -168,10 +208,30 @@ def summarize(samples):
         "max_read_early_ns": rd_early,
         "max_write_late_ns": wr_late,
         "max_write_early_ns": wr_early,
+        "dist_read": dist(2),
+        "dist_write": dist(1),
         "version_mismatch_cycles": ver_mismatch,
         "version_nonmono_writes": ver_nonmono,
         "ctx_counts": {},
     }
+
+
+def trim_warmup(samples, sec):
+    """丢弃开跑后前 sec 秒的样本。
+
+    必要性（实测证据）：A 组用户态臂在开跑约 4.5s 内稳定在 8.7us，之后跳到
+    22us 并长期稳定；5s 短测因 90% 样本落在瞬态里而给出 8.7us，与 60s 长测的
+    22us 冲突。预热期是启动瞬态（tick/调速/缓存状态未定），不是被测对象，
+    必须截掉且在报告中注明截断秒数，否则短测与长测的数会互相矛盾。
+    """
+    if sec <= 0:
+        return samples, 0
+    noms = [s["nominal_ns"] for s in samples if s["status"] == 0]
+    if not noms:
+        return samples, 0
+    cut = min(noms) + int(sec * 1e9)
+    kept = [s for s in samples if s["nominal_ns"] >= cut]
+    return kept, len(samples) - len(kept)
 
 
 def main():
@@ -180,6 +240,8 @@ def main():
     ap.add_argument("--bin", help="已保存的二进制；优先于 --dev")
     ap.add_argument("-o", "--out-dir", required=True)
     ap.add_argument("--tag", default="run")
+    ap.add_argument("--warmup-sec", type=float, default=0.0,
+                    help="丢弃开跑后前 N 秒样本（默认 0；长测建议 10）")
     args = ap.parse_args()
     os.makedirs(args.out_dir, exist_ok=True)
     src = args.bin or args.dev
@@ -193,7 +255,12 @@ def main():
             data = f.read()
         open(raw_path, "wb").write(data)
     hdr, samples = load_bin(raw_path)
+    n_raw = len(samples)
+    samples, n_trimmed = trim_warmup(samples, args.warmup_sec)
     summary = summarize(samples)
+    summary["warmup_sec"] = args.warmup_sec
+    summary["n_raw"] = n_raw
+    summary["n_trimmed"] = n_trimmed
     # ctx
     from collections import Counter
     summary["ctx_counts"] = dict(Counter(s["ctx_name"] for s in samples))

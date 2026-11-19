@@ -100,9 +100,11 @@ run_one() {
       sudo cat /dev/kf_let_log >"$dest/raw.bin"
   fi
   sudo rmmod kf_task || die "rmmod"
+  # 注意：dump_summary.json 若用 tee 会被混入文本行 → 只写日志文件，meta.json 才是干净 JSON
   "$PY" "$KF/scripts/let_log_dump__导出读写日志.py" \
     --bin "$dest/raw.bin" -o "$dest" --tag "${tag}_r${rep}" \
-    | tee "$dest/dump_summary.json"
+    --warmup-sec "${WARMUP_SEC:-10}" \
+    >"$dest/dump.log" 2>&1 || die "dump $tag/$rep（详见 $dest/dump.log）"
 }
 
 LOAD_PID=""
@@ -124,10 +126,18 @@ stop_load() {
   fi
 }
 
-echo "==== build thread ===="
-KO_T=$(build_arm thread "$CONTRACT_THREAD")
-echo "==== build irq ===="
-KO_I=$(build_arm irq "$CONTRACT_IRQ")
+if [ -n "${REUSE_KO_DIR:-}" ]; then
+  # 负载梯度等场景：复用同一批已验收的 .ko，避免每档重复 build 引入时长混杂
+  KO_T="$REUSE_KO_DIR/build_thread/kmod_hrtimer/kf_task.ko"
+  KO_I="$REUSE_KO_DIR/build_irq/kmod_hrtimer/kf_task.ko"
+  [ -f "$KO_T" ] && [ -f "$KO_I" ] || die "REUSE_KO_DIR 缺 ko: $REUSE_KO_DIR"
+  echo "==== reuse ko: $REUSE_KO_DIR ===="
+else
+  echo "==== build thread ===="
+  KO_T=$(build_arm thread "$CONTRACT_THREAD")
+  echo "==== build irq ===="
+  KO_I=$(build_arm irq "$CONTRACT_IRQ")
+fi
 
 start_load
 trap stop_load EXIT
