@@ -1,9 +1,13 @@
 # K-Fusion
 
-**An LLVM-based Kernelization and Fusion Compiler**
+**面向 LET 任务的读写抖动抑制编译工具链**
 
-将用户态 C 通过 LLVM Pass **内核化（kernelization）** 并 **融合（fusion）** 进 PREEMPT_RT 内核模块，在隔离的执行域中降低周期抖动。
+论文主线：**逻辑执行时间（LET）模型下共享数据读写抖动的抑制**——用 LLVM 分析任务的共享数据访问，
+把符合条件的读写钉扎到定时器硬中断、计算留在实时核上的用户态实时线程，
+在统一口径下分报最大读/写抖动并校验数据版本正确性。
+（工具链仍具备 IR 层内核化 / 融合能力，见下文；那是对产物形态的客观描述，不是论文卖点。）
 
+> 论文全貌与实验设计（**写作以此为准**）：[docs/PAPER_WALKTHROUGH__论文全貌与实验设计.md](docs/PAPER_WALKTHROUGH__论文全貌与实验设计.md)
 > 目录结构：[REPO_LAYOUT.md](REPO_LAYOUT.md)
 
 ## 克隆
@@ -33,16 +37,19 @@ FORCE_CHOSEN=D@linux_kernel \
 # 旧对照宿主：HOST_MODEL=per_group
 ```
 
-## 对照与参考（非主线）
+## 参考（旧线路 / 非主线）
 
 | 路径 | 角色 |
 |------|------|
-| [`crtos/`](crtos/) | 论文对照：cRTOS / Jailhouse baseline |
+| [`crtos/`](crtos/) | 旧线路历史材料：cRTOS / Jailhouse 跨域归因（**不是当前论文主线**） |
 | [`timedc/`](timedc/) | 灵感来源：Timed C / KTC 三基线对比 |
+| [`kfusion/docs/paper/`](kfusion/docs/paper/) | 旧叙事论文草稿（DRAFT_A–D 等），写作时勿照搬主线论断 |
 
 ## 环境
 
-- Raspberry Pi 5 · Linux PREEMPT_RT（`6.12.x-jh` 等）
+- Raspberry Pi 4 Model B Rev1.5 · Linux **5.15.49-rt47 PREEMPT_RT**（`realtime=1`，`HZ=1000`）
+  - SSH `pi@192.168.1.4`（IP 已从 `.3` 变为 `.4`）；实时核绑核 + FIFO
+  - 旧平台（Pi5 / 6.12、旧卡 5.15.86 非 RT）的数字**已作废**，不得与新口径混表
 - clang/llvm · cmake/ninja · 内核 headers
 
 ## 许可证

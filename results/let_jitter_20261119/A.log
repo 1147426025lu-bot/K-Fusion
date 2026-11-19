@@ -1,0 +1,33 @@
+OUT=/home/pi/kfusion_results/let4_20261119/A REPS=5 DUR=60s cycles=60000 cpu=3 prio=80 no_rt=0
+bin=/tmp/kf_let_userspace
+==== A 组 rep1 (60s) ====
+A 组用户态 LET: period=1000us cycles=60000 相位 w=400 r=500 g1=700 cpu=3 policy=SCHED_FIFO prio=80
+{"arm":"userspace_A","samples":120000,"cycles":60000,"period_us":1000,"skip_commit":0,"hold":0,"late_cycle":0,"out":"/home/pi/kfusion_results/let4_20261119/A/rep1/raw.bin"}
+  read  p50=22319 p99=23226 max=24880 ns
+  write p50=22454 p99=23381 max=29703 ns
+==== A 组 rep2 (60s) ====
+A 组用户态 LET: period=1000us cycles=60000 相位 w=400 r=500 g1=700 cpu=3 policy=SCHED_FIFO prio=80
+{"arm":"userspace_A","samples":120000,"cycles":60000,"period_us":1000,"skip_commit":0,"hold":0,"late_cycle":0,"out":"/home/pi/kfusion_results/let4_20261119/A/rep2/raw.bin"}
+  read  p50=22402 p99=23726 max=34151 ns
+  write p50=22559 p99=26046 max=32208 ns
+==== A 组 rep3 (60s) ====
+A 组用户态 LET: period=1000us cycles=60000 相位 w=400 r=500 g1=700 cpu=3 policy=SCHED_FIFO prio=80
+{"arm":"userspace_A","samples":120000,"cycles":60000,"period_us":1000,"skip_commit":0,"hold":0,"late_cycle":0,"out":"/home/pi/kfusion_results/let4_20261119/A/rep3/raw.bin"}
+  read  p50=22198 p99=23143 max=48238 ns
+  write p50=22372 p99=23377 max=36740 ns
+==== A 组 rep4 (60s) ====
+A 组用户态 LET: period=1000us cycles=60000 相位 w=400 r=500 g1=700 cpu=3 policy=SCHED_FIFO prio=80
+{"arm":"userspace_A","samples":120000,"cycles":60000,"period_us":1000,"skip_commit":0,"hold":0,"late_cycle":0,"out":"/home/pi/kfusion_results/let4_20261119/A/rep4/raw.bin"}
+  read  p50=21957 p99=22366 max=26514 ns
+  write p50=22126 p99=22607 max=68496 ns
+==== A 组 rep5 (60s) ====
+A 组用户态 LET: period=1000us cycles=60000 相位 w=400 r=500 g1=700 cpu=3 policy=SCHED_FIFO prio=80
+{"arm":"userspace_A","samples":120000,"cycles":60000,"period_us":1000,"skip_commit":0,"hold":0,"late_cycle":0,"out":"/home/pi/kfusion_results/let4_20261119/A/rep5/raw.bin"}
+  read  p50=22205 p99=22718 max=31637 ns
+  write p50=22290 p99=22932 max=33030 ns
+
+A 组（用户态）跨 5 轮，单位 us，报中位[极小-极大]
+  read  p50=22.20[21.96-22.40]  p99=23.14[22.37-23.73]  max=31.64[24.88-48.24]
+  write p50=22.37[22.13-22.56]  p99=23.38[22.61-26.05]  max=33.03[29.70-68.50]
+  skip=[0, 0, 0, 0, 0] err=[0, 0, 0, 0, 0] ver_mismatch=[0, 0, 0, 0, 0]
+✅ A 组完成 → /home/pi/kfusion_results/let4_20261119/A/summary.json

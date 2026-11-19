@@ -1,0 +1,294 @@
+OUT=/home/pi/kfusion_results/let4_20261119/BD MODE=idle DUR=60s REPS=5 LOG_CAP=700000
+==== reuse ko: /home/pi/kfusion_results/let_jitter_idle_3x15m ====
+==== thread rep1 ====
+hrtimer_hard=0
+let_ctx_hardirq=0
+let_ctx_softirq=0
+let_ctx_task=2034
+periods=1020
+let_rd_jit_max_ns=25564
+let_wr_jit_max_ns=42160
+let_rd_ok=1028
+let_wr_ok=1031
+let_skip_commit=0
+let_log_drops=0
+periods=61046
+let_rd_jit_max_ns=105610
+let_wr_jit_max_ns=135685
+let_rd_ok=61060
+let_wr_ok=61065
+let_rw_fires=122140
+let_rw_irq=0
+let_skip_commit=0
+let_log_drops=0
+let_ctx_hardirq=0
+let_ctx_softirq=0
+let_ctx_task=122196
+deadline_miss=0
+missing_groups=0
+release_overflow=0
+==== irq rep1 ====
+hrtimer_hard=1
+let_ctx_hardirq=2026
+let_ctx_softirq=0
+let_ctx_task=0
+periods=1021
+let_rd_jit_max_ns=1417
+let_wr_jit_max_ns=6162
+let_rd_ok=1029
+let_wr_ok=1032
+let_skip_commit=0
+let_log_drops=0
+periods=61048
+let_rd_jit_max_ns=4112
+let_wr_jit_max_ns=6162
+let_rd_ok=61067
+let_wr_ok=61073
+let_rw_fires=122158
+let_rw_irq=122170
+let_skip_commit=0
+let_log_drops=0
+let_ctx_hardirq=122206
+let_ctx_softirq=0
+let_ctx_task=0
+deadline_miss=0
+missing_groups=0
+release_overflow=0
+==== thread rep2 ====
+hrtimer_hard=0
+let_ctx_hardirq=0
+let_ctx_softirq=0
+let_ctx_task=2036
+periods=1020
+let_rd_jit_max_ns=27235
+let_wr_jit_max_ns=41476
+let_rd_ok=1029
+let_wr_ok=1032
+let_skip_commit=0
+let_log_drops=0
+periods=61047
+let_rd_jit_max_ns=110483
+let_wr_jit_max_ns=62133
+let_rd_ok=61061
+let_wr_ok=61066
+let_rw_fires=122142
+let_rw_irq=0
+let_skip_commit=0
+let_log_drops=0
+let_ctx_hardirq=0
+let_ctx_softirq=0
+let_ctx_task=122202
+deadline_miss=0
+missing_groups=0
+release_overflow=0
+==== irq rep2 ====
+hrtimer_hard=1
+let_ctx_hardirq=2024
+let_ctx_softirq=0
+let_ctx_task=0
+periods=1020
+let_rd_jit_max_ns=1401
+let_wr_jit_max_ns=5001
+let_rd_ok=1028
+let_wr_ok=1031
+let_skip_commit=0
+let_log_drops=0
+periods=61048
+let_rd_jit_max_ns=4242
+let_wr_jit_max_ns=5503
+let_rd_ok=61066
+let_wr_ok=61072
+let_rw_fires=122156
+let_rw_irq=122168
+let_skip_commit=0
+let_log_drops=0
+let_ctx_hardirq=122204
+let_ctx_softirq=0
+let_ctx_task=0
+deadline_miss=0
+missing_groups=0
+release_overflow=0
+==== thread rep3 ====
+hrtimer_hard=0
+let_ctx_hardirq=0
+let_ctx_softirq=0
+let_ctx_task=2036
+periods=1021
+let_rd_jit_max_ns=26197
+let_wr_jit_max_ns=50216
+let_rd_ok=1030
+let_wr_ok=1032
+let_skip_commit=0
+let_log_drops=0
+periods=61047
+let_rd_jit_max_ns=110226
+let_wr_jit_max_ns=62617
+let_rd_ok=61060
+let_wr_ok=61065
+let_rw_fires=122138
+let_rw_irq=0
+let_skip_commit=0
+let_log_drops=0
+let_ctx_hardirq=0
+let_ctx_softirq=0
+let_ctx_task=122192
+deadline_miss=0
+missing_groups=0
+release_overflow=0
+==== irq rep3 ====
+hrtimer_hard=1
+let_ctx_hardirq=2025
+let_ctx_softirq=0
+let_ctx_task=0
+periods=1021
+let_rd_jit_max_ns=1369
+let_wr_jit_max_ns=3983
+let_rd_ok=1029
+let_wr_ok=1032
+let_skip_commit=0
+let_log_drops=0
+periods=61049
+let_rd_jit_max_ns=4080
+let_wr_jit_max_ns=5202
+let_rd_ok=61068
+let_wr_ok=61074
+let_rw_fires=122160
+let_rw_irq=122172
+let_skip_commit=0
+let_log_drops=0
+let_ctx_hardirq=122202
+let_ctx_softirq=0
+let_ctx_task=0
+deadline_miss=0
+missing_groups=0
+release_overflow=0
+==== thread rep4 ====
+hrtimer_hard=0
+let_ctx_hardirq=0
+let_ctx_softirq=0
+let_ctx_task=2036
+periods=1021
+let_rd_jit_max_ns=27016
+let_wr_jit_max_ns=40790
+let_rd_ok=1030
+let_wr_ok=1033
+let_skip_commit=0
+let_log_drops=0
+periods=61047
+let_rd_jit_max_ns=56209
+let_wr_jit_max_ns=55975
+let_rd_ok=61060
+let_wr_ok=61065
+let_rw_fires=122138
+let_rw_irq=0
+let_skip_commit=0
+let_log_drops=0
+let_ctx_hardirq=0
+let_ctx_softirq=0
+let_ctx_task=122191
+deadline_miss=0
+missing_groups=0
+release_overflow=0
+==== irq rep4 ====
+hrtimer_hard=1
+let_ctx_hardirq=2026
+let_ctx_softirq=0
+let_ctx_task=0
+periods=1021
+let_rd_jit_max_ns=1744
+let_wr_jit_max_ns=3606
+let_rd_ok=1030
+let_wr_ok=1033
+let_skip_commit=0
+let_log_drops=0
+periods=61049
+let_rd_jit_max_ns=4705
+let_wr_jit_max_ns=8093
+let_rd_ok=61068
+let_wr_ok=61074
+let_rw_fires=122160
+let_rw_irq=122172
+let_skip_commit=0
+let_log_drops=0
+let_ctx_hardirq=122198
+let_ctx_softirq=0
+let_ctx_task=0
+deadline_miss=0
+missing_groups=0
+release_overflow=0
+==== thread rep5 ====
+hrtimer_hard=0
+let_ctx_hardirq=0
+let_ctx_softirq=0
+let_ctx_task=2035
+periods=1020
+let_rd_jit_max_ns=26113
+let_wr_jit_max_ns=34704
+let_rd_ok=1029
+let_wr_ok=1032
+let_skip_commit=0
+let_log_drops=0
+periods=61046
+let_rd_jit_max_ns=110270
+let_wr_jit_max_ns=74432
+let_rd_ok=61060
+let_wr_ok=61065
+let_rw_fires=122138
+let_rw_irq=0
+let_skip_commit=0
+let_log_drops=0
+let_ctx_hardirq=0
+let_ctx_softirq=0
+let_ctx_task=122196
+deadline_miss=0
+missing_groups=0
+release_overflow=0
+==== irq rep5 ====
+hrtimer_hard=1
+let_ctx_hardirq=2026
+let_ctx_softirq=0
+let_ctx_task=0
+periods=1021
+let_rd_jit_max_ns=1578
+let_wr_jit_max_ns=3748
+let_rd_ok=1030
+let_wr_ok=1033
+let_skip_commit=0
+let_log_drops=0
+periods=61050
+let_rd_jit_max_ns=4052
+let_wr_jit_max_ns=10594
+let_rd_ok=61068
+let_wr_ok=61074
+let_rw_fires=122160
+let_rw_irq=122172
+let_skip_commit=0
+let_log_drops=0
+let_ctx_hardirq=122208
+let_ctx_softirq=0
+let_ctx_task=0
+deadline_miss=0
+missing_groups=0
+release_overflow=0
+figs -> /home/pi/kfusion_results/let4_20261119/BD/figs
+| arm | rep | read_ok | write_ok | skip | err | drops | max_rd_us | max_wr_us | ctx |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| irq | 1 | 51167 | 51167 | 0 | 0 | 0 | 3.61 | 5.18 | {'hardirq': 102334} |
+| irq | 2 | 51159 | 51159 | 0 | 0 | 0 | 3.72 | 4.63 | {'hardirq': 102318} |
+| irq | 3 | 51167 | 51167 | 0 | 0 | 0 | 3.57 | 5.20 | {'hardirq': 102334} |
+| irq | 4 | 51165 | 51165 | 0 | 0 | 0 | 4.71 | 8.09 | {'hardirq': 102330} |
+| irq | 5 | 51167 | 51167 | 0 | 0 | 0 | 3.72 | 5.09 | {'hardirq': 102334} |
+| thread | 1 | 51158 | 51158 | 0 | 0 | 0 | 105.61 | 135.69 | {'task': 102316} |
+| thread | 2 | 51151 | 51151 | 0 | 0 | 0 | 88.27 | 57.55 | {'task': 102302} |
+| thread | 3 | 51154 | 51154 | 0 | 0 | 0 | 97.72 | 56.98 | {'task': 102308} |
+| thread | 4 | 51151 | 51151 | 0 | 0 | 0 | 56.21 | 51.66 | {'task': 102302} |
+| thread | 5 | 51162 | 51162 | 0 | 0 | 0 | 91.36 | 60.91 | {'task': 102324} |
+✅ 完成 → /home/pi/kfusion_results/let4_20261119/BD
+total 248
+drwxrwxr-x 2 pi pi   4096 Nov 19 22:16 .
+drwxrwxr-x 5 pi pi   4096 Nov 19 22:16 ..
+-rw-rw-r-- 1 pi pi 121185 Nov 19 22:16 fig_jitter_timeseries_irq.png
+-rw-rw-r-- 1 pi pi  81303 Nov 19 22:16 fig_jitter_timeseries_thread.png
+-rw-rw-r-- 1 pi pi  31395 Nov 19 22:16 fig_max_jitter_compare.png
+-rw-rw-r-- 1 pi pi   2633 Nov 19 22:16 table_correctness.json
+-rw-rw-r-- 1 pi pi    908 Nov 19 22:16 table_correctness.md

@@ -1,0 +1,386 @@
+[
+  {
+    "arm": "A",
+    "op": "read",
+    "metric": "p50",
+    "per_rep_us": [
+      22.33,
+      22.42,
+      22.24,
+      21.99,
+      22.24
+    ],
+    "median_us": 22.24,
+    "min_us": 21.99,
+    "max_us": 22.42,
+    "spread_us": 0.43
+  },
+  {
+    "arm": "A",
+    "op": "read",
+    "metric": "p99",
+    "per_rep_us": [
+      23.42,
+      23.6,
+      23.13,
+      22.36,
+      22.72
+    ],
+    "median_us": 23.13,
+    "min_us": 22.36,
+    "max_us": 23.6,
+    "spread_us": 1.24
+  },
+  {
+    "arm": "A",
+    "op": "read",
+    "metric": "max",
+    "per_rep_us": [
+      24.88,
+      34.15,
+      48.24,
+      26.51,
+      31.64
+    ],
+    "median_us": 31.64,
+    "min_us": 24.88,
+    "max_us": 48.24,
+    "spread_us": 23.36
+  },
+  {
+    "arm": "A",
+    "op": "write",
+    "metric": "p50",
+    "per_rep_us": [
+      22.46,
+      22.59,
+      22.41,
+      22.16,
+      22.33
+    ],
+    "median_us": 22.41,
+    "min_us": 22.16,
+    "max_us": 22.59,
+    "spread_us": 0.42
+  },
+  {
+    "arm": "A",
+    "op": "write",
+    "metric": "p99",
+    "per_rep_us": [
+      28.11,
+      26.82,
+      23.38,
+      22.59,
+      22.93
+    ],
+    "median_us": 23.38,
+    "min_us": 22.59,
+    "max_us": 28.11,
+    "spread_us": 5.51
+  },
+  {
+    "arm": "A",
+    "op": "write",
+    "metric": "max",
+    "per_rep_us": [
+      29.7,
+      32.21,
+      36.74,
+      68.5,
+      33.03
+    ],
+    "median_us": 33.03,
+    "min_us": 29.7,
+    "max_us": 68.5,
+    "spread_us": 38.79
+  },
+  {
+    "arm": "B",
+    "op": "read",
+    "metric": "p50",
+    "per_rep_us": [
+      42.59,
+      46.94,
+      46.5,
+      43.55,
+      46.87
+    ],
+    "median_us": 46.5,
+    "min_us": 42.59,
+    "max_us": 46.94,
+    "spread_us": 4.35
+  },
+  {
+    "arm": "B",
+    "op": "read",
+    "metric": "p99",
+    "per_rep_us": [
+      48.05,
+      49.79,
+      48.4,
+      48.07,
+      51.5
+    ],
+    "median_us": 48.4,
+    "min_us": 48.05,
+    "max_us": 51.5,
+    "spread_us": 3.45
+  },
+  {
+    "arm": "B",
+    "op": "read",
+    "metric": "max",
+    "per_rep_us": [
+      105.61,
+      88.27,
+      97.72,
+      56.21,
+      91.36
+    ],
+    "median_us": 91.36,
+    "min_us": 56.21,
+    "max_us": 105.61,
+    "spread_us": 49.4
+  },
+  {
+    "arm": "B",
+    "op": "write",
+    "metric": "p50",
+    "per_rep_us": [
+      42.76,
+      46.94,
+      46.59,
+      44.6,
+      46.9
+    ],
+    "median_us": 46.59,
+    "min_us": 42.76,
+    "max_us": 46.94,
+    "spread_us": 4.18
+  },
+  {
+    "arm": "B",
+    "op": "write",
+    "metric": "p99",
+    "per_rep_us": [
+      48.97,
+      48.5,
+      49.29,
+      48.35,
+      49.61
+    ],
+    "median_us": 48.97,
+    "min_us": 48.35,
+    "max_us": 49.61,
+    "spread_us": 1.26
+  },
+  {
+    "arm": "B",
+    "op": "write",
+    "metric": "max",
+    "per_rep_us": [
+      135.69,
+      57.55,
+      56.98,
+      51.66,
+      60.91
+    ],
+    "median_us": 57.55,
+    "min_us": 51.66,
+    "max_us": 135.69,
+    "spread_us": 84.02
+  },
+  {
+    "arm": "C",
+    "op": "read",
+    "metric": "p50",
+    "per_rep_us": [
+      3.46,
+      4.04,
+      3.26,
+      3.35,
+      3.95
+    ],
+    "median_us": 3.46,
+    "min_us": 3.26,
+    "max_us": 4.04,
+    "spread_us": 0.77
+  },
+  {
+    "arm": "C",
+    "op": "read",
+    "metric": "p99",
+    "per_rep_us": [
+      7.57,
+      4.23,
+      3.98,
+      3.96,
+      4.11
+    ],
+    "median_us": 4.11,
+    "min_us": 3.96,
+    "max_us": 7.57,
+    "spread_us": 3.62
+  },
+  {
+    "arm": "C",
+    "op": "read",
+    "metric": "max",
+    "per_rep_us": [
+      17.78,
+      39.31,
+      20.85,
+      15.81,
+      27.2
+    ],
+    "median_us": 20.85,
+    "min_us": 15.81,
+    "max_us": 39.31,
+    "spread_us": 23.5
+  },
+  {
+    "arm": "C",
+    "op": "write",
+    "metric": "p50",
+    "per_rep_us": [
+      3.66,
+      6.13,
+      3.48,
+      4.04,
+      4.32
+    ],
+    "median_us": 4.04,
+    "min_us": 3.48,
+    "max_us": 6.13,
+    "spread_us": 2.65
+  },
+  {
+    "arm": "C",
+    "op": "write",
+    "metric": "p99",
+    "per_rep_us": [
+      4.39,
+      7.32,
+      4.87,
+      4.85,
+      4.58
+    ],
+    "median_us": 4.85,
+    "min_us": 4.39,
+    "max_us": 7.32,
+    "spread_us": 2.93
+  },
+  {
+    "arm": "C",
+    "op": "write",
+    "metric": "max",
+    "per_rep_us": [
+      24.67,
+      31.67,
+      11.25,
+      9.11,
+      14.13
+    ],
+    "median_us": 14.13,
+    "min_us": 9.11,
+    "max_us": 31.67,
+    "spread_us": 22.56
+  },
+  {
+    "arm": "D",
+    "op": "read",
+    "metric": "p50",
+    "per_rep_us": [
+      3.33,
+      3.41,
+      3.32,
+      3.27,
+      3.31
+    ],
+    "median_us": 3.32,
+    "min_us": 3.27,
+    "max_us": 3.41,
+    "spread_us": 0.14
+  },
+  {
+    "arm": "D",
+    "op": "read",
+    "metric": "p99",
+    "per_rep_us": [
+      3.48,
+      3.57,
+      3.46,
+      3.45,
+      3.46
+    ],
+    "median_us": 3.46,
+    "min_us": 3.45,
+    "max_us": 3.57,
+    "spread_us": 0.12
+  },
+  {
+    "arm": "D",
+    "op": "read",
+    "metric": "max",
+    "per_rep_us": [
+      3.61,
+      3.72,
+      3.57,
+      4.71,
+      3.72
+    ],
+    "median_us": 3.72,
+    "min_us": 3.57,
+    "max_us": 4.71,
+    "spread_us": 1.14
+  },
+  {
+    "arm": "D",
+    "op": "write",
+    "metric": "p50",
+    "per_rep_us": [
+      3.92,
+      3.87,
+      3.87,
+      3.9,
+      4.02
+    ],
+    "median_us": 3.9,
+    "min_us": 3.87,
+    "max_us": 4.02,
+    "spread_us": 0.15
+  },
+  {
+    "arm": "D",
+    "op": "write",
+    "metric": "p99",
+    "per_rep_us": [
+      4.03,
+      3.99,
+      3.97,
+      4.29,
+      4.12
+    ],
+    "median_us": 4.03,
+    "min_us": 3.97,
+    "max_us": 4.29,
+    "spread_us": 0.32
+  },
+  {
+    "arm": "D",
+    "op": "write",
+    "metric": "max",
+    "per_rep_us": [
+      5.18,
+      4.63,
+      5.2,
+      8.09,
+      5.09
+    ],
+    "median_us": 5.18,
+    "min_us": 4.63,
+    "max_us": 8.09,
+    "spread_us": 3.47
+  }
+]
