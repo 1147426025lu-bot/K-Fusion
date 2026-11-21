@@ -25,54 +25,40 @@ uint32_t g_cmd_snap_ver;         /* 快照版本 */
 int32_t g_out;                   /* 消费者输出（可观察） */
 uint32_t g_seed = 1u;
 
+/* 任务计算只有一份定义：kfusion/src/let_pc_compute__产消计算体.h。
+ * 本文件（D 组输入）与 A/C 组共用它，禁止在此另写一份算术。
+ * 必须放在变量声明之后：头文件里的内联包装要引用这些变量。
+ * KF_PC_PLAIN：保持裸赋值，使 Pass 看到的 AST 与之前一致。 */
+#define KF_PC_PLAIN 1
+#include "../../src/let_pc_compute__产消计算体.h"
+
 /* 生产者：推进状态，算出待发布命令（不直接写 g_cmd） */
 void stage_prod(void)
 {
-	g_seed = g_seed * 1103515245u + 12345u;
-	g_state = g_state + (int32_t)((g_seed >> 16) & 0x7u) - 3;
-	if (g_state > 1000)
-		g_state = 1000;
-	else if (g_state < -1000)
-		g_state = -1000;
-	g_cmd_pending = g_state * 2;
+	KF_PC_PROD_STMT();
 }
 
 /* 逻辑写入：到点才发布共享命令与版本 */
 void stage_commit(void)
 {
-	g_cmd = g_cmd_pending;
-	g_cmd_ver = g_cmd_ver + 1u;
+	KF_PC_COMMIT_STMT();
 }
 
 /* 逻辑读取：到点才快照共享命令（计算侧只许用快照） */
 void stage_fetch(void)
 {
-	g_cmd_snap = g_cmd;
-	g_cmd_snap_ver = g_cmd_ver;
+	KF_PC_FETCH_STMT();
 }
 
 /* 消费者动作：仅依赖快照 */
 void stage_act(void)
 {
-	int32_t v = g_cmd_snap + 1;
-
-	if (v > 2000)
-		v = 2000;
-	else if (v < -2000)
-		v = -2000;
-	g_out = v;
+	KF_PC_ACT_STMT();
 }
 
 void pc_reset(void)
 {
-	g_state = 0;
-	g_cmd_pending = 0;
-	g_cmd = 0;
-	g_cmd_ver = 0;
-	g_cmd_snap = 0;
-	g_cmd_snap_ver = 0;
-	g_out = 0;
-	g_seed = 1u;
+	KF_PC_RESET_STMT();
 }
 
 void pc_main(void)

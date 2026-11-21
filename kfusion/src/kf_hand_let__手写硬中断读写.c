@@ -28,6 +28,7 @@
 #include <linux/kthread.h>
 #include <linux/cpumask.h>
 #include <linux/vmalloc.h>
+#include <linux/atomic.h>
 
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Paper group C: hand-written hardirq shared read/write baseline (LET)");
@@ -47,15 +48,18 @@ MODULE_DESCRIPTION("Paper group C: hand-written hardirq shared read/write baseli
 #define KF_SLOT_READ_PH   500000LL   /* input_snapshot @500us（硬中断纯读写桩） */
 #define KF_SLOT_G1_PH     700000LL   /* group1 @700us：本拍收尾记账 */
 
-/* ---- 共享数据（与 let_pc_shared 同语义；obs 暴露供冻结核对） ---- */
-static int32_t g_state;
-static int32_t g_cmd_pending;
-static int32_t g_cmd;
-static int32_t g_cmd_ver;
-static int32_t g_cmd_snap;
-static int32_t g_cmd_snap_ver;
-static int32_t g_seed = 12345;
-static int32_t g_ready;
+/* ---- 共享数据（类型与 D 组逐字节一致；计算本体来自共用头文件） ---- */
+static int32_t  g_state;
+static int32_t  g_cmd_pending;
+static int32_t  g_cmd;
+static uint32_t g_cmd_ver;
+static int32_t  g_cmd_snap;
+static uint32_t g_cmd_snap_ver;
+static uint32_t g_seed = 1u;   /* 规范初值；曾误用 12345 */
+static int32_t  g_ready;
+static int32_t  g_out;         /* 消费者输出（共用计算写它，须在 include 之前声明） */
+
+#include "let_pc_compute__产消计算体.h"
 
 /* ---- 模块参数（默认烧入与 D 组对齐） ---- */
 static int cpu = 3;
@@ -127,9 +131,9 @@ module_param(release_overflow, ulong, 0444);
 module_param_named(g_state, g_state, int, 0444);
 module_param_named(g_cmd_pending, g_cmd_pending, int, 0444);
 module_param_named(g_cmd, g_cmd, int, 0444);
-module_param_named(g_cmd_ver, g_cmd_ver, int, 0444);
+module_param_named(g_cmd_ver, g_cmd_ver, uint, 0444);
 module_param_named(g_cmd_snap, g_cmd_snap, int, 0444);
-module_param_named(g_cmd_snap_ver, g_cmd_snap_ver, int, 0444);
+module_param_named(g_cmd_snap_ver, g_cmd_snap_ver, uint, 0444);
 
 /* ---- 逐样本日志结构与 magic（与 dump 脚本逐字节一致） ---- */
 struct kf_let_sample {
@@ -163,25 +167,25 @@ static enum hrtimer_mode kf_timer_mode;
 static struct hrtimer kf_timer;
 static s64 kf_base_ns;
 static u64 kf_cycle;
-static int kf_next_slot;   /* 0=g0计算 1=写 2=读 3=g1收尾 */
+static int kf_next_slot;   /* 0=prod计算 1=写 2=读 3=act计算 */
 
-/* 计算交给 worker 线程（与 D 组同构）：硬中断只跑纯读写桩 */
+/* 计算交给 worker 线程（与 D 组同构）：硬中断只跑纯读写桩。
+ * kf_stage_req: 0=无请求 1=跑生产者 2=跑消费者（硬中断置位，worker 消费）。 */
 static struct task_struct *kf_worker;
 static wait_queue_head_t kf_wait;
-static int kf_group_pending;   /* 硬中断置位，worker 消费 */
-static unsigned long g_out;
-module_param_named(g_out, g_out, ulong, 0444);
+static atomic_t kf_stage_req = ATOMIC_INIT(0);
+module_param_named(g_out, g_out, int, 0444);
 
-/* 手写计算体（对应 stage_prod/act）：产值和消费，均不在硬中断里跑 */
-static void hand_compute_body(void)
+/* 宿主侧计算入口：共用计算 + 本宿主的就绪标记（门禁不入共用计算） */
+static void hand_stage_prod(void)
 {
-	/* 产：更新 g_state -> g_cmd_pending，供 400us 写桩提交 */
-	WRITE_ONCE(g_state, READ_ONCE(g_state) + (READ_ONCE(g_seed) % 7) - 3);
-	WRITE_ONCE(g_seed, READ_ONCE(g_seed) * 1103515245LL + 12345);
-	WRITE_ONCE(g_cmd_pending, READ_ONCE(g_state));
-	/* 消费：上一拍 g_cmd_snap -> 输出 */
-	WRITE_ONCE(g_out, (unsigned long)READ_ONCE(g_cmd_snap));
-	WRITE_ONCE(g_ready, 1);   /* 计算就绪，写桩可提交 */
+	kf_pc_prod();
+	WRITE_ONCE(g_ready, 1);   /* 本拍生产完成，400us 写桩可提交 */
+}
+
+static void hand_stage_act(void)
+{
+	kf_pc_act();
 }
 
 static u8 kf_ctx_flags(void)
@@ -207,9 +211,8 @@ static int hand_stub_write(u32 *ver_out)
 			*ver_out = READ_ONCE(g_cmd_ver);
 		return 1; /* skip */
 	}
-	WRITE_ONCE(g_cmd, READ_ONCE(g_cmd_pending));
-	WRITE_ONCE(g_cmd_ver, READ_ONCE(g_cmd_ver) + 1u);
-	WRITE_ONCE(g_ready, false);
+	KF_PC_COMMIT_STMT();
+	WRITE_ONCE(g_ready, 0);
 	if (ver_out)
 		*ver_out = READ_ONCE(g_cmd_ver);
 	return KF_LET_ST_OK;
@@ -217,8 +220,7 @@ static int hand_stub_write(u32 *ver_out)
 
 static int hand_stub_read(u32 *ver_out)
 {
-	WRITE_ONCE(g_cmd_snap, READ_ONCE(g_cmd));
-	WRITE_ONCE(g_cmd_snap_ver, READ_ONCE(g_cmd_ver));
+	KF_PC_FETCH_STMT();
 	if (ver_out)
 		*ver_out = READ_ONCE(g_cmd_snap_ver);
 	return KF_LET_ST_OK;
@@ -372,19 +374,29 @@ static void kf_arm_next(void)
 	hrtimer_start(&kf_timer, ns_to_ktime(at), kf_timer_mode);
 }
 
-/* worker：执行计算体（任务态），不参与读写抖动测量 */
+/* worker：执行计算（任务态），不参与读写抖动测量。
+ * 请求用位图而不是单个布尔：0us 的生产请求与 700us 的消费请求可能都被压在
+ * 一次 worker 唤醒里，用布尔会互相覆盖并把「生产漏做」伪装成 skip。 */
+#define KF_REQ_PROD 1
+#define KF_REQ_ACT  2
+
 static int kf_worker_fn(void *data)
 {
+	int req;
+
 	(void)data;
 	while (!kthread_should_stop()) {
 		wait_event_interruptible(kf_wait,
-			READ_ONCE(kf_group_pending) || kthread_should_stop());
+			atomic_read(&kf_stage_req) || kthread_should_stop());
 		if (kthread_should_stop())
 			break;
-		if (!READ_ONCE(kf_group_pending))
+		req = atomic_xchg(&kf_stage_req, 0);
+		if (!req)
 			continue;
-		WRITE_ONCE(kf_group_pending, 0);
-		hand_compute_body();
+		if (req & KF_REQ_PROD)
+			hand_stage_prod();
+		if (req & KF_REQ_ACT)
+			hand_stage_act();
 	}
 	return 0;
 }
@@ -398,20 +410,22 @@ static enum hrtimer_restart kf_tick(struct hrtimer *t)
 
 	/* 硬中断回调只做：纯读写桩 或 置位唤醒 worker（计算不在硬中断跑） */
 	switch (kf_next_slot) {
-	case 0: /* group0 @0us：唤醒 worker 跑计算 */
-		WRITE_ONCE(kf_group_pending, 1);
+	case 0: /* stage_prod @0us：唤醒 worker 跑生产者计算 */
+		atomic_or(KF_REQ_PROD, &kf_stage_req);
 		wake_up_interruptible(&kf_wait);
 		kf_next_slot = 1;
 		break;
-	case 1: /* output_commit @400us：纯写桩 */
+	case 1: /* stage_commit @400us：纯写桩 */
 		kf_exec(KF_LET_OP_WRITE, nominal_ns);
 		kf_next_slot = 2;
 		break;
-	case 2: /* input_snapshot @500us：纯读桩 */
+	case 2: /* stage_fetch @500us：纯读桩 */
 		kf_exec(KF_LET_OP_READ, nominal_ns);
 		kf_next_slot = 3;
 		break;
-	default: /* group1 @700us：收尾记账 */
+	default: /* stage_act @700us：唤醒 worker 跑消费者计算（吃本拍快照）+ 收尾记账 */
+		atomic_or(KF_REQ_ACT, &kf_stage_req);
+		wake_up_interruptible(&kf_wait);
 		kf_next_slot = 0;
 		kf_cycle++;
 		periods = kf_cycle;
@@ -467,7 +481,7 @@ static int __init kf_init(void)
 	}
 
 	init_waitqueue_head(&kf_wait);
-	WRITE_ONCE(kf_group_pending, 0);
+	atomic_set(&kf_stage_req, 0);
 	kf_worker = kthread_create(kf_worker_fn, NULL, "kf_hand_worker");
 	if (IS_ERR(kf_worker)) {
 		ret = PTR_ERR(kf_worker);

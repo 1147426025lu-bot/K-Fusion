@@ -92,7 +92,11 @@ bash "$SCRIPT_DIR/run_host_stubs_sync_check__宿主桩同步门禁.sh"
 if [ "${SKIP_BUILD:-0}" != "1" ]; then
     PASS_TARGET="$(plc_fusion_pass_target)"
     echo "🛠️ [1/3] 编译 ${PASS_TARGET} + PLCLowJitterPass + plc_ast..."
-    if ! (cd "$PRJ/build" && cmake .. >/dev/null && make "$PASS_TARGET" PLCLowJitterPass plc_ast -j"$(nproc)" >/dev/null); then
+    # build/ 被 .gitignore 忽略，干净检出时不存在：必须显式创建并指定源/构建目录，
+    # 不能依赖 `cd build`（干净检出上 cd 直接失败，CI 会在进入构建前就报错）
+    mkdir -p "$PRJ/build"
+    if ! (cmake -S "$PRJ" -B "$PRJ/build" >/dev/null &&
+          make -C "$PRJ/build" "$PASS_TARGET" PLCLowJitterPass plc_ast -j"$(nproc)" >/dev/null); then
         plc_die "$PLC_E_BUILD" "Pass / plc_ast 编译失败"
     fi
 else

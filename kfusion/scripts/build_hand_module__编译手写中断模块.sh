@@ -8,10 +8,14 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SRC="$ROOT/kfusion/src/kf_hand_let__手写硬中断读写.c"
+HDR="$ROOT/kfusion/src/let_pc_compute__产消计算体.h"
 BUILD="${KF_HAND_BUILD:-/home/pi/kf_hand_build}"
 
 mkdir -p "$BUILD"
 cp "$SRC" "$BUILD/kf_task.c"
+# 任务计算只有一份定义，源文件用引号相对包含它；模块被拷到独立 build 目录后
+# 必须把头文件一并带过去，否则 #include 断链（干净构建第一次就会撞上）。
+cp "$HDR" "$BUILD/let_pc_compute__产消计算体.h"
 cat > "$BUILD/Makefile" <<'EOF'
 obj-m := kf_task.o
 KDIR := /lib/modules/$(shell uname -r)/build

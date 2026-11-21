@@ -75,32 +75,32 @@ struct __attribute__((packed)) kf_let_log_hdr {
 	uint32_t reserved;
 };
 
-/* ---- 与被测模块同构的共享数据（对应 let_pc_shared 的 obs 变量） ---- */
-static volatile long g_state;
-static volatile long g_seed = 12345;
-static volatile long g_cmd_pending;
-static volatile long g_cmd;
-static volatile long g_cmd_ver;
-static volatile long g_cmd_snap;
-static volatile long g_cmd_snap_ver;
-static volatile long g_out;
-static volatile int  g_ready;
+/* ---- 与被测模块同构的共享数据 ----
+ * 类型必须与 D 组逐字节一致：历史上这里用的是 volatile long（ARM64 上 8 字节），
+ * 而 D 组是 int32_t（4 字节），store 粒度不同会悄悄改变抖动来源。
+ * g_seed 初值按规范取 1u（曾误用 12345，会让三组跑出不同的状态序列）。 */
+static int32_t  g_state;
+static uint32_t g_seed = 1u;
+static int32_t  g_cmd_pending;
+static int32_t  g_cmd;
+static uint32_t g_cmd_ver;
+static int32_t  g_cmd_snap;
+static uint32_t g_cmd_snap_ver;
+static int32_t  g_out;
+static int32_t  g_ready;
 
 static long n_skip_commit;
 static long n_hold;
 
-/* 与 hand_compute_body 逐句对应：产在前、消费在后，均不在读写桩里 */
-static void compute_body(void)
+/* 任务计算只有一份定义，与 C/D 组共用 */
+#include "let_pc_compute__产消计算体.h"
+
+/* 生产者阶段 = 共用计算 + 本宿主的就绪标记。
+ * 门禁（就绪标志）故意留在宿主侧而不是共用计算里：门禁口径本身是 D 组要修的
+ * 对象，藏进共用计算会让四个宿主共享同一个错误。 */
+static inline void stage_prod_hosted(void)
 {
-	__atomic_store_n(&g_state, __atomic_load_n(&g_state, __ATOMIC_RELAXED)
-			 + (__atomic_load_n(&g_seed, __ATOMIC_RELAXED) % 7) - 3,
-			 __ATOMIC_RELAXED);
-	__atomic_store_n(&g_seed, __atomic_load_n(&g_seed, __ATOMIC_RELAXED)
-			 * 1103515245L + 12345, __ATOMIC_RELAXED);
-	__atomic_store_n(&g_cmd_pending, __atomic_load_n(&g_state, __ATOMIC_RELAXED),
-			 __ATOMIC_RELAXED);
-	__atomic_store_n(&g_out, __atomic_load_n(&g_cmd_snap, __ATOMIC_RELAXED),
-			 __ATOMIC_RELAXED);
+	kf_pc_prod();
 	__atomic_store_n(&g_ready, 1, __ATOMIC_RELAXED);
 }
 
@@ -110,28 +110,22 @@ static int stub_write(uint32_t *ver_out)
 	if (!__atomic_load_n(&g_ready, __ATOMIC_RELAXED)) {
 		n_skip_commit++;
 		if (ver_out)
-			*ver_out = (uint32_t)__atomic_load_n(&g_cmd_ver, __ATOMIC_RELAXED);
+			*ver_out = __atomic_load_n(&g_cmd_ver, __ATOMIC_RELAXED);
 		return KF_LET_ST_SKIP;
 	}
-	__atomic_store_n(&g_cmd, __atomic_load_n(&g_cmd_pending, __ATOMIC_RELAXED),
-			 __ATOMIC_RELAXED);
-	__atomic_store_n(&g_cmd_ver, __atomic_load_n(&g_cmd_ver, __ATOMIC_RELAXED) + 1,
-			 __ATOMIC_RELAXED);
+	KF_PC_COMMIT_STMT();
 	__atomic_store_n(&g_ready, 0, __ATOMIC_RELAXED);
 	if (ver_out)
-		*ver_out = (uint32_t)__atomic_load_n(&g_cmd_ver, __ATOMIC_RELAXED);
+		*ver_out = __atomic_load_n(&g_cmd_ver, __ATOMIC_RELAXED);
 	return KF_LET_ST_OK;
 }
 
 /* 对应 hand_stub_read */
 static int stub_read(uint32_t *ver_out)
 {
-	__atomic_store_n(&g_cmd_snap, __atomic_load_n(&g_cmd, __ATOMIC_RELAXED),
-			 __ATOMIC_RELAXED);
-	__atomic_store_n(&g_cmd_snap_ver, __atomic_load_n(&g_cmd_ver, __ATOMIC_RELAXED),
-			 __ATOMIC_RELAXED);
+	KF_PC_FETCH_STMT();
 	if (ver_out)
-		*ver_out = (uint32_t)__atomic_load_n(&g_cmd_snap_ver, __ATOMIC_RELAXED);
+		*ver_out = __atomic_load_n(&g_cmd_snap_ver, __ATOMIC_RELAXED);
 	return KF_LET_ST_OK;
 }
 
@@ -284,9 +278,9 @@ int main(int argc, char **argv)
 
 		t_cycle = base_ns + c * period_ns;
 
-		/* slot0：计算（对应 D 组的 group0 计算相位 0us） */
+		/* slot0 @0us：生产者计算（与 C/D 组同一份共用计算） */
 		wait_abs(t_cycle);
-		compute_body();
+		stage_prod_hosted();
 
 		/* slot1：写提交 */
 		nom = t_cycle + (int64_t)ph_wr_us * NS_PER_US;
@@ -326,8 +320,11 @@ int main(int argc, char **argv)
 			n++;
 		}
 
-		/* slot3：收尾占位（与 D 组 act@700 对齐，保证唤醒次数同构） */
+		/* slot3 @700us：消费者计算（吃本拍 500us 的快照，与 D 组 stage_act 同相位）
+		 * 历史上这里是空占位，消费被并进 slot0 吃上一拍快照 —— 消费相位因此
+		 * 与 D 组差一整拍，属于必须并掉的混杂。 */
 		wait_abs(t_cycle + (int64_t)ph_g1_us * NS_PER_US);
+		kf_pc_act();
 
 		/* 超期：整周期所有 slot 都跑完了还没进下一周期起点之后 */
 		if (now_ns() > t_cycle + period_ns)
