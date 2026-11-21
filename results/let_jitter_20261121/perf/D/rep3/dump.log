@@ -1,0 +1,55 @@
+{
+  "hdr": {
+    "magic": 1262898260,
+    "hdr_version": 1,
+    "sample_bytes": 36,
+    "n_samples": 120222,
+    "drops": 0,
+    "period_us": 1000,
+    "arm_path": 1,
+    "arm_name": "irq_hard"
+  },
+  "summary": {
+    "n": 100222,
+    "n_read_ok": 50111,
+    "n_write_ok": 50111,
+    "n_skip": 0,
+    "n_hold": 0,
+    "n_err": 0,
+    "max_read_jitter_ns": 1727,
+    "max_write_jitter_ns": 4926,
+    "max_read_late_ns": 1727,
+    "max_read_early_ns": 0,
+    "max_write_late_ns": 4926,
+    "max_write_early_ns": 0,
+    "dist_read": {
+      "n": 50111,
+      "p50_ns": 1297,
+      "p90_ns": 1330,
+      "p99_ns": 1357,
+      "p999_ns": 1381,
+      "max_ns": 1727,
+      "mean_ns": 1297
+    },
+    "dist_write": {
+      "n": 50111,
+      "p50_ns": 1634,
+      "p90_ns": 1676,
+      "p99_ns": 1727,
+      "p999_ns": 2610,
+      "max_ns": 4926,
+      "mean_ns": 1640
+    },
+    "version_mismatch_cycles": 0,
+    "version_nonmono_writes": 0,
+    "ctx_counts": {
+      "hardirq": 100222
+    },
+    "warmup_sec": 10.0,
+    "n_raw": 120222,
+    "n_trimmed": 20000
+  },
+  "tag": "D_r1",
+  "source": "/home/pi/kfusion_results/four_arms_perf/D/rep3/raw.bin"
+}
+wrote /home/pi/kfusion_results/four_arms_perf/D/rep3/D_r1.samples.csv n=100222

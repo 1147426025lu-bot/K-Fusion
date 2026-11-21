@@ -1,0 +1,166 @@
+══ K-Fusion 统一流水线 ══
+  src       /home/pi/K-Fusion/kfusion/examples/ecos/let_pc_shared__LET产消共享.c
+  out       /home/pi/kfusion_results/four_arms_v2/build_c
+  clang/opt clang-19 / opt-19 / llc-19
+  KERNELDIR /lib/modules/5.15.49-rt47-v8+/build
+  Pass      /home/pi/K-Fusion/kfusion/build/KFusionPass.so
+  FORCE     D@linux_kernel
+  HOST      single_worker
+
+──── 1) Clang AST → 阶段骨架（替代手写 stages.json / dag.json） ────
+extracted 4 stages from pc_main:
+  0. stage_prod @0µs  stage_prod()
+  1. stage_commit @400µs  stage_commit()
+  2. stage_fetch @500µs  stage_fetch()
+  3. stage_act @700µs  stage_act()
+wrote /home/pi/kfusion_results/four_arms_v2/build_c/stages.json
+
+──── 2) C → LLVM IR（禁内联，保留阶段函数） ────
+
+──── 3) IR → EffectSummary（效果不是人写的） ────
+[EffectSummary] 写出 /home/pi/kfusion_results/four_arms_v2/build_c/effect_summary.json（6 个函数）
+
+──── 4) 摘要 + 自动骨架 → 契约 ────
+写出 /home/pi/kfusion_results/four_arms_v2/build_c/task.contract.json（4 个阶段）
+  stage_prod               state_read/state_write
+  stage_commit             state_read/state_write
+  stage_fetch              state_read/state_write
+  stage_act                state_read/state_write
+
+──── 5) 契约门禁（linux_userspace 为底线；内核是否可行交给选型） ────
+== task.contract.json  (task=let_pc_shared)
+   [linux_userspace] ✅ PASS
+== task.contract.json  (task=let_pc_shared)
+   [linux_kernel] ✅ PASS
+  内核域契约可通过（是否部署仍由 A/B/C/D 决定）
+
+──── 6) DAG（数据边来自 IR，相位来自骨架） ────
+== 节点 4（stages 视图） ==
+  stage_act              state_read,state_write
+  stage_commit           state_read,state_write
+  stage_fetch            state_read,state_write
+  stage_prod             state_read,state_write
+== 边 ==
+  stage_commit         -> stage_fetch          [data    ] @g_cmd, @g_cmd_ver
+  stage_fetch          -> stage_act            [data    ] @g_cmd_snap
+  stage_prod           -> stage_commit         [data    ] @g_cmd_pending
+== 拓扑序 ==
+  stage_prod -> stage_commit -> stage_fetch -> stage_act
+== 统计 ==
+  边 3（call 0 / spawn 0 / data 3 / anti 0 / conflict 0）· 候选 0
+  区域具体化：唯一绑定 0 · 多绑定 0 · 完全未解析 0 · 调用已解释 0
+
+──── 6b) TEIR（状态版本 + 时间事件 + 允许域） ────
+TEIR 4 nodes (must_preserve=4 may_delete=0)  edges previous-job=0  policy=ok
+wrote /home/pi/kfusion_results/four_arms_v2/build_c/task.teir.json
+  pin 0 个阶段
+
+──── 7) 单域融合规划（对照报告；失败不阻断 STKP） ────
+  写出对照 /home/pi/kfusion_results/four_arms_v2/build_c/plan.planner.json
+
+──── 7c) A–F 对照基线（失败不阻断 STKP） ────
+A/B/C/D/E/F legal=4/4  chosen=B
+    A LEGAL   fused=False  Cost=84.0  
+  → B LEGAL   fused=True  Cost=21.0  Cost=G·c + E + extra = 21.0; G=1 c=21.0 extra=0.0; 内核最优 D 的 Cost=21.0 ≥ 用户态，故不迁移
+    C LEGAL   fused=False  Cost=84.0  
+    D LEGAL   fused=True  Cost=21.0  
+wrote /home/pi/kfusion_results/four_arms_v2/build_c/candidates.json
+
+──── 7c2) STKP 穷举求解（入选方案才是生成输入） ────
+  forced choice: D@linux_kernel（测量用，不是模型/目标函数结论）
+STKP chosen plan → /home/pi/kfusion_results/four_arms_v2/build_c/chosen.plan.json  (D linux_kernel Ĉ=None)
+STKP v1 raw=54 enum=54 deployable=16 model=54 chosen=D claim=forced_for_measurement
+  prune domain=0 semantic=0 temporal=0 mixed=38 missing=54
+  g0  stage_prod + stage_commit + stage_fetch + stage_act @ linux_kernel
+  vs A–F: baseline=B STKP=D missed_by_af=False
+wrote /home/pi/kfusion_results/four_arms_v2/build_c/stkp.json
+  STKP 入选 D  域 linux_kernel  调度类 默认为 CFS
+
+──── 7b-let) 从时间契约挂接 let_events / shared_objects ────
+  let_events=2 irq=2 shared_objects=1 reshaped=True groups=[('g0', 0.0, ['stage_prod', 'stage_commit', 'stage_fetch']), ('g1', 700.0, ['stage_act'])]
+
+──── 7b-verify) 计划规范化 + 校验 → verified_plan.json（U-6） ────
+写出 /home/pi/kfusion_results/four_arms_v2/build_c/verified_plan.json（2 组，owner=kernel_host，状态 3 个，handoff 0 个）
+
+──── 7b) 独立验证器（验证入选方案，不调用规划器） ────
+VERIFY PASS
+
+──── 7b2) DAG 全局验证器（写回 verification，供 emit 门禁） ────
+· 组 g0   stage_prod + stage_commit + stage_fetch
+· 组 g1   stage_act
+✅ 方案验证通过（2 组 · 同拍边 3 · 跨周期边 0 · 时间证据 empirical）
+  deploy.json chosen=D domain=linux_kernel sched=-
+
+──── 7c3) 调度感知可行性（只认实测，不认模型） ────
+  跳过：未给 DEPLOY_OBJECTIVE（没有画像就没有实测期限判断）
+
+──── 7d) 按需 LET（有时间契约才启用） ────
+LET decide legal=3  chosen=selective_pins
+    unfused          LEGAL  Cost=84.0  不用 LET
+    full_fuse        REJECT Cost=-  拒绝: E_PIN_EARLY_COMMIT, E_PIN_PULL, E_PIN_EARLY_COMPUTE
+    full_fuse_let    LEGAL  Cost=84.0  LET×2
+  → selective_pins   LEGAL  Cost=84.0  不用 LET; 全融合无 LET 非法; 未采用 LET（钉扎已由分组保住，或 LET 更贵）
+    stretch_period   REJECT Cost=-  拒绝: E_PERIOD_STRETCH
+wrote /home/pi/kfusion_results/four_arms_v2/build_c/let.json
+
+──── 7e) 共用时间/版本门禁（STKP 入选方案；采样/提交/数据版本） ────
+contract_gate teir_ok=True window_raw=False pin_let=True has_let=True deploy_ok=True
+  WIN E_PIN_EARLY_COMMIT stage_commit
+  WIN E_PIN_PULL stage_fetch
+   公开状态符号（推导）：g_cmd,g_cmd_pending,g_cmd_snap,g_cmd_snap_ver,g_cmd_ver,g_out,g_seed,g_state
+
+──── 8) 生成用户态驱动（#include 原计算体，不复制） ────
+写出 /home/pi/kfusion_results/four_arms_v2/build_c/driver.c（plan 2 次释放/周期，flat 4 次/周期，4 阶段）
+
+──── 8b) hrtimer 内核宿主（入选域=linux_kernel） ────
+  ⚠ LET_DEFER 阶段 stage_commit, stage_fetch 由宿主槽位调用（不在 ecos_body 内执行）
+=== ECoS 合成：kf_task（target=linux-kernel）===
+  组 2 / 阶段 4，周期 1000 µs，证据 empirical，验证 通过
+  g0   @0      µs  stage_prod + stage_commit + stage_fetch
+  g1   @700    µs  stage_act
+  写出 9 个文件：
+    ecos_fused_body.h
+    ecos_fused_body.c
+    fusion_ir.json
+    ecos_fused_linux.c
+    compat/stdint.h
+    Kbuild
+    README.build.txt
+    kf_let_host.h
+    let_impl.c
+
+──── 8b-1) 内核计算体：task.ll → plc-fusion-remap → llc → stage_impl.o ────
+kernel_stage: /home/pi/kfusion_results/four_arms_v2/build_c/kmod_hrtimer/stage_impl.o (2592 bytes) + /home/pi/kfusion_results/four_arms_v2/build_c/kmod_hrtimer/stage_impl.S (4112 bytes, 供 kbuild), roots=stage_prod,stage_commit,stage_fetch,stage_act
+manifest: /home/pi/kfusion_results/four_arms_v2/build_c/kmod_hrtimer/kernel_stage.manifest.json
+manifest 回填 .ko：8400b06f2052d512 (79752 bytes)
+
+──── 8c) LET 作业表（plc_let；须通过同一 TIME_CONTRACT，且不得用无 LET 全融合绕过 STKP） ────
+skip let_host: chosen=selective_pins uses_let=False
+⚠ LET 方案不可部署或与 STKP 分组冲突：不生成 let_host
+跳过宿主编译（SKIP_HOST=1）
+
+✅ 从 C 到 A/B/C/D 流水线完成
+   骨架  /home/pi/kfusion_results/four_arms_v2/build_c/stages.json
+   DAG   /home/pi/kfusion_results/four_arms_v2/build_c/task.dag.json
+   TEIR  /home/pi/kfusion_results/four_arms_v2/build_c/task.teir.json
+   入选  /home/pi/kfusion_results/four_arms_v2/build_c/chosen.plan.json  (D / linux_kernel)
+   调度类 （未启用部署目标，按 CFS）
+   部署  /home/pi/kfusion_results/four_arms_v2/build_c/deploy.json
+   方案  /home/pi/kfusion_results/four_arms_v2/build_c/plan.json
+   验证  /home/pi/kfusion_results/four_arms_v2/build_c/verify.json
+   选型  /home/pi/kfusion_results/four_arms_v2/build_c/candidates.json  (A–F 基线)
+   STKP  /home/pi/kfusion_results/four_arms_v2/build_c/stkp.json
+   LET   /home/pi/kfusion_results/four_arms_v2/build_c/let.json
+   用户态 /home/pi/kfusion_results/four_arms_v2/build_c/driver.c
+   kmod   /home/pi/kfusion_results/four_arms_v2/build_c/kmod_hrtimer/
+   计算体始终是 /home/pi/K-Fusion/kfusion/examples/ecos/let_pc_shared__LET产消共享.c ，没有第二份手写阶段函数
+
+── 统一验收（U-3）──
+  domain=linux_kernel
+  ok Pass roots=stage_prod,stage_commit,stage_fetch,stage_act
+  ok stage_obj sha=d653968c620472cc
+  ok .ko /home/pi/kfusion_results/four_arms_v2/build_c/kmod_hrtimer/kf_task.ko (8400b06f2052d512…)
+  ownership keys in plan: check plan.json
+  plan ownership=3 handoffs=0 release_owner=kernel_host verified=True
+
+✅ 统一流水线完成 → /home/pi/kfusion_results/four_arms_v2/build_c

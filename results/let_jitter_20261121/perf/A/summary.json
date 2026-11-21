@@ -1,0 +1,352 @@
+{
+  "arm": "A_userspace",
+  "config": {
+    "reps": 5,
+    "duration_sec": 60,
+    "period_us": 1000,
+    "phase_write_us": 400,
+    "phase_read_us": 500,
+    "cpu": 3,
+    "prio": 80,
+    "no_rt": false,
+    "warmup_sec": 10.0
+  },
+  "per_rep": [
+    {
+      "rep": 1,
+      "hdr": {
+        "magic": 1262898260,
+        "hdr_version": 1,
+        "sample_bytes": 36,
+        "n_samples": 120000,
+        "drops": 0,
+        "period_us": 1000,
+        "arm_path": 3,
+        "arm_name": "userspace"
+      },
+      "read": {
+        "n": 50000,
+        "p50_ns": 8305,
+        "p90_ns": 8380,
+        "p99_ns": 8450,
+        "p999_ns": 8603,
+        "max_ns": 10637,
+        "mean_ns": 8306
+      },
+      "write": {
+        "n": 50000,
+        "p50_ns": 8437,
+        "p90_ns": 8517,
+        "p99_ns": 8591,
+        "p999_ns": 9921,
+        "max_ns": 18005,
+        "mean_ns": 8441
+      },
+      "n_skip": 0,
+      "n_err": 0,
+      "ctx": {
+        "task": 100000
+      },
+      "ver_mismatch": 0,
+      "ver_nonmono": 0,
+      "warmup_sec": 10.0,
+      "n_trimmed": 20000
+    },
+    {
+      "rep": 2,
+      "hdr": {
+        "magic": 1262898260,
+        "hdr_version": 1,
+        "sample_bytes": 36,
+        "n_samples": 120000,
+        "drops": 0,
+        "period_us": 1000,
+        "arm_path": 3,
+        "arm_name": "userspace"
+      },
+      "read": {
+        "n": 50000,
+        "p50_ns": 8368,
+        "p90_ns": 8444,
+        "p99_ns": 8512,
+        "p999_ns": 8631,
+        "max_ns": 9862,
+        "mean_ns": 8368
+      },
+      "write": {
+        "n": 50000,
+        "p50_ns": 8464,
+        "p90_ns": 8545,
+        "p99_ns": 8615,
+        "p999_ns": 8764,
+        "max_ns": 16188,
+        "mean_ns": 8465
+      },
+      "n_skip": 0,
+      "n_err": 0,
+      "ctx": {
+        "task": 100000
+      },
+      "ver_mismatch": 0,
+      "ver_nonmono": 0,
+      "warmup_sec": 10.0,
+      "n_trimmed": 20000
+    },
+    {
+      "rep": 3,
+      "hdr": {
+        "magic": 1262898260,
+        "hdr_version": 1,
+        "sample_bytes": 36,
+        "n_samples": 120000,
+        "drops": 0,
+        "period_us": 1000,
+        "arm_path": 3,
+        "arm_name": "userspace"
+      },
+      "read": {
+        "n": 50000,
+        "p50_ns": 8308,
+        "p90_ns": 8384,
+        "p99_ns": 8455,
+        "p999_ns": 8606,
+        "max_ns": 8793,
+        "mean_ns": 8308
+      },
+      "write": {
+        "n": 50000,
+        "p50_ns": 8404,
+        "p90_ns": 8485,
+        "p99_ns": 8557,
+        "p999_ns": 8716,
+        "max_ns": 10805,
+        "mean_ns": 8405
+      },
+      "n_skip": 0,
+      "n_err": 0,
+      "ctx": {
+        "task": 100000
+      },
+      "ver_mismatch": 0,
+      "ver_nonmono": 0,
+      "warmup_sec": 10.0,
+      "n_trimmed": 20000
+    },
+    {
+      "rep": 4,
+      "hdr": {
+        "magic": 1262898260,
+        "hdr_version": 1,
+        "sample_bytes": 36,
+        "n_samples": 120000,
+        "drops": 0,
+        "period_us": 1000,
+        "arm_path": 3,
+        "arm_name": "userspace"
+      },
+      "read": {
+        "n": 50000,
+        "p50_ns": 8333,
+        "p90_ns": 8408,
+        "p99_ns": 8481,
+        "p999_ns": 8829,
+        "max_ns": 10001,
+        "mean_ns": 8335
+      },
+      "write": {
+        "n": 50000,
+        "p50_ns": 8424,
+        "p90_ns": 8503,
+        "p99_ns": 8598,
+        "p999_ns": 11498,
+        "max_ns": 20581,
+        "mean_ns": 8437
+      },
+      "n_skip": 0,
+      "n_err": 0,
+      "ctx": {
+        "task": 100000
+      },
+      "ver_mismatch": 0,
+      "ver_nonmono": 0,
+      "warmup_sec": 10.0,
+      "n_trimmed": 20000
+    },
+    {
+      "rep": 5,
+      "hdr": {
+        "magic": 1262898260,
+        "hdr_version": 1,
+        "sample_bytes": 36,
+        "n_samples": 120000,
+        "drops": 0,
+        "period_us": 1000,
+        "arm_path": 3,
+        "arm_name": "userspace"
+      },
+      "read": {
+        "n": 50000,
+        "p50_ns": 8296,
+        "p90_ns": 8372,
+        "p99_ns": 8438,
+        "p999_ns": 8625,
+        "max_ns": 10886,
+        "mean_ns": 8295
+      },
+      "write": {
+        "n": 50000,
+        "p50_ns": 8390,
+        "p90_ns": 8472,
+        "p99_ns": 8542,
+        "p999_ns": 8695,
+        "max_ns": 13456,
+        "mean_ns": 8389
+      },
+      "n_skip": 0,
+      "n_err": 0,
+      "ctx": {
+        "task": 100000
+      },
+      "ver_mismatch": 0,
+      "ver_nonmono": 0,
+      "warmup_sec": 10.0,
+      "n_trimmed": 20000
+    }
+  ],
+  "across_reps": {
+    "read": {
+      "p50_ns": {
+        "median": 8308,
+        "min": 8296,
+        "max": 8368,
+        "spread": 72,
+        "values": [
+          8305,
+          8368,
+          8308,
+          8333,
+          8296
+        ]
+      },
+      "p90_ns": {
+        "median": 8384,
+        "min": 8372,
+        "max": 8444,
+        "spread": 72,
+        "values": [
+          8380,
+          8444,
+          8384,
+          8408,
+          8372
+        ]
+      },
+      "p99_ns": {
+        "median": 8455,
+        "min": 8438,
+        "max": 8512,
+        "spread": 74,
+        "values": [
+          8450,
+          8512,
+          8455,
+          8481,
+          8438
+        ]
+      },
+      "p999_ns": {
+        "median": 8625,
+        "min": 8603,
+        "max": 8829,
+        "spread": 226,
+        "values": [
+          8603,
+          8631,
+          8606,
+          8829,
+          8625
+        ]
+      },
+      "max_ns": {
+        "median": 10001,
+        "min": 8793,
+        "max": 10886,
+        "spread": 2093,
+        "values": [
+          10637,
+          9862,
+          8793,
+          10001,
+          10886
+        ]
+      }
+    },
+    "write": {
+      "p50_ns": {
+        "median": 8424,
+        "min": 8390,
+        "max": 8464,
+        "spread": 74,
+        "values": [
+          8437,
+          8464,
+          8404,
+          8424,
+          8390
+        ]
+      },
+      "p90_ns": {
+        "median": 8503,
+        "min": 8472,
+        "max": 8545,
+        "spread": 73,
+        "values": [
+          8517,
+          8545,
+          8485,
+          8503,
+          8472
+        ]
+      },
+      "p99_ns": {
+        "median": 8591,
+        "min": 8542,
+        "max": 8615,
+        "spread": 73,
+        "values": [
+          8591,
+          8615,
+          8557,
+          8598,
+          8542
+        ]
+      },
+      "p999_ns": {
+        "median": 8764,
+        "min": 8695,
+        "max": 11498,
+        "spread": 2803,
+        "values": [
+          9921,
+          8764,
+          8716,
+          11498,
+          8695
+        ]
+      },
+      "max_ns": {
+        "median": 16188,
+        "min": 10805,
+        "max": 20581,
+        "spread": 9776,
+        "values": [
+          18005,
+          16188,
+          10805,
+          20581,
+          13456
+        ]
+      }
+    }
+  }
+}

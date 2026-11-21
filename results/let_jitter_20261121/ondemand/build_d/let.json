@@ -1,0 +1,393 @@
+{
+  "version": 1,
+  "kind": "let_decide",
+  "task": {
+    "name": "let_pc_shared",
+    "entry": "pc_main",
+    "period_us": 1000,
+    "deadline_us": 1000,
+    "step_us": null,
+    "notes": "由 Clang AST 抽取；相位来自源注释或命令行，不是分析猜测"
+  },
+  "contract": {
+    "mode": "strict_period",
+    "period_us": 1000,
+    "allow_period_stretch": false,
+    "pinned": [
+      "stage_act",
+      "stage_commit",
+      "stage_fetch"
+    ]
+  },
+  "model": {
+    "formula": "Cost = G*c + |LET|*let_event + E",
+    "c_us": 21.0,
+    "let_event_us": 21.0,
+    "note": "LET 是可选变换；更贵就不用。不是 WCET。"
+  },
+  "candidates": [
+    {
+      "id": "unfused",
+      "legal": true,
+      "deployable": true,
+      "diagnostics": [],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_userspace",
+          "generator": "let_decide",
+          "let": false
+        },
+        "order": [
+          "stage_prod",
+          "stage_commit",
+          "stage_fetch",
+          "stage_act"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "stage_prod"
+            ]
+          },
+          {
+            "id": "g1",
+            "members": [
+              "stage_commit"
+            ]
+          },
+          {
+            "id": "g2",
+            "members": [
+              "stage_fetch"
+            ]
+          },
+          {
+            "id": "g3",
+            "members": [
+              "stage_act"
+            ]
+          }
+        ],
+        "let_events": []
+      },
+      "cost": {
+        "groups": 4,
+        "let_events": 0,
+        "c_us": 21.0,
+        "let_event_us": 21.0,
+        "exec_us": 0.0,
+        "total_us": 84.0,
+        "uses_let": false
+      },
+      "why": "不用 LET"
+    },
+    {
+      "id": "full_fuse",
+      "legal": false,
+      "deployable": false,
+      "diagnostics": [
+        {
+          "code": "E_PIN_EARLY_COMMIT",
+          "where": "stage_commit",
+          "msg": "提交钉在 400 µs，融合后组头 0，无输出保持 LET"
+        },
+        {
+          "code": "E_PIN_PULL",
+          "where": "stage_fetch",
+          "msg": "采样相位 500.0 被前拉到组头 0，无输入快照 LET"
+        },
+        {
+          "code": "E_PIN_EARLY_COMPUTE",
+          "where": "stage_act",
+          "msg": "计算钉在 700 µs，组释放 0，禁止前拉"
+        }
+      ],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_userspace",
+          "generator": "let_decide",
+          "let": false
+        },
+        "order": [
+          "stage_prod",
+          "stage_commit",
+          "stage_fetch",
+          "stage_act"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "stage_prod",
+              "stage_commit",
+              "stage_fetch",
+              "stage_act"
+            ]
+          }
+        ],
+        "let_events": []
+      },
+      "cost": {
+        "groups": 1,
+        "let_events": 0,
+        "c_us": 21.0,
+        "let_event_us": 21.0,
+        "exec_us": 0.0,
+        "total_us": 21.0,
+        "uses_let": false
+      },
+      "why": "拒绝: E_PIN_EARLY_COMMIT, E_PIN_PULL, E_PIN_EARLY_COMPUTE"
+    },
+    {
+      "id": "full_fuse_let",
+      "legal": true,
+      "deployable": false,
+      "diagnostics": [],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_userspace",
+          "generator": "let_decide",
+          "let": true,
+          "let_reshaped": true
+        },
+        "order": [
+          "stage_prod",
+          "stage_commit",
+          "stage_fetch",
+          "stage_act"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "stage_prod",
+              "stage_commit",
+              "stage_fetch"
+            ],
+            "domain": "linux_kernel",
+            "phase_us": 0.0,
+            "release_phase_us": 0.0
+          },
+          {
+            "id": "g1",
+            "members": [
+              "stage_act"
+            ],
+            "domain": "linux_kernel",
+            "phase_us": 700.0,
+            "release_phase_us": 700.0,
+            "phase_binding": "required"
+          }
+        ],
+        "let_events": [
+          {
+            "kind": "output_commit",
+            "stage": "stage_commit",
+            "at_us": 400.0,
+            "compute_at_us": 0.0
+          },
+          {
+            "kind": "input_snapshot",
+            "stage": "stage_fetch",
+            "at_us": 500.0,
+            "compute_at_us": 0.0
+          }
+        ]
+      },
+      "cost": {
+        "groups": 2,
+        "let_events": 2,
+        "c_us": 21.0,
+        "let_event_us": 21.0,
+        "exec_us": 0.0,
+        "total_us": 84.0,
+        "uses_let": true
+      },
+      "why": "LET×2"
+    },
+    {
+      "id": "selective_pins",
+      "legal": true,
+      "deployable": true,
+      "diagnostics": [],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_userspace",
+          "generator": "let_decide",
+          "let": false
+        },
+        "order": [
+          "stage_prod",
+          "stage_commit",
+          "stage_fetch",
+          "stage_act"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "stage_prod"
+            ]
+          },
+          {
+            "id": "g1",
+            "members": [
+              "stage_commit"
+            ]
+          },
+          {
+            "id": "g2",
+            "members": [
+              "stage_fetch"
+            ]
+          },
+          {
+            "id": "g3",
+            "members": [
+              "stage_act"
+            ]
+          }
+        ],
+        "let_events": []
+      },
+      "cost": {
+        "groups": 4,
+        "let_events": 0,
+        "c_us": 21.0,
+        "let_event_us": 21.0,
+        "exec_us": 0.0,
+        "total_us": 84.0,
+        "uses_let": false
+      },
+      "why": "不用 LET; 全融合无 LET 非法; 未采用 LET（钉扎已由分组保住，或 LET 更贵）"
+    },
+    {
+      "id": "stretch_period",
+      "legal": false,
+      "deployable": false,
+      "diagnostics": [
+        {
+          "code": "E_PERIOD_STRETCH",
+          "where": "period_us",
+          "msg": "严格周期模式拒绝 1000 → 1500.0"
+        }
+      ],
+      "plan": {
+        "version": 2,
+        "meta": {
+          "platform": "linux_userspace",
+          "generator": "let_decide",
+          "let": false,
+          "period_us": 1500.0
+        },
+        "order": [
+          "stage_prod",
+          "stage_commit",
+          "stage_fetch",
+          "stage_act"
+        ],
+        "groups": [
+          {
+            "id": "g0",
+            "members": [
+              "stage_prod"
+            ]
+          },
+          {
+            "id": "g1",
+            "members": [
+              "stage_commit"
+            ]
+          },
+          {
+            "id": "g2",
+            "members": [
+              "stage_fetch"
+            ]
+          },
+          {
+            "id": "g3",
+            "members": [
+              "stage_act"
+            ]
+          }
+        ],
+        "let_events": []
+      },
+      "cost": {
+        "groups": 4,
+        "let_events": 0,
+        "c_us": 21.0,
+        "let_event_us": 21.0,
+        "exec_us": 0.0,
+        "total_us": 84.0,
+        "uses_let": false
+      },
+      "why": "拒绝: E_PERIOD_STRETCH"
+    }
+  ],
+  "chosen": "selective_pins",
+  "chosen_record": {
+    "id": "selective_pins",
+    "legal": true,
+    "deployable": true,
+    "diagnostics": [],
+    "plan": {
+      "version": 2,
+      "meta": {
+        "platform": "linux_userspace",
+        "generator": "let_decide",
+        "let": false
+      },
+      "order": [
+        "stage_prod",
+        "stage_commit",
+        "stage_fetch",
+        "stage_act"
+      ],
+      "groups": [
+        {
+          "id": "g0",
+          "members": [
+            "stage_prod"
+          ]
+        },
+        {
+          "id": "g1",
+          "members": [
+            "stage_commit"
+          ]
+        },
+        {
+          "id": "g2",
+          "members": [
+            "stage_fetch"
+          ]
+        },
+        {
+          "id": "g3",
+          "members": [
+            "stage_act"
+          ]
+        }
+      ],
+      "let_events": []
+    },
+    "cost": {
+      "groups": 4,
+      "let_events": 0,
+      "c_us": 21.0,
+      "let_event_us": 21.0,
+      "exec_us": 0.0,
+      "total_us": 84.0,
+      "uses_let": false
+    },
+    "why": "不用 LET; 全融合无 LET 非法; 未采用 LET（钉扎已由分组保住，或 LET 更贵）"
+  },
+  "n_legal": 3
+}

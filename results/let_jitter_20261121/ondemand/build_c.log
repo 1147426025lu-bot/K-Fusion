@@ -1,0 +1,13 @@
+══ C 组：共用宿主 + 手写读写实现 ══
+  src   /home/pi/K-Fusion/kfusion/examples/ecos/let_pc_shared__LET产消共享.c
+  out   /home/pi/kfusion_results/four_arms_v2/build_c
+-- 1) 生成共用宿主（KF_LET_STUB_SEAM=1）
+-- 2) 替换读写实现（生成 → 手写）
+-- 3) 重编 .ko
+
+  generated impl sha256  813b6e1f5b26feae025915ea0f9219d1b1bfdbcd992eb33b8778478c43167345
+  hand      impl sha256  4717eb2141f43a7681515cf9674444e7ab9a97d2a0726e1629f40534b07118a3
+  diff 行数             112
+  kf_task.ko sha256      3017d600e9595aa8f2bedeeab242f75967b43e1e95fddf4ad6f5cd4c23e1869c
+  manifest               /home/pi/kfusion_results/four_arms_v2/build_c/hand_impl_manifest.json
+✅ C 组模块：/home/pi/kfusion_results/four_arms_v2/build_c/kmod_hrtimer/kf_task.ko

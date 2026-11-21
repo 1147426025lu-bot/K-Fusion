@@ -23,6 +23,7 @@ BODY_H = "ecos_fused_body.h"
 BODY_C = "ecos_fused_body.c"
 HOST_C = "ecos_fused_linux.c"
 COMPAT_H = "compat/stdint.h"
+LET_HOST_H = "kf_let_host.h"
 KBUILD = "Kbuild"
 README = "README.build.txt"
 
@@ -541,7 +542,7 @@ MODULE_PARM_DESC(rsf_probe, "统一 r/s/f：start_lat / exec / response（与用
 _KBUILD = """# 由 ECoS 方案生成；在目标侧（内核树）执行：
 #   make -C <KDIR> M=$PWD modules
 obj-m := %(mod)s.o
-%(mod)s-y := ecos_fused_linux.o ecos_fused_body.o stage_impl.o%(xdom_objs)s
+%(mod)s-y := ecos_fused_linux.o ecos_fused_body.o stage_impl.o%(xdom_objs)s%(let_impl_objs)s
 
 # 阶段源码若是用户态 C（#include <stdint.h>），用 compat/ 补定宽整数 typedef。
 # 只补 typedef，不补 libc——用到 libc 的阶段要先过 LLVM 内核化 Pass。
@@ -876,6 +877,8 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
         "stage_profile": stage_profile,
         "rsf_probe": _RSF_PROBE,
     }
+    let_impl_objs = ""
+    extra_files = {}
     if host_model == "single_worker":
         import linux_kernel_single_worker as _sw
         # 死区探针仍按组 id；单线程里用 ev.group_id 替换 g->id
@@ -883,7 +886,10 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
                                      if probe_before else "")
         shared["probe_after_sw"] = (probe_after.replace("g->id", "ev.group_id")
                                     if probe_after else "")
-        host = _sw.render(ir, module_name, shared)
+        # seam 模式把 let_run 切到独立编译单元（let_impl_gen.c），宿主只留接口
+        host = _sw.render(ir, module_name, shared, out_files=extra_files)
+        if extra_files:
+            let_impl_objs = " let_impl.o"
         host_note = "host_model=single_worker"
     else:
         host = _LINUX_C % shared
@@ -893,10 +899,13 @@ MODULE_PARM_DESC(dz_hist, "闭合边间隔直方图 + p50/p99/p99.9/max");"""
                         "cpu": int(_cpu), "rtprio": int(_prio),
                         "digest_hint": digest_hint}
     readme = ("# %s\n\n" % host_note) + readme
-    return {
+    files = {
         HOST_C: host,
         COMPAT_H: _COMPAT_STDINT,
         KBUILD: _KBUILD % {"mod": module_name,
-                           "xdom_objs": " ecos_xdom.o" if xdom else ""},
+                           "xdom_objs": " ecos_xdom.o" if xdom else "",
+                           "let_impl_objs": let_impl_objs},
         README: readme,
     }
+    files.update(extra_files)
+    return files

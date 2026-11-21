@@ -1,0 +1,55 @@
+{
+  "ok": true,
+  "errors": [],
+  "warnings": [],
+  "stats": {
+    "groups": 2,
+    "nodes": 4,
+    "same_cycle_edges": 3,
+    "cross_cycle_edges": 0,
+    "evidence": "empirical",
+    "temporal_source": "none",
+    "domains": [
+      "default"
+    ],
+    "cross_domain_edges": 0,
+    "cross_domain_periods": 0,
+    "cross_domain_extra_us": 0.0,
+    "period_us": 1000.0,
+    "domain_period_us": {},
+    "multirate": false,
+    "xdom_deployable": null,
+    "completion_us": 720.0,
+    "backlog_us": 0.0
+  },
+  "schedule": [
+    {
+      "id": "g0",
+      "members": [
+        "stage_prod",
+        "stage_commit",
+        "stage_fetch"
+      ],
+      "domain": "default",
+      "period_us": 1000.0,
+      "phase_us": 0.0,
+      "backlog_us": 0.0,
+      "start_us": 20.0,
+      "finish_us": 20.0,
+      "exec_us": 0.0
+    },
+    {
+      "id": "g1",
+      "members": [
+        "stage_act"
+      ],
+      "domain": "default",
+      "period_us": 1000.0,
+      "phase_us": 700.0,
+      "backlog_us": 0.0,
+      "start_us": 720.0,
+      "finish_us": 720.0,
+      "exec_us": 0.0
+    }
+  ]
+}

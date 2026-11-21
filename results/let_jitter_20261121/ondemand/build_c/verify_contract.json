@@ -1,0 +1,27 @@
+{
+  "teir_ok": true,
+  "teir_diagnostics": [],
+  "pin_ok_with_let": true,
+  "pin_diagnostics": [],
+  "window_ok_without_let": false,
+  "window_diagnostics": [
+    {
+      "code": "E_PIN_EARLY_COMMIT",
+      "where": "stage_commit",
+      "msg": "提交钉在 400 µs，融合后组头 0，无输出保持 LET"
+    },
+    {
+      "code": "E_PIN_PULL",
+      "where": "stage_fetch",
+      "msg": "采样相位 500.0 被前拉到组头 0，无输入快照 LET"
+    }
+  ],
+  "has_let": true,
+  "deploy_ok": true,
+  "ok": true,
+  "contract_pinned": [
+    "stage_act",
+    "stage_commit",
+    "stage_fetch"
+  ]
+}

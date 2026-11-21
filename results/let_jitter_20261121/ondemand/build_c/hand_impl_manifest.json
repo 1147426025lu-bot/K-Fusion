@@ -1,0 +1,12 @@
+{
+  "kind": "hand_impl_swap",
+  "arm": "C",
+  "source": "let_pc_shared__LET产消共享.c",
+  "host": "ecos_fused_linux.c (与 D 组同一份)",
+  "impl_file": "let_impl.c",
+  "generated_impl_sha256": "813b6e1f5b26feae025915ea0f9219d1b1bfdbcd992eb33b8778478c43167345",
+  "hand_impl_sha256": "4717eb2141f43a7681515cf9674444e7ab9a97d2a0726e1629f40534b07118a3",
+  "diff_lines": 112,
+  "ko_sha256": "3017d600e9595aa8f2bedeeab242f75967b43e1e95fddf4ad6f5cd4c23e1869c",
+  "note": "宿主/事件表/计时点/缓冲区/门禁全同；唯一变量 = let_impl.c 是生成还是手写"
+}

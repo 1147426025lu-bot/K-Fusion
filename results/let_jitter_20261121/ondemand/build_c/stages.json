@@ -1,0 +1,131 @@
+{
+  "version": 1,
+  "extracted": true,
+  "source": "/home/pi/K-Fusion/kfusion/examples/ecos/let_pc_shared__LET产消共享.c",
+  "kc0": {
+    "ok": true,
+    "violations": []
+  },
+  "task": {
+    "name": "let_pc_shared",
+    "entry": "pc_main",
+    "period_us": 1000,
+    "deadline_us": 1000,
+    "step_us": null,
+    "notes": "由 Clang AST 抽取；相位来自源注释或命令行，不是分析猜测"
+  },
+  "stages": [
+    {
+      "name": "stage_prod",
+      "fn": "stage_prod",
+      "depends_on": [],
+      "context": "thread",
+      "call": "stage_prod()",
+      "offset_us": 0
+    },
+    {
+      "name": "stage_commit",
+      "fn": "stage_commit",
+      "depends_on": [
+        "stage_prod"
+      ],
+      "context": "thread",
+      "call": "stage_commit()",
+      "offset_us": 400
+    },
+    {
+      "name": "stage_fetch",
+      "fn": "stage_fetch",
+      "depends_on": [
+        "stage_commit"
+      ],
+      "context": "thread",
+      "call": "stage_fetch()",
+      "offset_us": 500
+    },
+    {
+      "name": "stage_act",
+      "fn": "stage_act",
+      "depends_on": [
+        "stage_fetch"
+      ],
+      "context": "thread",
+      "call": "stage_act()",
+      "offset_us": 700
+    }
+  ],
+  "globals": [
+    "g_state",
+    "g_cmd_pending",
+    "g_cmd",
+    "g_cmd_ver",
+    "g_cmd_snap",
+    "g_cmd_snap_ver",
+    "g_out",
+    "g_seed"
+  ],
+  "globals_digest": [
+    "g_state",
+    "g_cmd_pending",
+    "g_cmd",
+    "g_cmd_ver",
+    "g_cmd_snap",
+    "g_cmd_snap_ver",
+    "g_out",
+    "g_seed"
+  ],
+  "globals_typed": [
+    {
+      "name": "g_state",
+      "type": "int32_t",
+      "has_init": false
+    },
+    {
+      "name": "g_cmd_pending",
+      "type": "int32_t",
+      "has_init": false
+    },
+    {
+      "name": "g_cmd",
+      "type": "int32_t",
+      "has_init": false
+    },
+    {
+      "name": "g_cmd_ver",
+      "type": "uint32_t",
+      "has_init": false
+    },
+    {
+      "name": "g_cmd_snap",
+      "type": "int32_t",
+      "has_init": false
+    },
+    {
+      "name": "g_cmd_snap_ver",
+      "type": "uint32_t",
+      "has_init": false
+    },
+    {
+      "name": "g_out",
+      "type": "int32_t",
+      "has_init": false
+    },
+    {
+      "name": "g_seed",
+      "type": "uint32_t",
+      "has_init": true
+    }
+  ],
+  "entry_params": [],
+  "reset": "kf_pc_reset",
+  "calls": {
+    "stage_prod": "stage_prod()",
+    "stage_commit": "stage_commit()",
+    "stage_fetch": "stage_fetch()",
+    "stage_act": "stage_act()"
+  },
+  "binds": {
+    "setpoint": "1000"
+  },
+  "observations": []
+}

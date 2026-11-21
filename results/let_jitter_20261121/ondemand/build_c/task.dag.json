@@ -1,0 +1,171 @@
+{
+  "version": 2,
+  "meta": {
+    "mode": "stages",
+    "summary": "/home/pi/kfusion_results/four_arms_v2/build_c/effect_summary.json",
+    "task": {
+      "name": "let_pc_shared",
+      "entry": "pc_main",
+      "period_us": 1000,
+      "deadline_us": 1000,
+      "step_us": null,
+      "notes": "由 Clang AST 抽取；相位来自源注释或命令行，不是分析猜测"
+    },
+    "note": "proven=true 的边可作为约束；candidates 未经证明，不得当作依赖；conflict 无方向（只禁止重排）；recurrences 是相位反向边给出的真实反馈环（延迟 1 拍），algebraic_loops 是拍内闭合的非法环"
+  },
+  "nodes": [
+    {
+      "name": "stage_act",
+      "fns": [
+        "stage_act"
+      ],
+      "context": "thread",
+      "declared_deps": [
+        "stage_fetch"
+      ],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ],
+      "phase_us": 700.0
+    },
+    {
+      "name": "stage_commit",
+      "fns": [
+        "stage_commit"
+      ],
+      "context": "thread",
+      "declared_deps": [
+        "stage_prod"
+      ],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ],
+      "phase_us": 400.0
+    },
+    {
+      "name": "stage_fetch",
+      "fns": [
+        "stage_fetch"
+      ],
+      "context": "thread",
+      "declared_deps": [
+        "stage_commit"
+      ],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ],
+      "phase_us": 500.0
+    },
+    {
+      "name": "stage_prod",
+      "fns": [
+        "stage_prod"
+      ],
+      "context": "thread",
+      "declared_deps": [],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "thread",
+        "softirq"
+      ],
+      "phase_us": 0.0
+    }
+  ],
+  "edges": [
+    {
+      "from": "stage_commit",
+      "to": "stage_fetch",
+      "kind": "data",
+      "evidence": [
+        "@g_cmd",
+        "@g_cmd_ver"
+      ],
+      "evidence_count": 2,
+      "proven": true
+    },
+    {
+      "from": "stage_fetch",
+      "to": "stage_act",
+      "kind": "data",
+      "evidence": [
+        "@g_cmd_snap"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    },
+    {
+      "from": "stage_prod",
+      "to": "stage_commit",
+      "kind": "data",
+      "evidence": [
+        "@g_cmd_pending"
+      ],
+      "evidence_count": 1,
+      "proven": true
+    }
+  ],
+  "candidates": [],
+  "phase": {
+    "known": true,
+    "unit": "us",
+    "period_us": 1000,
+    "offsets": {
+      "stage_act": 700.0,
+      "stage_commit": 400.0,
+      "stage_fetch": 500.0,
+      "stage_prod": 0.0
+    },
+    "note": "一拍内各阶段的释放相位。跨周期判定只用它——生产者的相位晚于消费者时，该边只能跨拍满足（z⁻¹）。"
+  },
+  "topo_order": [
+    "stage_prod",
+    "stage_commit",
+    "stage_fetch",
+    "stage_act"
+  ],
+  "topo_order_delayed": [
+    "stage_prod",
+    "stage_commit",
+    "stage_fetch",
+    "stage_act"
+  ],
+  "recurrences": [],
+  "algebraic_loops": [],
+  "cycles": [],
+  "stats": {
+    "nodes": 4,
+    "edges": 3,
+    "by_kind": {
+      "call": 0,
+      "spawn": 0,
+      "data": 3,
+      "anti": 0,
+      "conflict": 0
+    },
+    "candidates": 0,
+    "recurrences": 0,
+    "algebraic_loops": 0,
+    "concretized": 0,
+    "multi_binding": 0,
+    "unresolved": 0,
+    "explained_by_call": 0
+  }
+}

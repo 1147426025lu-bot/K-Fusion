@@ -1,0 +1,6 @@
+date=2026-11-21T11:49:03+08:00
+kernel=5.15.49-rt47-v8+
+cmdline=coherent_pool=1M 8250.nr_uarts=1 snd_bcm2835.enable_compat_alsa=0 snd_bcm2835.enable_hdmi=1  smsc95xx.macaddr=E4:5F:01:B1:07:55 vc_mem.mem_base=0x3ec00000 vc_mem.mem_size=0x40000000  console=ttyS0,115200 console=tty1 root=PARTUUID=026c2b00-02 rootfstype=ext4 fsck.repair=yes rootwait cfg80211.ieee80211_regdom=CN cma=64M@32M kvm-arm.mode=none nohz_full=3 rcu_nocbs=3 rcu_nocb_poll irqaffinity=0-2 workqueue.cpumask=7 isolcpus=domain,managed_irq,3
+cpu3_governor=performance
+cpu3_cur_freq=1800000
+cpu3_freqs=600000 700000 800000 900000 1000000 1100000 1200000 1300000 1400000 1500000 1600000 1700000 1800000 

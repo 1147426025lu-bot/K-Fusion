@@ -416,6 +416,55 @@ fi
 "$PY" "$KF/scripts/ecos/contract_gate.py" "${GATE_V[@]}" \
   || die "contract_gate 拒绝入选方案" 8
 
+# 内核计算体的公开符号（--extra-public）：显式给了就用；没给就按
+# 「状态所有权 + 共享对象 + LET 读写量 + 观察量」从 plan.json / 契约推导。
+# 旧的内建默认值 g_in,g_integ,g_out,loop_reset 只对某个特定例子成立——忘了 export
+# 就会把 LET 的 g_state/g_seed 内部化成文件局部，modpost 报 undefined，看起来像"构建坏了"。
+if [ -z "${KERNEL_STATE_SYMS:-}" ]; then
+  KERNEL_STATE_SYMS="$(KF_PLAN="$OUT/plan.json" KF_CONTRACT="${TIME_CONTRACT:-}" \
+      KF_DIGEST="${DIGEST[*]:-}" "$PY" - <<'PY'
+import json, os, re
+
+syms = set()
+
+
+def take(d):
+    for k in (d.get("state_ownership") or {}):
+        syms.add(str(k))
+    for o in (d.get("shared_objects") or []):
+        if isinstance(o, dict):
+            for f in ("name", "version"):
+                if o.get(f):
+                    syms.add(str(o[f]))
+    for e in (d.get("let_events") or []):
+        for f in ("vars", "snap_vars"):
+            syms.update(str(v) for v in (e.get(f) or []))
+        for it in (e.get("publish") or []):
+            if isinstance(it, dict):
+                for f in ("dst", "src"):
+                    if it.get(f):
+                        syms.add(str(it[f]))
+
+
+p = os.environ.get("KF_PLAN") or ""
+if p and os.path.isfile(p):
+    take(json.load(open(p, encoding="utf-8")))
+c = os.environ.get("KF_CONTRACT") or ""
+if c and os.path.isfile(c):
+    take(json.load(open(c, encoding="utf-8")))
+# --digest-var 的观察量（宿主里 extern 引用，必须保持全局）
+for tok in os.environ.get("KF_DIGEST", "").replace("--digest-var", " ").split():
+    if re.fullmatch(r"[A-Za-z_]\w*", tok):
+        syms.add(tok)
+print(",".join(sorted(syms)))
+PY
+)"
+  if [ -n "$KERNEL_STATE_SYMS" ]; then
+    export KERNEL_STATE_SYMS
+    echo "   公开状态符号（推导）：$KERNEL_STATE_SYMS"
+  fi
+fi
+
 step "8) 生成用户态驱动（#include 原计算体，不复制）"
 if [ "$DOMAIN" = "mixed" ]; then
   # 内核段计算体同样必须由 Pass 产出（UKU 的 kernel 组 = stage_pid 之类）

@@ -159,10 +159,13 @@ d^w_{i,k} = w_{i,k} − D_{i,k}        （式 5）
 | 板 / SoC | Raspberry Pi 4 Model B **Rev 1.5** / BCM2711 |
 | 内核 | **5.15.49-rt47 PREEMPT_RT**（`realtime = 1`，`HZ = 1000`） |
 | 隔离 | `isolcpus=domain,managed_irq,3`；实时核绑定 + FIFO 优先级 |
+| **调频（必记）** | **`governor` 必须钉 `performance`（1.8 GHz）**。默认是 `ondemand`，隔离核空闲时降频到 600–700 MHz，同一份代码的时延会差 **2.6×**（2026-11-21 实测 A/C/D 比值 2.58–2.60，B 1.99）。每批必须落 `platform_start.txt`（governor + `scaling_cur_freq` + 频率表 + cmdline） |
 | 网络 | SSH `pi@192.168.1.4`（**IP 已从 .3 变为 .4**；hostkey `SHA256:ppmb…`） |
 | 计时 | **软件时间戳为主**（完成时刻 − 逻辑时刻）；GPIO 电平标记 + 逻辑分析仪为辅助外部计时（**尚未取证**） |
 
 > 旧卡（5.15.86 非 RT / 6.12）的全部数字**作废**，不得进入任何新口径表格。
+> **2026-11-21 之前的所有时延数据都在 `ondemand` 下采的（当时未记录 governor）**，
+> 只能在同一批内部比较，**不得与新口径混表或算倍数**；需要引用旧结论时按 `perf` 口径重测。
 > 空闲起步，再分别引入 CPU / 内存 / 网络 / 存储负载，记录负载位置与强度；负载梯度尚未做。
 
 ### 3.4 不能主张什么（红线清单）
@@ -230,6 +233,11 @@ d^w_{i,k} = w_{i,k} − D_{i,k}        （式 5）
 ---
 
 ## 5. 已有硬证据（板上实测）
+
+> **⚠️ 口径警告（2026-11-21 补）**：§5.2–§5.8 的全部时延数字都在 `ondemand` 下调频采集，
+> 当时未记录 governor；隔离核实际长期跑在 600–700 MHz，同一份代码的时延比 1.8 GHz 下高 **2.6×**。
+> 这些数字**只在各自批次内部可比**，不得与 §5.9（`performance` 1.8 GHz 主口径）混表或算倍数。
+> 需要引用其中任何结论时，按 `performance` 口径重测；**当前唯一可对外引用的是 §5.9**。
 
 数据源：`~/kfusion_results/`。以下数字均可由 `figs/table_correctness.json` 与
 `correctness_gate.json` 复核。§5.1–5.6 是 B（内核线程）与 D（编译器硬中断）两臂的**长窗口**结果
@@ -354,6 +362,9 @@ d^w_{i,k} = w_{i,k} − D_{i,k}        （式 5）
 > 2026-11-21 已把计算收敛到 `kfusion/src/let_pc_compute__产消计算体.h` 单一来源（A/C/D 共用），
 > 相位统一 0/400/500/700、消费者统一吃同拍快照；D 组 IR 语义经比对未变。
 > **需按新代码重跑后本表才算数**，在此之前只能作"原型跑通"引用。
+>
+> **2026-11-21 已重跑并取代本表 → 见 §5.9。** 本节数字此后只作历史记录；
+> 其中三条结论（A 比 B 准时 p=0.031 / 预热瞬态未归因 / C 尾部差 5.6×）已被 §5.9 推翻。
 
 A 组由独立用户态探针落地（`kf_let_userspace__用户态LET读写.c`），四组现在同周期、同相位、
 同计算体、同桩语义、同日志格式，**唯一变量 = 读写桩的执行上下文**。各 5 轮 60 s，
@@ -398,22 +409,72 @@ A 组由独立用户态探针落地（`kf_let_userspace__用户态LET读写.c`�
 8h 浸泡（L4/FIFO99/CPU3）：2880 万拍，start_lat p50 8 / max 112.87 µs，0 超期。
 保留为平台稳定性背景，**口径是 start_lat，不是读写偏差，不得并入 §5.2–§5.6 的表**。
 
+### 5.9 四组对照重跑：统一计算链 + 调频口径（2026-11-21，**当前唯一可用口径**）
+
+§5.2–§5.7 的全部数字都在 `ondemand` 下调频采的（当时未记录 governor），
+本篇是修完三处评审问题后的重跑，也是**唯一同时满足"同计算源 + 同宿主 + 记录频率"的一批**。
+
+**先修的三件事**
+
+1. 计算收敛到 `kfusion/src/let_pc_compute__产消计算体.h` 单一来源，相位统一 `0/400/500/700`，
+   消费者吃同拍快照（A/C/D 共用；B 与 D 同二进制）。
+2. 就绪门禁：`kf_let_ready` 单布尔 → `{cycle_id, done_ns, group_id, valid, consumed}` 三元组 +
+   `kf_stage_take()` 状态机；硬中断路径锁改 `raw_spinlock_t`；11 项单测 + 板上 3 组 16 项断言全过。
+3. C/D 共用宿主：`KF_LET_STUB_SEAM=1` 把 `let_run` 切到独立编译单元，C 组只替换 `let_impl.c`。
+   宿主源码与目标码两臂**逐字节相同**（`ff281b17…` / `0c5a5265…`），两版实现各 67 条指令。
+
+**主表（`governor=performance`，1.8 GHz，5 轮 × 60 s，单位 µs，中位 [极差]）**
+
+| 臂 | 读 p50 | 读 p99 | 读 max | 写 p50 | 写 max |
+|---|---|---|---|---|---|
+| **A** 用户态 FIFO 线程 | 8.31 [8.30–8.37] | 8.46 | 10.00 [8.79–10.89] | 8.42 [8.39–8.46] | 16.19 [10.80–20.58] |
+| **B** 内核软中断（同 .ko） | **7.95** [7.88–7.98] | 8.16 | 10.25 [9.00–11.22] | 9.10 [8.96–9.14] | 17.89 [12.92–20.57] |
+| **C** 硬中断 + 手写实现 | **1.25** [1.23–1.27] | **1.31** | 1.62 [1.44–1.75] | **1.61** [1.60–1.64] | 5.09 [2.65–5.97] |
+| **D** 硬中断 + 生成实现 | 1.28 [1.27–1.30] | 1.34 | **1.47** [1.43–1.88] | 1.64 [1.62–1.68] | **3.77** [3.16–4.93] |
+
+40 轮（2 批 × 4 臂 × 5 轮）正确性全绿：`skip/err/drops/版本错/版本非单调 = 0`，就绪门禁五个计数全 0。
+
+**四条要点**
+
+1. **偏差在"入口"不在函数体**：`t_before − nominal` 占 C 组读抖动的 95%（1204 vs 56 ns）。
+   读写函数体常年 55–260 ns。命题应表述为"删掉从定时器到期到代码开始执行的整条路径"，
+   而不是"读写更快"。
+2. **硬中断相对唤醒路径的收益**：读 8.31 → 1.25 µs（6.6×），写 8.42 → 1.61 µs（5.2×）。
+3. **A 与 B 不再可分**（读 B 7.95 略优、写 A 8.42 略优，尾部互有胜负）。
+   §5.7 那条"A 比 B 准时，p=0.031"**作废**——它的主因是两组计算链不同 + 两者对频率敏感度不同（2.60 vs 1.99）。
+4. **C 与 D 等价**：读 1.279 vs 1.250（D 高 2.3%）、写 1.638 vs 1.610（D 高 1.7%），
+   均 5/5 同向、单项 p=0.031，但两项 Bonferroni 校正后 p=0.0625 未过 0.05；
+   差值可定位到函数体多出的 18 ns（生成版回读一次刚写过的版本号）。
+   **尾部方向相反**（C 写 max 5.09 > D 3.77），不得合并成"谁更好"。
+   §5.7 那条"C 尾部差 5.6×"**作废**——旧 C 是独立模块、4 相位全走 HARD timer，混杂了 timer 编程次数。
+
+**调频对照（同 .ko，只换 governor）**：读 p50 A 21.65→8.31（2.60×）、B 15.81→7.95（1.99×）、
+C 3.22→1.25（2.58×）、D 3.29→1.28（2.57×），`1800/700 = 2.57`。
+**顺带定案"预热瞬态"**：performance 下 A 组从第 0 秒起 12 个 5 s 桶的 p50 全在 8.288–8.306 µs，
+无任何台阶；旧"4.5 s 处 8.72→22.4 µs"就是 `ondemand` 的降频台阶（22.4/8.72 = 2.57）。
+`--warmup-sec 10` 保留，但该现象从"未归因"改为"已归因：DVFS"。
+
+- 全量数据、机制分解、三条被推翻的旧结论、不能主张清单：
+  `results/let_jitter_20261121/RESULT__四组对照__统一计算链与调频对照.md`
+- 图：`perf/figs/fig1_max_per_rep.png`、`fig2_signed_vs_time.png`、`fig3_p99_tail.png`
+
 ---
 
 ## 6. 缺口与下一步（按性价比排序）
 
 | 优先级 | 缺口 | 补什么 |
 |---|---|---|
-| **0** | **D 组就绪门禁（正确性，长测前必修）** | `kf_let_ready` 是单个布尔，**任意**组体跑完都会置 true，`output_commit` 只读这个布尔。它无法区分"哪个生产者、哪一拍"的结果就绪，上一拍或消费者组（act@700）的完成都能让本拍 400 µs 的发布放行。修法：改用「生产者 + 周期号 + 完成时刻」三元组配对，并补超时/旧结果/连续漏周期用例。位置 `backend/synthesis/linux_kernel_single_worker.py:655,859` |
-| **0** | **D 组硬中断里的睡眠锁（RT 合法性）** | `kf_tick` 入队分支用 `spin_lock_irqsave(&kf_lock)`（同文件 :552），而 `hrtimer_hard=1` 是**整只定时器**的模式，group 释放槽也在硬中断里触发。PREEMPT_RT 上 `spinlock_t` 是可睡眠 rtmutex，硬中断上下文取它属非法路径（板上没炸大概率是 lockdep 未开）。修法：队列锁换 `raw_spinlock_t`，或按槽分模式（读写槽 HARD、释放槽 soft） |
-| 1 | **C/D 共用宿主** | 让 C 与 D 共用同一事件表、回调、计时点、缓冲区，只替换读写函数（手写 vs Pass 生成），否则"桩来源"与宿主实现差异仍混在一起。本轮已确认原"timer 编程 2 倍"归因错误并撤回 |
-| 2 | GPIO 外部计时（**唯一硬缺口**） | 逻辑分析仪采 GPIO 脉冲，写清两独立时钟的对齐方法，与软件计时互证。需要外部仪器，本轮未做 |
-| 3 | 抖动口径复核 | 确认 `nominal_ns` 与开题 `R_{i,k}/D_{i,k}` 的相位/起点完全一致；signed late/early 一并出图（数据已含，出图未做） |
-| 4 | 负载梯度 × 四组 | ✅ 2026-11-18 已做 B/D 四档（§5.5）；**A/C 尚未在负载下测**，现有四组对照是空闲条件。计算链统一后需重做（内存负载优先，B/D 在该条件下差距最突出） |
-| 5 | 中断影响维度 | ✅ victim cyclictest 三条件对照已做（§5.4）；✅ hrtimer 回调全程耗时探针已落地，但**仅 C 组有**，D 组仍是单桩耗时 |
-| 6 | 统计补强 | ✅ 已补到 **5 轮 + p50/p99/max + 极差**，A 对 B 达单侧 p=0.031；剩余：超期/跳拍的序列相关分析、多重比较校正 |
-| 7 | 预热瞬态归因 | A 组 4.5 s 处 8.7→22 µs 的转变原因未归因；需对照 tick/调速/缓存状态 |
-| 8 | 构建可复现性 | `kf_unify` 依赖调用方 `export KERNEL_STATE_SYMS`（不设则共享状态符号被 internalize、modpost 报 undefined）；应改为由契约推导或缺失即 fail-closed。另：每轮应记录提交号 + `.ko` 哈希 + 内核配置 + 采样窗口，现有 B/D 短测复用了旧 `.ko` 且未记哈希 |
+| ~~0~~ | ~~D 组就绪门禁~~ | ✅ **2026-11-21 已修**：`kf_let_ready` 单布尔 → `{cycle_id, done_ns, group_id, valid, consumed}` 三元组 + `kf_stage_take()` 状态机（`KF_STAGE_OK/NOT_READY/STALE/CONSUMED/TOO_OLD/GROUP_MISMATCH`）。11 项单测 + 板上 16 项断言全过；生产者超时 600 µs 时 `ver` 增量 0、`skip=3027`、`stale=3030`（旧实现在这里会"读到旧值但版本号照增"） |
+| ~~0~~ | ~~D 组硬中断里的睡眠锁~~ | ✅ **2026-11-21 已修**：队列锁与标记锁改 `DEFINE_RAW_SPINLOCK` + `raw_spin_lock_irqsave`，全文 `spin_lock_irqsave(&kf_lock` 已无残留 |
+| ~~1~~ | ~~C/D 共用宿主~~ | ✅ **2026-11-21 已做**：`KF_LET_STUB_SEAM=1` 切出独立编译单元 `let_impl.c`，宿主源码与目标码两臂**逐字节相同**，两版实现各 67 条指令。C vs D 现在是真单变量 |
+| **1** | **GPIO 外部计时（唯一硬缺口）** | 逻辑分析仪采 GPIO 脉冲，写清两独立时钟的对齐方法，与软件计时互证。需要外部仪器，本轮未做。另外 `ktime_get()` 自身开销仍未独立标定 |
+| 2 | 负载梯度 × 四组（按新口径重做） | 11-18 那批 B/D 四档是 `ondemand` 下测的，**不可直接引用**；需在 `performance` 下重做（内存负载优先） |
+| 3 | 抖动口径复核 | ✅ signed 偏差已出图（`fig2_signed_vs_time.png`）；剩余：确认 `nominal_ns` 与开题 `R_{i,k}/D_{i,k}` 的相位/起点逐项对齐 |
+| 4 | 中断影响维度 | ✅ victim cyclictest 三条件对照已做（§5.4）；✅ hrtimer 回调全程耗时探针已落地，但**仅 C 组有**，D 组仍是单桩耗时 |
+| 5 | 统计补强 | ✅ 5 轮 + p50/p99/max + 极差 + 符号检验；C vs D 已做 Bonferroni 校正。剩余：超期/跳拍的序列相关分析 |
+| ~~7~~ | ~~预热瞬态归因~~ | ✅ **2026-11-21 定案**：不是瞬态，是 `ondemand` 从 1.8 GHz 降到 ~700 MHz 的调频台阶（比值 2.57 与频率比一致）。`performance` 下 0–60 s 无台阶 |
+| 6 | 构建可复现性 | ✅ `KERNEL_STATE_SYMS` 已由契约/plan/digest-var 自动推导（不再需要调用方 export）；✅ 每批落 `platform_start.txt` + 全部 `.o`/`.ko` 哈希。剩余：把提交号写进产物 |
+| 7 | `meta.json` 的 `arm_path` 语义 | 现由 `hrtimer_hard` 反推（B 臂显示 `thread`，实为 softirq）。应以样本 `ctx_name` 为准，或改 `let_log_dump` 的映射，避免后续误读 |
 
 ---
 
@@ -421,6 +482,18 @@ A 组由独立用户态探针落地（`kf_let_userspace__用户态LET读写.c`�
 
 ```bash
 # 平台：Pi4B / 5.15.49-rt47 PREEMPT_RT，SSH pi@192.168.1.4
+# 0) 【新口径必做】把调频钉到 performance，否则时延随频率漂 2.6×（§3.3 / §5.9）
+echo performance | sudo tee /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
+cat /sys/devices/system/cpu/cpu3/cpufreq/scaling_cur_freq    # 应为 1800000
+
+# 0b) 【当前唯一可用口径】四组重跑：计算链统一 + C/D 共用宿主 + 落平台快照
+OUT=/home/pi/kfusion_results/four_arms_perf REPS=5 DURATION=60 \
+  bash kfusion/scripts/run_four_arms_v2__四组重跑.sh
+#     换平台条件（governor / 负载 / 窗口）重跑，复用同一批 .ko，不重编：
+#     OUT=<新目录> REUSE_BUILD=/home/pi/kfusion_results/four_arms_perf ...
+python3 kfusion/scripts/plot_four_arms_v2__四组重跑出图.py \
+  --run /home/pi/kfusion_results/four_arms_perf -o /home/pi/kfusion_results/four_arms_perf/figs
+
 # 1) 同步脚本与产物到 Pi（Windows 侧整目录 tar，避免中文名 GBK 乱码）
 # 2) 正确性短测
 bash kfusion/scripts/run_let_correctness__LET正确性短测.sh
@@ -445,6 +518,7 @@ bash kfusion/scripts/build_hand_module__编译手写中断模块.sh
 OUT=/home/pi/kfusion_results/let_hand_60s_3x60s DURATION_SEC=60 REPS=3 \
   bash kfusion/scripts/run_let_handwritten__C组手写中断实验.sh
 #    注：汇总读 *.meta.json（dump_summary.json 被 tee 混入文本行，勿直接 json.load）
+# 8) ⚠ 已弃用（C 组是独立模块、非共用宿主、且不记 governor）——改用上面的 0b)
 # 8) 四组对照一次跑齐（A 用户态 / B kthread / C 手写硬中断 / D 生成硬中断）
 #    各 5 轮 60s，自动出 fig1–fig4 + 表格；A 组探针板端 gcc 编译
 bash kfusion/scripts/build_hand_module__编译手写中断模块.sh

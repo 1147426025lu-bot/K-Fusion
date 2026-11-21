@@ -1,0 +1,54 @@
+{
+  "hdr": {
+    "magic": 1262898260,
+    "hdr_version": 1,
+    "sample_bytes": 36,
+    "n_samples": 120367,
+    "drops": 0,
+    "period_us": 1000,
+    "arm_path": 1,
+    "arm_name": "irq_hard"
+  },
+  "summary": {
+    "n": 100367,
+    "n_read_ok": 50183,
+    "n_write_ok": 50184,
+    "n_skip": 0,
+    "n_hold": 0,
+    "n_err": 0,
+    "max_read_jitter_ns": 3618,
+    "max_write_jitter_ns": 4938,
+    "max_read_late_ns": 3618,
+    "max_read_early_ns": 0,
+    "max_write_late_ns": 4938,
+    "max_write_early_ns": 0,
+    "dist_read": {
+      "n": 50183,
+      "p50_ns": 3289,
+      "p90_ns": 3378,
+      "p99_ns": 3440,
+      "p999_ns": 3488,
+      "max_ns": 3618,
+      "mean_ns": 3287
+    },
+    "dist_write": {
+      "n": 50184,
+      "p50_ns": 4341,
+      "p90_ns": 4447,
+      "p99_ns": 4537,
+      "p999_ns": 4619,
+      "max_ns": 4938,
+      "mean_ns": 4344
+    },
+    "version_mismatch_cycles": 0,
+    "version_nonmono_writes": 0,
+    "ctx_counts": {
+      "hardirq": 100367
+    },
+    "warmup_sec": 10.0,
+    "n_raw": 120367,
+    "n_trimmed": 20000
+  },
+  "tag": "D_r1",
+  "source": "/home/pi/kfusion_results/four_arms_v2/D/rep3/raw.bin"
+}

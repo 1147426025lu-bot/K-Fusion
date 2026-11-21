@@ -1,0 +1,71 @@
+{
+  "version": 23,
+  "module": "/home/pi/kfusion_results/four_arms_v2/build_d/task.ll",
+  "functions": {
+    "pc_main": {
+      "effects": ["state_read", "state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": ["@g_cmd", "@g_cmd_pending", "@g_cmd_snap", "@g_cmd_ver", "@g_seed", "@g_state"],
+      "writes": ["@g_cmd", "@g_cmd_pending", "@g_cmd_snap", "@g_cmd_snap_ver", "@g_cmd_ver", "@g_out", "@g_seed", "@g_state"],
+      "recursive": false,
+      "calls": ["stage_act", "stage_commit", "stage_fetch", "stage_prod"],
+      "unknown_calls": []
+    },
+    "pc_reset": {
+      "effects": ["state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": [],
+      "writes": ["@g_cmd", "@g_cmd_pending", "@g_cmd_snap", "@g_cmd_snap_ver", "@g_cmd_ver", "@g_out", "@g_seed", "@g_state"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "stage_act": {
+      "effects": ["state_read", "state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": ["@g_cmd_snap"],
+      "writes": ["@g_out"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "stage_commit": {
+      "effects": ["state_read", "state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": ["@g_cmd_pending", "@g_cmd_ver"],
+      "writes": ["@g_cmd", "@g_cmd_ver"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "stage_fetch": {
+      "effects": ["state_read", "state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": ["@g_cmd", "@g_cmd_ver"],
+      "writes": ["@g_cmd_snap", "@g_cmd_snap_ver"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    },
+    "stage_prod": {
+      "effects": ["state_read", "state_write"],
+      "allowed_contexts": ["thread", "softirq"],
+      "reads": ["@g_seed", "@g_state"],
+      "writes": ["@g_cmd_pending", "@g_seed", "@g_state"],
+      "recursive": false,
+      "calls": [],
+      "unknown_calls": []
+    }
+  },
+  "callsites": [
+    {"caller": "pc_main", "callee": "stage_prod", "args": []},
+    {"caller": "pc_main", "callee": "stage_commit", "args": []},
+    {"caller": "pc_main", "callee": "stage_fetch", "args": []},
+    {"caller": "pc_main", "callee": "stage_act", "args": []}
+  ],
+  "thread_entries": [
+  ],
+  "interface_bindings": {
+  },
+  "alias_stats": {"aa_available": true, "pairs_checked": 48, "coarse_pairs": 0, "split_pairs": 0}
+}

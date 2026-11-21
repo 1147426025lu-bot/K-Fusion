@@ -1,0 +1,12 @@
+{
+  "chosen": "D",
+  "domain": "linux_kernel",
+  "fused": true,
+  "cost_us": null,
+  "why": "缺测不得当 0: stage_prod@linux_kernel,stage_commit@linux_kernel,stage_fetch@linux_kernel,stage_act@linux_kernel; 强制选择（测量用，非模型结论）",
+  "adapter": null,
+  "deployable": true,
+  "sched_class": null,
+  "run_prefix": [],
+  "objective": null
+}

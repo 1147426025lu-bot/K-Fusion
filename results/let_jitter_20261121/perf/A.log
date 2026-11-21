@@ -1,0 +1,33 @@
+OUT=/home/pi/kfusion_results/four_arms_perf/A REPS=5 DUR=60s cycles=60000 cpu=3 prio=80 no_rt=0
+bin=/tmp/kf_let_userspace
+==== A 组 rep1 (60s) ====
+A 组用户态 LET: period=1000us cycles=60000 相位 w=400 r=500 g1=700 cpu=3 policy=SCHED_FIFO prio=80 wait=nanosleep
+{"arm":"userspace_A","samples":120000,"cycles":60000,"period_us":1000,"skip_commit":0,"hold":0,"late_cycle":0,"out":"/home/pi/kfusion_results/four_arms_perf/A/rep1/raw.bin"}
+  read  p50=8305 p99=8450 max=10637 ns
+  write p50=8437 p99=8591 max=18005 ns
+==== A 组 rep2 (60s) ====
+A 组用户态 LET: period=1000us cycles=60000 相位 w=400 r=500 g1=700 cpu=3 policy=SCHED_FIFO prio=80 wait=nanosleep
+{"arm":"userspace_A","samples":120000,"cycles":60000,"period_us":1000,"skip_commit":0,"hold":0,"late_cycle":0,"out":"/home/pi/kfusion_results/four_arms_perf/A/rep2/raw.bin"}
+  read  p50=8368 p99=8512 max=9862 ns
+  write p50=8464 p99=8615 max=16188 ns
+==== A 组 rep3 (60s) ====
+A 组用户态 LET: period=1000us cycles=60000 相位 w=400 r=500 g1=700 cpu=3 policy=SCHED_FIFO prio=80 wait=nanosleep
+{"arm":"userspace_A","samples":120000,"cycles":60000,"period_us":1000,"skip_commit":0,"hold":0,"late_cycle":0,"out":"/home/pi/kfusion_results/four_arms_perf/A/rep3/raw.bin"}
+  read  p50=8308 p99=8455 max=8793 ns
+  write p50=8404 p99=8557 max=10805 ns
+==== A 组 rep4 (60s) ====
+A 组用户态 LET: period=1000us cycles=60000 相位 w=400 r=500 g1=700 cpu=3 policy=SCHED_FIFO prio=80 wait=nanosleep
+{"arm":"userspace_A","samples":120000,"cycles":60000,"period_us":1000,"skip_commit":0,"hold":0,"late_cycle":0,"out":"/home/pi/kfusion_results/four_arms_perf/A/rep4/raw.bin"}
+  read  p50=8333 p99=8481 max=10001 ns
+  write p50=8424 p99=8598 max=20581 ns
+==== A 组 rep5 (60s) ====
+A 组用户态 LET: period=1000us cycles=60000 相位 w=400 r=500 g1=700 cpu=3 policy=SCHED_FIFO prio=80 wait=nanosleep
+{"arm":"userspace_A","samples":120000,"cycles":60000,"period_us":1000,"skip_commit":0,"hold":0,"late_cycle":0,"out":"/home/pi/kfusion_results/four_arms_perf/A/rep5/raw.bin"}
+  read  p50=8296 p99=8438 max=10886 ns
+  write p50=8390 p99=8542 max=13456 ns
+
+A 组（用户态）跨 5 轮，单位 us，报中位[极小-极大]
+  read  p50=8.31[8.30-8.37]  p99=8.46[8.44-8.51]  max=10.00[8.79-10.89]
+  write p50=8.42[8.39-8.46]  p99=8.59[8.54-8.62]  max=16.19[10.80-20.58]
+  skip=[0, 0, 0, 0, 0] err=[0, 0, 0, 0, 0] ver_mismatch=[0, 0, 0, 0, 0]
+✅ A 组完成 → /home/pi/kfusion_results/four_arms_perf/A/summary.json

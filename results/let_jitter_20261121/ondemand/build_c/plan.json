@@ -1,0 +1,139 @@
+{
+  "version": 2,
+  "task": "let_pc_shared",
+  "period_us": 1000.0,
+  "deadline_us": 1000.0,
+  "groups": [
+    {
+      "id": "g0",
+      "members": [
+        "stage_prod",
+        "stage_commit",
+        "stage_fetch"
+      ],
+      "domain": "linux_kernel",
+      "domain_short": "kernel",
+      "phase_us": 0.0,
+      "phase_binding": "advisory"
+    },
+    {
+      "id": "g1",
+      "members": [
+        "stage_act"
+      ],
+      "domain": "linux_kernel",
+      "domain_short": "kernel",
+      "phase_us": 700.0,
+      "phase_binding": "required"
+    }
+  ],
+  "state_ownership": {
+    "g_seed": "kernel",
+    "g_state": "kernel",
+    "g_cmd_ver": "kernel"
+  },
+  "handoffs": [],
+  "release_owner": "kernel_host",
+  "runtime": {
+    "cpu": 3,
+    "sched": "fifo",
+    "priority": 80,
+    "timer": "absolute"
+  },
+  "order": [
+    "stage_prod",
+    "stage_commit",
+    "stage_fetch",
+    "stage_act"
+  ],
+  "let_events": [
+    {
+      "kind": "output_commit",
+      "stage": "stage_commit",
+      "at_us": 400.0,
+      "vars": [
+        "g_cmd",
+        "g_cmd_ver"
+      ],
+      "on_timeout": "skip_commit",
+      "path": "irq",
+      "publish": [
+        {
+          "dst": "g_cmd",
+          "src": "g_cmd_pending"
+        },
+        {
+          "dst": "g_cmd_ver",
+          "op": "inc"
+        }
+      ]
+    },
+    {
+      "kind": "input_snapshot",
+      "stage": "stage_fetch",
+      "at_us": 500.0,
+      "vars": [
+        "g_cmd",
+        "g_cmd_ver"
+      ],
+      "on_timeout": "skip_commit",
+      "path": "irq",
+      "snap_vars": [
+        "g_cmd_snap",
+        "g_cmd_snap_ver"
+      ]
+    }
+  ],
+  "shared_objects": [
+    {
+      "name": "g_cmd",
+      "writer": "stage_commit",
+      "readers": [
+        "stage_fetch"
+      ],
+      "version": "g_cmd_ver"
+    }
+  ],
+  "meta": {
+    "platform": "linux_kernel",
+    "fusion": true,
+    "generator": "stkp_v1",
+    "model_feasible": true,
+    "deployment_ready": true,
+    "xdom_adapter": null,
+    "let": true,
+    "let_reshaped": true
+  },
+  "provenance": {
+    "generator": "plan_extend__计划扩展.py",
+    "plan_version": 2,
+    "input_plan_sha256": "9ef100fccabbc96b0a03c93733ac56a2e73bf1dada72b92d1d2a585c0f6aedab",
+    "input_teir_sha256": "87bb2df270d27e0f21068baf4504ffa336fd17effa14bcb4292dfb4b0e5c897f",
+    "verified": true
+  },
+  "verification": {
+    "ok": true,
+    "by": "kfusion/scripts/ecos/plan_verify.py",
+    "errors": [],
+    "stats": {
+      "groups": 2,
+      "nodes": 4,
+      "same_cycle_edges": 3,
+      "cross_cycle_edges": 0,
+      "evidence": "empirical",
+      "temporal_source": "none",
+      "domains": [
+        "default"
+      ],
+      "cross_domain_edges": 0,
+      "cross_domain_periods": 0,
+      "cross_domain_extra_us": 0.0,
+      "period_us": 1000.0,
+      "domain_period_us": {},
+      "multirate": false,
+      "xdom_deployable": null,
+      "completion_us": 720.0,
+      "backlog_us": 0.0
+    }
+  }
+}

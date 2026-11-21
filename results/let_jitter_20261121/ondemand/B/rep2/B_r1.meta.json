@@ -1,0 +1,54 @@
+{
+  "hdr": {
+    "magic": 1262898260,
+    "hdr_version": 1,
+    "sample_bytes": 36,
+    "n_samples": 120300,
+    "drops": 0,
+    "period_us": 1000,
+    "arm_path": 0,
+    "arm_name": "thread"
+  },
+  "summary": {
+    "n": 100300,
+    "n_read_ok": 50150,
+    "n_write_ok": 50150,
+    "n_skip": 0,
+    "n_hold": 0,
+    "n_err": 0,
+    "max_read_jitter_ns": 21237,
+    "max_write_jitter_ns": 24547,
+    "max_read_late_ns": 21237,
+    "max_read_early_ns": 0,
+    "max_write_late_ns": 24547,
+    "max_write_early_ns": 0,
+    "dist_read": {
+      "n": 50150,
+      "p50_ns": 15842,
+      "p90_ns": 16109,
+      "p99_ns": 16508,
+      "p999_ns": 20451,
+      "max_ns": 21237,
+      "mean_ns": 15094
+    },
+    "dist_write": {
+      "n": 50150,
+      "p50_ns": 18197,
+      "p90_ns": 18600,
+      "p99_ns": 18810,
+      "p999_ns": 23411,
+      "max_ns": 24547,
+      "mean_ns": 17371
+    },
+    "version_mismatch_cycles": 0,
+    "version_nonmono_writes": 0,
+    "ctx_counts": {
+      "softirq": 100300
+    },
+    "warmup_sec": 10.0,
+    "n_raw": 120300,
+    "n_trimmed": 20000
+  },
+  "tag": "B_r1",
+  "source": "/home/pi/kfusion_results/four_arms_v2/B/rep2/raw.bin"
+}

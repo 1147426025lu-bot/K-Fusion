@@ -15,6 +15,57 @@
 """
 from __future__ import print_function
 
+_LET_HOST_H = r'''/* kf_let_host.h —— LET 宿主与读写实现之间的唯一接口；由生成器产出，不要手改。
+ *
+ * 为什么要这份头：读写实现（手写 C 组 / 契约生成 D 组）与宿主分开编译，
+ * 但状态码、门禁语义、失败策略只能有一处定义，否则两组会悄悄漂移。
+ * 计数（skip/stale/...）与策略全部留在宿主内，实现方拿不到也改不了。
+ */
+#ifndef KF_LET_HOST_H
+#define KF_LET_HOST_H
+
+#include <linux/types.h>
+
+#define KF_LET_OP_NONE  0u
+#define KF_LET_OP_WRITE 1u	/* output_commit → W,d */
+#define KF_LET_OP_READ  2u	/* input_snapshot → R,r */
+
+#define KF_LET_ST_OK    0u
+#define KF_LET_ST_SKIP  1u
+#define KF_LET_ST_HOLD  2u
+#define KF_LET_ST_ERR   3u
+
+/* 反查不到生产者组时退化为只按周期配对（不静默否定，也不假装是单变量实验） */
+#define KF_PROD_ANY 0xffffffffu
+
+/* 被 output_commit 依赖的生产者组；无 LET 时为 -1 */
+#define KF_PROD_GID %(prod_gid)d
+
+enum kf_stage_state {
+	KF_STAGE_OK = 0,
+	KF_STAGE_NOT_READY = 1,		/* 尚无任何可用结果 */
+	KF_STAGE_STALE = 2,		/* 只有更早周期的结果（旧值） */
+	KF_STAGE_CONSUMED = 3,		/* 本拍已发布过 */
+	KF_STAGE_TOO_OLD = 4,		/* 有本拍结果但超出时效预算 */
+	KF_STAGE_GROUP_MISMATCH = 5,	/* 标记来自非生产者组 */
+};
+
+#define KF_LET_POLICY_SKIP  0u
+#define KF_LET_POLICY_HOLD  1u
+#define KF_LET_POLICY_FAULT 2u
+
+/* 宿主：按 (周期, 生产者组, 完成时刻) 原子取用本拍结果，age_out 返回结果年龄 */
+int kf_let_gate_take(u64 cycle_id, u32 need_group, s64 *age_out);
+
+/* 宿主：门禁未通过时按策略收尾（计数在宿主内），返回样本该记的状态码 */
+int kf_let_gate_fail(int st, u32 policy);
+
+/* 读写实现：id=事件下标，op=KF_LET_OP_*，返回 KF_LET_ST_* */
+int let_run(u64 cycle_id, u32 id, u32 op, u32 *ver_out);
+
+#endif /* KF_LET_HOST_H */
+'''
+
 _HOST = r'''/* %(name)s —— 单工作线程 ring-0 宿主（U-5/PR-U7）；不要手改。
  *
  * 方案：%(ngroups)d 组 / %(nstages)d 阶段，周期 %(period)s µs，证据级别 %(evidence)s
@@ -35,6 +86,7 @@ _HOST = r'''/* %(name)s —— 单工作线程 ring-0 宿主（U-5/PR-U7）；�
 #include <linux/kthread.h>
 #include <linux/wait.h>
 #include <linux/ktime.h>
+#include <linux/delay.h>	/* 故障注入用 usleep_range */
 #include <linux/sched.h>
 #include <linux/sched/rt.h>
 #include <linux/spinlock.h>
@@ -50,6 +102,7 @@ _HOST = r'''/* %(name)s —— 单工作线程 ring-0 宿主（U-5/PR-U7）；�
 %(probe_includes)s
 
 #include "ecos_fused_body.h"
+#include "kf_let_host.h"
 %(xdom_include)s
 
 #define ECOS_GROUPS %(ngroups)d
@@ -59,15 +112,11 @@ _HOST = r'''/* %(name)s —— 单工作线程 ring-0 宿主（U-5/PR-U7）；�
 #define KF_Q_DEPTH 64
 #define KF_ALL_GROUPS_MASK ((1U << ECOS_GROUPS) - 1U)
 #define KF_N_SLOTS %(nslots)d
+/* KF_PROD_GID 在 kf_let_host.h 里（宿主与手写实现共用） */
 #define KF_KIND_GROUP 0u
 #define KF_KIND_LET   1u
-#define KF_LET_OP_NONE  0u
-#define KF_LET_OP_WRITE 1u	/* output_commit → W,d */
-#define KF_LET_OP_READ  2u	/* input_snapshot → R,r */
-#define KF_LET_ST_OK    0u
-#define KF_LET_ST_SKIP  1u
-#define KF_LET_ST_HOLD  2u
-#define KF_LET_ST_ERR   3u
+/* KF_LET_OP_* / KF_LET_ST_* / KF_STAGE_* / 门禁接口统一在 kf_let_host.h：
+ * 手写实现（C 组）与生成实现（D 组）include 同一份，状态码不会各写一套。 */
 #define KF_LET_CTX_HARD 0x01u
 #define KF_LET_CTX_SOFT 0x02u
 #define KF_LET_CTX_TASK 0x04u
@@ -300,8 +349,61 @@ static int hrtimer_hard = %(hrtimer_hard)d;
 module_param(hrtimer_hard, int, 0444);
 MODULE_PARM_DESC(hrtimer_hard, "1=HRTIMER_MODE_*_HARD（PREEMPT_RT 硬中断）；0=默认（RT 上多为 softirq）");
 
-/* 本拍计算体已完成、可供逻辑写入消费；IRQ 与 kthread 同 CPU 绑定下用 WRITE_ONCE/READ_ONCE */
-static bool kf_let_ready;
+/* ---- 计算就绪标记：三元组（生产者组、周期号、完成时刻） ----
+ * 旧实现是单个 bool：任意组体跑完就置真，output_commit 无法判断「谁算的、哪一拍、
+ * 算完多久」，会把上一拍遗留或别的组的结果当成本拍结果发布。现改为逐拍三元组，
+ * 且 commit 只能原子地取用一次（consumed），重复提交单独计数。
+ */
+struct kf_stage_mark {
+	u64 cycle_id;	/* 产出该结果的周期 */
+	s64 done_ns;	/* 该结果算完的时刻 */
+	u32 group_id;	/* 产出该结果的组，必须等于 commit 依赖的生产者 */
+	u32 valid;
+	u32 consumed;	/* 本拍结果已被 commit 取用，禁止重复发布 */
+};
+
+static struct kf_stage_mark kf_mark;
+
+static unsigned long let_ready_not_ready;
+module_param(let_ready_not_ready, ulong, 0444);
+MODULE_PARM_DESC(let_ready_not_ready, "commit 时无任何可用结果的次数");
+
+static unsigned long let_ready_stale;
+module_param(let_ready_stale, ulong, 0444);
+MODULE_PARM_DESC(let_ready_stale, "commit 只看到更早周期结果的次数（旧值风险）");
+
+static unsigned long let_ready_consumed;
+module_param(let_ready_consumed, ulong, 0444);
+MODULE_PARM_DESC(let_ready_consumed, "同一拍重复 commit 的次数（必须为 0）");
+
+static unsigned long let_ready_too_old;
+module_param(let_ready_too_old, ulong, 0444);
+MODULE_PARM_DESC(let_ready_too_old, "结果年龄超出时效预算的次数");
+
+static unsigned long let_ready_group_mismatch;
+module_param(let_ready_group_mismatch, ulong, 0444);
+MODULE_PARM_DESC(let_ready_group_mismatch, "就绪标记来自非生产者组的次数（必须为 0）");
+
+static long let_ready_age_max_ns;
+module_param(let_ready_age_max_ns, long, 0444);
+MODULE_PARM_DESC(let_ready_age_max_ns, "commit 时结果的最大年龄 now-done_ns（ns）");
+
+static int let_result_age_budget_ns = %(age_budget_ns)d;
+module_param(let_result_age_budget_ns, int, 0444);
+MODULE_PARM_DESC(let_result_age_budget_ns, "结果时效预算（ns）；0=只查周期不查年龄");
+
+/* 故障注入（仅正确性用例；默认全 0，不影响测量口径） */
+static unsigned int test_stall_prod_us;
+module_param(test_stall_prod_us, uint, 0644);
+MODULE_PARM_DESC(test_stall_prod_us, "故障注入：生产者组体前睡眠 N µs（默认 0）");
+
+static unsigned int test_skip_prod_left;
+module_param(test_skip_prod_left, uint, 0644);
+MODULE_PARM_DESC(test_skip_prod_left, "故障注入：跳过接下来 N 拍生产者组体（默认 0）");
+
+static unsigned long test_prod_skipped;
+module_param(test_prod_skipped, ulong, 0444);
+MODULE_PARM_DESC(test_prod_skipped, "被故障注入跳过的生产者组体次数");
 
 static struct kf_let_sample *kf_let_log;
 static unsigned int kf_let_log_n;
@@ -325,7 +427,12 @@ static struct kf_cycle_record kf_open;
 static struct hrtimer kf_timer;
 static struct task_struct *kf_worker;
 static wait_queue_head_t kf_wait;
-static DEFINE_SPINLOCK(kf_lock);
+/* 队列锁与就绪标记锁都必须是 raw_spinlock_t：hrtimer_hard=1 时整只定时器在硬中断
+ * 上下文触发（含 group 释放槽），PREEMPT_RT 上 spinlock_t 是可睡眠的 rtmutex，
+ * 在硬中断里取它属于非法路径。临界区只有几个字，raw 不会带来可测的额外延迟。
+ */
+static DEFINE_RAW_SPINLOCK(kf_lock);
+static DEFINE_RAW_SPINLOCK(kf_mark_lock);
 static struct kf_release_event kf_q[KF_Q_DEPTH];
 static unsigned int kf_head;
 static unsigned int kf_tail;
@@ -333,7 +440,108 @@ static s64 kf_base_ns;
 static u64 kf_cycle;
 static int kf_next_slot;
 
-%(let_run_fn)s
+/* 生产者组体跑完后登记三元组；只有登记过的结果才可能被 commit 取用 */
+static void kf_mark_stage(u64 cycle_id, u32 group_id, s64 done_ns)
+{
+	unsigned long flags;
+
+	raw_spin_lock_irqsave(&kf_mark_lock, flags);
+	kf_mark.cycle_id = cycle_id;
+	kf_mark.done_ns = done_ns;
+	kf_mark.group_id = group_id;
+	kf_mark.valid = 1;
+	kf_mark.consumed = 0;
+	raw_spin_unlock_irqrestore(&kf_mark_lock, flags);
+}
+
+/* 取用本拍结果：周期一致 + 生产者一致 + 未被取用 + 未超龄 才放行。
+ * 取用是原子的：同一拍第二次 commit 会得到 KF_STAGE_CONSUMED。
+ */
+static int kf_stage_take(u64 cycle_id, u32 need_group, s64 now,
+			 s64 budget_ns, s64 *age_out)
+{
+	unsigned long flags;
+	int st = KF_STAGE_OK;
+
+	*age_out = 0;
+	raw_spin_lock_irqsave(&kf_mark_lock, flags);
+	if (!kf_mark.valid) {
+		st = KF_STAGE_NOT_READY;
+	} else if (kf_mark.cycle_id < cycle_id) {
+		st = KF_STAGE_STALE;
+		*age_out = now - kf_mark.done_ns;
+	} else if (kf_mark.cycle_id > cycle_id) {
+		/* 结果来自未来拍：不可能发生，按未就绪 fail-closed 而不是放行 */
+		st = KF_STAGE_NOT_READY;
+	} else if (kf_mark.group_id != need_group) {
+		st = (kf_mark.group_id > need_group) ? KF_STAGE_GROUP_MISMATCH
+						     : KF_STAGE_NOT_READY;
+	} else if (kf_mark.consumed) {
+		st = KF_STAGE_CONSUMED;
+	} else {
+		*age_out = now - kf_mark.done_ns;
+		if (budget_ns > 0 && *age_out > budget_ns) {
+			st = KF_STAGE_TOO_OLD;
+		} else {
+			kf_mark.consumed = 1;
+			st = KF_STAGE_OK;
+		}
+	}
+	raw_spin_unlock_irqrestore(&kf_mark_lock, flags);
+	return st;
+}
+
+static void kf_stage_account(int st)
+{
+	switch (st) {
+	case KF_STAGE_STALE:
+		let_ready_stale++;
+		break;
+	case KF_STAGE_CONSUMED:
+		let_ready_consumed++;
+		break;
+	case KF_STAGE_TOO_OLD:
+		let_ready_too_old++;
+		break;
+	case KF_STAGE_GROUP_MISMATCH:
+		let_ready_group_mismatch++;
+		break;
+	case KF_STAGE_NOT_READY:
+	default:
+		let_ready_not_ready++;
+		break;
+	}
+}
+
+/* ---- 对读写实现的接口（kf_let_host.h 声明）；策略与计数都留在宿主里，
+ * 手写实现与生成实现只负责「到点真正读写哪些量」，改不了门禁口径。 ---- */
+int kf_let_gate_take(u64 cycle_id, u32 need_group, s64 *age_out)
+{
+	int st = kf_stage_take(cycle_id, need_group, ktime_get(),
+			       (s64)let_result_age_budget_ns, age_out);
+
+	if (*age_out > let_ready_age_max_ns)
+		let_ready_age_max_ns = *age_out;
+	return st;
+}
+
+int kf_let_gate_fail(int st, u32 policy)
+{
+	kf_stage_account(st);
+	if (policy == KF_LET_POLICY_HOLD) {
+		let_hold_last++;
+		return KF_LET_ST_HOLD;
+	}
+	if (policy == KF_LET_POLICY_FAULT) {
+		let_skip_commit++;
+		WRITE_ONCE(frozen, true);
+		return KF_LET_ST_ERR;
+	}
+	let_skip_commit++;
+	return KF_LET_ST_SKIP;
+}
+
+%(let_run_decl)s
 
 static u8 kf_let_ctx_flags(void)
 {
@@ -409,7 +617,7 @@ static void kf_let_exec(u64 cycle_id, u32 let_id, u8 let_op, u8 irq_path,
 	s.cpu = (u8)smp_processor_id();
 	s.nominal_ns = nominal_ns;
 	s.t_before_ns = ktime_get();
-	st = let_run(let_id, &ver);
+	st = let_run(cycle_id, let_id, let_op, &ver);
 	s.t_after_ns = ktime_get();
 	ctx = kf_let_ctx_flags();
 	s.ctx = ctx;
@@ -516,6 +724,7 @@ static void kf_note_depth(void)
 		queue_backlog_max = d;
 }
 
+
 static void kf_arm_next(void)
 {
 	s64 at;
@@ -556,7 +765,7 @@ static enum hrtimer_restart kf_tick(struct hrtimer *t)
 	ev.id = slot->id;
 	ev.nominal_release_ns = expires;
 
-	spin_lock_irqsave(&kf_lock, flags);
+	raw_spin_lock_irqsave(&kf_lock, flags);
 	if (kf_q_full()) {
 		release_overflow++;
 		overflow = release_overflow;
@@ -566,7 +775,7 @@ static enum hrtimer_restart kf_tick(struct hrtimer *t)
 		kf_note_depth();
 	}
 	kf_advance_slot();
-	spin_unlock_irqrestore(&kf_lock, flags);
+	raw_spin_unlock_irqrestore(&kf_lock, flags);
 
 	wake_up_interruptible(&kf_wait);
 
@@ -596,15 +805,15 @@ static int kf_worker_fn(void *data)
 			unsigned long flags;
 			s64 s_ns, f_ns, T_ns;
 
-			spin_lock_irqsave(&kf_lock, flags);
+			raw_spin_lock_irqsave(&kf_lock, flags);
 			if (kf_q_empty()) {
-				spin_unlock_irqrestore(&kf_lock, flags);
+				raw_spin_unlock_irqrestore(&kf_lock, flags);
 				break;
 			}
 			ev = kf_q[kf_head];
 			kf_head = (kf_head + 1) %% KF_Q_DEPTH;
 			kf_note_depth();
-			spin_unlock_irqrestore(&kf_lock, flags);
+			raw_spin_unlock_irqrestore(&kf_lock, flags);
 
 			if (unlikely(frozen))
 				continue;
@@ -631,6 +840,18 @@ static int kf_worker_fn(void *data)
 				continue;
 			}
 
+			/* 故障注入：只作用于生产者组，默认全 0 时行为与未注入一致。
+			 * skip 放在组记账之前，跳过的拍会体现为 missing_groups 而不是"假装完成"。
+			 */
+			if (ev.id == KF_PROD_GID) {
+				if (READ_ONCE(test_skip_prod_left)) {
+					WRITE_ONCE(test_skip_prod_left,
+						   READ_ONCE(test_skip_prod_left) - 1);
+					test_prod_skipped++;
+					continue;	/* 不跑生产者组体、不登记结果 */
+				}
+			}
+
 %(xdom_anchor)s%(probe_before_sw)s
 			s_ns = ktime_get();
 			if (s_ns > ev.nominal_release_ns + (s64)late_start_slack_ns)
@@ -650,10 +871,17 @@ static int kf_worker_fn(void *data)
 			    ev.id < ECOS_GROUPS)
 				kf_open.groups_seen |= (1U << ev.id);
 
+			/* 故障注入：让生产者算得比逻辑写入时刻更晚，用于超时/旧值用例 */
+			if (ev.id == KF_PROD_GID && READ_ONCE(test_stall_prod_us)) {
+				unsigned int us = READ_ONCE(test_stall_prod_us);
+
+				usleep_range(us, us + 200);
+			}
+
 			ecos_run_body((int)ev.id);
-			/* 组体跑完 → 本拍计算就绪，供后续 LET commit 消费 */
-			WRITE_ONCE(kf_let_ready, true);
 			f_ns = ktime_get();
+			/* 组体跑完 → 登记三元组（周期、组号、完成时刻），供 commit 配对取用 */
+			kf_mark_stage(ev.cycle_id, ev.id, f_ns);
 
 			if (ev.id == ECOS_LAST_GROUP) {
 				T_ns = (s64)deadline_us * 1000LL;
@@ -734,7 +962,14 @@ static int __init ecos_init(void)
 	let_wr_late_max_ns = 0;
 	let_wr_early_max_ns = 0;
 	let_op_dur_max_ns = 0;
-	WRITE_ONCE(kf_let_ready, false);
+	memset(&kf_mark, 0, sizeof(kf_mark));
+	let_ready_not_ready = 0;
+	let_ready_stale = 0;
+	let_ready_consumed = 0;
+	let_ready_too_old = 0;
+	let_ready_group_mismatch = 0;
+	let_ready_age_max_ns = 0;
+	test_prod_skipped = 0;
 	memset(&kf_open, 0, sizeof(kf_open));
 
 	kf_worker = kthread_create(kf_worker_fn, NULL, "ecos_sw");
@@ -784,6 +1019,9 @@ static void __exit ecos_exit(void)
 		let_ctx_hardirq, let_ctx_softirq, let_ctx_task,
 		let_rw_fires, let_rw_irq, let_skip_commit, let_log_drops,
 		kf_let_log_n);
+	pr_info("ecos-sw: 就绪门禁 stale=%%lu not_ready=%%lu consumed=%%lu too_old=%%lu group_mismatch=%%lu age_max=%%ldns\n",
+		let_ready_stale, let_ready_not_ready, let_ready_consumed,
+		let_ready_too_old, let_ready_group_mismatch, let_ready_age_max_ns);
 	if (kf_let_log) {
 		misc_deregister(&kf_let_log_dev);
 		vfree(kf_let_log);
@@ -848,35 +1086,33 @@ def _let_version_sym(e):
     return None
 
 
-def _emit_let_stub_body(e):
-    """返回 (body_lines, used_symbols)。body 不含函数外壳；返回 int 状态码。"""
+def _emit_let_stub_body(e, prod_gid=-1):
+    """返回 (body_lines, used_symbols)。body 不含函数外壳；返回 int 状态码。
+
+    prod_gid 是 output_commit 依赖的生产者组号（由 compute_at_us 反查）。
+    提交前必须用 (周期, 组号, 完成时刻) 三元组配对，不能只看单个 bool。
+    """
     kind = e.get("kind")
     timeout = e.get("on_timeout") or "skip_commit"
     lines = []
     used = set()
     ver = _let_version_sym(e)
     if kind == "output_commit":
-        lines.append("\tif (!READ_ONCE(kf_let_ready)) {")
-        if timeout == "hold_last":
-            lines.append("\t\tlet_hold_last++;")
-            if ver:
-                used.add(ver)
-                lines.append("\t\tif (ver_out)\n\t\t\t*ver_out = READ_ONCE(%s);" % ver)
-            lines.append("\t\treturn KF_LET_ST_HOLD;")
-        elif timeout == "fault":
-            lines.append("\t\tlet_skip_commit++;")
-            lines.append("\t\tWRITE_ONCE(frozen, true);")
-            if ver:
-                used.add(ver)
-                lines.append("\t\tif (ver_out)\n\t\t\t*ver_out = READ_ONCE(%s);" % ver)
-            lines.append("\t\treturn KF_LET_ST_ERR;")
-        else:
-            lines.append("\t\tlet_skip_commit++;")
-            if ver:
-                used.add(ver)
-                lines.append("\t\tif (ver_out)\n\t\t\t*ver_out = READ_ONCE(%s);" % ver)
-            lines.append("\t\treturn KF_LET_ST_SKIP;")
-        lines.append("\t}")
+        need = ("%du" % prod_gid) if prod_gid is not None and prod_gid >= 0 \
+            else "KF_PROD_ANY"
+        pol = {"hold_last": "KF_LET_POLICY_HOLD",
+               "fault": "KF_LET_POLICY_FAULT"}.get(timeout, "KF_LET_POLICY_SKIP")
+        lines.append("\t{")
+        lines.append("\t\ts64 age_ns = 0;")
+        lines.append("\t\tint st = kf_let_gate_take(cycle_id, %s, &age_ns);" % need)
+        lines.append("")
+        lines.append("\t\t(void)age_ns;")
+        lines.append("\t\tif (st != KF_STAGE_OK) {")
+        if ver:
+            used.add(ver)
+            lines.append("\t\t\tif (ver_out)\n\t\t\t\t*ver_out = READ_ONCE(%s);" % ver)
+        lines.append("\t\t\treturn kf_let_gate_fail(st, %s);" % pol)
+        lines.append("\t\t}")
         for item in (e.get("publish") or []):
             if not isinstance(item, dict):
                 continue
@@ -885,18 +1121,18 @@ def _emit_let_stub_body(e):
                 continue
             used.add(dst)
             if item.get("op") == "inc":
-                lines.append("\tWRITE_ONCE(%s, READ_ONCE(%s) + 1u);" % (dst, dst))
+                lines.append("\t\tWRITE_ONCE(%s, READ_ONCE(%s) + 1u);" % (dst, dst))
             else:
                 src = item.get("src")
                 if not src:
                     continue
                 used.add(src)
-                lines.append("\tWRITE_ONCE(%s, READ_ONCE(%s));" % (dst, src))
-        lines.append("\tWRITE_ONCE(kf_let_ready, false);")
+                lines.append("\t\tWRITE_ONCE(%s, READ_ONCE(%s));" % (dst, src))
         if ver:
             used.add(ver)
-            lines.append("\tif (ver_out)\n\t\t*ver_out = READ_ONCE(%s);" % ver)
-        lines.append("\treturn KF_LET_ST_OK;")
+            lines.append("\t\tif (ver_out)\n\t\t\t*ver_out = READ_ONCE(%s);" % ver)
+        lines.append("\t\treturn KF_LET_ST_OK;")
+        lines.append("\t}")
     elif kind == "input_snapshot":
         srcs = list(e.get("vars") or [])
         snaps = list(e.get("snap_vars") or [])
@@ -914,12 +1150,32 @@ def _emit_let_stub_body(e):
     return lines, used
 
 
-def _build_slots_and_let(ir):
+def _producer_gid(e, gphase):
+    """output_commit 依赖的生产者组号。
+
+    优先用 compute_at_us（阶段原本被计算时所在的组头）；缺该字段时退化为
+    「相位严格早于 at_us 的最后一组」。反查不到返回 -1（生成端退化为只按周期配对）。
+    """
+    at = e.get("compute_at_us")
+    if at is not None:
+        for gid, ph in gphase.items():
+            if abs(ph - float(at)) < 1e-6:
+                return gid
+        at_us = float(at)
+    else:
+        at_us = float(e.get("at_us") or 0)
+    cands = [gid for gid, ph in gphase.items() if ph < at_us - 1e-6]
+    return max(cands) if cands else -1
+
+
+def _build_slots_and_let(ir, seam=False):
     """组释放 + LET 钉扎 → 统一相位槽；并生成 irq 安全桩 / let_run。"""
     events = list(getattr(ir, "let_events", None) or [])
     slots = []
+    gphase = {}
     for i, g in enumerate(ir.groups):
         ph = g.phase_us if g.phase_us is not None else 0.0
+        gphase[i] = float(ph)
         slots.append((float(ph), 0, i, 0, None))  # kind=group
     let_meta = []
     for li, e in enumerate(events):
@@ -955,19 +1211,27 @@ def _build_slots_and_let(ir):
             "\t{ .phase_ns = %s, .kind = %u, .id = %u, .irq_path = %u, .let_op = %u }"
             % (_ns(ph), kind, idx, irq, let_op))
     if not let_meta:
+        empty = ("int let_run(u64 cycle_id, u32 id, u32 op, u32 *ver_out)\n{\n"
+                 "\t(void)cycle_id;\n\t(void)id;\n\t(void)op;\n"
+                 "\tif (ver_out)\n\t\t*ver_out = 0;\n"
+                 "\treturn KF_LET_ST_OK;\n}\n")
         return {
             "nslots": len(slots),
             "slot_inits": ",\n".join(inits) + ("\n" if inits else ""),
             "let_externs": "/* 无 LET 事件 */\n",
-            "let_run_fn": ("static int let_run(u32 id, u32 *ver_out)\n{\n"
-                           "\t(void)id;\n\tif (ver_out)\n\t\t*ver_out = 0;\n"
-                           "\treturn KF_LET_ST_OK;\n}\n"),
+            "let_run_decl": ("/* let_run 见 let_impl.c */\n" if seam else
+                             empty.replace("int let_run", "static int let_run", 1)),
+            "let_impl_c": ("let_impl.c",
+                           '/* 无 LET 事件 */\n#include "kf_let_host.h"\n\n' + empty)
+            if seam else None,
             "hrtimer_hard": 0,
             "any_irq": 0,
+            "prod_gid": -1,
         }
 
     stage_externs = []
     var_externs = []
+    prod_gid = -1
     stubs = []
     cases = []
     seen_fn = set()
@@ -981,8 +1245,11 @@ def _build_slots_and_let(ir):
         st = e.get("stage") or ("let_%d" % li)
         path = e.get("path") or "thread"
         use_stub = _let_can_stub(e)
+        pg = _producer_gid(e, gphase) if e.get("kind") == "output_commit" else -1
+        if pg >= 0 and prod_gid < 0:
+            prod_gid = pg
         if use_stub:
-            body, used = _emit_let_stub_body(e)
+            body, used = _emit_let_stub_body(e, pg)
             for name in sorted(used):
                 if name in seen_var:
                     continue
@@ -990,12 +1257,12 @@ def _build_slots_and_let(ir):
                 var_externs.append("extern %s %s;" % (_let_ctype(name), name))
             stub_name = "let_stub_%u" % li
             stubs.append(
-                "static int %s(u32 *ver_out)\t/* %s @%.0fµs path=%s */\n{\n%s\n}\n"
+                "static int %s(u64 cycle_id, u32 *ver_out)\t/* %s @%.0fµs path=%s */\n{\n%s\n}\n"
                 % (stub_name, e.get("kind"), float(e.get("at_us") or 0),
                    path, "\n".join(body) if body else
-                   "\t(void)ver_out;\n\treturn KF_LET_ST_OK;")
+                   "\t(void)cycle_id;\n\t(void)ver_out;\n\treturn KF_LET_ST_OK;")
             )
-            cases.append("\tcase %u:\n\t\treturn %s(ver_out);" % (li, stub_name))
+            cases.append("\tcase %u:\n\t\treturn %s(cycle_id, ver_out);" % (li, stub_name))
         else:
             if irq_by_id.get(li):
                 cases.append(
@@ -1015,34 +1282,63 @@ def _build_slots_and_let(ir):
 
     let_externs = ("\n".join(var_externs + stage_externs)
                    + ("\n" if (var_externs or stage_externs) else ""))
-    let_run = (
-        "".join(stubs)
-        + "static int let_run(u32 id, u32 *ver_out)\n{\n"
-        "\tswitch (id) {\n"
-        + "\n".join(cases) + "\n"
-        "\tdefault:\n\t\tif (ver_out)\n\t\t\t*ver_out = 0;\n"
-        "\t\treturn KF_LET_ST_ERR;\n"
-        "\t}\n}\n"
-    )
+    run_body = ("\tswitch (id) {\n"
+                + "\n".join(cases) + "\n"
+                "\tdefault:\n\t\tif (ver_out)\n\t\t\t*ver_out = 0;\n"
+                "\t\treturn KF_LET_ST_ERR;\n"
+                "\t}\n}\n")
+    sig = "int let_run(u64 cycle_id, u32 id, u32 op, u32 *ver_out)\n{\n\t(void)op;\n"
+    let_run = ("".join(stubs) + "static " + sig + run_body) if not seam else None
+    let_impl = None
+    if seam:
+        let_impl = (
+            "let_impl.c",
+            "/* let_impl.c —— D 组读写实现：由契约的 publish / snap_vars 生成。\n"
+            " * C 组把本文件换成 let_impl_hand.c；宿主、事件表、计时点、缓冲区、门禁全同。\n"
+            " * 不要手改：要改读写语义就改契约或手写实现，并同步跑 test_let_ready_gate。\n"
+            " */\n"
+            "#include <linux/module.h>\n"
+            "#include <linux/kernel.h>\n"
+            "#include <linux/compiler.h>\n"
+            '#include "kf_let_host.h"\n\n'
+            + let_externs + "\n"
+            + "".join(stubs)
+            + sig + run_body)
     return {
         "nslots": len(slots),
         "slot_inits": ",\n".join(inits) + ("\n" if inits else ""),
         "let_externs": let_externs,
-        "let_run_fn": let_run,
+        "let_run_decl": ("/* let_run 由 let_impl.c 提供（接口见 kf_let_host.h） */\n"
+                         if seam else let_run),
+        "let_impl_c": let_impl,
         "hrtimer_hard": 1 if any_irq else 0,
         "any_irq": 1 if any_irq else 0,
+        "prod_gid": prod_gid,
     }
 
 
-def render(ir, module_name, shared):
-    """shared: dict of already-computed placeholders from linux_kernel_emitter.emit."""
+def render(ir, module_name, shared, out_files=None):
+    """shared: dict of already-computed placeholders from linux_kernel_emitter.emit.
+
+    out_files: 可选 dict；seam 模式下把 let_impl.c 追加进去（返回值仍是宿主文本）。
+    """
     xdom_tick = shared.get("xdom_tick_shift_single")
     if not xdom_tick:
         xdom_tick = "\t/* 下一相位由 kf_arm_next() 按 base+cycle+phase 绝对计算 */\n"
 
     probe_before = shared.get("probe_before_sw", "")
     probe_after = shared.get("probe_after_sw", "")
-    let_bits = _build_slots_and_let(ir)
+    import os
+    # 对照组分离（C vs D）：读写实现切到独立编译单元，宿主/事件表/计时点/门禁全同。
+    seam = os.environ.get("KF_LET_STUB_SEAM", "0") == "1"
+    let_bits = _build_slots_and_let(ir, seam=seam)
+    _gid = let_bits.get("prod_gid")
+    if out_files is not None:
+        out_files["kf_let_host.h"] = _LET_HOST_H % {
+            "prod_gid": int(_gid) if _gid is not None else -1}
+        if seam and let_bits.get("let_impl_c"):
+            _fname, _ftext = let_bits["let_impl_c"]
+            out_files[_fname] = _ftext
     # 默认：有 irq 槽则 HARD；可用环境 KF_LET_LOG_CAP / KF_HRTIMER_HARD 覆盖
     import os
     log_cap = os.environ.get("KF_LET_LOG_CAP")
@@ -1073,9 +1369,11 @@ def render(ir, module_name, shared):
         "nslots": let_bits["nslots"],
         "slot_inits": let_bits["slot_inits"],
         "let_externs": let_bits["let_externs"],
-        "let_run_fn": let_bits["let_run_fn"],
+        "let_run_decl": let_bits["let_run_decl"],
         "let_log_cap": log_cap,
         "hrtimer_hard": hard,
+        "prod_gid": int(let_bits.get("prod_gid") if let_bits.get("prod_gid") is not None else -1),
+        "age_budget_ns": int(shared.get("deadline", shared["period"])) * 1000,
         "body_cases": shared["body_cases"],
         "digest_decls": shared["digest_decls"],
         "digest_update": shared["digest_update"],

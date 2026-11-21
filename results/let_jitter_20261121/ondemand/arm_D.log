@@ -1,0 +1,30 @@
+══ 臂 D：1 × 60s（warmup 截 10s，cpu=3 hrtimer_hard=1）══
+  rep1 done
+wrote /home/pi/kfusion_results/four_arms_v2/D/figs/table_D.json rows = 1
+  rep1 n=100354 read p50=3.30 p99=3.48 max=4.10 | write p50=4.23 p99=4.45 max=8.01 | skip=0
+══ 臂 D：1 × 60s（warmup 截 10s，cpu=3 hrtimer_hard=1）══
+  rep1 done
+wrote /home/pi/kfusion_results/four_arms_v2/D/figs/table_D.json rows = 2
+  rep1 n=100354 read p50=3.30 p99=3.48 max=4.10 | write p50=4.23 p99=4.45 max=8.01 | skip=0
+  rep2 n=100346 read p50=3.29 p99=3.44 max=3.57 | write p50=4.28 p99=4.45 max=5.97 | skip=0
+══ 臂 D：1 × 60s（warmup 截 10s，cpu=3 hrtimer_hard=1）══
+  rep1 done
+wrote /home/pi/kfusion_results/four_arms_v2/D/figs/table_D.json rows = 3
+  rep1 n=100354 read p50=3.30 p99=3.48 max=4.10 | write p50=4.23 p99=4.45 max=8.01 | skip=0
+  rep2 n=100346 read p50=3.29 p99=3.44 max=3.57 | write p50=4.28 p99=4.45 max=5.97 | skip=0
+  rep3 n=100367 read p50=3.29 p99=3.44 max=3.62 | write p50=4.34 p99=4.54 max=4.94 | skip=0
+══ 臂 D：1 × 60s（warmup 截 10s，cpu=3 hrtimer_hard=1）══
+  rep1 done
+wrote /home/pi/kfusion_results/four_arms_v2/D/figs/table_D.json rows = 4
+  rep1 n=100354 read p50=3.30 p99=3.48 max=4.10 | write p50=4.23 p99=4.45 max=8.01 | skip=0
+  rep2 n=100346 read p50=3.29 p99=3.44 max=3.57 | write p50=4.28 p99=4.45 max=5.97 | skip=0
+  rep3 n=100367 read p50=3.29 p99=3.44 max=3.62 | write p50=4.34 p99=4.54 max=4.94 | skip=0
+  rep4 n=100354 read p50=3.28 p99=3.42 max=3.51 | write p50=4.23 p99=4.39 max=5.67 | skip=0
+══ 臂 D：1 × 60s（warmup 截 10s，cpu=3 hrtimer_hard=1）══
+  rep1 done
+wrote /home/pi/kfusion_results/four_arms_v2/D/figs/table_D.json rows = 5
+  rep1 n=100354 read p50=3.30 p99=3.48 max=4.10 | write p50=4.23 p99=4.45 max=8.01 | skip=0
+  rep2 n=100346 read p50=3.29 p99=3.44 max=3.57 | write p50=4.28 p99=4.45 max=5.97 | skip=0
+  rep3 n=100367 read p50=3.29 p99=3.44 max=3.62 | write p50=4.34 p99=4.54 max=4.94 | skip=0
+  rep4 n=100354 read p50=3.28 p99=3.42 max=3.51 | write p50=4.23 p99=4.39 max=5.67 | skip=0
+  rep5 n=100358 read p50=3.23 p99=3.36 max=3.50 | write p50=4.31 p99=4.50 max=5.90 | skip=0

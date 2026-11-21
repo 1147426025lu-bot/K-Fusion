@@ -1,0 +1,55 @@
+{
+  "hdr": {
+    "magic": 1262898260,
+    "hdr_version": 1,
+    "sample_bytes": 36,
+    "n_samples": 120000,
+    "drops": 0,
+    "period_us": 1000,
+    "arm_path": 3,
+    "arm_name": "userspace"
+  },
+  "summary": {
+    "n": 100000,
+    "n_read_ok": 50000,
+    "n_write_ok": 50000,
+    "n_skip": 0,
+    "n_hold": 0,
+    "n_err": 0,
+    "max_read_jitter_ns": 45366,
+    "max_write_jitter_ns": 33460,
+    "max_read_late_ns": 45366,
+    "max_read_early_ns": 0,
+    "max_write_late_ns": 33460,
+    "max_write_early_ns": 0,
+    "dist_read": {
+      "n": 50000,
+      "p50_ns": 21466,
+      "p90_ns": 21901,
+      "p99_ns": 25070,
+      "p999_ns": 27953,
+      "max_ns": 45366,
+      "mean_ns": 15669
+    },
+    "dist_write": {
+      "n": 50000,
+      "p50_ns": 21700,
+      "p90_ns": 22150,
+      "p99_ns": 22896,
+      "p999_ns": 25923,
+      "max_ns": 33460,
+      "mean_ns": 15877
+    },
+    "version_mismatch_cycles": 0,
+    "version_nonmono_writes": 0,
+    "ctx_counts": {
+      "task": 100000
+    },
+    "warmup_sec": 10.0,
+    "n_raw": 120000,
+    "n_trimmed": 20000
+  },
+  "tag": "userspace_r4",
+  "source": "/home/pi/kfusion_results/four_arms_v2/A/rep4/raw.bin"
+}
+wrote /home/pi/kfusion_results/four_arms_v2/A/rep4/userspace_r4.samples.csv n=100000

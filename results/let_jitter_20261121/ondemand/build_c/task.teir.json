@@ -1,0 +1,391 @@
+{
+  "version": 1,
+  "kind": "teir",
+  "task": {
+    "name": "let_pc_shared",
+    "entry": "pc_main",
+    "period_us": 1000,
+    "deadline_us": 1000,
+    "step_us": null,
+    "notes": "由 Clang AST 抽取；相位来自源注释或命令行，不是分析猜测"
+  },
+  "nodes": [
+    {
+      "name": "stage_prod",
+      "fns": [
+        "stage_prod"
+      ],
+      "phase_us": 0.0,
+      "reads": [
+        "@g_seed",
+        "@g_state"
+      ],
+      "writes": [
+        "@g_cmd_pending",
+        "@g_seed",
+        "@g_state"
+      ],
+      "persistent": [
+        "@g_seed",
+        "@g_state"
+      ],
+      "unread_this_job": [],
+      "live_same_job": [
+        "@g_cmd_pending"
+      ],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "softirq",
+        "thread"
+      ],
+      "unknown_calls": [],
+      "must_preserve": true,
+      "may_delete": false,
+      "why_preserve": [
+        "same_job_live:@g_cmd_pending",
+        "self_carry:@g_seed",
+        "self_carry:@g_state"
+      ],
+      "allowed_domains": [
+        "linux_userspace",
+        "linux_kernel",
+        "nuttx"
+      ],
+      "blocked_domains": [],
+      "migration_reason": "状态访问可分析，计算不依赖用户态 API，持久状态=@g_seed,@g_state",
+      "cost_us_by_domain": {
+        "linux_userspace": {
+          "value": null,
+          "evidence": "missing",
+          "note": "节点未分域实测时两域同值，不得当作 WCET"
+        },
+        "linux_kernel": {
+          "value": null,
+          "evidence": "missing",
+          "note": "节点未分域实测时两域同值，不得当作 WCET"
+        }
+      },
+      "exec_us": null,
+      "call": "stage_prod()"
+    },
+    {
+      "name": "stage_commit",
+      "fns": [
+        "stage_commit"
+      ],
+      "phase_us": 400.0,
+      "reads": [
+        "@g_cmd_pending",
+        "@g_cmd_ver"
+      ],
+      "writes": [
+        "@g_cmd",
+        "@g_cmd_ver"
+      ],
+      "persistent": [
+        "@g_cmd_ver"
+      ],
+      "unread_this_job": [],
+      "live_same_job": [
+        "@g_cmd",
+        "@g_cmd_ver"
+      ],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "softirq",
+        "thread"
+      ],
+      "unknown_calls": [],
+      "must_preserve": true,
+      "may_delete": false,
+      "why_preserve": [
+        "same_job_live:@g_cmd",
+        "self_carry:@g_cmd_ver",
+        "same_job_live:@g_cmd_ver"
+      ],
+      "allowed_domains": [
+        "linux_userspace",
+        "linux_kernel",
+        "nuttx"
+      ],
+      "blocked_domains": [],
+      "migration_reason": "状态访问可分析，计算不依赖用户态 API，持久状态=@g_cmd_ver",
+      "cost_us_by_domain": {
+        "linux_userspace": {
+          "value": null,
+          "evidence": "missing",
+          "note": "节点未分域实测时两域同值，不得当作 WCET"
+        },
+        "linux_kernel": {
+          "value": null,
+          "evidence": "missing",
+          "note": "节点未分域实测时两域同值，不得当作 WCET"
+        }
+      },
+      "exec_us": null,
+      "call": "stage_commit()"
+    },
+    {
+      "name": "stage_fetch",
+      "fns": [
+        "stage_fetch"
+      ],
+      "phase_us": 500.0,
+      "reads": [
+        "@g_cmd",
+        "@g_cmd_ver"
+      ],
+      "writes": [
+        "@g_cmd_snap",
+        "@g_cmd_snap_ver"
+      ],
+      "persistent": [],
+      "unread_this_job": [
+        "@g_cmd_snap_ver"
+      ],
+      "live_same_job": [
+        "@g_cmd_snap"
+      ],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "softirq",
+        "thread"
+      ],
+      "unknown_calls": [],
+      "must_preserve": true,
+      "may_delete": false,
+      "why_preserve": [
+        "same_job_live:@g_cmd_snap",
+        "unobserved_write:@g_cmd_snap_ver"
+      ],
+      "allowed_domains": [
+        "linux_userspace",
+        "linux_kernel",
+        "nuttx"
+      ],
+      "blocked_domains": [],
+      "migration_reason": "状态访问可分析，计算不依赖用户态 API",
+      "cost_us_by_domain": {
+        "linux_userspace": {
+          "value": null,
+          "evidence": "missing",
+          "note": "节点未分域实测时两域同值，不得当作 WCET"
+        },
+        "linux_kernel": {
+          "value": null,
+          "evidence": "missing",
+          "note": "节点未分域实测时两域同值，不得当作 WCET"
+        }
+      },
+      "exec_us": null,
+      "call": "stage_fetch()"
+    },
+    {
+      "name": "stage_act",
+      "fns": [
+        "stage_act"
+      ],
+      "phase_us": 700.0,
+      "reads": [
+        "@g_cmd_snap"
+      ],
+      "writes": [
+        "@g_out"
+      ],
+      "persistent": [],
+      "unread_this_job": [
+        "@g_out"
+      ],
+      "live_same_job": [],
+      "effects": [
+        "state_read",
+        "state_write"
+      ],
+      "contexts": [
+        "softirq",
+        "thread"
+      ],
+      "unknown_calls": [],
+      "must_preserve": true,
+      "may_delete": false,
+      "why_preserve": [
+        "unobserved_write:@g_out"
+      ],
+      "allowed_domains": [
+        "linux_userspace",
+        "linux_kernel",
+        "nuttx"
+      ],
+      "blocked_domains": [],
+      "migration_reason": "状态访问可分析，计算不依赖用户态 API",
+      "cost_us_by_domain": {
+        "linux_userspace": {
+          "value": null,
+          "evidence": "missing",
+          "note": "节点未分域实测时两域同值，不得当作 WCET"
+        },
+        "linux_kernel": {
+          "value": null,
+          "evidence": "missing",
+          "note": "节点未分域实测时两域同值，不得当作 WCET"
+        }
+      },
+      "exec_us": null,
+      "call": "stage_act()"
+    }
+  ],
+  "edges": [
+    {
+      "from": "stage_commit",
+      "to": "stage_fetch",
+      "kind": "data",
+      "version": "same-job",
+      "pinned": true,
+      "proven": true,
+      "regions": [
+        "@g_cmd",
+        "@g_cmd_ver"
+      ]
+    },
+    {
+      "from": "stage_fetch",
+      "to": "stage_act",
+      "kind": "data",
+      "version": "same-job",
+      "pinned": true,
+      "proven": true,
+      "regions": [
+        "@g_cmd_snap"
+      ]
+    },
+    {
+      "from": "stage_prod",
+      "to": "stage_commit",
+      "kind": "data",
+      "version": "same-job",
+      "pinned": true,
+      "proven": true,
+      "regions": [
+        "@g_cmd_pending"
+      ]
+    }
+  ],
+  "events": [
+    {
+      "kind": "state_update",
+      "stage": "stage_prod",
+      "region": "@g_seed",
+      "version": "previous-job"
+    },
+    {
+      "kind": "state_update",
+      "stage": "stage_prod",
+      "region": "@g_state",
+      "version": "previous-job"
+    },
+    {
+      "kind": "state_update",
+      "stage": "stage_commit",
+      "region": "@g_cmd_ver",
+      "version": "previous-job"
+    },
+    {
+      "kind": "output_commit",
+      "stage": "stage_fetch",
+      "region": "@g_cmd_snap_ver",
+      "version": "this-job"
+    },
+    {
+      "kind": "output_commit",
+      "stage": "stage_act",
+      "region": "@g_out",
+      "version": "this-job"
+    },
+    {
+      "kind": "same_job_flow",
+      "from": "stage_commit",
+      "to": "stage_fetch",
+      "region": "@g_cmd",
+      "version": "same-job"
+    },
+    {
+      "kind": "same_job_flow",
+      "from": "stage_commit",
+      "to": "stage_fetch",
+      "region": "@g_cmd_ver",
+      "version": "same-job"
+    },
+    {
+      "kind": "same_job_flow",
+      "from": "stage_fetch",
+      "to": "stage_act",
+      "region": "@g_cmd_snap",
+      "version": "same-job"
+    },
+    {
+      "kind": "same_job_flow",
+      "from": "stage_prod",
+      "to": "stage_commit",
+      "region": "@g_cmd_pending",
+      "version": "same-job"
+    }
+  ],
+  "persistent_state": [
+    {
+      "region": "@g_seed",
+      "writer": "stage_prod",
+      "kind": "carry"
+    },
+    {
+      "region": "@g_state",
+      "writer": "stage_prod",
+      "kind": "carry"
+    },
+    {
+      "region": "@g_cmd_ver",
+      "writer": "stage_commit",
+      "kind": "carry"
+    }
+  ],
+  "transform": {
+    "closed": false,
+    "alias_uncertain": false,
+    "delete_forbidden": true,
+    "reorder_forbidden_if_alias": false,
+    "reasons": [],
+    "policy": "ok"
+  },
+  "meta": {
+    "note": "输出本拍未读 ≠ 可删除；别名未证则保留依赖或拒绝变换",
+    "session_init": {
+      "g_state": "zero",
+      "g_cmd_ver": "zero"
+    },
+    "delay_edges": []
+  },
+  "calls": {
+    "stage_prod": "stage_prod()",
+    "stage_commit": "stage_commit()",
+    "stage_fetch": "stage_fetch()",
+    "stage_act": "stage_act()"
+  },
+  "region_types": {
+    "g_state": "int32_t",
+    "g_cmd_pending": "int32_t",
+    "g_cmd": "int32_t",
+    "g_cmd_ver": "uint32_t",
+    "g_cmd_snap": "int32_t",
+    "g_cmd_snap_ver": "uint32_t",
+    "g_out": "int32_t",
+    "g_seed": "uint32_t"
+  }
+}

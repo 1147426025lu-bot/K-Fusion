@@ -1,0 +1,70 @@
+{
+  "kind": "kernel_stage_build",
+  "version": 1,
+  "source": "/home/pi/K-Fusion/kfusion/examples/ecos/let_pc_shared__LET产消共享.c",
+  "plan": "/home/pi/kfusion_results/four_arms_v2/build_d/plan.json",
+  "kernel_groups": [
+    "g0",
+    "g1"
+  ],
+  "kernel_roots": [
+    "stage_prod",
+    "stage_commit",
+    "stage_fetch",
+    "stage_act"
+  ],
+  "internalized": true,
+  "pass_so": "/home/pi/K-Fusion/kfusion/build/KFusionPass.so",
+  "tools": {
+    "clang": "clang-19",
+    "opt": "opt-19",
+    "llc": "llc-19"
+  },
+  "tool_versions": {
+    "clang": "Debian clang version 19.1.7 (3+b1)",
+    "opt": "Debian LLVM version 19.1.7",
+    "llc": "Debian LLVM version 19.1.7"
+  },
+  "symbols": {
+    "defined": [
+      "g_cmd",
+      "g_cmd_pending",
+      "g_cmd_snap",
+      "g_cmd_snap_ver",
+      "g_cmd_ver",
+      "g_out",
+      "g_seed",
+      "g_state",
+      "stage_act",
+      "stage_commit",
+      "stage_fetch",
+      "stage_prod"
+    ],
+    "undefined": [],
+    "roots_present": [
+      "stage_prod",
+      "stage_commit",
+      "stage_fetch",
+      "stage_act"
+    ],
+    "stages_absent": [],
+    "indirect_calls": 0
+  },
+  "sha256": {
+    "source": "849bf9b9250d03169b5cd5c4583d1ec46f25725eb6e35493e825f6a46e2729bd",
+    "task_ll": "eb7cc724dbd595d985acb6881c5ecf5d728028d8726d4436c36e2275630a0a41",
+    "mapped_ll": "216def46ff7766ddf26d8797816dba434cfe0d85c9e7667f6938bcbb246e44d3",
+    "selected_ll": "a4133769fb3798fa8f8b193ba373cc036600533d7c9f41a29db6a79d92b98450",
+    "stage_obj": "d653968c620472cc46b6ebd9d554a8b497590150b0dc24bc25907ce1e64398f3",
+    "stage_asm": "84a515793dc7e2d6a32625d95b32d6211d5a4341d56df5744b9e9c53ab022ed7",
+    "pass_so": "4adce6056acb37df08d5ab657f8e9ea5e3f89c243ec991cc0aede78258404ee6"
+  },
+  "bytes": 2592,
+  "asm_bytes": 4112,
+  "note": "计算体来自 Clang/LLVM + PLCFusionPass；不是原始 C 的直接编译。闭包用 internalize+globaldce 收敛；符号三查通过：入选函数都在、未入选阶段都不在、未定义符号为空。",
+  "final_ko": {
+    "path": "/home/pi/kfusion_results/four_arms_v2/build_d/kmod_hrtimer/kf_task.ko",
+    "sha256": "8400b06f2052d5120732fa648d14532cf682becc974fc91643f53250d21beca0",
+    "bytes": 79752
+  }
+}

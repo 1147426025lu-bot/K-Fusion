@@ -1,0 +1,52 @@
+{
+  "version": 2,
+  "meta": {
+    "platform": "linux_kernel",
+    "fusion": true,
+    "generator": "stkp_v1",
+    "model_feasible": true,
+    "deployment_ready": true,
+    "xdom_adapter": null
+  },
+  "order": [
+    "stage_prod",
+    "stage_commit",
+    "stage_fetch",
+    "stage_act"
+  ],
+  "groups": [
+    {
+      "id": "g0",
+      "members": [
+        "stage_prod",
+        "stage_commit",
+        "stage_fetch",
+        "stage_act"
+      ],
+      "domain": "linux_kernel",
+      "release_phase_us": 0.0
+    }
+  ],
+  "domains": {
+    "stage_prod": "linux_kernel",
+    "stage_commit": "linux_kernel",
+    "stage_fetch": "linux_kernel",
+    "stage_act": "linux_kernel"
+  },
+  "cost": {
+    "predicted_R_us": null,
+    "grade": "missing"
+  },
+  "schedule": {
+    "exec_us": {},
+    "release": [
+      {
+        "group": "g0",
+        "domain": "linux_kernel",
+        "L_us": 21.0,
+        "phase_us": 0.0
+      }
+    ],
+    "complete": false
+  }
+}

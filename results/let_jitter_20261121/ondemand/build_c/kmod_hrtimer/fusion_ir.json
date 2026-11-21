@@ -1,0 +1,81 @@
+{
+  "period_us": 1000.0,
+  "deadline_us": 1000.0,
+  "release_cost_us": 20.0,
+  "evidence": "empirical",
+  "verified": true,
+  "digest_vars": [
+    "g_state",
+    "g_cmd_pending",
+    "g_cmd",
+    "g_cmd_ver",
+    "g_cmd_snap",
+    "g_cmd_snap_ver",
+    "g_out",
+    "g_seed"
+  ],
+  "groups": [
+    {
+      "id": "g0",
+      "phase_us": 0.0,
+      "exec_us": 0.0,
+      "body": "ecos_body_g0",
+      "stages": [
+        {
+          "name": "stage_prod",
+          "call": "stage_prod()",
+          "exec_us": 0.0,
+          "effects": [
+            "state_read",
+            "state_write"
+          ],
+          "phase_us": 0.0
+        },
+        {
+          "name": "stage_commit",
+          "call": "stage_commit()",
+          "exec_us": 0.0,
+          "effects": [
+            "state_read",
+            "state_write"
+          ],
+          "phase_us": 400.0
+        },
+        {
+          "name": "stage_fetch",
+          "call": "stage_fetch()",
+          "exec_us": 0.0,
+          "effects": [
+            "state_read",
+            "state_write"
+          ],
+          "phase_us": 500.0
+        }
+      ]
+    },
+    {
+      "id": "g1",
+      "phase_us": 700.0,
+      "exec_us": 0.0,
+      "body": "ecos_body_g1",
+      "stages": [
+        {
+          "name": "stage_act",
+          "call": "stage_act()",
+          "exec_us": 0.0,
+          "effects": [
+            "state_read",
+            "state_write"
+          ],
+          "phase_us": 700.0
+        }
+      ]
+    }
+  ],
+  "order": [
+    "stage_prod",
+    "stage_commit",
+    "stage_fetch",
+    "stage_act"
+  ]
+}
